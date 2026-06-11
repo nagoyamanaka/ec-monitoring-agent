@@ -1,0 +1,16 @@
+{
+  "name": "@ec-monitoring-agent/backoffice-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ts-node --esm src/server.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "express": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21"
+  }
+}
