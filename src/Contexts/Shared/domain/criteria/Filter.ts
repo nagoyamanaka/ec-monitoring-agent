@@ -1,25 +1,32 @@
+import { InvalidArgumentError } from "../value-object/InvalidArgumentError.js";
+import { FilterField } from "./FilterField.js";
 import { FilterOperator } from "./FilterOperator.js";
+import { FilterValue } from "./FilterValue.js";
 
 export class Filter {
-  readonly field: string;
+  readonly field: FilterField;
   readonly operator: FilterOperator;
-  readonly value: string;
+  readonly value: FilterValue;
 
-  constructor(field: string, operator: FilterOperator, value: string) {
+  constructor(field: FilterField, operator: FilterOperator, value: FilterValue) {
     this.field = field;
     this.operator = operator;
     this.value = value;
   }
 
-  static fromValues(values: {
-    field: string;
-    operator: string;
-    value: string;
-  }): Filter {
+  static fromValues(values: Map<string, string>): Filter {
+    const field = values.get("field");
+    const operator = values.get("operator");
+    const value = values.get("value");
+
+    if (!field || !operator || !value) {
+      throw new InvalidArgumentError("The filter is invalid");
+    }
+
     return new Filter(
-      values.field,
-      new FilterOperator(values.operator as FilterOperator["value"]),
-      values.value,
+      new FilterField(field),
+      FilterOperator.fromValue(operator),
+      new FilterValue(value),
     );
   }
 }

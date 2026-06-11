@@ -34,19 +34,19 @@ export class InventoryReservedDomainEvent extends ECDomainEvent {
     };
   }
 
-  static fromPrimitives(
-    aggregateId: string,
-    body: Record<string, unknown>,
-    eventId: string,
-    occurredOn: Date,
-  ): InventoryReservedDomainEvent {
+  static fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: Record<string, unknown>;
+  }): InventoryReservedDomainEvent {
     return new InventoryReservedDomainEvent({
-      productId: aggregateId,
-      orderId: body.orderId as string,
-      reservedQuantity: body.reservedQuantity as number,
-      remainingStock: body.remainingStock as number,
-      eventId,
-      occurredOn,
+      productId: params.aggregateId,
+      orderId: params.attributes.orderId as string,
+      reservedQuantity: params.attributes.reservedQuantity as number,
+      remainingStock: params.attributes.remainingStock as number,
+      eventId: params.eventId,
+      occurredOn: params.occurredOn,
     });
   }
 }

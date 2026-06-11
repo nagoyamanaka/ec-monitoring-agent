@@ -46,20 +46,20 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
     };
   }
 
-  static fromPrimitives(
-    aggregateId: string,
-    body: Record<string, unknown>,
-    eventId: string,
-    occurredOn: Date,
-  ): InventoryReservationFailedDomainEvent {
+  static fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: Record<string, unknown>;
+  }): InventoryReservationFailedDomainEvent {
     return new InventoryReservationFailedDomainEvent({
-      productId: aggregateId,
-      orderId: body.orderId as string,
-      requestedQuantity: body.requestedQuantity as number,
-      currentStock: body.currentStock as number,
-      reason: body.reason as InventoryFailureReasonValue,
-      eventId,
-      occurredOn,
+      productId: params.aggregateId,
+      orderId: params.attributes.orderId as string,
+      requestedQuantity: params.attributes.requestedQuantity as number,
+      currentStock: params.attributes.currentStock as number,
+      reason: params.attributes.reason as InventoryFailureReasonValue,
+      eventId: params.eventId,
+      occurredOn: params.occurredOn,
     });
   }
 }

@@ -1,26 +1,15 @@
-import { ValueObject } from "../../../Shared/domain/ValueObject.js";
-import { DomainError } from "../../../Shared/domain/DomainError.js";
+import { EnumValueObject } from "../../../Shared/domain/value-object/EnumValueObject.js";
+import { InvalidArgumentError } from "../../../Shared/domain/value-object/InvalidArgumentError.js";
 
-export const OrderStatusValues = {
-  PENDING: "PENDING",
-  CONFIRMED: "CONFIRMED",
-  FAILED: "FAILED",
-} as const;
-
-export type OrderStatusValue =
-  (typeof OrderStatusValues)[keyof typeof OrderStatusValues];
-
-export class InvalidOrderStatusError extends DomainError {
-  readonly errorCode = "INVALID_ORDER_STATUS";
-
-  constructor(value: string) {
-    super(`Invalid OrderStatus: "${value}"`);
-  }
+export enum OrderStatusValues {
+  PENDING = "PENDING",
+  CONFIRMED = "CONFIRMED",
+  FAILED = "FAILED",
 }
 
-export class OrderStatus extends ValueObject<OrderStatusValue> {
-  constructor(value: OrderStatusValue) {
-    super(value);
+export class OrderStatus extends EnumValueObject<OrderStatusValues> {
+  constructor(value: OrderStatusValues) {
+    super(value, Object.values(OrderStatusValues));
   }
 
   static pending(): OrderStatus {
@@ -36,10 +25,7 @@ export class OrderStatus extends ValueObject<OrderStatusValue> {
   }
 
   static fromString(value: string): OrderStatus {
-    if (!Object.values(OrderStatusValues).includes(value as OrderStatusValue)) {
-      throw new InvalidOrderStatusError(value);
-    }
-    return new OrderStatus(value as OrderStatusValue);
+    return new OrderStatus(value as OrderStatusValues);
   }
 
   isPending(): boolean {
@@ -52,5 +38,9 @@ export class OrderStatus extends ValueObject<OrderStatusValue> {
 
   isFailed(): boolean {
     return this.value === OrderStatusValues.FAILED;
+  }
+
+  protected throwErrorForInvalidValue(value: OrderStatusValues): void {
+    throw new InvalidArgumentError(`Invalid OrderStatus: "${value}"`);
   }
 }

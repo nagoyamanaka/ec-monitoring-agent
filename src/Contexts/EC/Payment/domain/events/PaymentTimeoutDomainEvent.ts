@@ -34,19 +34,19 @@ export class PaymentTimeoutDomainEvent extends ECDomainEvent {
     };
   }
 
-  static fromPrimitives(
-    aggregateId: string,
-    body: Record<string, unknown>,
-    eventId: string,
-    occurredOn: Date,
-  ): PaymentTimeoutDomainEvent {
+  static fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: Record<string, unknown>;
+  }): PaymentTimeoutDomainEvent {
     return new PaymentTimeoutDomainEvent({
-      paymentAttemptId: aggregateId,
-      orderId: body.orderId as string,
-      customerId: body.customerId as string,
-      amount: body.amount as number,
-      eventId,
-      occurredOn,
+      paymentAttemptId: params.aggregateId,
+      orderId: params.attributes.orderId as string,
+      customerId: params.attributes.customerId as string,
+      amount: params.attributes.amount as number,
+      eventId: params.eventId,
+      occurredOn: params.occurredOn,
     });
   }
 }

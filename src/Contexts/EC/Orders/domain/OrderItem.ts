@@ -1,12 +1,4 @@
-import { DomainError } from "../../../Shared/domain/DomainError.js";
-
-export class InvalidOrderItemError extends DomainError {
-  readonly errorCode = "INVALID_ORDER_ITEM";
-
-  constructor(message: string) {
-    super(message);
-  }
-}
+import { InvalidArgumentError } from "../../../Shared/domain/value-object/InvalidArgumentError.js";
 
 export interface OrderItemPrimitive {
   productId: string;
@@ -21,12 +13,12 @@ export class OrderItem {
 
   constructor(productId: string, quantity: number, unitPrice: number) {
     if (quantity < 1) {
-      throw new InvalidOrderItemError(
+      throw new InvalidArgumentError(
         `OrderItem quantity must be >= 1, got: ${quantity}`,
       );
     }
     if (unitPrice < 0) {
-      throw new InvalidOrderItemError(
+      throw new InvalidArgumentError(
         `OrderItem unitPrice must be >= 0, got: ${unitPrice}`,
       );
     }

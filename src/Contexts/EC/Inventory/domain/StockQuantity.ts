@@ -1,20 +1,14 @@
-import { ValueObject } from "../../../Shared/domain/ValueObject.js";
-import { DomainError } from "../../../Shared/domain/DomainError.js";
+import { NumberValueObject } from "../../../Shared/domain/value-object/NumberValueObject.js";
+import { InvalidArgumentError } from "../../../Shared/domain/value-object/InvalidArgumentError.js";
 
-export class InvalidStockQuantityError extends DomainError {
-  readonly errorCode = "INVALID_STOCK_QUANTITY";
-
+export class StockQuantity extends NumberValueObject {
   constructor(value: number) {
-    super(`StockQuantity must be >= 0, got: ${value}`);
-  }
-}
-
-export class StockQuantity extends ValueObject<number> {
-  constructor(value: number) {
-    if (value < 0) {
-      throw new InvalidStockQuantityError(value);
-    }
     super(value);
+    if (value < 0) {
+      throw new InvalidArgumentError(
+        `StockQuantity must be >= 0, got: ${value}`,
+      );
+    }
   }
 
   hasEnoughStock(quantity: number): boolean {
@@ -24,7 +18,9 @@ export class StockQuantity extends ValueObject<number> {
   decrement(quantity: number): StockQuantity {
     const result = this.value - quantity;
     if (result < 0) {
-      throw new InvalidStockQuantityError(result);
+      throw new InvalidArgumentError(
+        `StockQuantity cannot be decremented below 0, got: ${result}`,
+      );
     }
     return new StockQuantity(result);
   }

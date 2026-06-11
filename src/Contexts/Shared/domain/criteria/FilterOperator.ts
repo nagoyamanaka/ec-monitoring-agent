@@ -1,43 +1,38 @@
-export const FilterOperatorValues = {
-  EQUAL: "=",
-  NOT_EQUAL: "!=",
-  GT: ">",
-  LT: "<",
-  CONTAINS: "CONTAINS",
-  NOT_CONTAINS: "NOT_CONTAINS",
-} as const;
+import { EnumValueObject } from "../value-object/EnumValueObject.js";
+import { InvalidArgumentError } from "../value-object/InvalidArgumentError.js";
 
-export type FilterOperatorValue =
-  (typeof FilterOperatorValues)[keyof typeof FilterOperatorValues];
+export enum Operator {
+  EQUAL = "=",
+  NOT_EQUAL = "!=",
+  GT = ">",
+  LT = "<",
+  CONTAINS = "CONTAINS",
+  NOT_CONTAINS = "NOT_CONTAINS",
+}
 
-export class FilterOperator {
-  readonly value: FilterOperatorValue;
+export class FilterOperator extends EnumValueObject<Operator> {
+  constructor(value: Operator) {
+    super(value, Object.values(Operator));
+  }
 
-  constructor(value: FilterOperatorValue) {
-    this.value = value;
+  static fromValue(value: string): FilterOperator {
+    for (const operatorValue of Object.values(Operator)) {
+      if (value === operatorValue.toString()) {
+        return new FilterOperator(operatorValue);
+      }
+    }
+    throw new InvalidArgumentError(`The filter operator ${value} is invalid`);
+  }
+
+  public isPositive(): boolean {
+    return this.value !== Operator.NOT_EQUAL && this.value !== Operator.NOT_CONTAINS;
+  }
+
+  protected throwErrorForInvalidValue(value: Operator): void {
+    throw new InvalidArgumentError(`The filter operator ${value} is invalid`);
   }
 
   static equal(): FilterOperator {
-    return new FilterOperator(FilterOperatorValues.EQUAL);
-  }
-
-  static notEqual(): FilterOperator {
-    return new FilterOperator(FilterOperatorValues.NOT_EQUAL);
-  }
-
-  static gt(): FilterOperator {
-    return new FilterOperator(FilterOperatorValues.GT);
-  }
-
-  static lt(): FilterOperator {
-    return new FilterOperator(FilterOperatorValues.LT);
-  }
-
-  static contains(): FilterOperator {
-    return new FilterOperator(FilterOperatorValues.CONTAINS);
-  }
-
-  static notContains(): FilterOperator {
-    return new FilterOperator(FilterOperatorValues.NOT_CONTAINS);
+    return this.fromValue(Operator.EQUAL);
   }
 }

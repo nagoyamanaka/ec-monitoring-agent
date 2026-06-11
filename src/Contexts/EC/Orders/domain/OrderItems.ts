@@ -1,22 +1,15 @@
-import { ValueObject } from "../../../Shared/domain/ValueObject.js";
-import { DomainError } from "../../../Shared/domain/DomainError.js";
+import { InvalidArgumentError } from "../../../Shared/domain/value-object/InvalidArgumentError.js";
 import { OrderItem, OrderItemPrimitive } from "./OrderItem.js";
 import { TotalAmount } from "./TotalAmount.js";
 
-export class EmptyOrderItemsError extends DomainError {
-  readonly errorCode = "EMPTY_ORDER_ITEMS";
+export class OrderItems {
+  readonly value: OrderItem[];
 
-  constructor() {
-    super("Order must contain at least one item");
-  }
-}
-
-export class OrderItems extends ValueObject<OrderItem[]> {
   constructor(value: OrderItem[]) {
     if (value.length === 0) {
-      throw new EmptyOrderItemsError();
+      throw new InvalidArgumentError("Order must contain at least one item");
     }
-    super(value);
+    this.value = value;
   }
 
   totalAmount(): TotalAmount {

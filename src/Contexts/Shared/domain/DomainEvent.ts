@@ -1,12 +1,20 @@
-import { randomUUID } from "crypto";
+import { Uuid } from "./value-object/Uuid.js";
+
+type DomainEventAttributes = Record<string, unknown>;
 
 export abstract class DomainEvent {
-  static readonly EVENT_NAME: string;
+  static EVENT_NAME: string;
+  static fromPrimitives: (params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: DomainEventAttributes;
+  }) => DomainEvent;
 
-  readonly eventName: string;
   readonly aggregateId: string;
   readonly eventId: string;
   readonly occurredOn: Date;
+  readonly eventName: string;
 
   constructor(params: {
     eventName: string;
@@ -14,20 +22,22 @@ export abstract class DomainEvent {
     eventId?: string;
     occurredOn?: Date;
   }) {
-    this.eventName = params.eventName;
-    this.aggregateId = params.aggregateId;
-    this.eventId = params.eventId ?? randomUUID();
-    this.occurredOn = params.occurredOn ?? new Date();
+    const { aggregateId, eventName, eventId, occurredOn } = params;
+    this.aggregateId = aggregateId;
+    this.eventId = eventId ?? Uuid.random().value;
+    this.occurredOn = occurredOn ?? new Date();
+    this.eventName = eventName;
   }
 
-  abstract toPrimitives(): Record<string, unknown>;
-
-  static fromPrimitives(
-    _aggregateId: string,
-    _body: Record<string, unknown>,
-    _eventId: string,
-    _occurredOn: Date,
-  ): DomainEvent {
-    throw new Error("fromPrimitives must be implemented in subclass");
-  }
+  abstract toPrimitives(): DomainEventAttributes;
 }
+
+export type DomainEventClass = {
+  EVENT_NAME: string;
+  fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: DomainEventAttributes;
+  }): DomainEvent;
+};

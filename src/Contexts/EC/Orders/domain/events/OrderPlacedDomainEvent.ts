@@ -35,19 +35,19 @@ export class OrderPlacedDomainEvent extends ECDomainEvent {
     };
   }
 
-  static fromPrimitives(
-    aggregateId: string,
-    body: Record<string, unknown>,
-    eventId: string,
-    occurredOn: Date,
-  ): OrderPlacedDomainEvent {
+  static fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: Record<string, unknown>;
+  }): OrderPlacedDomainEvent {
     return new OrderPlacedDomainEvent({
-      orderId: aggregateId,
-      customerId: body.customerId as string,
-      items: body.items as OrderItemPrimitive[],
-      totalAmount: body.totalAmount as number,
-      eventId,
-      occurredOn,
+      orderId: params.aggregateId,
+      customerId: params.attributes.customerId as string,
+      items: params.attributes.items as OrderItemPrimitive[],
+      totalAmount: params.attributes.totalAmount as number,
+      eventId: params.eventId,
+      occurredOn: params.occurredOn,
     });
   }
 }

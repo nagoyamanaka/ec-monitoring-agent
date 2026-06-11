@@ -7,17 +7,11 @@ export class Filters {
     this.filters = filters;
   }
 
-  static none(): Filters {
-    return new Filters([]);
-  }
-
-  static fromValues(
-    filters: Array<{ field: string; operator: string; value: string }>,
-  ): Filters {
+  static fromValues(filters: Array<Map<string, string>>): Filters {
     return new Filters(filters.map(Filter.fromValues));
   }
 
-  isEmpty(): boolean {
-    return this.filters.length === 0;
+  static none(): Filters {
+    return new Filters([]);
   }
 }

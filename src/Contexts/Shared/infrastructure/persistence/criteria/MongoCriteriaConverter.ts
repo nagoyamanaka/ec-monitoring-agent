@@ -1,6 +1,6 @@
 import { Criteria } from "../../../domain/criteria/Criteria.js";
 import { Filter } from "../../../domain/criteria/Filter.js";
-import { FilterOperatorValues } from "../../../domain/criteria/FilterOperator.js";
+import { Operator } from "../../../domain/criteria/FilterOperator.js";
 
 type MongoFilter = Record<string, unknown>;
 
@@ -11,13 +11,16 @@ export class MongoCriteriaConverter {
     limit?: number;
     skip?: number;
   } {
-    const filter = criteria.hasFilters()
-      ? this.buildFilter(criteria)
-      : {};
+    const filter = criteria.hasFilters() ? this.buildFilter(criteria) : {};
 
-    const sort = criteria.order.hasOrder()
-      ? { [criteria.order.orderBy]: criteria.order.orderType === "asc" ? 1 as const : -1 as const }
-      : undefined;
+    const sort =
+      criteria.order.hasOrder()
+        ? {
+            [criteria.order.orderBy.value]: criteria.order.orderType.isAsc()
+              ? (1 as const)
+              : (-1 as const),
+          }
+        : undefined;
 
     return {
       filter,
@@ -28,25 +31,28 @@ export class MongoCriteriaConverter {
   }
 
   private buildFilter(criteria: Criteria): MongoFilter {
-    return criteria.filters.filters.reduce<MongoFilter>((acc, filter) => {
-      return { ...acc, ...this.filterToMongo(filter) };
-    }, {});
+    return criteria.filters.filters.reduce<MongoFilter>(
+      (acc, filter) => ({ ...acc, ...this.filterToMongo(filter) }),
+      {},
+    );
   }
 
   private filterToMongo(filter: Filter): MongoFilter {
-    const { field, operator, value } = filter;
-    switch (operator.value) {
-      case FilterOperatorValues.EQUAL:
+    const field = filter.field.value;
+    const value = filter.value.value;
+
+    switch (filter.operator.value) {
+      case Operator.EQUAL:
         return { [field]: value };
-      case FilterOperatorValues.NOT_EQUAL:
+      case Operator.NOT_EQUAL:
         return { [field]: { $ne: value } };
-      case FilterOperatorValues.GT:
+      case Operator.GT:
         return { [field]: { $gt: value } };
-      case FilterOperatorValues.LT:
+      case Operator.LT:
         return { [field]: { $lt: value } };
-      case FilterOperatorValues.CONTAINS:
+      case Operator.CONTAINS:
         return { [field]: { $regex: value, $options: "i" } };
-      case FilterOperatorValues.NOT_CONTAINS:
+      case Operator.NOT_CONTAINS:
         return { [field]: { $not: { $regex: value, $options: "i" } } };
       default:
         return {};

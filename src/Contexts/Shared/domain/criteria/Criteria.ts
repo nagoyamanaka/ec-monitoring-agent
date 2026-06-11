@@ -1,18 +1,13 @@
 import { Filters } from "./Filters.js";
-import { CriteriaOrder } from "./CriteriaOrder.js";
+import { Order } from "./Order.js";
 
 export class Criteria {
   readonly filters: Filters;
-  readonly order: CriteriaOrder;
+  readonly order: Order;
   readonly limit?: number;
   readonly offset?: number;
 
-  constructor(
-    filters: Filters,
-    order: CriteriaOrder,
-    limit?: number,
-    offset?: number,
-  ) {
+  constructor(filters: Filters, order: Order, limit?: number, offset?: number) {
     this.filters = filters;
     this.order = order;
     this.limit = limit;
@@ -20,10 +15,10 @@ export class Criteria {
   }
 
   static all(): Criteria {
-    return new Criteria(Filters.none(), CriteriaOrder.none());
+    return new Criteria(Filters.none(), Order.none());
   }
 
-  hasFilters(): boolean {
-    return !this.filters.isEmpty();
+  public hasFilters(): boolean {
+    return this.filters.filters.length > 0;
   }
 }

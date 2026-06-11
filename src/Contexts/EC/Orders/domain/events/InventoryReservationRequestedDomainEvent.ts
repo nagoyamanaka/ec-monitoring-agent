@@ -27,17 +27,17 @@ export class InventoryReservationRequestedDomainEvent extends ECDomainEvent {
     };
   }
 
-  static fromPrimitives(
-    aggregateId: string,
-    body: Record<string, unknown>,
-    eventId: string,
-    occurredOn: Date,
-  ): InventoryReservationRequestedDomainEvent {
+  static fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: Record<string, unknown>;
+  }): InventoryReservationRequestedDomainEvent {
     return new InventoryReservationRequestedDomainEvent({
-      orderId: aggregateId,
-      items: body.items as OrderItemPrimitive[],
-      eventId,
-      occurredOn,
+      orderId: params.aggregateId,
+      items: params.attributes.items as OrderItemPrimitive[],
+      eventId: params.eventId,
+      occurredOn: params.occurredOn,
     });
   }
 }
