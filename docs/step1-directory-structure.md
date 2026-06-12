@@ -35,21 +35,24 @@ src/Contexts/Shared/
 │   ├── Command.ts                # CQRS コマンド基底クラス
 │   ├── CommandBus.ts             # コマンドバスインターフェース
 │   ├── CommandHandler.ts         # CommandHandler<T> インターフェース（subscribedTo/handle）
-│   ├── CommandNotRegisteredError.ts
 │   ├── Query.ts                  # CQRS クエリ基底クラス
 │   ├── QueryBus.ts               # クエリバスインターフェース
 │   ├── QueryHandler.ts           # QueryHandler<Q,R> インターフェース
-│   ├── QueryNotRegisteredError.ts
 │   ├── Response.ts               # クエリ応答マーカーインターフェース
 │   ├── NewableClass.ts           # ユーティリティ型
 │   ├── Nullable.ts               # T | null | undefined ユーティリティ型
+│   ├── errors/
+│   │   ├── AppError.ts           # エラーインターフェース（errorCode/message）
+│   │   ├── DomainError.ts        # ドメインエラー基底（Error + AppError 実装）
+│   │   ├── ApplicationError.ts   # アプリケーションエラー基底
+│   │   ├── InfrastructureError.ts # インフラエラー基底
+│   │   └── InvalidArgumentError.ts # VO構築失敗の基底エラー（errorCode: INVALID_ARGUMENT）
 │   ├── value-object/             # CodelyTV準拠のValue Object基底クラス群
 │   │   ├── ValueObject.ts        # T extends Primitives 制約 + null guard + equals
 │   │   ├── StringValueObject.ts  # ValueObject<string> 抽象基底
 │   │   ├── NumberValueObject.ts  # ValueObject<number> 抽象基底（isBiggerThan）
 │   │   ├── EnumValueObject.ts    # 列挙型VO基底（validValues + checkValueIsValid）
-│   │   ├── Uuid.ts               # UUID v4 バリデーション付きVO
-│   │   └── InvalidArgumentError.ts # VO構築失敗の基底エラー
+│   │   └── Uuid.ts               # UUID v4 バリデーション付きVO
 │   ├── criteria/
 │   │   ├── Criteria.ts           # 検索条件ルートオブジェクト（filters/order/limit/offset）
 │   │   ├── Filter.ts             # FilterField + FilterOperator + FilterValue の集約
@@ -63,19 +66,55 @@ src/Contexts/Shared/
 │   └── logging/
 │       ├── Logger.ts             # ログ書き込みインターフェース（write(log): Promise<void>）※GCP OTel要件のため独自設計を維持
 │       └── StructuredLog.ts      # ログスキーマの型定義（severity/trace_id/span_idなど）
+├── application/
+│   └── errors/
+│       ├── CommandNotRegisteredError.ts  # ApplicationError派生（COMMAND_NOT_REGISTERED）
+│       └── QueryNotRegisteredError.ts    # ApplicationError派生（QUERY_NOT_REGISTERED）
 └── infrastructure/
+    ├── CommandBus/
+    │   ├── InMemoryCommandBus.ts         # CommandBus実装（Handler map管理）
+    │   └── CommandHandlers.ts            # CommandHandlerの登録・解決
+    ├── QueryBus/
+    │   ├── InMemoryQueryBus.ts           # QueryBus実装
+    │   └── QueryHandlers.ts              # QueryHandlerの登録・解決
     ├── EventBus/
+    │   ├── DomainEventJsonSerializer.ts  # DomainEvent→JSONシリアライズ
+    │   ├── DomainEventDeserializer.ts    # JSON→DomainEventデシリアライズ
+    │   ├── DomainEventSubscribers.ts     # Subscriberの登録管理
+    │   ├── DomainEventFailoverPublisher/
+    │   │   └── DomainEventFailoverPublisher.ts  # 発行失敗時のリトライ処理
+    │   ├── InMemory/
+    │   │   └── InMemoryAsyncEventBus.ts  # テスト用インメモリEventBus
     │   └── RabbitMq/
-    │       ├── RabbitMqEventBus.ts              # RabbitMQ EventBus実装（Failover Publisher込み）
+    │       ├── RabbitMqEventBus.ts              # RabbitMQ EventBus実装
     │       ├── RabbitMqConnection.ts            # 接続管理
-    │       └── RabbitMqExchangeNameFormatter.ts # Exchange命名規則
-    ├── persistence/
-    │   └── criteria/
-    │       └── MongoCriteriaConverter.ts        # Criteria→MongoDBクエリ変換（CodelyTV流用）
-    └── logging/
-        ├── FileLogger.ts         # Logger実装（OTel経由でファイル出力）
-        ├── OTelLogger.ts         # Logger実装（OTel Collector送信・将来拡張用）
-        └── CompositeLogger.ts    # Logger実装（Promise.allSettledで並列Transport実行）
+    │       ├── RabbitMQConfigurer.ts            # Exchange/Queue設定
+    │       ├── RabbitMQConsumer.ts              # メッセージ消費処理
+    │       ├── RabbitMQConsumerFactory.ts
+    │       ├── RabbitMQExchangeNameFormatter.ts # Exchange命名規則
+    │       ├── RabbitMQQueueNameFormatter.ts    # Queue命名規則
+    │       ├── ConnectionSettings.ts
+    │       └── ExchangeSetting.ts
+    ├── errors/
+    │   └── LogWriteError.ts              # InfrastructureError派生（ログ書き込み失敗）
+    ├── logging/
+    │   ├── FileLogger.ts                 # Logger実装（OTel経由でファイル出力）
+    │   └── OTelLogger.ts                 # Logger実装（OTel Collector送信・将来拡張用）
+    └── persistence/
+        ├── mongo/
+        │   ├── MongoClientFactory.ts     # MongoDB接続ファクトリ
+        │   ├── MongoConfig.ts            # 接続設定
+        │   └── MongoRepository.ts        # Criteria対応の抽象MongoDBリポジトリ基底
+        ├── elasticsearch/
+        │   ├── ElasticClientFactory.ts
+        │   ├── ElasticConfig.ts
+        │   ├── ElasticCriteriaConverter.ts  # Criteria→Elasticsearchクエリ変換
+        │   └── ElasticRepository.ts
+        └── drizzle/                      # 将来のRDB移行時用（現在未使用）
+            ├── DrizzleClientFactory.ts
+            ├── DrizzleConfig.ts
+            ├── DrizzleRepository.ts
+            └── ValueObjectTransformer.ts
 ```
 
 ---
@@ -323,6 +362,60 @@ infrastructure/api → types
 AlertsLayout → components/demo/DemoDrawer（ここだけ）
 DefaultLayout → DemoDrawerを参照しない
 
-ApplicationService / CommandHandler → Logger interface のみ（FileLogger/CompositeLogger を直接importしない）
+ApplicationService / CommandHandler → Logger interface のみ（FileLogger/OTelLogger を直接importしない）
 EC コンテキスト → Monitoring コンテキストを直接importしない（RabbitMQ経由）
+```
+
+---
+
+## テスト戦略
+
+### ファイル配置：フラットなコロケーション
+
+テストファイルはソースファイルと同じディレクトリに並べる（`__tests__` サブディレクトリは作らない）。
+
+```
+src/Contexts/EC/Orders/domain/
+├── Order.ts
+├── Order.test.ts       ← 隣に並べる
+├── OrderItems.ts
+└── OrderItems.test.ts
+```
+
+**理由**: リネーム・移動時にテストが一緒に動く。IDEで `Order.ts` の隣に `Order.test.ts` が表示される。Vitest のデフォルト glob がそのまま機能する。
+
+統合テスト（MongoDB/RabbitMQ接続が必要）はサフィックスで区別し、後から `vitest.config.ts` で分離できるようにする。
+
+```
+src/Contexts/EC/Orders/infrastructure/
+├── MongoOrderRepository.ts
+└── MongoOrderRepository.integration.test.ts
+```
+
+---
+
+### レイヤー別テスト方針
+
+| ファイル種別 | テスト方針 | 理由 |
+|---|---|---|
+| インターフェース・型定義のみ | **テスト不要** | TypeScript が静的に保証。実行時ロジックがない |
+| `AggregateRoot`, `ValueObject`, `DomainEvent` 基底クラス | **集約テストで間接カバー** | `Order.test.ts` 等で `record()` / `equals()` が自然に通る。`FakeAggregate` を作るのはカバレッジ埋めにしかならない |
+| `Uuid`, `criteria/` | **直接テスト** | UUID バリデーション・フィルタ組み立て等、独立した振る舞いを持つ |
+| domain VO / Aggregate | **ユースケース単位でテスト** | `Order.place()` で DomainEvent 発行まで一気通貫でテストする |
+| application CommandHandler | **モックリポジトリでユニットテスト** | EventBus / Repository を vi.fn() でモックし、Handler の分岐ロジックに集中 |
+| infrastructure Repository | **統合テスト**（`.integration.test.ts`） | 実際の MongoDB に接続して `save` / `findById` を確認 |
+
+### テスト不要ファイル一覧（`Shared/domain`）
+
+以下はインターフェース・型定義・抽象クラスのみのため、単体テストを書かない。
+
+```
+Command.ts / CommandBus.ts / CommandHandler.ts
+Query.ts / QueryBus.ts / QueryHandler.ts
+EventBus.ts / DomainEventSubscriber.ts
+Logger.ts / StructuredLog.ts / AppError.ts
+Nullable.ts / NewableClass.ts / Response.ts
+AggregateRoot.ts    → Order.test.ts で間接カバー
+ValueObject.ts      → Uuid.test.ts / criteria テストで間接カバー
+DomainEvent.ts      → OrderPlacedDomainEvent.test.ts で間接カバー
 ```
