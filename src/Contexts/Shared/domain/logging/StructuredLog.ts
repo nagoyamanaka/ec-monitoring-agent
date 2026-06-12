@@ -1,4 +1,4 @@
-export interface StructuredLog {
+export type StructuredLog = {
   severity: "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
   service: string;
   trace_id: string;
