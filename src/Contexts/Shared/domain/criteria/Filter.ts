@@ -1,4 +1,4 @@
-import { InvalidArgumentError } from "../value-object/InvalidArgumentError.js";
+import { InvalidArgumentError } from "../errors/InvalidArgumentError.js";
 import { FilterField } from "./FilterField.js";
 import { FilterOperator } from "./FilterOperator.js";
 import { FilterValue } from "./FilterValue.js";

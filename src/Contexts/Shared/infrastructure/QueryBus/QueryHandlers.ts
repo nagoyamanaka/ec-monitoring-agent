@@ -1,7 +1,7 @@
 import { Query } from '../../domain/Query.js';
 import { QueryHandler } from '../../domain/QueryHandler.js';
 import { Response } from '../../domain/Response.js';
-import { QueryNotRegisteredError } from '../../domain/QueryNotRegisteredError.js';
+import { QueryNotRegisteredError } from '../../application/errors/QueryNotRegisteredError.js';
 
 export class QueryHandlers extends Map<Query, QueryHandler<Query, Response>> {
   constructor(queryHandlers: Array<QueryHandler<Query, Response>>) {

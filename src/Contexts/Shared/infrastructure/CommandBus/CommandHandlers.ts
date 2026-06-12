@@ -1,6 +1,6 @@
 import { Command } from '../../domain/Command.js';
 import { CommandHandler } from '../../domain/CommandHandler.js';
-import { CommandNotRegisteredError } from '../../domain/CommandNotRegisteredError.js';
+import { CommandNotRegisteredError } from '../../application/errors/CommandNotRegisteredError.js';
 
 export class CommandHandlers extends Map<Command, CommandHandler<Command>> {
   constructor(commandHandlers: Array<CommandHandler<Command>>) {

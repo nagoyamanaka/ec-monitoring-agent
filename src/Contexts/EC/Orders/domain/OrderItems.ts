@@ -1,4 +1,4 @@
-import { InvalidArgumentError } from "../../../Shared/domain/value-object/InvalidArgumentError.js";
+import { InvalidArgumentError } from "../../../Shared/domain/errors/InvalidArgumentError.js";
 import { OrderItem, OrderItemPrimitive } from "./OrderItem.js";
 import { TotalAmount } from "./TotalAmount.js";
 

@@ -1,5 +1,5 @@
 import { AggregateRoot } from "../../../Shared/domain/AggregateRoot.js";
-import { DomainError } from "../../../Shared/domain/DomainError.js";
+import { DomainError } from "../../../Shared/domain/errors/DomainError.js";
 import { OrderId } from "./OrderId.js";
 import { CustomerId } from "./CustomerId.js";
 import { OrderItems, } from "./OrderItems.js";

@@ -1,5 +1,5 @@
 import { v4 as uuidV4, validate } from "uuid";
-import { InvalidArgumentError } from "./InvalidArgumentError.js";
+import { InvalidArgumentError } from "../errors/InvalidArgumentError.js";
 import { ValueObject } from "./ValueObject.js";
 
 export class Uuid extends ValueObject<string> {

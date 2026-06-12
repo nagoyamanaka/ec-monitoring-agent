@@ -1,5 +1,5 @@
 import { EnumValueObject } from "../../../Shared/domain/value-object/EnumValueObject.js";
-import { InvalidArgumentError } from "../../../Shared/domain/value-object/InvalidArgumentError.js";
+import { InvalidArgumentError } from "../../../Shared/domain/errors/InvalidArgumentError.js";
 
 export enum OrderStatusValues {
   PENDING = "PENDING",

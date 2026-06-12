@@ -1,4 +1,4 @@
-import { InvalidArgumentError } from "../../../Shared/domain/value-object/InvalidArgumentError.js";
+import { InvalidArgumentError } from "../../../Shared/domain/errors/InvalidArgumentError.js";
 
 export interface OrderItemPrimitive {
   productId: string;

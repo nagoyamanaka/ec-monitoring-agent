@@ -1,5 +1,5 @@
 import { NumberValueObject } from "../../../Shared/domain/value-object/NumberValueObject.js";
-import { InvalidArgumentError } from "../../../Shared/domain/value-object/InvalidArgumentError.js";
+import { InvalidArgumentError } from "../../../Shared/domain/errors/InvalidArgumentError.js";
 
 export class StockQuantity extends NumberValueObject {
   constructor(value: number) {
