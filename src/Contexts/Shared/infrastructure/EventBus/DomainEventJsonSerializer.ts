@@ -1,15 +1,17 @@
-import { DomainEvent } from '../../domain/DomainEvent.js';
+import { DomainEvent } from "../../domain/DomainEvent.js";
 
 export class DomainEventJsonSerializer {
   static serialize(event: DomainEvent): string {
+    // 元(Object): {id:1}
+    // 変換後(String):"{\"id\"}"
     return JSON.stringify({
       data: {
         id: event.eventId,
         type: event.eventName,
         occurred_on: event.occurredOn.toISOString(),
         aggregateId: event.aggregateId,
-        attributes: event.toPrimitives()
-      }
+        attributes: event.toPrimitives(),
+      },
     });
   }
 }
