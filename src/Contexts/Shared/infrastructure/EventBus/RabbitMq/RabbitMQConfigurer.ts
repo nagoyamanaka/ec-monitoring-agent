@@ -2,12 +2,12 @@ import { DomainEvent } from "../../../domain/DomainEvent.js";
 import { DomainEventSubscriber } from "../../../domain/DomainEventSubscriber.js";
 import { RabbitMqConnection } from "./RabbitMqConnection.js";
 import { RabbitMQExchangeNameFormatter } from "./RabbitMQExchangeNameFormatter.js";
-import { RabbitMQqueueFormatter } from "./RabbitMQqueueFormatter.js";
+import { RabbitMQQueueNameFormatter } from "./RabbitMQQueueNameFormatter.js";
 
 export class RabbitMQConfigurer {
   constructor(
     private connection: RabbitMqConnection,
-    private queueNameFormatter: RabbitMQqueueFormatter,
+    private queueNameFormatter: RabbitMQQueueNameFormatter,
     private messageRetryTtl: number,
   ) {}
 

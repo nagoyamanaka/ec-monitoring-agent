@@ -6,20 +6,20 @@ import { DomainEventJsonSerializer } from '../DomainEventJsonSerializer.js';
 import { DomainEventSubscribers } from '../DomainEventSubscribers.js';
 import { RabbitMqConnection } from './RabbitMqConnection.js';
 import { RabbitMQConsumerFactory } from './RabbitMQConsumerFactory.js';
-import { RabbitMQqueueFormatter } from './RabbitMQqueueFormatter.js';
+import { RabbitMQQueueNameFormatter } from './RabbitMQQueueNameFormatter.js';
 
 export class RabbitMQEventBus implements EventBus {
   private failoverPublisher: DomainEventFailoverPublisher;
   private connection: RabbitMqConnection;
   private exchange: string;
-  private queueNameFormatter: RabbitMQqueueFormatter;
+  private queueNameFormatter: RabbitMQQueueNameFormatter;
   private maxRetries: Number;
 
   constructor(params: {
     failoverPublisher: DomainEventFailoverPublisher;
     connection: RabbitMqConnection;
     exchange: string;
-    queueNameFormatter: RabbitMQqueueFormatter;
+    queueNameFormatter: RabbitMQQueueNameFormatter;
     maxRetries: Number;
   }) {
     const { failoverPublisher, connection, exchange } = params;

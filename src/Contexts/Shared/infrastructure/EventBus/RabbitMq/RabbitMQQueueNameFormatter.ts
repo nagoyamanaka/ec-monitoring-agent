@@ -4,7 +4,7 @@ import { DomainEventSubscriber } from "../../../domain/DomainEventSubscriber.js"
 // キューの名前フォーマットというけど、実質subscriber用のroutingKey生成器
 // RabbitMqConfigure.tsのgetRoutingKeysFor()を見ると、イベント用のroutingKeyは直接domainEvent名で作ってる。
 // なのでこのクラスは実質subscriberの名前でexchgangeにrouting keyを登録したい(別ルート)だけ
-export class RabbitMQqueueFormatter {
+export class RabbitMQQueueNameFormatter {
   constructor(private moduleName: string) {}
 
   format(subscriber: DomainEventSubscriber<DomainEvent>) {
