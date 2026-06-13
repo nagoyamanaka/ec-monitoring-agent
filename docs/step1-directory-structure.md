@@ -1,25 +1,28 @@
 # Step 1: ディレクトリ構成（詳細設計）
 
-> 本ドキュメントは設計エージェント向けプロンプト v4 の Step 1 詳細設計です。
+> 本ドキュメントは設計エージェント向けプロンプト v9 の Step 1 詳細設計です。
 > 元資料の設計背景・制約・ハッカソン要件は元資料を参照してください。
 
 ---
 
 ## 設計判断メモ（本ドキュメント確定時の議論）
 
-| 判断項目                         | 決定内容                                                              | 理由                                                                                                                            |
-| -------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| アプリのプロセス分割             | `ec/backend` と `backoffice/backend` を別プロセスに分離               | 将来のスケーリング時にプロセス単位でコンテナスケールアウトできる。コンテキスト分離を構成で体現できる                            |
-| RabbitMQ Subscriberの配置        | 各バックエンドプロセス内に内包                                        | Subscriberは「そのイベントを使いたいコンテキストが自分で持つ」のがEDAの自然な形。中央集権化するメリット（共通処理の集約）がない |
-| フロントエンドのディレクトリ構成 | レイヤー優先アプローチ（pages / components / hooks / infrastructure） | バックエンドのClean Architectureと対称性があり面接で説明しやすい。3画面規模に対してFeature-Sliced Designはオーバースペック      |
-| SSE通信の抽象化                  | `AlertStream` interfaceで抽象化                                       | SSEとMockの切り替えに実際の意味がある。REST APIは抽象化しない（プロトコル変更シナリオが現実的にない）                           |
-| HTTPクライアント                 | fetchベースの薄いラッパーを自前実装（axiosを使わない）                | サプライチェーンインシデントリスク回避。標準APIで主要機能（エラーハンドリング・タイムアウト・ヘッダー）を賄える。実装はAIに委譲 |
-| HTTPクライアントの抽象化         | `HttpClient` interfaceを定義し `FetchHttpClient` が実装               | `alertsApi.ts` 等はinterfaceに依存することでテスト時のモック差し替えが可能になる                                                |
-| デモ系コンポーネントの配置       | `components/demo/` に完全に閉じ込め、`AlertsLayout` のみで参照        | プロダクションUIへの非侵食。`AlertDetailPage` 等はデモの存在を知らない構造                                                      |
-| Shared/domain の value-object 設計 | CodelyTV の `value-object/` サブディレクトリをそのまま流用（`Uuid` / `StringValueObject` / `NumberValueObject` / `EnumValueObject`） | UUID バリデーション・Primitive 型制約・列挙型検証を基底クラスに集約。ECドメインの VO が `extends Uuid` / `extends NumberValueObject` 等で簡潔になる |
-| Shared/domain の CQRS 基盤追加    | `Command` / `CommandBus` / `CommandHandler` / `Query` / `QueryBus` / `QueryHandler` / `Response` を追加 | CodelyTV 準拠。Step 3 のアプリケーション層で CommandHandler<T> を実装する際の基盤 |
-| Logger.ts の CodelyTV 版不採用    | `Logger.ts` は独自の `StructuredLog` 設計を維持（CodelyTV 版の `debug/error/info` は採用しない） | GCP Cloud Logging への OTel 連携で `trace_id`/`span_id` 付き構造化ログが必須。CodelyTV 版は単純すぎてこの要件を満たせない |
-| DomainEvent.fromPrimitives シグネチャ変更 | 旧: `(aggregateId, body, eventId, occurredOn)` → 新: `{aggregateId, eventId, occurredOn, attributes}` named params | CodelyTV 準拠。RabbitMQ Subscriber がデシリアライズ時に呼び出すシグネチャを統一 |
+| 判断項目                                  | 決定内容                                                                                                                             | 理由                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| アプリのプロセス分割                      | `ec/backend` と `backoffice/backend` を別プロセスに分離                                                                              | 将来のスケーリング時にプロセス単位でコンテナスケールアウトできる。コンテキスト分離を構成で体現できる                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| RabbitMQ Subscriberの配置                 | 各バックエンドプロセス内に内包                                                                                                       | Subscriberは「そのイベントを使いたいコンテキストが自分で持つ」のがEDAの自然な形。中央集権化するメリット（共通処理の集約）がない                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| フロントエンドのディレクトリ構成          | レイヤー優先アプローチ（pages / components / hooks / infrastructure）                                                                | バックエンドのClean Architectureと対称性があり面接で説明しやすい。3画面規模に対してFeature-Sliced Designはオーバースペック                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| SSE通信の抽象化                           | `AlertStream` interfaceで抽象化                                                                                                      | SSEとMockの切り替えに実際の意味がある。REST APIは抽象化しない（プロトコル変更シナリオが現実的にない）                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| HTTPクライアント                          | fetchベースの薄いラッパーを自前実装（axiosを使わない）                                                                               | サプライチェーンインシデントリスク回避。標準APIで主要機能（エラーハンドリング・タイムアウト・ヘッダー）を賄える。実装はAIに委譲                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| HTTPクライアントの抽象化                  | `HttpClient` interfaceを定義し `FetchHttpClient` が実装                                                                              | `alertsApi.ts` 等はinterfaceに依存することでテスト時のモック差し替えが可能になる                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| デモ系コンポーネントの配置                | `components/demo/` に完全に閉じ込め、`AlertsLayout` のみで参照                                                                       | プロダクションUIへの非侵食。`AlertDetailPage` 等はデモの存在を知らない構造                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Shared/domain の value-object 設計        | CodelyTV の `value-object/` サブディレクトリをそのまま流用（`Uuid` / `StringValueObject` / `NumberValueObject` / `EnumValueObject`） | UUID バリデーション・Primitive 型制約・列挙型検証を基底クラスに集約。ECドメインの VO が `extends Uuid` / `extends NumberValueObject` 等で簡潔になる                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Shared/domain の CQRS 基盤追加            | `Command` / `CommandBus` / `CommandHandler` / `Query` / `QueryBus` / `QueryHandler` / `Response` を追加                              | CodelyTV 準拠。Step 3 のアプリケーション層で CommandHandler<T> を実装する際の基盤                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Logger.ts の CodelyTV 版不採用            | `Logger.ts` は独自の `StructuredLog` 設計を維持（CodelyTV 版の `debug/error/info` は採用しない）                                     | GCP Cloud Logging への OTel 連携で `trace_id`/`span_id` 付き構造化ログが必須。CodelyTV 版は単純すぎてこの要件を満たせない                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| DomainEvent.fromPrimitives シグネチャ変更 | 旧: `(aggregateId, body, eventId, occurredOn)` → 新: `{aggregateId, eventId, occurredOn, attributes}` named params                   | CodelyTV 準拠。RabbitMQ Subscriber がデシリアライズ時に呼び出すシグネチャを統一                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| AIInvestigationのレポート設計             | `InvestigationReport` に `investigationSteps` / `suggestedActions` / `reviewStatus` を持たせる                                       | 「AIが調査して人間はレビューするだけ」という体験価値を実現するため。保守業務における対向先起因の障害調査を自動化するというサービスの核心。分類ツールではなく調査エージェントとして機能させる                                                                                                                                                                                                                                                                                                                                                         |
+| レビューステータスの管理                  | `reviewStatus: PENDING_REVIEW / APPROVED / REJECTED` を `InvestigationReport` に持たせる                                             | 承認/却下フィードバックを既存の `SubmitFeedbackCommandHandler` に統合できる。新規コンテキスト不要                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **仮完成後の優先追加実装**                | `ElasticsearchAlertClassifier` を `AlertClassifier` Strategyの第2実装として追加する                                                  | ハッカソン本体完成後のROIが最も高い追加実装。工数約6時間。`AnalyzeAlertCommandHandler` はインターフェースにのみ依存しているため既存コードをノータッチで差し替え可能。`InMemoryAlertClassifier`（完全一致・confidence 1.0固定）に対し、BM25スコアリングによるconfidence実数値化が実現できる。面接で「将来できます」ではなく「実装済みです」として説明できる点が転職ポートフォリオとしての価値を高める。`Shared/infrastructure/persistence/elasticsearch/` に `ElasticClientFactory` / `ElasticCriteriaConverter` が既に設計済みのため追加コストが低い |
 
 ---
 
@@ -205,7 +208,7 @@ src/Contexts/Monitoring/
 │   │   │   └── AnalyzeAlertCommandHandler.ts  # 既知/未知分類ロジック
 │   │   └── SubmitFeedback/
 │   │       ├── SubmitFeedbackCommand.ts
-│   │       └── SubmitFeedbackCommandHandler.ts # フィードバック受付・既知昇格トリガー
+│   │       └── SubmitFeedbackCommandHandler.ts # フィードバック受付・既知昇格トリガー・レポートレビュー結果の記録
 │   └── infrastructure/
 │       ├── persistence/
 │       │   ├── MongoAlertRepository.ts
@@ -215,19 +218,30 @@ src/Contexts/Monitoring/
 │
 ├── AIInvestigation/
 │   ├── domain/
-│   │   ├── InvestigationReport.ts             # AI分析レポートエンティティ
+│   │   ├── InvestigationReport.ts             # AI調査レポートエンティティ
+│   │   │                                      #   summary: string           原因仮説サマリー
+│   │   │                                      #   confidence: number        確信度（0.0〜1.0）
+│   │   │                                      #   investigationSteps: string[]  AIが実施した調査ステップ
+│   │   │                                      #   suggestedActions: string[]    推奨アクション一覧
+│   │   │                                      #   suggestedPatternName: string  自動昇格候補パターン名（Geminiが提案）
+│   │   │                                      #   reviewStatus: ReviewStatus    PENDING_REVIEW / APPROVED / REJECTED
+│   │   │                                      #   ※ reviewStatusはSubmitFeedbackCommandHandlerで更新
+│   │   ├── ReviewStatus.ts                    # Value Object（PENDING_REVIEW / APPROVED / REJECTED）
 │   │   ├── InvestigationContext.ts            # Geminiへ送るコンテキストの型（トークン上限3,500）
 │   │   └── AIInvestigationPort.ts             # Gemini API呼び出しのポートインターフェース（DIP）
 │   ├── application/
 │   │   └── InvestigateAlert/
 │   │       ├── InvestigateAlertCommand.ts
-│   │       └── InvestigateAlertCommandHandler.ts # 未知障害時にGeminiへ投げる
+│   │       └── InvestigateAlertCommandHandler.ts # 未知障害時にGeminiへ投げ、InvestigationReportを生成・保存
 │   └── infrastructure/
 │       └── GeminiAIInvestigationAdapter.ts    # AIInvestigationPort実装（@google/generative-ai）
+│                                              # プロンプト設計：JSON固定出力（summary/confidence/investigationSteps/suggestedActions/suggestedPatternName）
+│                                              # ガード：スキーマバリデーション（safeParse）・confidenceクランプ・タイムアウトリトライ1回
 │
 ├── ReportGeneration/
 │   ├── domain/
 │   │   └── AlertReport.ts                     # バックオフィス表示用レポートの読み取りモデル
+│   │                                          # InvestigationReportの内容をUIに渡す形に整形する責務
 │   ├── application/
 │   │   └── GetAlertReport/
 │   │       ├── GetAlertReportQuery.ts
@@ -243,6 +257,35 @@ src/Contexts/Monitoring/
         ├── InMemorySimilarIncidentRepository.ts  # 今回の実装（起動時にMongoからウォームアップ）
         └── InMemoryCriteriaConverter.ts          # Criteria→array filter/sort変換
 ```
+
+### AlertClassifier Strategyパターン 拡張ロードマップ（仮完成後の優先実装）
+
+```
+AlertClassifier（インターフェース）
+  ├─ InMemoryAlertClassifier        ← ハッカソン本体で実装（完全一致・confidence 1.0固定）
+  └─ ElasticsearchAlertClassifier   ← 仮完成後に追加（BM25スコアリング・confidence実数値）
+```
+
+**追加ファイル（既存コードへの変更ゼロ）**
+
+```
+src/Contexts/Monitoring/AlertAnalysis/
+└── infrastructure/
+    └── ElasticsearchAlertClassifier.ts   # AlertClassifier実装（BM25スコア→confidenceマッピング）
+
+src/Contexts/Shared/infrastructure/persistence/elasticsearch/
+├── ElasticClientFactory.ts               # 設計済み（追加コストなし）
+├── ElasticConfig.ts                      # 設計済み（追加コストなし）
+└── ElasticCriteriaConverter.ts           # 設計済み（追加コストなし）
+```
+
+**実装方針メモ（面接・ADR説明用）**
+
+- 既知パターンをElasticsearchにインデックスし、MonitoringEventのeventName/payloadをクエリとして投げる
+- BM25スコアを `confidence` にマッピング（スコア正規化）
+- `AnalyzeAlertCommandHandler` はインターフェースにのみ依存しているため差し替えでノータッチ
+- 「将来できます」ではなく「実装済みです」として説明できる状態にすることがポートフォリオ価値の核心
+- 移行トリガー：自動昇格パターンが10件超、または `/analytics` で誤分類率が計測可能になった時点
 
 ---
 
@@ -280,7 +323,7 @@ src/apps/backoffice/backend/
 │   ├── controllers/
 │   │   ├── AlertsGetController.ts
 │   │   ├── AlertGetController.ts
-│   │   ├── AlertFeedbackPatchController.ts
+│   │   ├── AlertFeedbackPatchController.ts   # レポートレビュー（承認/却下）も同エンドポイントで受け付ける
 │   │   ├── AlertsStreamController.ts        # SSEコネクション管理
 │   │   ├── PatternsGetController.ts
 │   │   ├── PatternPromotePostController.ts
@@ -316,7 +359,13 @@ src/apps/backoffice/frontend/
 │   │   ├── alerts/
 │   │   │   ├── AlertList.tsx        # アラート一覧
 │   │   │   ├── AlertCard.tsx        # アコーディオン展開カード
-│   │   │   └── AlertCardExpanded.tsx # 展開時のAI分析結果・フィードバックボタン
+│   │   │   └── AlertCardExpanded.tsx # 展開時のAI調査レポート表示
+│   │   │                            #   表示内容：
+│   │   │                            #     原因仮説サマリー・確信度
+│   │   │                            #     調査ステップ（AIが何を調査したか）
+│   │   │                            #     推奨アクション一覧
+│   │   │                            #   操作：[✓ 承認] [✗ 却下] ボタン
+│   │   │                            #     → PATCH /alerts/:id/feedback に reviewStatus を送信
 │   │   ├── demo/                    # デモ系コンポーネントをここに完全に閉じ込める
 │   │   │   ├── DemoDrawer.tsx       # デモコントロールドロワー本体（AlertsLayoutのみで参照）
 │   │   │   ├── ScenarioControls.tsx # シナリオ実行ボタン群
@@ -343,6 +392,10 @@ src/apps/backoffice/frontend/
 │   │
 │   └── types/
 │       └── alert.ts                 # フロントエンド用型定義
+│                                    # InvestigationReport の表示型を含む
+│                                    #   investigationSteps: string[]
+│                                    #   suggestedActions: string[]
+│                                    #   reviewStatus: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED'
 │
 ├── index.html
 ├── vite.config.ts
@@ -364,6 +417,9 @@ DefaultLayout → DemoDrawerを参照しない
 
 ApplicationService / CommandHandler → Logger interface のみ（FileLogger/OTelLogger を直接importしない）
 EC コンテキスト → Monitoring コンテキストを直接importしない（RabbitMQ経由）
+
+SubmitFeedbackCommandHandler → InvestigationReport.reviewStatus の更新も担う
+                               （承認/却下とパターン昇格フィードバックを同一エンドポイントで処理）
 ```
 
 ---
@@ -396,14 +452,15 @@ src/Contexts/EC/Orders/infrastructure/
 
 ### レイヤー別テスト方針
 
-| ファイル種別 | テスト方針 | 理由 |
-|---|---|---|
-| インターフェース・型定義のみ | **テスト不要** | TypeScript が静的に保証。実行時ロジックがない |
-| `AggregateRoot`, `ValueObject`, `DomainEvent` 基底クラス | **集約テストで間接カバー** | `Order.test.ts` 等で `record()` / `equals()` が自然に通る。`FakeAggregate` を作るのはカバレッジ埋めにしかならない |
-| `Uuid`, `criteria/` | **直接テスト** | UUID バリデーション・フィルタ組み立て等、独立した振る舞いを持つ |
-| domain VO / Aggregate | **ユースケース単位でテスト** | `Order.place()` で DomainEvent 発行まで一気通貫でテストする |
-| application CommandHandler | **モックリポジトリでユニットテスト** | EventBus / Repository を vi.fn() でモックし、Handler の分岐ロジックに集中 |
-| infrastructure Repository | **統合テスト**（`.integration.test.ts`） | 実際の MongoDB に接続して `save` / `findById` を確認 |
+| ファイル種別                                             | テスト方針                                    | 理由                                                                                                              |
+| -------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| インターフェース・型定義のみ                             | **テスト不要**                                | TypeScript が静的に保証。実行時ロジックがない                                                                     |
+| `AggregateRoot`, `ValueObject`, `DomainEvent` 基底クラス | **集約テストで間接カバー**                    | `Order.test.ts` 等で `record()` / `equals()` が自然に通る。`FakeAggregate` を作るのはカバレッジ埋めにしかならない |
+| `Uuid`, `criteria/`                                      | **直接テスト**                                | UUID バリデーション・フィルタ組み立て等、独立した振る舞いを持つ                                                   |
+| domain VO / Aggregate                                    | **ユースケース単位でテスト**                  | `Order.place()` で DomainEvent 発行まで一気通貫でテストする                                                       |
+| application CommandHandler                               | **モックリポジトリでユニットテスト**          | EventBus / Repository を vi.fn() でモックし、Handler の分岐ロジックに集中                                         |
+| `InvestigateAlertCommandHandler`                         | **モックAIInvestigationPortでユニットテスト** | Gemini APIを差し替え。JSON返却 → InvestigationReport生成 → reviewStatus初期値の検証                               |
+| infrastructure Repository                                | **統合テスト**（`.integration.test.ts`）      | 実際の MongoDB に接続して `save` / `findById` を確認                                                              |
 
 ### テスト不要ファイル一覧（`Shared/domain`）
 
