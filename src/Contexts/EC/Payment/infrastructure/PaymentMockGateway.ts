@@ -4,11 +4,11 @@
 
 export type PaymentMode = "success" | "random" | "timeout";
 
-export interface PaymentRequest {
+export type PaymentRequest = {
   orderId: string;
   customerId: string;
   amount: number;
-}
+};
 
 export type PaymentResult =
   | { success: true }
