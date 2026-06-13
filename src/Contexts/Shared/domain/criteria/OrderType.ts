@@ -13,12 +13,7 @@ export class OrderType extends EnumValueObject<OrderTypes> {
   }
 
   static fromValue(value: string): OrderType {
-    const isOrderType = (Object.values(OrderTypes) as string[]).includes(value);
-    if (isOrderType) {
-      return new OrderType(value as OrderTypes);
-    }
-
-    throw new InvalidArgumentError(`The order type ${value} is invalid`);
+    return new OrderType(value as OrderTypes);
   }
 
   public isNone(): boolean {
