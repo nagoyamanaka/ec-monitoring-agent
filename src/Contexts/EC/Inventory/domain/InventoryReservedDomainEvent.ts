@@ -1,4 +1,4 @@
-import { ECDomainEvent } from "../../../Shared/domain/ECDomainEvent.js";
+import { ECDomainEvent } from "../../Shared/domain/ECDomainEvent.js";
 
 export class InventoryReservedDomainEvent extends ECDomainEvent {
   static readonly EVENT_NAME = "ec.inventory.reserved";

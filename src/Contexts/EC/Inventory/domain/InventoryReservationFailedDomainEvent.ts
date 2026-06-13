@@ -1,4 +1,4 @@
-import { ECDomainEvent } from "../../../Shared/domain/ECDomainEvent.js";
+import { ECDomainEvent } from "../../Shared/domain/ECDomainEvent.js";
 
 export const InventoryFailureReason = {
   INSUFFICIENT_STOCK: "INSUFFICIENT_STOCK",
