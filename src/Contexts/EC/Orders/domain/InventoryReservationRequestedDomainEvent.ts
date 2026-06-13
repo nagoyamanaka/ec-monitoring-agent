@@ -1,5 +1,5 @@
-import { ECDomainEvent } from "../../../Shared/domain/ECDomainEvent.js";
-import { OrderItemPrimitive } from "../OrderItem.js";
+import { ECDomainEvent } from "../../Shared/domain/ECDomainEvent.js";
+import { OrderItemPrimitive } from "./OrderItem.js";
 
 export class InventoryReservationRequestedDomainEvent extends ECDomainEvent {
   static readonly EVENT_NAME = "ec.order.inventory_reservation_requested";
@@ -21,7 +21,7 @@ export class InventoryReservationRequestedDomainEvent extends ECDomainEvent {
     this.items = params.items;
   }
 
-  toPrimitives(): Record<string, unknown> {
+  toPrimitives() {
     return {
       items: this.items,
     };

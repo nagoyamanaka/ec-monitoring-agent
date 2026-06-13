@@ -1,5 +1,5 @@
-import { ECDomainEvent } from "../../../Shared/domain/ECDomainEvent.js";
-import { OrderItemPrimitive } from "../OrderItem.js";
+import { ECDomainEvent } from "../../Shared/domain/ECDomainEvent.js";
+import { OrderItemPrimitive } from "./OrderItem.js";
 
 export class OrderPlacedDomainEvent extends ECDomainEvent {
   static readonly EVENT_NAME = "ec.order.placed";

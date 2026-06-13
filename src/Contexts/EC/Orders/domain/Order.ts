@@ -2,12 +2,12 @@ import { AggregateRoot } from "../../../Shared/domain/AggregateRoot.js";
 import { DomainError } from "../../../Shared/domain/errors/DomainError.js";
 import { OrderId } from "./OrderId.js";
 import { CustomerId } from "./CustomerId.js";
-import { OrderItems, } from "./OrderItems.js";
+import { OrderItems } from "./OrderItems.js";
 import { OrderItemPrimitive } from "./OrderItem.js";
 import { OrderStatus } from "./OrderStatus.js";
 import { TotalAmount } from "./TotalAmount.js";
-import { OrderPlacedDomainEvent } from "./events/OrderPlacedDomainEvent.js";
-import { InventoryReservationRequestedDomainEvent } from "./events/InventoryReservationRequestedDomainEvent.js";
+import { OrderPlacedDomainEvent } from "./OrderPlacedDomainEvent.js";
+import { InventoryReservationRequestedDomainEvent } from "./InventoryReservationRequestedDomainEvent.js";
 
 export class InvalidOrderStatusTransitionError extends DomainError {
   readonly errorCode = "INVALID_ORDER_STATUS_TRANSITION";
@@ -98,10 +98,7 @@ export class Order extends AggregateRoot {
 
   failInventory(): void {
     if (!this._status.isPending()) {
-      throw new InvalidOrderStatusTransitionError(
-        this._status.value,
-        "FAILED",
-      );
+      throw new InvalidOrderStatusTransitionError(this._status.value, "FAILED");
     }
     this._status = OrderStatus.failed();
     this._updatedAt = new Date();

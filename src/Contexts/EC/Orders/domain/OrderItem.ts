@@ -1,10 +1,10 @@
 import { InvalidArgumentError } from "../../../Shared/domain/errors/InvalidArgumentError.js";
 
-export interface OrderItemPrimitive {
+export type OrderItemPrimitive = {
   productId: string;
   quantity: number;
   unitPrice: number;
-}
+};
 
 export class OrderItem {
   readonly productId: string;
