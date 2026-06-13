@@ -5,8 +5,8 @@ type DomainEventAttributes = Record<string, unknown>;
 export abstract class DomainEvent {
   static EVENT_NAME: string;
   static fromPrimitives: (params: {
-    aggregateId: string;
-    eventId: string;
+    aggregateId: string; // 集約ID。何のコンテキストのメンバを対象としたものか
+    eventId: string; // イベントID。冪等性確認やトレーサビリティに利用
     occurredOn: Date;
     attributes: DomainEventAttributes;
   }) => DomainEvent;
