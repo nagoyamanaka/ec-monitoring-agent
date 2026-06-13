@@ -14,7 +14,7 @@ export class Criteria {
     this.offset = offset;
   }
 
-  static all(): Criteria {
+  static none(): Criteria {
     return new Criteria(Filters.none(), Order.none());
   }
 
