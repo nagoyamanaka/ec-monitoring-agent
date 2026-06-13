@@ -1,17 +1,17 @@
-# 設計エージェント向けプロンプト v9
+# 設計エージェント向けプロンプト v10
 
-> **変更履歴（v8→v9）**
-> Step 4（Monitoringコンテキスト拡張ポイント）を確定し参照ドキュメント化しました。
-> AlertClassifier設計方針（OCP + Strategyパターン）、AlertClassification VOの粒度判断、
-> フィードバックループの自動昇格設計を追記しました。
+> **変更履歴（v9→v10）**
+> ハッカソン要件の再確認を受け、GCP AI技術の充足戦略とVertex AI / ADK への段階移行設計を追記。
+> `AIInvestigationPort` の命名設計方針、3フェーズ移行ロードマップ、
+> 今すぐ実施する設計上の配慮を確定しました。
 >
-> | Step                                       | 詳細設計ドキュメント                | ステータス |
-> | ------------------------------------------ | ----------------------------------- | ---------- |
-> | Step 1: ディレクトリ構成                   | `docs/step1-directory-structure.md` | ✅ 確定    |
-> | Step 2: ドメインモデル設計（EC）           | `docs/step2-domain-model.md`        | ✅ 確定    |
-> | Step 3: アプリケーション層設計（EC）       | `docs/step3-application-layer.md`   | ✅ 確定    |
-> | Step 4: Monitoringコンテキスト拡張ポイント | `docs/step4-monitoring-context.md`  | ✅ 確定    |
-> | Step 5: ADR                                | `docs/step5-adr.md`                 | ✅ 確定    |
+> | Step                                       | 詳細設計ドキュメント                | ステータス      |
+> | ------------------------------------------ | ----------------------------------- | --------------- |
+> | Step 1: ディレクトリ構成                   | `docs/step1-directory-structure.md` | ✅ 確定         |
+> | Step 2: ドメインモデル設計（EC）           | `docs/step2-domain-model.md`        | ✅ 確定         |
+> | Step 3: アプリケーション層設計（EC）       | `docs/step3-application-layer.md`   | ✅ 確定         |
+> | Step 4: Monitoringコンテキスト拡張ポイント | `docs/step4-monitoring-context.md`  | ✅ 確定         |
+> | Step 5: ADR                                | `docs/step5-adr.md`                 | 🔲 次のステップ |
 
 ---
 
@@ -34,6 +34,21 @@ ECドメイン（注文・在庫）で発生する障害を、AIエージェン�
 - Google Cloud アプリケーションプロダクトを1つ以上使用（Compute Engine採用）
 - Google Cloud AI技術を使用（**Gemini API必須**。Claude/GPT-4は使用禁止）
 - Findy DevOps × AI Agent Hackathon 2026 出展用
+
+### ハッカソンGCP要件の充足戦略
+
+**要件1（アプリ実行）**: Compute Engine（e2-medium × 1）で充足。選択肢に明示されており完全適合。
+
+**要件2（AI技術）**: 以下の3フェーズで段階強化する。
+
+| フェーズ                    | 実装                                          | 充足状況                                      | 備考                         |
+| --------------------------- | --------------------------------------------- | --------------------------------------------- | ---------------------------- |
+| ハッカソン本体              | Gemini API直接（`@google/generative-ai`）     | ✅ Gemini API                                 | 要件最低ラインを確実に満たす |
+| フェーズ1（完成後）         | Vertex AI SDK経由（`@google-cloud/vertexai`） | ✅✅ Gemini API（Vertex AI推奨経路）          | 審査員評価が上がる           |
+| フェーズ2（ポートフォリオ） | ADKエージェント構成                           | ✅✅✅ Gemini Enterprise Agent Platform + ADK | 2項目達成                    |
+
+> **重要**: 各フェーズの切り替えは `AIInvestigationPort` 実装クラスのDI差し替えのみ。
+> `InvestigateAlertCommandHandler`（Application層）は完全にノータッチ。
 
 ### ポートフォリオ要件
 
@@ -94,7 +109,9 @@ src/
 | Architecture   | DDD + CleanArchitecture + CQRS + EDA                                               | CodelyTVパターン準拠                                                                                             |
 | Message Broker | RabbitMQ                                                                           | DomainEvent配信                                                                                                  |
 | Database       | MongoDB                                                                            | 全コンテキスト統一（ハッカソンスコープ）                                                                         |
-| AI             | Gemini API                                                                         | `@google/generative-ai`                                                                                          |
+| AI（現行）     | Gemini API                                                                         | `@google/generative-ai`。ハッカソン本体で使用                                                                    |
+| AI（将来P1）   | Vertex AI SDK                                                                      | `@google-cloud/vertexai`。フェーズ1で差し替え                                                                    |
+| AI（将来P2）   | ADK（Agents Development Kit）                                                      | フェーズ2でマルチエージェント構成                                                                                |
 | Observability  | Cloud Logging・Cloud Monitoring・Cloud Trace                                       | GCPネイティブ。OTel SDK（`@opentelemetry/sdk-node`）からGCPエクスポーター経由で直接送信。Collectorコンテナ不使用 |
 | Logging        | OTel Logs → Cloud Logging（`@google-cloud/opentelemetry-cloud-trace-exporter` 等） | Winston不使用。OTel一括化でtrace_id自動付与                                                                      |
 | Test           | Vitest (BDD)                                                                       |                                                                                                                  |
@@ -333,6 +350,18 @@ const AUTO_PROMOTE_THRESHOLD = 3; // 正解フィードバック3回で自動昇
 - `Alert.context` に `orderExists: false` を記録し「注文未確定の決済障害」として分類する
 - 既知パターン `PAYMENT_TIMEOUT_NO_ORDER` で分類できる
 
+### AIInvestigationPort 設計方針（GCP要件段階移行）
+
+- ポート名は `AIInvestigationPort` のままプロダクト名を含まない抽象名にする
+- 実装クラスを3段階で用意し、DIの差し替えのみで移行する
+
+```
+AIInvestigationPort（インターフェース）← Application層が依存する抽象
+  ├─ GeminiAIInvestigationAdapter      ← フェーズ0：ハッカソン本体（Gemini API直接）
+  ├─ VertexAIInvestigationAdapter      ← フェーズ1：Vertex AI SDK経由（推奨経路）
+  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADKエージェント構成
+```
+
 ---
 
 ## デモコントロールドロワーの設計
@@ -416,6 +445,8 @@ OTel統合フロー:
 1. サンプリングをハッカソンスコープで実装しない理由と将来方針
 1. AlertClassifierをStrategyパターンで設計しハッカソンではfirst-matchのみ実装する理由
 1. AlertClassification VOに重み情報を持たせずClassifier実装クラスに閉じる理由
+1. **AIInvestigationPortをプロダクト名に依存しない抽象名にする理由と段階移行設計**（v10追加）
+1. **ハッカソン本体でGemini API直接を選択しVertex AI / ADK移行を後続フェーズとする理由**（v10追加）
 
 ---
 
@@ -436,6 +467,7 @@ OTel統合フロー:
 - ドメインサービスを作る場合は `XxxDomainService` と明示的にサフィックスをつける
 - `AlertClassifier` はインターフェースにのみ依存する。`InMemoryAlertClassifier` を直接importしない
 - `ClassificationConfidence` のみVOとしてクラス化する。`MatchedCondition` / `UnmatchedCondition` はinterfaceのまま
+- **`AIInvestigationPort` はポートインターフェース名にプロダクト名を含めない。`InvestigateAlertCommandHandler` は `AIInvestigationPort` にのみ依存し、実装クラスを直接importしない**（v10追加）
 
 ### ハッカソンスコープで許容する妥協
 
@@ -447,6 +479,7 @@ OTel統合フロー:
 - AlertClassifierはfirst-matchのみ実装。スコアリングはインターフェースのコメントに将来実装として明記するだけ
 - SSEAlertNotifierはEventEmitterオンメモリ。RedisへのスケールアウトはSSEAlertNotifierインターフェースで抽象化済み
 - `recentEvents` in InvestigationContextは省略（将来拡張ポイントとして設計注記のみ残す）
+- **AIはGemini API直接（フェーズ0）のみ実装。Vertex AI / ADKへの移行はAIInvestigationPortの差し替えで対応できる設計にし、実装はハッカソン後のフェーズに委ねる**（v10追加）
 
 ### MongoDBでのトランザクション代替パターン
 
@@ -461,6 +494,16 @@ Phase2: 全商品を findOneAndUpdate で更新（楽観ロック）
 ---
 
 ## 変更履歴
+
+### v10（GCP要件充足戦略・AIInvestigationPort段階移行設計追記）
+
+- ハッカソンGCP要件（要件1・要件2）の充足状況を整理し、3フェーズ移行戦略を確定
+- `AIInvestigationPort` のポート名設計方針を追記（プロダクト名を含まない抽象名）
+- `GeminiAIInvestigationAdapter` / `VertexAIInvestigationAdapter` / `ADKAgentInvestigationAdapter` の3実装をロードマップとして設計ドキュメントに明記
+- 技術スタック表にAI将来フェーズ（Vertex AI SDK / ADK）を追加
+- Step 5 ADR項目に2件追加（AIInvestigationPort抽象名設計、フェーズ選択理由）
+- 「必ず守ること」に `AIInvestigationPort` インターフェース依存ルールを追記
+- 「ハッカソンスコープで許容する妥協」にAIフェーズ0のみ実装方針を追記
 
 ### v9（Step 4確定・AlertClassifier設計・VO粒度判断追記）
 
@@ -482,17 +525,3 @@ Phase2: 全商品を findOneAndUpdate で更新（楽観ロック）
 - エラー設計方針を追記：3基底クラス（ハッカソンスコープ）と将来の細粒度エラー階層設計案
 - 在庫引き当て戦略をAll-or-Nothing（B案）に変更。将来の移行ロードマップを追記
 - 「必ず守ること」に `run()` 統一・`XxxGateway` 命名・HTTP非依存の原則を追記
-
-### v7（観測基盤をGCPネイティブに変更）
-
-- 観測基盤をOSSスタックからGCPネイティブ（Cloud Logging・Cloud Monitoring・Cloud Trace）に変更
-- OTel CollectorコンテナをSDKからの直接エクスポートに置き換え
-
-### v6（在庫管理トレードオフ・Sagaパターン追記）
-
-- 在庫管理のトレードオフとSagaパターンの提案を追記
-- Step 2の詳細設計を `docs/step2-domain-model.md` に分離
-
-### v5（Step別詳細設計ドキュメントへの分離）
-
-- Step 1の詳細設計を `docs/step1-directory-structure.md` に分離
