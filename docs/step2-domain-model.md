@@ -219,30 +219,30 @@ class TotalAmount extends ValueObject<number> {
 **ファイルパス**: `src/Contexts/EC/Orders/domain/events/OrderPlacedDomainEvent.ts`
 
 ```typescript
-class OrderPlacedDomainEvent extends DomainEvent {
+class OrderPlacedDomainEvent extends ECDomainEvent {
   static readonly EVENT_NAME = 'ec.order.placed';
 
-  constructor(
-    readonly orderId: string,
-    readonly customerId: string,
-    readonly items: OrderItemPrimitive[],
-    readonly totalAmount: number,
-    eventId?: string,
-    occurredOn?: Date,
-  )
+  readonly customerId: string;
+  readonly items: OrderItemPrimitive[];
+  readonly totalAmount: number;
 
-  toPrimitives(): {
+  constructor(params: {
+    orderId: string;
     customerId: string;
     items: OrderItemPrimitive[];
     totalAmount: number;
-  }
+    eventId?: string;
+    occurredOn?: Date;
+  })
 
-  static fromPrimitives(
-    aggregateId: string,
-    body: Record<string, unknown>,
-    eventId: string,
-    occurredOn: Date,
-  ): OrderPlacedDomainEvent
+  toPrimitives(): Record<string, unknown>
+
+  static fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: Record<string, unknown>;
+  }): OrderPlacedDomainEvent
 }
 ```
 
@@ -253,26 +253,26 @@ class OrderPlacedDomainEvent extends DomainEvent {
 **ファイルパス**: `src/Contexts/EC/Orders/domain/events/InventoryReservationRequestedDomainEvent.ts`
 
 ```typescript
-class InventoryReservationRequestedDomainEvent extends DomainEvent {
+class InventoryReservationRequestedDomainEvent extends ECDomainEvent {
   static readonly EVENT_NAME = 'ec.order.inventory_reservation_requested';
 
-  constructor(
-    readonly orderId: string,
-    readonly items: OrderItemPrimitive[],    // productId / quantity のみ使用
-    eventId?: string,
-    occurredOn?: Date,
-  )
+  readonly items: OrderItemPrimitive[];  // productId / quantity のみ使用
 
-  toPrimitives(): {
+  constructor(params: {
+    orderId: string;
     items: OrderItemPrimitive[];
-  }
+    eventId?: string;
+    occurredOn?: Date;
+  })
 
-  static fromPrimitives(
-    aggregateId: string,
-    body: Record<string, unknown>,
-    eventId: string,
-    occurredOn: Date,
-  ): InventoryReservationRequestedDomainEvent
+  toPrimitives(): Record<string, unknown>
+
+  static fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: Record<string, unknown>;
+  }): InventoryReservationRequestedDomainEvent
 }
 ```
 
@@ -416,30 +416,30 @@ class StockQuantity extends ValueObject<number> {
 **ファイルパス**: `src/Contexts/EC/Inventory/domain/events/InventoryReservedDomainEvent.ts`
 
 ```typescript
-class InventoryReservedDomainEvent extends DomainEvent {
+class InventoryReservedDomainEvent extends ECDomainEvent {
   static readonly EVENT_NAME = 'ec.inventory.reserved';
 
-  constructor(
-    readonly productId: string,
-    readonly orderId: string,
-    readonly reservedQuantity: number,
-    readonly remainingStock: number,
-    eventId?: string,
-    occurredOn?: Date,
-  )
+  readonly orderId: string;
+  readonly reservedQuantity: number;
+  readonly remainingStock: number;
 
-  toPrimitives(): {
+  constructor(params: {
+    productId: string;
     orderId: string;
     reservedQuantity: number;
     remainingStock: number;
-  }
+    eventId?: string;
+    occurredOn?: Date;
+  })
 
-  static fromPrimitives(
-    aggregateId: string,
-    body: Record<string, unknown>,
-    eventId: string,
-    occurredOn: Date,
-  ): InventoryReservedDomainEvent
+  toPrimitives(): Record<string, unknown>
+
+  static fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: Record<string, unknown>;
+  }): InventoryReservedDomainEvent
 }
 ```
 
@@ -450,39 +450,42 @@ class InventoryReservedDomainEvent extends DomainEvent {
 **ファイルパス**: `src/Contexts/EC/Inventory/domain/events/InventoryReservationFailedDomainEvent.ts`
 
 ```typescript
-class InventoryReservationFailedDomainEvent extends DomainEvent {
-  static readonly EVENT_NAME = 'ec.inventory.reservation_failed';
-
-  constructor(
-    readonly productId: string,
-    readonly orderId: string,
-    readonly requestedQuantity: number,
-    readonly currentStock: number,          // 不足していた在庫数（Monitoring分析に使用）
-    readonly reason: InventoryFailureReason,
-    eventId?: string,
-    occurredOn?: Date,
-  )
-
-  toPrimitives(): {
-    orderId: string;
-    requestedQuantity: number;
-    currentStock: number;
-    reason: string;
-  }
-
-  static fromPrimitives(
-    aggregateId: string,
-    body: Record<string, unknown>,
-    eventId: string,
-    occurredOn: Date,
-  ): InventoryReservationFailedDomainEvent
-}
-
 // 失敗理由の列挙（Monitoringの既知パターン照合に使用）
-const InventoryFailureReason = {
+export const InventoryFailureReason = {
   INSUFFICIENT_STOCK: 'INSUFFICIENT_STOCK',
   CONCURRENT_CONFLICT: 'CONCURRENT_CONFLICT', // 楽観ロック競合（MongoDBリトライ上限超過）
 } as const;
+
+export type InventoryFailureReasonValue =
+  (typeof InventoryFailureReason)[keyof typeof InventoryFailureReason];
+
+class InventoryReservationFailedDomainEvent extends ECDomainEvent {
+  static readonly EVENT_NAME = 'ec.inventory.reservation_failed';
+
+  readonly orderId: string;
+  readonly requestedQuantity: number;
+  readonly currentStock: number;  // 不足していた在庫数（Monitoring分析に使用）
+  readonly reason: InventoryFailureReasonValue;
+
+  constructor(params: {
+    productId: string;
+    orderId: string;
+    requestedQuantity: number;
+    currentStock: number;
+    reason: InventoryFailureReasonValue;
+    eventId?: string;
+    occurredOn?: Date;
+  })
+
+  toPrimitives(): Record<string, unknown>
+
+  static fromPrimitives(params: {
+    aggregateId: string;
+    eventId: string;
+    occurredOn: Date;
+    attributes: Record<string, unknown>;
+  }): InventoryReservationFailedDomainEvent
+}
 ```
 
 **設計ポイント**: `reason` と `currentStock` をprimitivesに含めることで、Monitoringが「在庫切れ（INSUFFICIENT_STOCK）」「楽観ロック競合（CONCURRENT_CONFLICT）」を区別して観測できる。在庫切れは結果整合性モデルにおけるビジネスエラーとして扱い、注文ステータスをFAILEDに遷移させる補償処理のトリガーとなる（Step 3で設計）。
