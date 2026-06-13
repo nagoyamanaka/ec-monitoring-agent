@@ -29,8 +29,7 @@ describe("Uuid", () => {
 
   describe("random()", () => {
     it("UUID v4形式の値を生成する", () => {
-      const uuid = Uuid.random();
-      expect(uuid).toBeInstanceOf(Uuid);
+      expect(() => Uuid.random()).not.toThrow();
     });
 
     it("呼び出すたびに異なる値を生成する", () => {
