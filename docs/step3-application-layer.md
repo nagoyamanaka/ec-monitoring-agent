@@ -10,7 +10,7 @@
 | 判断項目                                                     | 決定内容                                                                                                                                | 理由                                                                                                                                                                                               |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PaymentGateway` の命名                                      | `PaymentService` から `PaymentGateway` に変更                                                                                           | 外部サービスへのアウトバウンドポートであることを明示。ドメインサービス（`XxxDomainService`）との混同を避ける                                                                                       |
-| ApplicationServiceのメソッド名                               | `process()` ではなく `run()` を採用                                                                                                     | CodelyTV準拠（`CoursesByCriteriaSearcher.run()` 等で統一されている）                                                                                                                               |
+| ApplicationServiceのメソッド名                               | CommandHandler の実装メソッドは **`handle()`**（`CommandHandler<T>` インターフェース必須）。単体アプリケーションサービスを分離する場合はそちらの公開メソッドを `run()` とするのが CodelyTV 準拠だが、本設計では CommandHandler に処理を直書きするため `handle()` のみを用いる | `InMemoryCommandBus` が `handler.handle(command)` を呼ぶため `handle()` でなければ動作しない。`CourseCreator.run()` はハンドラから呼ばれる別クラスの話で、Handler 自身のメソッドではない |
 | エラーの基底クラス                                           | `DomainError` / `ApplicationError` / `InfrastructureError` の3基底を定義                                                                | Domain・Application層はHTTPを知らない。errorHandlerがレイヤーの意味でHTTPステータスに変換する責務を持つ                                                                                            |
 | 在庫引き当て方式                                             | All-or-Nothing（B案：事前チェック＋楽観ロック＋補償）                                                                                   | 部分成功（商品Aは届くが商品Bは届かない）はユーザー混乱リスクが高い。注文はビジネスセマンティクス上All-or-Nothingが自然                                                                             |
 | Inventory atomicの実現方式                                   | 2フェーズ（Phase1: 全商品在庫確認 / Phase2: 全商品更新＋楽観ロック）                                                                    | ハッカソンスコープでMongoDBのReplicaSetなし構成のためマルチドキュメントトランザクション不使用。`InventoryRepository` インターフェースは維持するため将来のPostgreSQL移行でApplication層はノータッチ |
@@ -114,7 +114,7 @@ export function errorHandler(
 **ファイルパス**: `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommand.ts`
 
 ```typescript
-class PlaceOrderCommand extends Command {
+export class PlaceOrderCommand extends Command {
   constructor(
     readonly orderId: string,
     readonly customerId: string,
@@ -139,6 +139,21 @@ class PlaceOrderCommand extends Command {
 ### `PlaceOrderCommandHandler`
 
 **ファイルパス**: `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts`
+
+**クラス骨格**（`CommandHandler<PlaceOrderCommand>` を implements）:
+
+```typescript
+export class PlaceOrderCommandHandler implements CommandHandler<PlaceOrderCommand> {
+  subscribedTo() {
+    return PlaceOrderCommand; // クラス自体（コンストラクタ）を返す。インスタンスではない
+  }
+
+  async handle(command: PlaceOrderCommand): Promise<void> { ... }
+}
+```
+
+> `InMemoryCommandBus` は `handler.handle(command)` を呼ぶ。メソッドは **`handle()`** のみ。
+> `subscribedTo()` がクラス自体を返すことで、`CommandHandlers` Map のキーと `command.constructor` が一致する。
 
 #### 依存関係
 
@@ -211,7 +226,7 @@ type PaymentResult =
 **ファイルパス**: `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommand.ts`
 
 ```typescript
-class ReserveInventoryCommand extends Command {
+export class ReserveInventoryCommand extends Command {
   constructor(
     readonly orderId: string,
     readonly items: OrderItemPrimitive[],
@@ -228,6 +243,18 @@ class ReserveInventoryCommand extends Command {
 ### `ReserveInventoryCommandHandler`
 
 **ファイルパス**: `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommandHandler.ts`
+
+**クラス骨格**（`CommandHandler<ReserveInventoryCommand>` を implements）:
+
+```typescript
+export class ReserveInventoryCommandHandler implements CommandHandler<ReserveInventoryCommand> {
+  subscribedTo() {
+    return ReserveInventoryCommand; // クラス自体を返す
+  }
+
+  async handle(command: ReserveInventoryCommand): Promise<void> { ... }
+}
+```
 
 #### 依存関係
 
@@ -307,7 +334,7 @@ Logger.write(INFO, 'reserve_inventory', orderId)
 **ファイルパス**: `src/Contexts/EC/Orders/application/GetOrder/GetOrderQuery.ts`
 
 ```typescript
-class GetOrderQuery extends Query {
+export class GetOrderQuery extends Query {
   constructor(readonly orderId: string) {
     super();
   }
@@ -319,7 +346,9 @@ class GetOrderQuery extends Query {
 **ファイルパス**: `src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryResponse.ts`
 
 ```typescript
-interface GetOrderQueryResponse {
+import { Response } from "../../../../Shared/domain/Response.js";
+
+export interface GetOrderQueryResponse extends Response {
   id: string;
   customerId: string;
   items: Array<{
@@ -334,11 +363,25 @@ interface GetOrderQueryResponse {
 }
 ```
 
-VOをほどいたピュアなデータ構造。Controllerがそのままレスポンスとして返せる形にする。
+`QueryHandler<Q, R extends Response>` の型制約を満たすために `Response` を extends する。`Response` は空インターフェースなので構造的には省略可能だが、CodelyTV 準拠で明示する。Controllerがそのままレスポンスとして返せる形にする。
 
 ### `GetOrderQueryHandler`
 
 **ファイルパス**: `src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts`
+
+**クラス骨格**（`QueryHandler<GetOrderQuery, GetOrderQueryResponse>` を implements）:
+
+```typescript
+export class GetOrderQueryHandler implements QueryHandler<GetOrderQuery, GetOrderQueryResponse> {
+  subscribedTo() {
+    return GetOrderQuery; // クラス自体を返す
+  }
+
+  async handle(query: GetOrderQuery): Promise<GetOrderQueryResponse> { ... }
+}
+```
+
+> QueryHandler も同様に `handle()` がインターフェース必須メソッド。`subscribedTo()` は `GetOrderQuery` クラス自体を返す。
 
 #### 依存関係
 

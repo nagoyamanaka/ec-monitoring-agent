@@ -44,16 +44,21 @@ src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommand.ts
 【新規作成】src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryResponse.ts
 
 - 以下の型を定義する（VOをほどいたプリミティブ）:
+- `Response`（src/Contexts/Shared/domain/Response.ts）を extends すること（`QueryHandler<Q, R extends Response>` の型制約を満たすため）
 
-interface GetOrderQueryResponse {
-id: string;
-customerId: string;
-items: Array<{ productId: string; quantity: number; unitPrice: number }>;
-totalAmount: number;
-status: string; // 'PENDING' | 'CONFIRMED' | 'FAILED'
-createdAt: string; // ISO 8601
-updatedAt: string; // ISO 8601
+```typescript
+import { Response } from "../../../../Shared/domain/Response.js";
+
+export interface GetOrderQueryResponse extends Response {
+  id: string;
+  customerId: string;
+  items: Array<{ productId: string; quantity: number; unitPrice: number }>;
+  totalAmount: number;
+  status: string; // 'PENDING' | 'CONFIRMED' | 'FAILED'
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
 }
+```
 
 参考ドキュメント: docs/step3-application-layer.md の「GetOrder」セクション
 
@@ -167,7 +172,15 @@ src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts
 6. Logger.write(INFO, place_order, '注文確定', orderId)
 
 CommandHandler インターフェース（src/Contexts/Shared/domain/CommandHandler.ts）を implements すること。
-メソッド名は run() を使うこと（CodelyTV準拠）。
+実装メソッドは **`handle(command: PlaceOrderCommand): Promise<void>`**（InMemoryCommandBus が `handler.handle(command)` を呼ぶため）。
+
+`subscribedTo()` は **`PlaceOrderCommand` クラス自体（コンストラクタ）** を返すこと:
+
+```typescript
+subscribedTo() { return PlaceOrderCommand; }
+```
+
+CommandHandlers Map は登録時に `subscribedTo()` の戻り値をキーにし、検索時に `command.constructor` で引くため、インスタンスではなくクラスを返さなければならない。
 
 参考ドキュメント: docs/step3-application-layer.md の「PlaceOrderCommandHandler」セクション
 
@@ -205,7 +218,13 @@ src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts
    - totalAmount は items の unitPrice \* quantity の合計（または Order に合計算出メソッドがあればそれを使う）
 
 QueryHandler インターフェース（src/Contexts/Shared/domain/QueryHandler.ts）を implements すること。
-メソッド名は run() を使うこと。
+実装メソッドは **`handle(query: GetOrderQuery): Promise<GetOrderQueryResponse>`**。
+
+`subscribedTo()` は **`GetOrderQuery` クラス自体（コンストラクタ）** を返すこと:
+
+```typescript
+subscribedTo() { return GetOrderQuery; }
+```
 
 参考ドキュメント: docs/step3-application-layer.md の「GetOrderQueryHandler」セクション
 
@@ -253,7 +272,14 @@ src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommandHa
 - EventBus.publish(inventory.pullDomainEvents()) で InventoryReservedDomainEvent を発行（商品ごと）
 - Logger.write(INFO, 'reserve_inventory', orderId)
 
-CommandHandler インターフェースを implements すること。メソッド名は run()。
+CommandHandler インターフェースを implements すること。
+実装メソッドは **`handle(command: ReserveInventoryCommand): Promise<void>`**。
+
+`subscribedTo()` は **`ReserveInventoryCommand` クラス自体（コンストラクタ）** を返すこと:
+
+```typescript
+subscribedTo() { return ReserveInventoryCommand; }
+```
 
 参考ドキュメント: docs/step3-application-layer.md の「ReserveInventoryCommandHandler」セクション
 ※ InventoryRepository の reserveStock / incrementStock メソッドのシグネチャは既存の InventoryRepository.ts を確認して合わせること
