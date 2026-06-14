@@ -5,7 +5,6 @@ import { CustomerId } from "./CustomerId.js";
 import { OrderItems } from "./OrderItems.js";
 import { OrderItemPrimitive } from "./OrderItem.js";
 import { OrderStatus } from "./OrderStatus.js";
-import { TotalAmount } from "./TotalAmount.js";
 import { OrderPlacedDomainEvent } from "./OrderPlacedDomainEvent.js";
 import { InventoryReservationRequestedDomainEvent } from "./InventoryReservationRequestedDomainEvent.js";
 
@@ -17,22 +16,20 @@ export class InvalidOrderStatusTransitionError extends DomainError {
   }
 }
 
-interface OrderPrimitives {
+type OrderPrimitives = {
   id: string;
   customerId: string;
   items: OrderItemPrimitive[];
-  totalAmount: number;
   status: string;
   createdAt: Date;
   updatedAt: Date;
-}
+};
 
 export class Order extends AggregateRoot {
   private constructor(
     readonly id: OrderId,
     readonly customerId: CustomerId,
     readonly items: OrderItems,
-    readonly totalAmount: TotalAmount,
     private _status: OrderStatus,
     readonly createdAt: Date,
     private _updatedAt: Date,
@@ -54,13 +51,11 @@ export class Order extends AggregateRoot {
     items: OrderItems;
   }): Order {
     const now = new Date();
-    const totalAmount = params.items.totalAmount();
 
     const order = new Order(
       params.id,
       params.customerId,
       params.items,
-      totalAmount,
       OrderStatus.pending(),
       now,
       now,
@@ -71,7 +66,7 @@ export class Order extends AggregateRoot {
         orderId: params.id.value,
         customerId: params.customerId.value,
         items: params.items.toPrimitives(),
-        totalAmount: totalAmount.value,
+        subtotalAmount: params.items.subtotalAmount().value,
       }),
     );
 
@@ -109,7 +104,6 @@ export class Order extends AggregateRoot {
       new OrderId(params.id),
       new CustomerId(params.customerId),
       OrderItems.fromPrimitives(params.items),
-      new TotalAmount(params.totalAmount),
       OrderStatus.fromString(params.status),
       params.createdAt,
       params.updatedAt,
@@ -121,7 +115,6 @@ export class Order extends AggregateRoot {
       id: this.id.value,
       customerId: this.customerId.value,
       items: this.items.toPrimitives(),
-      totalAmount: this.totalAmount.value,
       status: this._status.value,
       createdAt: this.createdAt,
       updatedAt: this._updatedAt,

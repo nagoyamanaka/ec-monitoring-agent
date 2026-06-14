@@ -1,6 +1,6 @@
 import { InvalidArgumentError } from "../../../Shared/domain/errors/InvalidArgumentError.js";
 import { OrderItem, OrderItemPrimitive } from "./OrderItem.js";
-import { TotalAmount } from "./TotalAmount.js";
+import { SubtotalAmount } from "./SubtotalAmount.js";
 
 export class OrderItems {
   readonly value: OrderItem[];
@@ -12,9 +12,9 @@ export class OrderItems {
     this.value = value;
   }
 
-  totalAmount(): TotalAmount {
+  subtotalAmount(): SubtotalAmount {
     const total = this.value.reduce((sum, item) => sum + item.subtotal(), 0);
-    return new TotalAmount(total);
+    return new SubtotalAmount(total);
   }
 
   toPrimitives(): OrderItemPrimitive[] {

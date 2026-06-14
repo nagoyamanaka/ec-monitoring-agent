@@ -1,6 +1,6 @@
 import { Inventory } from "./Inventory.js";
 import { ProductId } from "./ProductId.js";
-import { InventoryFailureReasonValue } from "./events/InventoryReservationFailedDomainEvent.js";
+import { InventoryFailureReasonValue } from "./InventoryReservationFailedDomainEvent.js";
 
 export type ReserveStockResult =
   | { success: true; remainingStock: number; newVersion: number }

@@ -2,12 +2,12 @@ import { AggregateRoot } from "../../../Shared/domain/AggregateRoot.js";
 import { ProductId } from "./ProductId.js";
 import { StockQuantity } from "./StockQuantity.js";
 import { OrderItemPrimitive } from "../../Orders/domain/OrderItem.js";
-import { InventoryReservedDomainEvent } from "./events/InventoryReservedDomainEvent.js";
+import { InventoryReservedDomainEvent } from "./InventoryReservedDomainEvent.js";
 import {
   InventoryReservationFailedDomainEvent,
   InventoryFailureReason,
   InventoryFailureReasonValue,
-} from "./events/InventoryReservationFailedDomainEvent.js";
+} from "./InventoryReservationFailedDomainEvent.js";
 
 interface InventoryPrimitives {
   productId: string;
