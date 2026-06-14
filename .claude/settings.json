@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(curl -s \"https://api.github.com/repos/CodelyTV/typescript-ddd-example/contents/src/Contexts/Mooc/Courses/application/Create/CourseCreator.ts\")"
-    ]
-  }
-}
