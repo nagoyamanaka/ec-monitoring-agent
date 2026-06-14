@@ -50,7 +50,8 @@ src/Contexts/Shared/
 │   │   ├── DomainError.ts        # ドメインエラー基底（Error + AppError 実装）
 │   │   ├── ApplicationError.ts   # アプリケーションエラー基底
 │   │   ├── InfrastructureError.ts # インフラエラー基底
-│   │   └── InvalidArgumentError.ts # VO構築失敗の基底エラー（errorCode: INVALID_ARGUMENT）
+│   │   ├── InvalidArgumentError.ts # VO構築失敗の基底エラー（errorCode: INVALID_ARGUMENT）
+│   │   └── InvalidDomainEventNameError.ts # ECDomainEventのプレフィックス違反（errorCode: INVALID_DOMAIN_EVENT_NAME）
 │   ├── value-object/             # CodelyTV準拠のValue Object基底クラス群
 │   │   ├── ValueObject.ts        # T extends Primitives 制約 + null guard + equals
 │   │   ├── StringValueObject.ts  # ValueObject<string> 抽象基底
@@ -139,7 +140,7 @@ src/Contexts/EC/
 │   │   ├── OrderItems.ts                                  # Value Object（OrderItemの集合）
 │   │   ├── OrderItem.ts                                   # Value Object（productId/quantity/price）
 │   │   ├── CustomerId.ts                                  # Value Object
-│   │   ├── TotalAmount.ts                                 # Value Object
+│   │   ├── SubtotalAmount.ts                              # Value Object
 │   │   ├── OrderRepository.ts                             # Repositoryインターフェース（Domain層）
 │   │   └── events/
 │   │       └── OrderPlacedDomainEvent.ts                  # 注文確定イベント
@@ -179,7 +180,7 @@ src/Contexts/EC/
     │   └── events/
     │       └── PaymentTimeoutDomainEvent.ts               # 決済タイムアウトイベント（シナリオ1の核心）
     └── infrastructure/
-        └── PaymentMockService.ts                          # モック決済（success/random/timeout切り替え）
+        └── PaymentMockGateway.ts                          # モック決済（success/random/timeout切り替え）
 ```
 
 ---

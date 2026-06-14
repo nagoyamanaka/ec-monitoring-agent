@@ -42,7 +42,6 @@
 | `id`          | `OrderId`     | 集約識別子                                     |
 | `customerId`  | `CustomerId`  | 注文者ID                                       |
 | `items`       | `OrderItems`  | 注文明細の集合                                 |
-| `totalAmount` | `TotalAmount` | 合計金額                                       |
 | `status`      | `OrderStatus` | 注文ステータス（PENDING / CONFIRMED / FAILED） |
 | `createdAt`   | `Date`        | 注文日時                                       |
 | `updatedAt`   | `Date`        | 最終更新日時                                   |
@@ -58,8 +57,7 @@ static place(params: {
 ```
 
 - `OrderStatus` を `PENDING` で初期化する
-- `totalAmount` は `items.totalAmount()` から算出する
-- `OrderPlacedDomainEvent` を `record()` に積む
+- `OrderPlacedDomainEvent` を `record()` に積む（`subtotalAmount` は `items.subtotalAmount().value` から算出してイベントに渡す）
 - インスタンスを返す（`new Order()` は外部から直接呼ばせない）
 
 #### 状態遷移メソッド
@@ -87,7 +85,6 @@ static fromPrimitives(params: {
   id: string;
   customerId: string;
   items: OrderItemPrimitive[];
-  totalAmount: number;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -99,7 +96,6 @@ toPrimitives(): {
   id: string;
   customerId: string;
   items: OrderItemPrimitive[];
-  totalAmount: number;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -191,19 +187,19 @@ class OrderItem {
 ```typescript
 class OrderItems extends ValueObject<OrderItem[]> {
   constructor(value: OrderItem[]); // 空配列はEmptyOrderItemsErrorをthrow
-  totalAmount(): TotalAmount; // 全OrderItemのsubtotal()合計
+  subtotalAmount(): SubtotalAmount; // 全OrderItemのsubtotal()合計
   toPrimitives(): OrderItemPrimitive[];
   static fromPrimitives(p: OrderItemPrimitive[]): OrderItems;
 }
 ```
 
-#### `TotalAmount`
+#### `SubtotalAmount`
 
-**ファイルパス**: `src/Contexts/EC/Orders/domain/TotalAmount.ts`
+**ファイルパス**: `src/Contexts/EC/Orders/domain/SubtotalAmount.ts`
 
 ```typescript
-class TotalAmount extends ValueObject<number> {
-  constructor(value: number); // 0以上。違反時はInvalidTotalAmountError
+class SubtotalAmount extends NumberValueObject {
+  constructor(value: number); // 0以上。違反時はInvalidArgumentError
 }
 ```
 
@@ -221,13 +217,13 @@ class OrderPlacedDomainEvent extends ECDomainEvent {
 
   readonly customerId: string;
   readonly items: OrderItemPrimitive[];
-  readonly totalAmount: number;
+  readonly subtotalAmount: number;
 
   constructor(params: {
     orderId: string;
     customerId: string;
     items: OrderItemPrimitive[];
-    totalAmount: number;
+    subtotalAmount: number;
     eventId?: string;
     occurredOn?: Date;
   })
@@ -307,16 +303,20 @@ static initialize(params: {
 #### ビジネスロジックメソッド
 
 ```typescript
-reserve(orderId: string, items: OrderItemPrimitive[]): void
+reserve(
+  orderId: string,
+  quantity: number,
+  outcome: { success: true; remainingStock: number; newVersion: number }
+         | { success: false; reason: InventoryFailureReasonValue }
+): void
 ```
 
-- `items` から自商品分の `quantity` を合算する
-- `stock.hasEnoughStock(quantity)` で在庫確認する
-- 在庫あり: `stock` をデクリメントし `InventoryReservedDomainEvent` を `record()` に積む
-- 在庫なし: `InventoryReservationFailedDomainEvent` を `record()` に積む（在庫切れはビジネスエラーとしてイベントで表現する。例外はthrowしない）
+- `InventoryRepository.reserveStock()` の結果（`outcome`）を受け取り、適切なDomainEventを `record()` に積む
+- 成功時: `_stock` / `_version` / `_updatedAt` を更新し `InventoryReservedDomainEvent` を積む
+- 失敗時: `InventoryReservationFailedDomainEvent` を積む（在庫切れはビジネスエラーとしてイベントで表現する。例外はthrowしない）
 - どちらのケースでも例外をthrowしない（イベントで表現する）
 
-**設計ポイント**: `reserve()` はatomicな操作を表現するが、実際のatomic保証はMongoDB層の `findOneAndUpdate` が担う。`reserve()` はDomainEventの生成責務を持ち、Infrastructure層が実際の競合検出を行う。
+**設計ポイント**: 在庫の在否判定・楽観ロックによるatomic更新はMongoDB層の `findOneAndUpdate`（`reserveStock()`）が担う。`reserve()` はその結果を受け取ってDomainEventを生成する責務のみを持つ。
 
 #### 永続化用メソッド
 
@@ -497,7 +497,7 @@ type ReserveStockResult =
 | `InvalidOrderStatusTransitionError` | `Order.confirmInventory()` / `Order.failInventory()` | 不正なステータス遷移              |
 | `EmptyOrderItemsError`              | `OrderItems` constructor                             | 注文明細が空                      |
 | `InvalidOrderItemError`             | `OrderItem` constructor                              | quantity ≤ 0 または unitPrice < 0 |
-| `InvalidTotalAmountError`           | `TotalAmount` constructor                            | 合計金額 < 0                      |
+| `InvalidSubtotalAmountError`        | `SubtotalAmount` constructor                         | 小計金額 < 0                      |
 | `InvalidProductIdError`             | `ProductId` constructor                              | 無効なID形式                      |
 | `InvalidStockQuantityError`         | `StockQuantity` constructor / `decrement()`          | 在庫数 < 0                        |
 

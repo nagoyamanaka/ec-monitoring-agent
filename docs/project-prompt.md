@@ -250,8 +250,7 @@ PlaceOrderCommandHandler
   ├─ PaymentGateway.run()
   │   └─ 失敗 → PaymentTimeoutDomainEvent → Monitoring
   └─ Order.place()
-       ├─ OrderPlacedDomainEvent
-       └─ InventoryReservationRequestedDomainEvent
+       └─ OrderPlacedDomainEvent
 
 RabbitMQ
   ├─ ReserveInventoryOnOrderPlaced
