@@ -33,104 +33,69 @@ Step 3 実装タスク一覧
 - 【新規作成】`src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderFailedError.ts` — `ApplicationError` 継承、`errorCode = 'PLACE_ORDER_FAILED'`
 - 【新規作成】`src/Contexts/Shared/infrastructure/errors/RepositoryError.ts` — `InfrastructureError` 継承、`errorCode = 'REPOSITORY_ERROR'`、`LogWriteError.ts` と同パターン
 
-# タスク 5: PlaceOrderCommandHandler 実装
+# ~~タスク 5: PlaceOrderCommandHandler + PlaceOrderUseCase 実装~~ ✅ 完了済み
 
-概要: 決済→Order生成→保存→EventBus発行の一連フローを実装する。
+**設計メモ**:
+- Handler / UseCase 分離パターンを全ハンドラに統一（CodelyTV の `CourseCreator` パターン準拠、`UseCase` サフィックスで命名）
+- `PlaceOrderCommandHandler`: VO変換のみ（OrderId / CustomerId / OrderItems）→ `PlaceOrderUseCase.run()` に委譲
+- `PlaceOrderUseCase`: Payment・Order生成・save・EventPublish・Logger の全ビジネスロジックを担う
+- Handler の依存は `PlaceOrderUseCase` のみ。UseCase が `OrderRepository` / `EventBus` / `PaymentGateway` / `Logger` に依存
 
-プロンプト:
+**作成・修正ファイル**:
+- 【新規作成】`src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderUseCase.ts`
+- 【修正】`src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts` — UseCase に委譲する薄いルーターに変更
 
-/home/shigeyasu/Project/ec-monitoring-agent にある TypeScript DDD プロジェクトで、
-PlaceOrderCommandHandler を新規作成してください。
+# タスク 6: GetOrderQueryHandler + GetOrderUseCase 実装
 
-作成ファイル:
-src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts
-
-依存するインターフェース（すべてドメイン抽象）:
-
-- OrderRepository: src/Contexts/EC/Orders/domain/OrderRepository.ts
-- EventBus: src/Contexts/Shared/domain/EventBus.ts
-- PaymentGateway: src/Contexts/EC/Orders/domain/PaymentGateway.ts
-- Logger: src/Contexts/Shared/domain/logging/Logger.ts
-
-依存するドメインクラス:
-
-- Order: src/Contexts/EC/Orders/domain/Order.ts
-- OrderId: src/Contexts/EC/Orders/domain/OrderId.ts
-- CustomerId: src/Contexts/EC/Orders/domain/CustomerId.ts
-- OrderItems: src/Contexts/EC/Orders/domain/OrderItems.ts
-- PaymentTimeoutDomainEvent: src/Contexts/EC/Payment/domain/PaymentTimeoutDomainEvent.ts
-
-依存するエラークラス（タスク4で作成済み）:
-
-- PlaceOrderFailedError
-- RepositoryError
-
-処理フロー（docs/step3-application-layer.md の「PlaceOrderCommandHandler 処理フロー」を厳守）:
-
-1. PaymentGateway.run({ orderId, amount: items合計金額 }) を呼ぶ
-   - 失敗時: PaymentTimeoutDomainEvent を publish し、PlaceOrderFailedError を throw
-2. OrderId / CustomerId / OrderItems を VO に変換（失敗は DomainError をそのまま throw）
-3. Order.place({ id, customerId, items }) を呼ぶ
-4. OrderRepository.save(order) を呼ぶ（失敗は RepositoryError を throw）
-5. EventBus.publish(order.pullDomainEvents()) を呼ぶ（失敗は Logger.write(WARN)のみ）
-6. Logger.write(INFO, place_order, '注文確定', orderId)
-
-CommandHandler インターフェース（src/Contexts/Shared/domain/CommandHandler.ts）を implements すること。
-実装メソッドは **`handle(command: PlaceOrderCommand): Promise<void>`**（InMemoryCommandBus が `handler.handle(command)` を呼ぶため）。
-
-`subscribedTo()` は **`PlaceOrderCommand` クラス自体（コンストラクタ）** を返すこと:
-
-```typescript
-subscribedTo() { return PlaceOrderCommand; }
-```
-
-CommandHandlers Map は登録時に `subscribedTo()` の戻り値をキーにし、検索時に `command.constructor` で引くため、インスタンスではなくクラスを返さなければならない。
-
-参考ドキュメント: docs/step3-application-layer.md の「PlaceOrderCommandHandler」セクション
-
-# タスク 6: GetOrderQueryHandler 実装
-
-概要: Order取得→レスポンス変換のシンプルなRead側ハンドラを実装する。
+概要: Order取得→レスポンス変換のシンプルなRead側ハンドラを、Handler/UseCase 分離パターンで実装する。
 
 プロンプト:
 
 /home/shigeyasu/Project/ec-monitoring-agent にある TypeScript DDD プロジェクトで、
-GetOrderQueryHandler を新規作成してください。
+GetOrderQueryHandler と GetOrderUseCase を新規作成してください。
+
+**設計方針（タスク5と統一）**: Handler は VO変換のみ → `GetOrderUseCase.run()` に委譲。UseCase がビジネスロジックを担う。
 
 作成ファイル:
-src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts
+- src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts
+- src/Contexts/EC/Orders/application/GetOrder/GetOrderUseCase.ts
 
-依存するインターフェース:
-
-- OrderRepository: src/Contexts/EC/Orders/domain/OrderRepository.ts
-- Logger: src/Contexts/Shared/domain/logging/Logger.ts
+【GetOrderQueryHandler】
 
 依存するクラス:
-
-- GetOrderQuery: src/Contexts/EC/Orders/application/GetOrder/GetOrderQuery.ts（タスク2で修正済み）
-- OrderResponse: src/Contexts/EC/Orders/application/OrderResponse.ts（タスク2で作成済み）
-- OrderId: src/Contexts/EC/Orders/domain/OrderId.ts
-- OrderResourceNotFoundError: src/Contexts/EC/Orders/application/errors/OrderResourceNotFoundError.ts（タスク4で作成済み）
+- GetOrderUseCase（constructor injection）
 
 処理フロー:
-
 1. GetOrderQuery を受け取る
-2. OrderRepository.findById(new OrderId(query.orderId)) を呼ぶ
-   - null の場合: OrderResourceNotFoundError を throw
-3. order.toPrimitives() を使って GetOrderQueryResponse を構築して返す
-   - createdAt / updatedAt は .toISOString() で文字列化する
-   - totalAmount は items の unitPrice \* quantity の合計（または Order に合計算出メソッドがあればそれを使う）
+2. new OrderId(query.orderId) で VO に変換
+3. await this.getOrderUseCase.run(id) を呼び、結果を返す
 
 QueryHandler インターフェース（src/Contexts/Shared/domain/QueryHandler.ts）を implements すること。
 実装メソッドは **`handle(query: GetOrderQuery): Promise<OrderResponse>`**。
 
-`subscribedTo()` は **`GetOrderQuery` クラス自体（コンストラクタ）** を返すこと:
+`subscribedTo()` は **`GetOrderQuery` クラス自体** を返すこと。
 
-```typescript
-subscribedTo() { return GetOrderQuery; }
-```
+【GetOrderUseCase】
 
-参考ドキュメント: docs/step3-application-layer.md の「GetOrderQueryHandler」セクション
+依存するインターフェース:
+- OrderRepository: src/Contexts/EC/Orders/domain/OrderRepository.ts
+- Logger: src/Contexts/Shared/domain/logging/Logger.ts
+
+依存するクラス:
+- OrderId: src/Contexts/EC/Orders/domain/OrderId.ts
+- OrderResponse: src/Contexts/EC/Orders/application/OrderResponse.ts（タスク2で作成済み）
+- OrderResourceNotFoundError: src/Contexts/EC/Orders/application/errors/OrderResourceNotFoundError.ts（タスク4で作成済み）
+
+メソッドシグネチャ: `async run(id: OrderId): Promise<OrderResponse>`
+
+処理フロー:
+1. OrderRepository.findById(id) を呼ぶ
+   - null の場合: OrderResourceNotFoundError を throw
+2. order.toPrimitives() を使って OrderResponse を構築して返す
+   - createdAt / updatedAt は .toISOString() で文字列化する
+   - totalAmount は items.subtotalAmount().value を使う（OrderItemsに subtotalAmount() メソッドあり）
+
+参考ドキュメント: docs/step3-application-layer.md の「GetOrderQueryHandler」「GetOrderUseCase」セクション
 
 # タスク 7: ReserveInventoryCommandHandler 実装
 

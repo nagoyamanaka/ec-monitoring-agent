@@ -10,12 +10,13 @@
 | 判断項目                                                     | 決定内容                                                                                                                                | 理由                                                                                                                                                                                               |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PaymentGateway` の命名                                      | `PaymentService` から `PaymentGateway` に変更                                                                                           | 外部サービスへのアウトバウンドポートであることを明示。ドメインサービス（`XxxDomainService`）との混同を避ける                                                                                       |
-| ApplicationServiceのメソッド名                               | CommandHandler の実装メソッドは **`handle()`**（`CommandHandler<T>` インターフェース必須）。単体アプリケーションサービスを分離する場合はそちらの公開メソッドを `run()` とするのが CodelyTV 準拠だが、本設計では CommandHandler に処理を直書きするため `handle()` のみを用いる | `InMemoryCommandBus` が `handler.handle(command)` を呼ぶため `handle()` でなければ動作しない。`CourseCreator.run()` はハンドラから呼ばれる別クラスの話で、Handler 自身のメソッドではない |
+| ApplicationServiceのメソッド名とクラス分離                   | CommandHandler は **VO変換のみ** を担い、ビジネスロジックは **`XxxUseCase.run()`** に委譲する。CodelyTV の `CourseCreator.run()` パターン準拠。UseCase クラスは `UseCase` サフィックスで統一（`PlaceOrderUseCase` / `GetOrderUseCase`） | Handler は「CQRSバスからの薄いルーター」に徹する。VO変換後に UseCase.run(VO引数) を呼ぶ一本道だが、将来 Subscriber からも同じ UseCase を呼べる構造を最初から持つ。全ハンドラで統一することで「Handler = 薄い」という慣習が崩れない |
 | エラーの基底クラス                                           | `DomainError` / `ApplicationError` / `InfrastructureError` の3基底を定義                                                                | Domain・Application層はHTTPを知らない。errorHandlerがレイヤーの意味でHTTPステータスに変換する責務を持つ                                                                                            |
 | 在庫引き当て方式                                             | All-or-Nothing（B案：事前チェック＋楽観ロック＋補償）                                                                                   | 部分成功（商品Aは届くが商品Bは届かない）はユーザー混乱リスクが高い。注文はビジネスセマンティクス上All-or-Nothingが自然                                                                             |
 | Inventory atomicの実現方式                                   | 2フェーズ（Phase1: 全商品在庫確認 / Phase2: 全商品更新＋楽観ロック）                                                                    | ハッカソンスコープでMongoDBのReplicaSetなし構成のためマルチドキュメントトランザクション不使用。`InventoryRepository` インターフェースは維持するため将来のPostgreSQL移行でApplication層はノータッチ |
 | PaymentタイムアウトイベントとorderId                         | Payment失敗時はOrderを生成しない。`PaymentTimeoutDomainEvent` には `orderId` を含めるが、Monitoringは「注文未確定の決済障害」として扱う | OrderがDBに存在しない段階でのイベントのため、MonitoringがorderIdでOrderを引こうとしない設計にする（Step 4で対処）                                                                                  |
 | `PlaceOrderCommandHandler` でのEventBus.publish() タイミング | `save()` 後に `publish()` する                                                                                                          | DBへの永続化が完了してからイベントを外部に伝播させる。saveが失敗した場合に不正なイベントを流さない                                                                                                 |
+| Payment成功後のOrder保存失敗検知                             | Payment成功直後に `place_order_payment_succeeded`（INFO）を `transactionId` 付きでログ出力する。Order確定時は `place_order`（INFO）を出力する | Outbox / PAYMENT_PENDING状態はハッカソンスコープで省略。`orderId` の冪等キー設計は維持済み。Cloud Loggingで「`place_order_payment_succeeded` あり・`place_order` なし」の orderId を検出することで未消込の決済を検知できる |
 | `CompensateOrderOnInventoryFailed` Subscriber の配置         | `EC/Orders/application/CompensateOrder/` に配置                                                                                         | 補償処理はOrderコンテキストの責務。InventoryコンテキストがOrderを知る逆転を避ける。依存は `OrderRepository` / `EventBus` / `Logger`（すべてドメイン抽象）のみで infrastructure 固有の依存がないため application 層に配置する |
 | Subscriber のキュー命名                                      | CodelyTV準拠 `{appName}.{eventName}.{subscriberName}`                                                                                   | 規約統一                                                                                                                                                                                           |
 
@@ -115,10 +116,14 @@ export function errorHandler(
 | -------------------------------- | -------------- | ------------------------------------------------------------------------------------------ |
 | `PlaceOrderCommand`              | Command        | `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommand.ts`                       |
 | `PlaceOrderCommandHandler`       | CommandHandler | `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts`                |
+| `PlaceOrderUseCase`              | UseCase        | `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderUseCase.ts`                       |
 | `ReserveInventoryCommand`        | Command        | `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommand.ts`        |
 | `ReserveInventoryCommandHandler` | CommandHandler | `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommandHandler.ts` |
 | `GetOrderQuery`                  | Query          | `src/Contexts/EC/Orders/application/GetOrder/GetOrderQuery.ts`                             |
 | `GetOrderQueryHandler`           | QueryHandler   | `src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts`                      |
+| `GetOrderUseCase`                | UseCase        | `src/Contexts/EC/Orders/application/GetOrder/GetOrderUseCase.ts`                           |
+
+> **命名規則**: UseCase クラスは `UseCase` サフィックス統一。Handler は `XxxUseCase` を constructor injection し `handle()` から `useCase.run(VO引数)` を呼ぶだけの薄いルーター。
 
 ---
 
@@ -155,20 +160,38 @@ export class PlaceOrderCommand extends Command {
 
 **ファイルパス**: `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts`
 
-**クラス骨格**（`CommandHandler<PlaceOrderCommand>` を implements）:
+Handler は薄いルーター。VO変換のみを行い `PlaceOrderUseCase.run()` に委譲する。
 
 ```typescript
 export class PlaceOrderCommandHandler implements CommandHandler<PlaceOrderCommand> {
-  subscribedTo() {
-    return PlaceOrderCommand; // クラス自体（コンストラクタ）を返す。インスタンスではない
-  }
+  constructor(private readonly placeOrderUseCase: PlaceOrderUseCase) {}
 
-  async handle(command: PlaceOrderCommand): Promise<void> { ... }
+  subscribedTo() { return PlaceOrderCommand; }
+
+  async handle(command: PlaceOrderCommand): Promise<void> {
+    const id = new OrderId(command.orderId);
+    const customerId = new CustomerId(command.customerId);
+    const items = new OrderItems(command.items.map(...));
+    await this.placeOrderUseCase.run({ id, customerId, items });
+  }
 }
 ```
 
-> `InMemoryCommandBus` は `handler.handle(command)` を呼ぶ。メソッドは **`handle()`** のみ。
 > `subscribedTo()` がクラス自体を返すことで、`CommandHandlers` Map のキーと `command.constructor` が一致する。
+
+#### 依存関係
+
+| 依存                | 種別  | 理由                    |
+| ------------------- | ----- | ----------------------- |
+| `PlaceOrderUseCase` | class | ビジネスロジックの委譲先 |
+
+---
+
+### `PlaceOrderUseCase`
+
+**ファイルパス**: `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderUseCase.ts`
+
+ビジネスロジック本体。将来 Subscriber から直接呼ぶ場合もここを再利用する。
 
 #### 依存関係
 
@@ -182,23 +205,26 @@ export class PlaceOrderCommandHandler implements CommandHandler<PlaceOrderComman
 #### 処理フロー
 
 ```
-1. PlaceOrderCommand を受け取る
-2. PaymentGateway.run({ orderId, amount }) を呼び出す
+PlaceOrderUseCase.run({ id: OrderId, customerId: CustomerId, items: OrderItems })
+
+1. amount = items.subtotalAmount().value
+2. PaymentGateway.run({ orderId: id.value, amount }) を呼び出す
    ├─ 成功 → 3へ進む
    └─ 失敗 → PaymentTimeoutDomainEvent を EventBus.publish()
               ※ この時点でOrderはDBに存在しない。
                 Monitoringは「注文未確定の決済障害」として扱う（Step 4で対処）
+              → Logger.write(WARN, place_order_payment_failed)
               → PlaceOrderFailedError をthrow（errorHandlerが400を返す）
-3. OrderId / CustomerId / OrderItems を Value Object に変換する
-   └─ 構築失敗（DomainError）→ そのままthrow（errorHandlerが400を返す）
-4. Order.place({ id, customerId, items }) を呼び出す
+3. Order.place({ id, customerId, items }) を呼び出す
    → OrderPlacedDomainEvent が record() に積まれる
-5. OrderRepository.save(order) を呼び出す
+4. OrderRepository.save(order) を呼び出す
    └─ 失敗 → RepositoryError をthrow（errorHandlerが500を返す）
-6. EventBus.publish(order.pullDomainEvents()) を呼び出す
+5. EventBus.publish(order.pullDomainEvents()) を呼び出す
    └─ 失敗 → Logger.write(WARN)（注文自体は成功扱い。RabbitMQのFailover Publisherが再試行）
-7. Logger.write({ severity: 'INFO', action: 'place_order', message: '注文確定', orderId })
+6. Logger.write({ severity: 'INFO', action: 'place_order', message: '注文確定', orderId })
 ```
+
+> VO変換はHandler側で完了済み。UseCase は VO を受け取りビジネスロジックに専念する。
 
 ---
 
@@ -384,19 +410,32 @@ export interface GetOrderQueryResponse extends Response {
 
 **ファイルパス**: `src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts`
 
-**クラス骨格**（`QueryHandler<GetOrderQuery, GetOrderQueryResponse>` を implements）:
+Handler は薄いルーター。VO変換のみを行い `GetOrderUseCase.run()` に委譲する。
 
 ```typescript
-export class GetOrderQueryHandler implements QueryHandler<GetOrderQuery, GetOrderQueryResponse> {
-  subscribedTo() {
-    return GetOrderQuery; // クラス自体を返す
-  }
+export class GetOrderQueryHandler implements QueryHandler<GetOrderQuery, OrderResponse> {
+  constructor(private readonly getOrderUseCase: GetOrderUseCase) {}
 
-  async handle(query: GetOrderQuery): Promise<GetOrderQueryResponse> { ... }
+  subscribedTo() { return GetOrderQuery; }
+
+  async handle(query: GetOrderQuery): Promise<OrderResponse> {
+    const id = new OrderId(query.orderId);
+    return this.getOrderUseCase.run(id);
+  }
 }
 ```
 
-> QueryHandler も同様に `handle()` がインターフェース必須メソッド。`subscribedTo()` は `GetOrderQuery` クラス自体を返す。
+#### 依存関係
+
+| 依存             | 種別  | 理由                    |
+| ---------------- | ----- | ----------------------- |
+| `GetOrderUseCase` | class | ビジネスロジックの委譲先 |
+
+---
+
+### `GetOrderUseCase`
+
+**ファイルパス**: `src/Contexts/EC/Orders/application/GetOrder/GetOrderUseCase.ts`
 
 #### 依存関係
 
@@ -408,10 +447,11 @@ export class GetOrderQueryHandler implements QueryHandler<GetOrderQuery, GetOrde
 #### 処理フロー
 
 ```
-1. GetOrderQuery を受け取る
-2. OrderRepository.findById(new OrderId(query.orderId)) を呼び出す
-   └─ null → ResourceNotFoundError をthrow（errorHandlerが404を返す）
-3. order.toPrimitives() で GetOrderQueryResponse を構築して返す
+GetOrderUseCase.run(id: OrderId): Promise<OrderResponse>
+
+1. OrderRepository.findById(id) を呼び出す
+   └─ null → OrderResourceNotFoundError をthrow（errorHandlerが404を返す）
+2. order.toPrimitives() で OrderResponse を構築して返す
 ```
 
 **将来の拡張ポイント**: 注文件数が増えた場合、MongoDBのprojectionで必要フィールドのみ取得するRead専用リポジトリに差し替える。
@@ -503,10 +543,12 @@ backoffice-backend.ec.payment.timeout.collect-monitoring-event
 
 ## ログ出力ポイント一覧
 
-| 出力箇所                                                | severity | action                           | message                                 |
-| ------------------------------------------------------- | -------- | -------------------------------- | --------------------------------------- |
-| `PlaceOrderCommandHandler` 完了                         | INFO     | `place_order`                    | 注文確定：{orderId}                     |
-| `PlaceOrderCommandHandler` Payment失敗                  | WARN     | `place_order_payment_failed`     | 決済失敗：{orderId}, reason={reason}    |
+| 出力箇所                                                | severity | action                               | message                                                  |
+| ------------------------------------------------------- | -------- | ------------------------------------ | -------------------------------------------------------- |
+| `PlaceOrderUseCase` 決済呼び出し直前                    | INFO     | `place_order_payment_started`        | 決済開始：{orderId}, amount={amount}                     |
+| `PlaceOrderUseCase` Payment成功直後                     | INFO     | `place_order_payment_succeeded`      | 決済完了：{orderId}, transactionId={transactionId}       |
+| `PlaceOrderUseCase` 完了                                | INFO     | `place_order`                        | 注文確定：{orderId}                                      |
+| `PlaceOrderUseCase` Payment失敗                         | WARN     | `place_order_payment_failed`         | 決済失敗：{orderId}, reason={reason}                     |
 | `ReserveInventoryCommandHandler` Phase1在庫不足         | WARN     | `reserve_inventory_insufficient` | 在庫不足（Phase1）：{productId}         |
 | `ReserveInventoryCommandHandler` Phase2全成功           | INFO     | `reserve_inventory`              | 在庫引き当て成功：{orderId}             |
 | `ReserveInventoryCommandHandler` Phase2競合ロールバック | WARN     | `reserve_inventory_rollback`     | 楽観ロック競合・ロールバック：{orderId} |

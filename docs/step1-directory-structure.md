@@ -147,10 +147,13 @@ src/Contexts/EC/
 │   ├── application/
 │   │   ├── PlaceOrder/
 │   │   │   ├── PlaceOrderCommand.ts                       # 注文作成コマンド
-│   │   │   └── PlaceOrderCommandHandler.ts                # コマンドハンドラ
+│   │   │   ├── PlaceOrderCommandHandler.ts                # コマンドハンドラ（VO変換のみ → UseCase委譲）
+│   │   │   ├── PlaceOrderUseCase.ts                       # ビジネスロジック本体（Payment・save・EventPublish・Logger）
+│   │   │   └── PlaceOrderFailedError.ts                   # ApplicationError（決済失敗）
 │   │   └── GetOrder/
 │   │       ├── GetOrderQuery.ts                           # 注文取得クエリ
-│   │       └── GetOrderQueryHandler.ts                    # クエリハンドラ（Read側）
+│   │       ├── GetOrderQueryHandler.ts                    # クエリハンドラ（VO変換のみ → UseCase委譲）
+│   │       └── GetOrderUseCase.ts                         # ビジネスロジック本体（findById・NotFound・レスポンス変換）
 │   └── infrastructure/
 │       ├── persistence/
 │       │   └── MongoOrderRepository.ts                    # OrderRepository MongoDB実装
