@@ -150,27 +150,27 @@ export class RabbitMqConnection {
     this.channel!.ack(message);
   }
 
-  async retry(message: ConsumeMessage, queue: string, exchange: string) {
-    const retryExchange = RabbitMQExchangeNameFormatter.retry(exchange);
-    const options = this.getMessageOptions(message);
+  async retry(params: { message: ConsumeMessage; queue: string; exchange: string }) {
+    const retryExchange = RabbitMQExchangeNameFormatter.retry(params.exchange);
+    const options = this.getMessageOptions(params.message);
 
     return await this.publish({
       exchange: retryExchange,
-      routingKey: queue,
-      content: message.content,
+      routingKey: params.queue,
+      content: params.message.content,
       options,
     });
   }
 
-  async deadLetter(message: ConsumeMessage, queue: string, exchange: string) {
+  async deadLetter(params: { message: ConsumeMessage; queue: string; exchange: string }) {
     const deadLetterExchange =
-      RabbitMQExchangeNameFormatter.deadLetter(exchange);
-    const options = this.getMessageOptions(message);
+      RabbitMQExchangeNameFormatter.deadLetter(params.exchange);
+    const options = this.getMessageOptions(params.message);
 
     return await this.publish({
       exchange: deadLetterExchange,
-      routingKey: queue,
-      content: message.content,
+      routingKey: params.queue,
+      content: params.message.content,
       options,
     });
   }

@@ -51,11 +51,11 @@ export class RabbitMQConsumer {
   }
 
   private async retry(message: ConsumeMessage) {
-    await this.connection.retry(message, this.queueName, this.exchange);
+    await this.connection.retry({ message, queue: this.queueName, exchange: this.exchange });
   }
 
   private async deadLetter(message: ConsumeMessage) {
-    await this.connection.deadLetter(message, this.queueName, this.exchange);
+    await this.connection.deadLetter({ message, queue: this.queueName, exchange: this.exchange });
   }
 
   private hasBeenRedeliveredTooMuch(message: ConsumeMessage) {
