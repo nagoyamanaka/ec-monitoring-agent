@@ -1,9 +1,10 @@
-# 設計エージェント向けプロンプト v10
+# 設計エージェント向けプロンプト v11
 
-> **変更履歴（v9→v10）**
-> ハッカソン要件の再確認を受け、GCP AI技術の充足戦略とVertex AI / ADK への段階移行設計を追記。
-> `AIInvestigationPort` の命名設計方針、3フェーズ移行ロードマップ、
-> 今すぐ実施する設計上の配慮を確定しました。
+> **変更履歴（v10→v11）**
+> AlertClassifier の実装段階戦略（InMemory完全一致 → Elasticスコアリング → A2A統合）を確定。
+> 各ステップの完了条件・依存関係・提出安全ラインを明記。
+> Elastic Cloud の費用試算・選定基準を追記。
+> Step 5 ADR 項目に1件追加。
 >
 > | Step                                       | 詳細設計ドキュメント                | ステータス      |
 > | ------------------------------------------ | ----------------------------------- | --------------- |
@@ -74,7 +75,7 @@ src/
 │   │   │   ├── AggregateRoot.ts       ← 必ず継承元として使用
 │   │   │   ├── DomainEvent.ts         ← イベントの基底クラス
 │   │   │   ├── EventBus.ts            ← インターフェース定義
-│   │   │   ├── ValueObject/         ← Value Objectの基底
+│   │   │   ├── ValueObject/           ← Value Objectの基底
 │   │   │   └── criteria/              ← 検索条件の抽象化（そのまま流用）
 │   │   └── infrastructure/
 │   │       ├── EventBus/RabbitMq/
@@ -112,6 +113,7 @@ src/
 | AI（現行）     | Gemini API                                                                         | `@google/generative-ai`。ハッカソン本体で使用                                                                    |
 | AI（将来P1）   | Vertex AI SDK                                                                      | `@google-cloud/vertexai`。フェーズ1で差し替え                                                                    |
 | AI（将来P2）   | ADK（Agents Development Kit）                                                      | フェーズ2でマルチエージェント構成                                                                                |
+| 検索（将来P1） | Elasticsearch（Elastic Cloud）                                                     | `ElasticAlertClassifier` でStrategyに追加。Elastic Agent Builder + A2AはP2                                       |
 | Observability  | Cloud Logging・Cloud Monitoring・Cloud Trace                                       | GCPネイティブ。OTel SDK（`@opentelemetry/sdk-node`）からGCPエクスポーター経由で直接送信。Collectorコンテナ不使用 |
 | Logging        | OTel Logs → Cloud Logging（`@google-cloud/opentelemetry-cloud-trace-exporter` 等） | Winston不使用。OTel一括化でtrace_id自動付与                                                                      |
 | Test           | Vitest (BDD)                                                                       |                                                                                                                  |
@@ -302,13 +304,98 @@ RabbitMQ
 
 ```
 AlertClassifier（インターフェース）← 抽象に依存
-  ├─ InMemoryAlertClassifier    ← ハッカソンで実装する具体（first-match）
-  └─ ScoringAlertClassifier     ← 将来差し替える具体（重み付けスコア）
+  ├─ InMemoryAlertClassifier       ← Step1：ハッカソン本体（first-match、完全一致）
+  ├─ ElasticAlertClassifier        ← Step2：Elasticsearchスコアリング（類似検索）
+  └─ ScoringAlertClassifier        ← 将来差し替える具体（重み付けスコア合算）
 ```
 
 - Classifierは「`KnownAlertClassification` を構築して返す」責務のみを持つ
 - スコアリングの計算ロジックはClassifier実装クラスの内部に閉じる
 - `AnalyzeAlertCommandHandler` はインターフェースにのみ依存し、実装切り替えでノータッチ
+
+### AlertClassifierの実装段階戦略（v11追加）
+
+AlertClassifierは以下の3ステップで段階的に強化する。
+各ステップは独立してデプロイ可能であり、前ステップが完了していることが次ステップの前提条件となる。
+
+#### ステップ依存関係
+
+```
+Step1（InMemory完全一致）
+  └─ ハッカソン提出の最低ライン。ここが動かないとStep2・3に進まない
+
+Step2（Elasticスコアリング）
+  └─ Step1完了が前提。Elasticsearchにデータが入っていないとElastic Agent Builderが機能しない
+
+Step3（A2A統合）
+  └─ Step2完了が前提。Elastic Agent BuilderはElasticsearchの上にしか乗らない
+     A2Aは「Elasticエージェントを外部公開する手段」であり、接続先が存在しないと接続できない
+```
+
+#### Step1：InMemory完全一致（ハッカソン本体スコープ）
+
+| 項目         | 内容                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------ |
+| 実装クラス   | `InMemoryAlertClassifier`                                                            |
+| マッチ戦略   | first-match（先着優先の完全一致）                                                    |
+| confidence   | 1.0固定                                                                              |
+| インフラ依存 | なし（オンメモリ）                                                                   |
+| **完了条件** | デモシナリオ1・2・3がE2Eで通る。**この状態でコミットを切り、提出できる状態をキープ** |
+
+#### Step2：Elasticsearchスコアリング（ポートフォリオ強化）
+
+| 項目         | 内容                                                                                                 |
+| ------------ | ---------------------------------------------------------------------------------------------------- |
+| 実装クラス   | `ElasticAlertClassifier`                                                                             |
+| マッチ戦略   | hybrid search（BM25 + ベクトル検索）による類似スコアリング                                           |
+| confidence   | Elasticsearchのスコアを正規化して返す                                                                |
+| インフラ依存 | Elastic Cloud（公式サイトから直接登録で14日間無料トライアル）                                        |
+| **完了条件** | `ElasticAlertClassifier` がDI切り替えで差し替え可能。InMemoryと並走して比較できる状態                |
+| 注意         | **Elastic CloudはGCPマーケットプレイス経由で登録すると無料トライアルがない。公式サイトから登録する** |
+
+**Elastic Cloud費用試算（ハッカソン用途）:**
+
+| 期間                         | 費用         |
+| ---------------------------- | ------------ |
+| 14日間無料トライアル         | $0           |
+| トライアル後〜7/10（〆切）   | $10〜$15程度 |
+| 8/19決勝デモまで保持する場合 | $25〜$30追加 |
+| **合計（最大見積もり）**     | **$40〜$50** |
+
+障害パターンのインデックスはデータ量が非常に小さいため、Serverless（Elasticsearch Serverless Search）の従量課金で十分。アイドル時間はsearch VCUがゼロにスケールするため実コストはさらに低くなる見込み。
+
+#### Step3：A2A統合（ポートフォリオ別格化）
+
+| 項目           | 内容                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| 実装クラス     | `ADKAgentInvestigationAdapter`（`AIInvestigationPort` に差し込む）                                      |
+| 連携方式       | Elastic Agent Builder → A2Aプロトコル → Gemini Enterprise                                               |
+| 前提           | Step2完了（Elastic Agent BuilderはElasticsearchの上にのみ構築できる）                                   |
+| **完了条件**   | Gemini EnterpriseからA2A経由でElasticエージェントを呼び出せる。`AIInvestigationPort` のDI差し替えで動く |
+| 着手タイミング | Elastic Agent Builder Bootcamp（6/23）受講後に着手。それまでにStep1を完了させておく                     |
+
+**Step3で得られるもの（面接・審査員への訴求）:**
+
+- A2Aプロトコルによるエージェント間協調の実装経験
+- Gemini Enterprise Agent Platformの実践的活用（審査員評価が大きく上がる）
+- 「なぜA2Aか」「なぜElasticか」を設計意図から語れる
+
+#### リスク管理方針
+
+```
+Step1完了 → コミットを切って「提出できる状態」を確保
+  ↓
+Step2着手（Bootcamp前でも進められる）
+  ↓
+6/23 Bootcamp受講（A2Aのパターン・設計を学ぶ）
+  ↓
+Step3着手（Bootcamp後）
+  ↓
+〆切7/10 → 到達したStepで提出
+```
+
+Step2・3の途中で〆切を迎えても、Step1の状態で提出できる。
+**A2Aがハッカソン〆切に間に合わない場合でも、ADRと設計ドキュメントに「なぜA2Aへ移行すべきか・設計上の準備」を明記することで、ほぼ同等の面接評価が得られる。**
 
 ### AlertClassification VOの設計原則（OCP適用）
 
@@ -322,10 +409,12 @@ VOにする価値はドメイン制約と振る舞いの有無で判断する。
 
 ### AlertClassifierのスコアリング移行ロードマップ
 
-| フェーズ   | 実装                                                         | 移行トリガー                                                                  |
-| ---------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| ハッカソン | `InMemoryAlertClassifier`（first-match、confidence 1.0固定） | -                                                                             |
-| 将来       | `ScoringAlertClassifier`（重み付けスコア合算、閾値判定）     | 自動昇格パターンが10件超 or `GET /analytics` で誤分類率が計測可能になった時点 |
+| フェーズ | 実装                                                         | 移行トリガー                                                                  |
+| -------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Step1    | `InMemoryAlertClassifier`（first-match、confidence 1.0固定） | -                                                                             |
+| Step2    | `ElasticAlertClassifier`（hybrid search、スコア正規化）      | Step1デモ完成後。Bootcamp前でも着手可能                                       |
+| Step3    | `ADKAgentInvestigationAdapter`（A2A統合）                    | Step2完了 + Bootcamp（6/23）受講後                                            |
+| 将来     | `ScoringAlertClassifier`（重み付けスコア合算、閾値判定）     | 自動昇格パターンが10件超 or `GET /analytics` で誤分類率が計測可能になった時点 |
 
 ### フィードバックループの自動昇格
 
@@ -359,7 +448,7 @@ const AUTO_PROMOTE_THRESHOLD = 3; // 正解フィードバック3回で自動昇
 AIInvestigationPort（インターフェース）← Application層が依存する抽象
   ├─ GeminiAIInvestigationAdapter      ← フェーズ0：ハッカソン本体（Gemini API直接）
   ├─ VertexAIInvestigationAdapter      ← フェーズ1：Vertex AI SDK経由（推奨経路）
-  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADKエージェント構成
+  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADKエージェント構成（A2A統合）
 ```
 
 ---
@@ -447,6 +536,7 @@ OTel統合フロー:
 1. AlertClassification VOに重み情報を持たせずClassifier実装クラスに閉じる理由
 1. **AIInvestigationPortをプロダクト名に依存しない抽象名にする理由と段階移行設計**（v10追加）
 1. **ハッカソン本体でGemini API直接を選択しVertex AI / ADK移行を後続フェーズとする理由**（v10追加）
+1. **AlertClassifierをInMemory → Elastic → A2Aの3ステップで段階強化する理由と各ステップの完了条件**（v11追加）
 
 ---
 
@@ -468,6 +558,8 @@ OTel統合フロー:
 - `AlertClassifier` はインターフェースにのみ依存する。`InMemoryAlertClassifier` を直接importしない
 - `ClassificationConfidence` のみVOとしてクラス化する。`MatchedCondition` / `UnmatchedCondition` はinterfaceのまま
 - **`AIInvestigationPort` はポートインターフェース名にプロダクト名を含めない。`InvestigateAlertCommandHandler` は `AIInvestigationPort` にのみ依存し、実装クラスを直接importしない**（v10追加）
+- **`ElasticAlertClassifier` はElastic Cloud公式サイトから直接登録したインスタンスに接続する。GCPマーケットプレイス経由は無料トライアルがないため使用しない**（v11追加）
+- **Step3（A2A）はStep2（Elastic）完了後に着手する。接続先が存在しない状態でA2A実装を開始しない**（v11追加）
 
 ### ハッカソンスコープで許容する妥協
 
@@ -480,6 +572,7 @@ OTel統合フロー:
 - SSEAlertNotifierはEventEmitterオンメモリ。RedisへのスケールアウトはSSEAlertNotifierインターフェースで抽象化済み
 - `recentEvents` in InvestigationContextは省略（将来拡張ポイントとして設計注記のみ残す）
 - **AIはGemini API直接（フェーズ0）のみ実装。Vertex AI / ADKへの移行はAIInvestigationPortの差し替えで対応できる設計にし、実装はハッカソン後のフェーズに委ねる**（v10追加）
+- **AlertClassifierはStep1（InMemory）のみハッカソン提出必須。Step2（Elastic）・Step3（A2A）は工数が許す範囲で積み上げる**（v11追加）
 
 ### MongoDBでのトランザクション代替パターン
 
@@ -494,6 +587,19 @@ Phase2: 全商品を findOneAndUpdate で更新（楽観ロック）
 ---
 
 ## 変更履歴
+
+### v11（AlertClassifier段階戦略・Elastic費用試算追記）
+
+- AlertClassifierの実装を3ステップ（InMemory完全一致 → Elasticスコアリング → A2A統合）に段階化
+- 各ステップの完了条件・依存関係・着手タイミングを明記
+- Step3（A2A）はStep2（Elastic）完了が前提であることを依存関係として設計ドキュメントに明記
+- Elastic Cloud費用試算を追記（ハッカソン用途の最大見積もり$40〜$50）
+- GCPマーケットプレイス経由は無料トライアルなしの注意事項を追記
+- リスク管理方針（Step1でコミットを切って提出ラインを確保）を明記
+- `ElasticAlertClassifier` を技術スタック表・AlertClassifier Strategyに追加
+- Step 5 ADR項目に1件追加（AlertClassifier 3ステップ段階戦略）
+- 「必ず守ること」にElastic Cloud登録経路・A2A着手タイミングのルールを追記
+- 「ハッカソンスコープで許容する妥協」にStep1のみ必須方針を追記
 
 ### v10（GCP要件充足戦略・AIInvestigationPort段階移行設計追記）
 
