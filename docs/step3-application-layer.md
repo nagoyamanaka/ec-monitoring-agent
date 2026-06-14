@@ -25,35 +25,50 @@
 
 ### 3基底クラス
 
-**ファイルパス**: `src/Contexts/Shared/domain/DomainError.ts`
+**ファイルパス**: `src/Contexts/Shared/domain/errors/DomainError.ts`
 
 ```typescript
-export abstract class DomainError extends Error {
+import { AppError } from "./AppError.js";
+
+export abstract class DomainError extends Error implements AppError {
+  abstract readonly errorCode: string;
+
   constructor(message: string) {
     super(message);
     this.name = this.constructor.name;
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 ```
 
-**ファイルパス**: `src/Contexts/Shared/application/ApplicationError.ts`
+**ファイルパス**: `src/Contexts/Shared/domain/errors/ApplicationError.ts`
 
 ```typescript
-export abstract class ApplicationError extends Error {
+import { AppError } from "./AppError.js";
+
+export abstract class ApplicationError extends Error implements AppError {
+  abstract readonly errorCode: string;
+
   constructor(message: string) {
     super(message);
     this.name = this.constructor.name;
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 ```
 
-**ファイルパス**: `src/Contexts/Shared/infrastructure/InfrastructureError.ts`
+**ファイルパス**: `src/Contexts/Shared/domain/errors/InfrastructureError.ts`
 
 ```typescript
-export abstract class InfrastructureError extends Error {
+import { AppError } from "./AppError.js";
+
+export abstract class InfrastructureError extends Error implements AppError {
+  abstract readonly errorCode: string;
+
   constructor(message: string) {
     super(message);
     this.name = this.constructor.name;
+    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 ```
@@ -192,13 +207,13 @@ export class PlaceOrderCommandHandler implements CommandHandler<PlaceOrderComman
 **ファイルパス**: `src/Contexts/EC/Orders/application/PlaceOrder/PaymentGateway.ts`
 
 ```typescript
-interface PaymentGateway {
-  run(params: { orderId: string; amount: number }): Promise<PaymentResult>;
-}
-
-type PaymentResult =
+export type PaymentResult =
   | { success: true; transactionId: string }
   | { success: false; reason: "TIMEOUT" | "DECLINED" | "ERROR" };
+
+export interface PaymentGateway {
+  run(params: { orderId: string; amount: number }): Promise<PaymentResult>;
+}
 ```
 
 ---
@@ -211,9 +226,9 @@ type PaymentResult =
 
 | モード    | 動作                                                |
 | --------- | --------------------------------------------------- |
-| `success` | 常に `{ success: true }` を返す                     |
-| `random`  | 80%成功・20%タイムアウト                            |
-| `timeout` | 常に `{ success: false, reason: 'TIMEOUT' }` を返す |
+| `SUCCESS` | 常に `{ success: true }` を返す                     |
+| `RANDOM`  | 80%成功・20%タイムアウト                            |
+| `TIMEOUT` | 常に `{ success: false, reason: 'TIMEOUT' }` を返す |
 
 モードはインメモリの変数で保持。`DemoPaymentModePostController` から `PaymentMockGateway.setMode(mode)` を呼び出す。
 

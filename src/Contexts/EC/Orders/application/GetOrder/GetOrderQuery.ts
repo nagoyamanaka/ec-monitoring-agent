@@ -1,4 +1,7 @@
-// TODO(Step3): Implement GetOrderQueryHandler
-export interface GetOrderQuery {
-  readonly orderId: string;
+import { Query } from "../../../../Shared/domain/Query.js";
+
+export class GetOrderQuery extends Query {
+  constructor(readonly orderId: string) {
+    super();
+  }
 }

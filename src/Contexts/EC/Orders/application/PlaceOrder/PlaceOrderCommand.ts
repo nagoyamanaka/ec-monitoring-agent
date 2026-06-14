@@ -1,8 +1,15 @@
-import { OrderItemPrimitive } from "../../domain/OrderItem.js";
+import { Command } from "../../../../Shared/domain/Command.js";
 
-// TODO(Step3): Implement PlaceOrderCommandHandler
-export interface PlaceOrderCommand {
-  readonly orderId: string;
-  readonly customerId: string;
-  readonly items: OrderItemPrimitive[];
+export class PlaceOrderCommand extends Command {
+  constructor(
+    readonly orderId: string,
+    readonly customerId: string,
+    readonly items: Array<{
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+    }>,
+  ) {
+    super();
+  }
 }

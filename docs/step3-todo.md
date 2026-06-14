@@ -1,45 +1,14 @@
 Step 3 実装タスク一覧
 
-# タスク 1: PlaceOrderCommand をクラス化
+# ~~タスク 1: PlaceOrderCommand をクラス化~~ ✅ 完了済み
 
-概要: 現在インターフェースになっている PlaceOrderCommand を、Command を継承したクラスに変更する。
+`src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommand.ts` を `class extends Command` に修正済み。
 
-プロンプト:
+# ~~タスク 2: GetOrderQuery をクラス化~~ ✅ 完了済み（GetOrderQueryResponse は未作成）
 
-/home/shigeyasu/Project/ec-monitoring-agent にある TypeScript DDD プロジェクトで、
-以下のファイルを修正してください。
+`src/Contexts/EC/Orders/application/GetOrder/GetOrderQuery.ts` を `class extends Query` に修正済み。
 
-対象ファイル:
-src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommand.ts
-
-現在の状態:
-
-- `PlaceOrderCommand` がインターフェースとして定義されている
-- `OrderItemPrimitive` を items の型として使っている
-
-修正内容:
-
-- `Command`（src/Contexts/Shared/domain/Command.ts）を継承したクラスに変更する
-- コンストラクタで orderId: string / customerId: string / items: Array<{ productId: string; quantity: number; unitPrice: number }> を受け取る
-- readonly フィールドとして定義する
-- super() を呼ぶ
-
-参考ドキュメント: docs/step3-application-layer.md の「PlaceOrderCommand」セクション
-
-# タスク 2: GetOrderQuery をクラス化 + GetOrderQueryResponse 定義
-
-概要: GetOrderQuery をインターフェースから Query 継承クラスへ変更し、GetOrderQueryResponse を新規作成する。
-
-プロンプト:
-
-/home/shigeyasu/Project/ec-monitoring-agent にある TypeScript DDD プロジェクトで、
-以下の作業をしてください。
-
-【修正1】src/Contexts/EC/Orders/application/GetOrder/GetOrderQuery.ts
-
-- 現在インターフェースになっている GetOrderQuery を、
-  Query（src/Contexts/Shared/domain/Query.ts）を継承したクラスに変更する
-- コンストラクタで readonly orderId: string を受け取り super() を呼ぶ
+**残作業**: `GetOrderQueryResponse.ts` の新規作成
 
 【新規作成】src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryResponse.ts
 
