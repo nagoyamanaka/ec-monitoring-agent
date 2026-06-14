@@ -1,8 +1,8 @@
 // TODO(Step3): Define PaymentGateway interface in domain layer
-// This mock supports 3 modes: success / random / timeout
+// This mock supports 3 modes: SUCCESS" | "RANDOM" | "TIMEOUT
 // Mode is controlled by PAYMENT_MODE env var (overridable via POST /demo/payment-mode)
 
-export type PaymentMode = "success" | "random" | "timeout";
+export type PaymentMode = "SUCCESS" | "RANDOM" | "TIMEOUT";
 
 export type PaymentRequest = {
   orderId: string;
@@ -17,7 +17,7 @@ export type PaymentResult =
 export class PaymentMockGateway {
   private mode: PaymentMode;
 
-  constructor(mode: PaymentMode = "success") {
+  constructor(mode: PaymentMode = "SUCCESS") {
     this.mode = mode;
   }
 
@@ -27,11 +27,11 @@ export class PaymentMockGateway {
 
   async process(_request: PaymentRequest): Promise<PaymentResult> {
     switch (this.mode) {
-      case "success":
+      case "SUCCESS":
         return { success: true };
-      case "timeout":
+      case "TIMEOUT":
         return { success: false, reason: "TIMEOUT" };
-      case "random":
+      case "RANDOM":
         return Math.random() > 0.3
           ? { success: true }
           : { success: false, reason: "TIMEOUT" };
