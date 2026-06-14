@@ -14,37 +14,18 @@ Step 3 実装タスク一覧
 - `GetOrder` → `new OrderResponse([order])`、将来の `ListOrders` → `new OrderResponse(orders)` で共用できる
 - `GetOrder/` サブディレクトリに閉じず `application/OrderResponse.ts` に配置（クエリ横断で再利用するため）
 
-# タスク 3: PaymentGateway インターフェース定義 + PaymentMockGateway 修正
+# ~~タスク 3: PaymentGateway インターフェース定義 + PaymentMockGateway 修正~~ ✅ 完了済み
 
-概要: PaymentGateway インターフェースを新規作成し、PaymentMockGateway を合わせて修正する（process() → run()）。
+**設計メモ**:
+- `run()` の引数に `orderId` を含む → Orders コンテキスト固有の概念のため、interface は `Orders/domain` に置くのが正しい
+- `orderId` を渡す理由: 決済の冪等性確保（同一注文の2重課金防止）とトレーサビリティ
+- `PaymentMockGateway`（payment/infra）はモード管理のみの親クラス。domain への依存を持たない
+- `PaymentMockOrderGateway`（orders/infra）が親を継承しつつ `PaymentGateway` interface を実装（CodelyTV の `extends MongoRepository implements XxxRepository` パターン）
 
-プロンプト:
-
-/home/shigeyasu/Project/ec-monitoring-agent にある TypeScript DDD プロジェクトで、
-以下の作業をしてください。
-
-【新規作成】src/Contexts/EC/Orders/application/PlaceOrder/PaymentGateway.ts
-
-- 以下のインターフェースと型を定義する:
-
-export type PaymentResult =
-| { success: true; transactionId: string }
-| { success: false; reason: 'TIMEOUT' | 'DECLINED' | 'ERROR' };
-
-export interface PaymentGateway {
-run(params: { orderId: string; amount: number }): Promise<PaymentResult>;
-}
-
-【修正】src/Contexts/EC/Payment/infrastructure/PaymentMockGateway.ts
-
-- PaymentGateway インターフェースを implements する
-- メソッド名を process() から run() に変更する
-- 引数を { orderId: string; amount: number } に合わせる
-- 成功時に transactionId: string を含める（ダミー値でOK、例: crypto.randomUUID()）
-- PaymentResult 型は PaymentGateway.ts からインポートして使う
-- モードは SUCCESS / RANDOM / TIMEOUT の3種類を維持する
-
-参考ドキュメント: docs/step3-application-layer.md の「PaymentGateway」「PaymentMockGateway」セクション
+**作成・修正ファイル**:
+- 【新規作成】`src/Contexts/EC/Orders/domain/PaymentGateway.ts` — interface + PaymentResult 型
+- 【修正】`src/Contexts/EC/Payment/infrastructure/PaymentMockGateway.ts` — mode 管理（`setMode`）のみの親クラスに整理
+- 【新規作成】`src/Contexts/EC/Orders/infrastructure/PaymentMockOrderGateway.ts` — `extends PaymentMockGateway implements PaymentGateway`、run() で SUCCESS / RANDOM / TIMEOUT 実装
 
 # タスク 4: エラークラス群の定義
 
