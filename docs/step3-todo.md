@@ -27,40 +27,11 @@ Step 3 実装タスク一覧
 - 【修正】`src/Contexts/EC/Payment/infrastructure/PaymentMockGateway.ts` — mode 管理（`setMode`）のみの親クラスに整理
 - 【新規作成】`src/Contexts/EC/Orders/infrastructure/PaymentMockOrderGateway.ts` — `extends PaymentMockGateway implements PaymentGateway`、run() で SUCCESS / RANDOM / TIMEOUT 実装
 
-# タスク 4: エラークラス群の定義
+# ~~タスク 4: エラークラス群の定義~~ ✅ 完了済み
 
-概要: ResourceNotFoundError・PlaceOrderFailedError・RepositoryError を新規作成する。
-
-プロンプト:
-
-/home/shigeyasu/Project/ec-monitoring-agent にある TypeScript DDD プロジェクトで、
-以下の3つのエラークラスを新規作成してください。
-
-既存の基底クラス（errorCode 抽象フィールドあり）:
-
-- ApplicationError: src/Contexts/Shared/domain/errors/ApplicationError.ts
-- InfrastructureError: src/Contexts/Shared/domain/errors/InfrastructureError.ts
-
-【新規作成1】src/Contexts/EC/Orders/application/errors/ResourceNotFoundError.ts
-
-- ApplicationError を継承
-- errorCode = 'RESOURCE_NOT_FOUND'
-- constructor(resource: string, id: string) でメッセージ生成
-
-【新規作成2】src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderFailedError.ts
-
-- ApplicationError を継承
-- errorCode = 'PLACE_ORDER_FAILED'
-- constructor(orderId: string, reason: string) でメッセージ生成
-
-【新規作成3】src/Contexts/Shared/infrastructure/errors/RepositoryError.ts
-（すでに LogWriteError.ts が同じ場所にあるので同様のパターンで）
-
-- InfrastructureError を継承
-- errorCode = 'REPOSITORY_ERROR'
-- constructor(operation: string, cause?: unknown) でメッセージ生成
-
-参考ドキュメント: docs/step3-application-layer.md の「アプリケーション層のエラー定義」セクション
+- 【新規作成】`src/Contexts/EC/Orders/application/errors/OrderResourceNotFoundError.ts` — `ApplicationError` 継承、`errorCode = 'ORDER_NOT_FOUND'`、constructor は `(id: string)` のみ（Orders コンテキスト固有）
+- 【新規作成】`src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderFailedError.ts` — `ApplicationError` 継承、`errorCode = 'PLACE_ORDER_FAILED'`
+- 【新規作成】`src/Contexts/Shared/infrastructure/errors/RepositoryError.ts` — `InfrastructureError` 継承、`errorCode = 'REPOSITORY_ERROR'`、`LogWriteError.ts` と同パターン
 
 # タスク 5: PlaceOrderCommandHandler 実装
 
@@ -78,7 +49,7 @@ src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts
 
 - OrderRepository: src/Contexts/EC/Orders/domain/OrderRepository.ts
 - EventBus: src/Contexts/Shared/domain/EventBus.ts
-- PaymentGateway: src/Contexts/EC/Orders/application/PlaceOrder/PaymentGateway.ts
+- PaymentGateway: src/Contexts/EC/Orders/domain/PaymentGateway.ts
 - Logger: src/Contexts/Shared/domain/logging/Logger.ts
 
 依存するドメインクラス:
@@ -137,21 +108,21 @@ src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts
 依存するクラス:
 
 - GetOrderQuery: src/Contexts/EC/Orders/application/GetOrder/GetOrderQuery.ts（タスク2で修正済み）
-- GetOrderQueryResponse: src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryResponse.ts（タスク2で作成済み）
+- OrderResponse: src/Contexts/EC/Orders/application/OrderResponse.ts（タスク2で作成済み）
 - OrderId: src/Contexts/EC/Orders/domain/OrderId.ts
-- ResourceNotFoundError: src/Contexts/EC/Orders/application/errors/ResourceNotFoundError.ts（タスク4で作成済み）
+- OrderResourceNotFoundError: src/Contexts/EC/Orders/application/errors/OrderResourceNotFoundError.ts（タスク4で作成済み）
 
 処理フロー:
 
 1. GetOrderQuery を受け取る
 2. OrderRepository.findById(new OrderId(query.orderId)) を呼ぶ
-   - null の場合: ResourceNotFoundError を throw
+   - null の場合: OrderResourceNotFoundError を throw
 3. order.toPrimitives() を使って GetOrderQueryResponse を構築して返す
    - createdAt / updatedAt は .toISOString() で文字列化する
    - totalAmount は items の unitPrice \* quantity の合計（または Order に合計算出メソッドがあればそれを使う）
 
 QueryHandler インターフェース（src/Contexts/Shared/domain/QueryHandler.ts）を implements すること。
-実装メソッドは **`handle(query: GetOrderQuery): Promise<GetOrderQueryResponse>`**。
+実装メソッドは **`handle(query: GetOrderQuery): Promise<OrderResponse>`**。
 
 `subscribedTo()` は **`GetOrderQuery` クラス自体（コンストラクタ）** を返すこと:
 
@@ -278,7 +249,7 @@ EC backend の Express サーバーをセットアップしてください。
 【作業1】errorHandler ミドルウェアの作成
 作成ファイル: src/apps/ec/backend/src/middleware/errorHandler.ts
 
-DomainError → 400、ResourceNotFoundError → 404、ApplicationError → 400、InfrastructureError → 500、その他 → 500 にマッピング。
+DomainError → 400、OrderResourceNotFoundError → 404、ApplicationError → 400、InfrastructureError → 500、その他 → 500 にマッピング。
 docs/step3-application-layer.md の「errorHandler でのマッピング」セクションのコードを参考にすること。
 
 【作業2】server.ts の実装
