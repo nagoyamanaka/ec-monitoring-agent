@@ -142,8 +142,7 @@ src/Contexts/EC/
 │   │   ├── TotalAmount.ts                                 # Value Object
 │   │   ├── OrderRepository.ts                             # Repositoryインターフェース（Domain層）
 │   │   └── events/
-│   │       ├── OrderPlacedDomainEvent.ts                  # 注文確定イベント
-│   │       └── InventoryReservationRequestedDomainEvent.ts # 在庫引き当て要求イベント
+│   │       └── OrderPlacedDomainEvent.ts                  # 注文確定イベント
 │   ├── application/
 │   │   ├── PlaceOrder/
 │   │   │   ├── PlaceOrderCommand.ts                       # 注文作成コマンド
@@ -169,12 +168,11 @@ src/Contexts/EC/
 │   ├── application/
 │   │   └── ReserveInventory/
 │   │       ├── ReserveInventoryCommand.ts                 # 在庫引き当てコマンド
-│   │       └── ReserveInventoryCommandHandler.ts          # コマンドハンドラ
+│   │       ├── ReserveInventoryCommandHandler.ts          # コマンドハンドラ
+│   │       └── ReserveInventoryOnOrderPlaced.ts           # OrderPlacedを購読して引き当て実行
 │   └── infrastructure/
-│       ├── persistence/
-│       │   └── MongoInventoryRepository.ts                # InventoryRepository MongoDB実装
-│       └── subscribers/
-│           └── ReserveInventoryOnOrderPlaced.ts           # OrderPlacedを購読して引き当て実行
+│       └── persistence/
+│           └── MongoInventoryRepository.ts                # InventoryRepository MongoDB実装
 │
 └── Payment/
     ├── domain/

@@ -10,7 +10,6 @@
 | 判断項目                                              | 決定内容                                                                         | 理由                                                                                                                 |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | OrderStatusの遷移制約                                 | `place()` / `confirmInventory()` / `failInventory()` の3メソッドで遷移を管理     | Aggregateが自身のState遷移を責務として持つ。不正遷移（例: FAILEDからCONFIRMED）はドメイン例外でガード                |
-| `InventoryReservationRequestedDomainEvent` の発行主体 | `Order` 集約が発行する                                                           | 注文確定という行為の結果として在庫引き当てが要求される。OrderがInventoryを知っているのではなく「要求を表明する」だけ |
 | `TotalAmount` の計算責務                              | `OrderItems.totalAmount()` で算出し、`Order.place()` 時に渡す                    | Value Objectの純粋性を保つ。CommandHandlerが計算するのではなく、Orderコンテキストで完結させる                        |
 | `StockQuantity` の下限制約                            | Value Object内で `value >= 0` をガード                                           | 0以下の在庫という概念をドメインで禁止する。引き当て可否の判断は `hasEnoughStock()` で表現                            |
 | Inventory楽観ロック                                   | `version` フィールドをAggregateに持たせ、MongoDBの `findOneAndUpdate` で競合検出 | アプリケーション層でのオプティミスティックロック実装の基盤。ACIDなしでの整合性担保                                   |
@@ -61,7 +60,6 @@ static place(params: {
 - `OrderStatus` を `PENDING` で初期化する
 - `totalAmount` は `items.totalAmount()` から算出する
 - `OrderPlacedDomainEvent` を `record()` に積む
-- `InventoryReservationRequestedDomainEvent` を `record()` に積む
 - インスタンスを返す（`new Order()` は外部から直接呼ばせない）
 
 #### 状態遷移メソッド
@@ -112,8 +110,7 @@ toPrimitives(): {
 
 | イベント                                   | 発行タイミング       | 受け取るコンテキスト             |
 | ------------------------------------------ | -------------------- | -------------------------------- |
-| `OrderPlacedDomainEvent`                   | `place()` 呼び出し時 | Monitoring（観測用）             |
-| `InventoryReservationRequestedDomainEvent` | `place()` 呼び出し時 | EC/Inventory（在庫引き当て実行） |
+| `OrderPlacedDomainEvent` | `place()` 呼び出し時 | Monitoring（観測用）/ EC/Inventory（在庫引き当て実行） |
 
 ---
 
@@ -247,36 +244,6 @@ class OrderPlacedDomainEvent extends ECDomainEvent {
 ```
 
 **設計ポイント**: `aggregateId` は `orderId` と同義。RabbitMQのRoutingKey: `ec.order.placed`
-
-#### `InventoryReservationRequestedDomainEvent`
-
-**ファイルパス**: `src/Contexts/EC/Orders/domain/events/InventoryReservationRequestedDomainEvent.ts`
-
-```typescript
-class InventoryReservationRequestedDomainEvent extends ECDomainEvent {
-  static readonly EVENT_NAME = 'ec.order.inventory_reservation_requested';
-
-  readonly items: OrderItemPrimitive[];  // productId / quantity のみ使用
-
-  constructor(params: {
-    orderId: string;
-    items: OrderItemPrimitive[];
-    eventId?: string;
-    occurredOn?: Date;
-  })
-
-  toPrimitives(): Record<string, unknown>
-
-  static fromPrimitives(params: {
-    aggregateId: string;
-    eventId: string;
-    occurredOn: Date;
-    attributes: Record<string, unknown>;
-  }): InventoryReservationRequestedDomainEvent
-}
-```
-
-**設計ポイント**: このイベントを購読するのは `EC/Inventory` コンテキストの `ReserveInventoryOnOrderPlaced` Subscriber のみ。Monitoringは `OrderPlacedDomainEvent` を観測する。
 
 ---
 
@@ -542,8 +509,8 @@ type ReserveStockResult =
 PlaceOrderCommand
   ↓
 Order.place()
-  ├─ record(OrderPlacedDomainEvent)                   → Monitoring が購読
-  └─ record(InventoryReservationRequestedDomainEvent) → EC/Inventory が購読
+  └─ record(OrderPlacedDomainEvent) → Monitoring が購読
+                                    → EC/Inventory が購読
         ↓
         ReserveInventoryOnOrderPlaced (Subscriber)
           ↓
@@ -561,4 +528,4 @@ Order.place()
 - `PlaceOrderCommandHandler`: `Order.place()` の呼び出し、`EventBus.publish()` への委譲
 - `ReserveInventoryCommandHandler`: `InventoryRepository.reserveStock()` の結果に基づいた `Inventory.reserve()` の呼び出し
 - `GetOrderQueryHandler`: CQRSのRead側（MongoOrderRepositoryから直接読み取り）
-- `ReserveInventoryOnOrderPlaced` Subscriber: RabbitMQキュー命名規則 `ec-backend.ec.order.inventory_reservation_requested.reserve-inventory-on-order-placed`
+- `ReserveInventoryOnOrderPlaced` Subscriber: RabbitMQキュー命名規則 `ec-backend.ec.order.placed.reserve-inventory-on-order-placed`

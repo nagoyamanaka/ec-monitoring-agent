@@ -6,7 +6,6 @@ import { OrderItems } from "./OrderItems.js";
 import { OrderItemPrimitive } from "./OrderItem.js";
 import { OrderStatus } from "./OrderStatus.js";
 import { OrderPlacedDomainEvent } from "./OrderPlacedDomainEvent.js";
-import { InventoryReservationRequestedDomainEvent } from "./InventoryReservationRequestedDomainEvent.js";
 
 export class InvalidOrderStatusTransitionError extends DomainError {
   readonly errorCode = "INVALID_ORDER_STATUS_TRANSITION";
@@ -67,13 +66,6 @@ export class Order extends AggregateRoot {
         customerId: params.customerId.value,
         items: params.items.toPrimitives(),
         subtotalAmount: params.items.subtotalAmount().value,
-      }),
-    );
-
-    order.record(
-      new InventoryReservationRequestedDomainEvent({
-        orderId: params.id.value,
-        items: params.items.toPrimitives(),
       }),
     );
 
