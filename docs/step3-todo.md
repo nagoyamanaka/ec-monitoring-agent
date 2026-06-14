@@ -4,32 +4,15 @@ Step 3 実装タスク一覧
 
 `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommand.ts` を `class extends Command` に修正済み。
 
-# ~~タスク 2: GetOrderQuery をクラス化~~ ✅ 完了済み（GetOrderQueryResponse は未作成）
+# ~~タスク 2: GetOrderQuery をクラス化~~ ✅ 完了済み
 
 `src/Contexts/EC/Orders/application/GetOrder/GetOrderQuery.ts` を `class extends Query` に修正済み。
+`src/Contexts/EC/Orders/application/OrderResponse.ts` を新規作成済み。
 
-**残作業**: `GetOrderQueryResponse.ts` の新規作成
-
-【新規作成】src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryResponse.ts
-
-- 以下の型を定義する（VOをほどいたプリミティブ）:
-- `Response`（src/Contexts/Shared/domain/Response.ts）を extends すること（`QueryHandler<Q, R extends Response>` の型制約を満たすため）
-
-```typescript
-import { Response } from "../../../../Shared/domain/Response.js";
-
-export interface GetOrderQueryResponse extends Response {
-  id: string;
-  customerId: string;
-  items: Array<{ productId: string; quantity: number; unitPrice: number }>;
-  totalAmount: number;
-  status: string; // 'PENDING' | 'CONFIRMED' | 'FAILED'
-  createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601
-}
-```
-
-参考ドキュメント: docs/step3-application-layer.md の「GetOrder」セクション
+**設計メモ**:
+- CodelyTV パターンに倣い、単体型を `interface OrderResponseItem`、配列管理を `class OrderResponse implements Response` に分離
+- `GetOrder` → `new OrderResponse([order])`、将来の `ListOrders` → `new OrderResponse(orders)` で共用できる
+- `GetOrder/` サブディレクトリに閉じず `application/OrderResponse.ts` に配置（クエリ横断で再利用するため）
 
 # タスク 3: PaymentGateway インターフェース定義 + PaymentMockGateway 修正
 
