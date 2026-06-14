@@ -53,46 +53,46 @@ describe("Order", () => {
   describe("confirmInventory()", () => {
     it("PENDING → CONFIRMED に遷移する", () => {
       const order = Order.place(makeOrderParams());
-      order.pullDomainEvents();
       order.confirmInventory();
       expect(order.status.value).toBe(OrderStatusValues.CONFIRMED);
     });
 
     it("CONFIRMED の Order に呼ぶと InvalidOrderStatusTransitionError をthrowする", () => {
       const order = Order.place(makeOrderParams());
-      order.pullDomainEvents();
       order.confirmInventory();
-      expect(() => order.confirmInventory()).toThrow(InvalidOrderStatusTransitionError);
+      expect(() => order.confirmInventory()).toThrow(
+        InvalidOrderStatusTransitionError,
+      );
     });
 
     it("FAILED の Order に呼ぶと InvalidOrderStatusTransitionError をthrowする", () => {
       const order = Order.place(makeOrderParams());
-      order.pullDomainEvents();
       order.failInventory();
-      expect(() => order.confirmInventory()).toThrow(InvalidOrderStatusTransitionError);
+      expect(() => order.confirmInventory()).toThrow(
+        InvalidOrderStatusTransitionError,
+      );
     });
   });
 
   describe("failInventory()", () => {
     it("PENDING → FAILED に遷移する", () => {
       const order = Order.place(makeOrderParams());
-      order.pullDomainEvents();
       order.failInventory();
       expect(order.status.value).toBe(OrderStatusValues.FAILED);
     });
 
     it("CONFIRMED の Order に呼ぶと InvalidOrderStatusTransitionError をthrowする", () => {
       const order = Order.place(makeOrderParams());
-      order.pullDomainEvents();
       order.confirmInventory();
-      expect(() => order.failInventory()).toThrow(InvalidOrderStatusTransitionError);
+      expect(() => order.failInventory()).toThrow(
+        InvalidOrderStatusTransitionError,
+      );
     });
   });
 
   describe("fromPrimitives() / toPrimitives()", () => {
     it("ラウンドトリップで同じ値が復元される", () => {
       const original = Order.place(makeOrderParams());
-      original.pullDomainEvents();
       const primitives = original.toPrimitives() as {
         id: string;
         customerId: string;
