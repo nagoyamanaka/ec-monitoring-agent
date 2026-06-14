@@ -45,7 +45,20 @@ Step 3 実装タスク一覧
 - 【新規作成】`src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderUseCase.ts`
 - 【修正】`src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts` — UseCase に委譲する薄いルーターに変更
 
-# タスク 6: GetOrderQueryHandler + GetOrderUseCase 実装
+# ~~タスク 6: GetOrderQueryHandler + GetOrderUseCase 実装~~ ✅ 完了済み
+
+**設計メモ**:
+- タスク5と同パターン。Handler は `new OrderId(query.orderId)` の VO変換のみ → `GetOrderUseCase.run(id)` に委譲
+- `GetOrderUseCase`: findById → null なら warn ログ + `OrderResourceNotFoundError` throw → `new OrderResponse([order])` を返す
+- `OrderResourceNotFoundError` のコンストラクタは `(resource: string, id: string)` の2引数（タスク4の実装を確認して合わせた）
+
+**作成ファイル**:
+- 【新規作成】`src/Contexts/EC/Orders/application/GetOrder/GetOrderUseCase.ts`
+- 【新規作成】`src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts`
+
+---
+
+（元プロンプト）
 
 概要: Order取得→レスポンス変換のシンプルなRead側ハンドラを、Handler/UseCase 分離パターンで実装する。
 
