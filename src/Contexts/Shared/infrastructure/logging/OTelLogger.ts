@@ -1,12 +1,31 @@
+import { trace, SpanContext } from "@opentelemetry/api";
 import { Logger } from "../../domain/logging/Logger.js";
 import { StructuredLog } from "../../domain/logging/StructuredLog.js";
-import { LogWriteError } from "../errors/LogWriteError.js";
 
-// TODO(Step3): Implement OTel logger that sends to Cloud Logging via
-// @google-cloud/opentelemetry-cloud-trace-exporter.
-// trace_id and span_id are injected automatically from active OTel span.
+// Generic OTel-aware structured logger. Writes JSON to stdout.
+// Subclasses override buildEntry() to add platform-specific fields.
+// trace_id/span_id are injected from the active OTel span when SDK is initialized;
+// fall back to values in StructuredLog otherwise (e.g. unit tests).
 export class OTelLogger extends Logger {
-  async write(_log: StructuredLog): Promise<void> {
-    throw new LogWriteError("Not implemented");
+  async write(log: StructuredLog): Promise<void> {
+    const spanContext = trace.getActiveSpan()?.spanContext();
+    const entry = this.buildEntry(log, spanContext);
+
+    if (log.severity === "WARN" || log.severity === "ERROR" || log.severity === "FATAL") {
+      console.error(JSON.stringify(entry));
+    } else {
+      console.log(JSON.stringify(entry));
+    }
+  }
+
+  protected buildEntry(
+    log: StructuredLog,
+    spanContext: SpanContext | undefined,
+  ): Record<string, unknown> {
+    return {
+      ...log,
+      trace_id: spanContext?.traceId ?? log.trace_id,
+      span_id: spanContext?.spanId ?? log.span_id,
+    };
   }
 }

@@ -15,7 +15,7 @@ import { RabbitMQConfigurer } from "../../../../Contexts/Shared/infrastructure/E
 import { RabbitMQQueueNameFormatter } from "../../../../Contexts/Shared/infrastructure/EventBus/RabbitMq/RabbitMQQueueNameFormatter.js";
 import { RabbitMqConnection } from "../../../../Contexts/Shared/infrastructure/EventBus/RabbitMq/RabbitMqConnection.js";
 import { RabbitMQEventBus } from "../../../../Contexts/Shared/infrastructure/EventBus/RabbitMq/RabbitMqEventBus.js";
-import { FileLogger } from "../../../../Contexts/Shared/infrastructure/logging/FileLogger.js";
+import { GcpCloudLoggingLogger } from "../../../../Contexts/Shared/infrastructure/logging/GcpCloudLoggingLogger.js";
 import { MongoClientFactory } from "../../../../Contexts/Shared/infrastructure/persistence/mongo/MongoClientFactory.js";
 import { InMemoryQueryBus } from "../../../../Contexts/Shared/infrastructure/QueryBus/InMemoryQueryBus.js";
 import { QueryHandlers } from "../../../../Contexts/Shared/infrastructure/QueryBus/QueryHandlers.js";
@@ -39,7 +39,7 @@ export class EcBackendApp {
 
   async start(): Promise<void> {
     const mongoClient = await MongoClientFactory.createClient("ec", { url: MONGO_URL });
-    const logger = new FileLogger();
+    const logger = new GcpCloudLoggingLogger();
 
     this.connection = new RabbitMqConnection({
       connectionSettings: {
