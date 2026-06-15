@@ -109,7 +109,8 @@ src/Contexts/Shared/
         ├── mongo/
         │   ├── MongoClientFactory.ts     # MongoDB接続ファクトリ
         │   ├── MongoConfig.ts            # 接続設定
-        │   └── MongoRepository.ts        # Criteria対応の抽象MongoDBリポジトリ基底
+        │   ├── MongoRepository.ts        # 抽象MongoDBリポジトリ基底（MongoClient DI・persist/searchByCriteria提供）
+        │   └── MongoCriteriaConverter.ts # Criteria→MongoDBクエリ変換（MongoRepository内部で使用）
         ├── elasticsearch/
         │   ├── ElasticClientFactory.ts
         │   ├── ElasticConfig.ts
@@ -156,7 +157,8 @@ src/Contexts/EC/
 │   │       └── GetOrderUseCase.ts                         # ビジネスロジック本体（findById・NotFound・レスポンス変換）
 │   └── infrastructure/
 │       ├── persistence/
-│       │   └── MongoOrderRepository.ts                    # OrderRepository MongoDB実装
+│       │   ├── MongoOrderRepository.ts                    # OrderRepository MongoDB実装（MongoRepository継承）
+│       │   └── InMemoryOrderRepository.ts                 # OrderRepository インメモリ実装（UT用）
 │       └── subscribers/
 │           └── (なし。Orderは発行側のみ)
 │
@@ -174,7 +176,8 @@ src/Contexts/EC/
 │   │       └── ReserveInventoryOnOrderPlaced.ts           # OrderPlacedを購読してUseCase直接呼び出し（CommandBus不使用）
 │   └── infrastructure/
 │       └── persistence/
-│           └── MongoInventoryRepository.ts                # InventoryRepository MongoDB実装
+│           ├── MongoInventoryRepository.ts                # InventoryRepository MongoDB実装（MongoRepository継承・reserveStockはfindOneAndUpdateで楽観ロック）
+│           └── InMemoryInventoryRepository.ts             # InventoryRepository インメモリ実装（UT用・楽観ロックのバージョンチェックを再現）
 │
 └── Payment/
     ├── domain/
