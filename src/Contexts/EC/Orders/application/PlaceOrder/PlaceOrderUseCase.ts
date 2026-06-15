@@ -32,7 +32,6 @@ export class PlaceOrderUseCase {
       span_id: "place_order",
       action: "place_order_payment_started",
       message: `決済開始：${id.value}, amount=${amount}`,
-      timestamp: new Date().toISOString(),
     });
 
     const paymentResult = await this.paymentGateway.run({
@@ -55,7 +54,6 @@ export class PlaceOrderUseCase {
         span_id: "place_order",
         action: "place_order_payment_failed",
         message: `決済失敗：${id.value}, reason=${paymentResult.reason}`,
-        timestamp: new Date().toISOString(),
       });
       throw new PlaceOrderFailedError(id.value, paymentResult.reason);
     }
@@ -69,7 +67,6 @@ export class PlaceOrderUseCase {
       span_id: "place_order",
       action: "place_order_payment_succeeded",
       message: `決済完了：${id.value}, transactionId=${paymentResult.transactionId}`,
-      timestamp: new Date().toISOString(),
     });
 
     const order = Order.place({ id, customerId, items });
@@ -89,7 +86,6 @@ export class PlaceOrderUseCase {
         span_id: "place_order",
         action: "place_order_event_publish_failed",
         message: `EventBus publish失敗：${id.value}`,
-        timestamp: new Date().toISOString(),
         stack_trace: cause instanceof Error ? cause.stack : String(cause),
       });
     }
@@ -100,7 +96,6 @@ export class PlaceOrderUseCase {
       span_id: "place_order",
       action: "place_order",
       message: `注文確定：${id.value}`,
-      timestamp: new Date().toISOString(),
     });
   }
 }

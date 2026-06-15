@@ -20,7 +20,6 @@ export class GetOrderUseCase {
         span_id: "get_order",
         action: "get_order_not_found",
         message: `注文未存在：${id.value}`,
-        timestamp: new Date().toISOString(),
       });
       throw new OrderResourceNotFoundError("Order", id.value);
     }
