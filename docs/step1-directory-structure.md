@@ -514,15 +514,17 @@ src/Contexts/EC/Orders/infrastructure/
 
 ### レイヤー別テスト方針
 
-| ファイル種別                                             | テスト方針                                    | 理由                                                                                                              |
-| -------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| インターフェース・型定義のみ                             | **テスト不要**                                | TypeScript が静的に保証。実行時ロジックがない                                                                     |
-| `AggregateRoot`, `ValueObject`, `DomainEvent` 基底クラス | **集約テストで間接カバー**                    | `Order.test.ts` 等で `record()` / `equals()` が自然に通る。`FakeAggregate` を作るのはカバレッジ埋めにしかならない |
-| `Uuid`, `criteria/`                                      | **直接テスト**                                | UUID バリデーション・フィルタ組み立て等、独立した振る舞いを持つ                                                   |
-| domain VO / Aggregate                                    | **ユースケース単位でテスト**                  | `Order.place()` で DomainEvent 発行まで一気通貫でテストする                                                       |
-| application CommandHandler                               | **モックリポジトリでユニットテスト**          | EventBus / Repository を vi.fn() でモックし、Handler の分岐ロジックに集中                                         |
-| `InvestigateAlertCommandHandler`                         | **モックAIInvestigationPortでユニットテスト** | Gemini APIを差し替え。JSON返却 → InvestigationReport生成 → reviewStatus初期値の検証                               |
-| infrastructure Repository                                | **統合テスト**（`.integration.test.ts`）      | 実際の MongoDB に接続して `save` / `findById` を確認                                                              |
+| ファイル種別                                             | テスト方針                                                      | 理由                                                                                                                                                           |
+| -------------------------------------------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| インターフェース・型定義のみ                             | **テスト不要**                                                  | TypeScript が静的に保証。実行時ロジックがない                                                                                                                  |
+| `AggregateRoot`, `ValueObject`, `DomainEvent` 基底クラス | **集約テストで間接カバー**                                      | `Order.test.ts` 等で `record()` / `equals()` が自然に通る。`FakeAggregate` を作るのはカバレッジ埋めにしかならない                                              |
+| `Uuid`, `criteria/`                                      | **直接テスト**                                                  | UUID バリデーション・フィルタ組み立て等、独立した振る舞いを持つ                                                                                                |
+| domain VO / Aggregate                                    | **ユースケース単位でテスト**                                    | `Order.place()` で DomainEvent 発行まで一気通貫でテストする                                                                                                    |
+| application UseCase                                      | **InMemory実装 + ConsoleLogger でユニットテスト**               | `InMemoryOrderRepository` / `InMemoryInventoryRepository` / `InMemoryAsyncEventBus` / `ConsoleLogger` / `PaymentMockOrderGateway` を注入して実依存でビジネスロジックを検証。EventBus は `vi.spyOn(bus, 'publish')` で publish 内容をアサート。楽観ロックリトライ等の非同期タイマーテストは `vi.useFakeTimers()` + `vi.runAllTimersAsync()` で対処 |
+| `InvestigateAlertCommandHandler`                         | **モック AIInvestigationPort でユニットテスト**                 | Gemini APIを差し替え。JSON返却 → InvestigationReport生成 → reviewStatus初期値の検証                                                                            |
+| infrastructure Repository（MongoRepository等）           | **E2E テストで代替（統合テスト省略）**                          | ハッカソンスコープの判断。Domain + Application UT でビジネスロジックは保証済み。MongoDB・RabbitMQ の疎通は E2E（代表的なユースケースパスを数本）で確認する。環境依存の統合テストは ROI が低いため省略 |
+
+> **E2E カバレッジ目標**: `POST /orders → GET /orders/:id` の正常系、Payment TIMEOUT シナリオ、在庫引き当て失敗による補償処理の3パスを最低限カバーする。
 
 ### テスト不要ファイル一覧（`Shared/domain`）
 
