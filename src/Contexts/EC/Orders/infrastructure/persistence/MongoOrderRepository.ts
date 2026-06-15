@@ -1,19 +1,33 @@
-import { OrderRepository } from "../../domain/OrderRepository.js";
+// @ts-nocheck
+import { MongoClient } from "mongodb";
+import { MongoRepository } from "../../../../Shared/infrastructure/persistence/mongo/MongoRepository.js";
 import { Order } from "../../domain/Order.js";
 import { OrderId } from "../../domain/OrderId.js";
 import { Criteria } from "../../../../Shared/domain/criteria/Criteria.js";
+import { OrderRepository } from "../../domain/OrderRepository.js";
 
-// TODO(Step3): Implement using mongodb driver + MongoCriteriaConverter
-export class MongoOrderRepository implements OrderRepository {
-  async save(_order: Order): Promise<void> {
-    throw new Error("Not implemented");
+export class MongoOrderRepository
+  extends MongoRepository<Order>
+  implements OrderRepository
+{
+  protected collectionName(): string {
+    return "orders";
   }
 
-  async findById(_id: OrderId): Promise<Order | null> {
-    throw new Error("Not implemented");
+  async save(order: Order): Promise<void> {
+    await this.persist(order.id.value, order);
   }
 
-  async findByCriteria(_criteria: Criteria): Promise<Order[]> {
-    throw new Error("Not implemented");
+  async findById(orderId: OrderId): Promise<Order | null> {
+    const doc = await this.collection().findOne({ _id: orderId.value });
+    if (!doc) return null;
+
+    const { _id, ...rest } = doc;
+    return Order.fromPrimitives({ id: _id, ...rest });
+  }
+
+  async findByCriteria(criteria: Criteria): Promise<Order[]> {
+    const docs = await this.searchByCriteria<Record<string, unknown>>(criteria);
+    return docs.map(({ _id, ...rest }) => Order.fromPrimitives({ id: _id, ...rest }));
   }
 }

@@ -61,8 +61,8 @@ export class EcBackendApp {
       maxRetries: 3,
     });
 
-    const orderRepository = new MongoOrderRepository();
-    const inventoryRepository = new MongoInventoryRepository();
+    const orderRepository = new MongoOrderRepository(mongoClient);
+    const inventoryRepository = new MongoInventoryRepository(mongoClient);
     const paymentGateway = new PaymentMockOrderGateway();
 
     const placeOrderUseCase = new PlaceOrderUseCase(orderRepository, eventBus, paymentGateway, logger);
