@@ -7,6 +7,7 @@ import {
 const PRODUCT_ID = "550e8400-e29b-41d4-a716-446655440000";
 const ORDER_ID = "550e8400-e29b-41d4-a716-446655440001";
 const EVENT_ID = "550e8400-e29b-41d4-a716-446655440002";
+const RESERVED_PRODUCT_ID = "550e8400-e29b-41d4-a716-446655440003";
 
 describe("InventoryReservationFailedDomainEvent", () => {
   describe("EVENT_NAME", () => {
@@ -65,6 +66,41 @@ describe("InventoryReservationFailedDomainEvent", () => {
       });
 
       expect(restored.reason).toBe(InventoryFailureReason.CONCURRENT_CONFLICT);
+    });
+
+    it("reservedProductIds がラウンドトリップで復元される", () => {
+      const occurredOn = new Date("2024-01-01T00:00:00.000Z");
+      const original = new InventoryReservationFailedDomainEvent({
+        productId: PRODUCT_ID,
+        orderId: ORDER_ID,
+        requestedQuantity: 1,
+        currentStock: 0,
+        reason: InventoryFailureReason.CONCURRENT_CONFLICT,
+        reservedProductIds: [RESERVED_PRODUCT_ID],
+        eventId: EVENT_ID,
+        occurredOn,
+      });
+
+      const restored = InventoryReservationFailedDomainEvent.fromPrimitives({
+        aggregateId: original.aggregateId,
+        eventId: original.eventId,
+        occurredOn: original.occurredOn,
+        attributes: original.toPrimitives(),
+      });
+
+      expect(restored.reservedProductIds).toEqual([RESERVED_PRODUCT_ID]);
+    });
+
+    it("reservedProductIds を省略した場合は空配列になる", () => {
+      const original = new InventoryReservationFailedDomainEvent({
+        productId: PRODUCT_ID,
+        orderId: ORDER_ID,
+        requestedQuantity: 5,
+        currentStock: 2,
+        reason: InventoryFailureReason.INSUFFICIENT_STOCK,
+      });
+
+      expect(original.reservedProductIds).toEqual([]);
     });
   });
 });

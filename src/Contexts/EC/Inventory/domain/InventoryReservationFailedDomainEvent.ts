@@ -15,6 +15,7 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
   readonly requestedQuantity: number;
   readonly currentStock: number;
   readonly reason: InventoryFailureReasonValue;
+  readonly reservedProductIds: string[];
 
   constructor(params: {
     productId: string;
@@ -22,6 +23,7 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
     requestedQuantity: number;
     currentStock: number;
     reason: InventoryFailureReasonValue;
+    reservedProductIds?: string[];
     eventId?: string;
     occurredOn?: Date;
   }) {
@@ -35,6 +37,7 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
     this.requestedQuantity = params.requestedQuantity;
     this.currentStock = params.currentStock;
     this.reason = params.reason;
+    this.reservedProductIds = params.reservedProductIds ?? [];
   }
 
   toPrimitives(): Record<string, unknown> {
@@ -43,6 +46,7 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
       requestedQuantity: this.requestedQuantity,
       currentStock: this.currentStock,
       reason: this.reason,
+      reservedProductIds: this.reservedProductIds,
     };
   }
 
@@ -58,6 +62,7 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
       requestedQuantity: params.attributes.requestedQuantity as number,
       currentStock: params.attributes.currentStock as number,
       reason: params.attributes.reason as InventoryFailureReasonValue,
+      reservedProductIds: params.attributes.reservedProductIds as string[],
       eventId: params.eventId,
       occurredOn: params.occurredOn,
     });

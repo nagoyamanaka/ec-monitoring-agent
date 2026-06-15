@@ -171,9 +171,8 @@ src/Contexts/EC/
 │   │       └── InventoryReservationFailedDomainEvent.ts   # 在庫引き当て失敗（既知障害デモの核心）
 │   ├── application/
 │   │   └── ReserveInventory/
-│   │       ├── ReserveInventoryCommand.ts                 # 在庫引き当てコマンド
-│   │       ├── ReserveInventoryCommandHandler.ts          # コマンドハンドラ
-│   │       └── ReserveInventoryOnOrderPlaced.ts           # OrderPlacedを購読して引き当て実行
+│   │       ├── ReserveInventoryUseCase.ts                 # ビジネスロジック本体（Phase1/Phase2/リトライ/イベント発行）
+│   │       └── ReserveInventoryOnOrderPlaced.ts           # OrderPlacedを購読してUseCase直接呼び出し（CommandBus不使用）
 │   └── infrastructure/
 │       └── persistence/
 │           └── MongoInventoryRepository.ts                # InventoryRepository MongoDB実装

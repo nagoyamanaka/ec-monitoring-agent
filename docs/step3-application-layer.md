@@ -117,8 +117,7 @@ export function errorHandler(
 | `PlaceOrderCommand`              | Command        | `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommand.ts`                       |
 | `PlaceOrderCommandHandler`       | CommandHandler | `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts`                |
 | `PlaceOrderUseCase`              | UseCase        | `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderUseCase.ts`                       |
-| `ReserveInventoryCommand`        | Command        | `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommand.ts`        |
-| `ReserveInventoryCommandHandler` | CommandHandler | `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommandHandler.ts` |
+| `ReserveInventoryUseCase`        | UseCase        | `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryUseCase.ts`        |
 | `GetOrderQuery`                  | Query          | `src/Contexts/EC/Orders/application/GetOrder/GetOrderQuery.ts`                             |
 | `GetOrderQueryHandler`           | QueryHandler   | `src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts`                      |
 | `GetOrderUseCase`                | UseCase        | `src/Contexts/EC/Orders/application/GetOrder/GetOrderUseCase.ts`                           |
@@ -281,21 +280,9 @@ export class ReserveInventoryCommand extends Command {
 
 ---
 
-### `ReserveInventoryCommandHandler`
+### `ReserveInventoryUseCase`
 
-**ファイルパス**: `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommandHandler.ts`
-
-**クラス骨格**（`CommandHandler<ReserveInventoryCommand>` を implements）:
-
-```typescript
-export class ReserveInventoryCommandHandler implements CommandHandler<ReserveInventoryCommand> {
-  subscribedTo() {
-    return ReserveInventoryCommand; // クラス自体を返す
-  }
-
-  async handle(command: ReserveInventoryCommand): Promise<void> { ... }
-}
-```
+**ファイルパス**: `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryUseCase.ts`
 
 #### 依存関係
 
@@ -309,49 +296,66 @@ export class ReserveInventoryCommandHandler implements CommandHandler<ReserveInv
 
 注文はビジネスセマンティクス上All-or-Nothingが自然。部分成功はユーザー混乱リスクが高いため採用しない。
 
+#### 実装上の既知制約
+
+`InventoryRepository` に `incrementStock` メソッドが存在しないため、Phase 2 途中での失敗時に成功済み分の DB ロールバックが不可。代わりに `InventoryReservationFailedDomainEvent` に `reservedProductIds`（成功済み商品IDリスト）を含めて publish し、補正 job が `reservedProductIds` を参照して在庫を戻す設計とする。Order 側の補償（`CompensateOrderOnInventoryFailed`）は従来通り機能する。
+
+また `Inventory.reserve()` の実際のシグネチャは `reserve(orderId: string, quantity: number, outcome: ...)` であり、ドキュメント記載の `reserve(orderId, items)` とは異なる。
+
 #### 処理フロー
 
 ```
+ReserveInventoryUseCase.run(orderId: string, items: OrderItemPrimitive[])
+
 【Phase 1: 全商品の在庫確認（読み取り）】
 
-inventories = []
-for each item in command.items:
+reservations = []
+for each item in items:
+  productId = new ProductId(item.productId)
   inventory = await InventoryRepository.findByProductId(productId)
-  if inventory === null || !inventory.hasEnoughStock(item.quantity):
-    → 全体をFail（INSUFFICIENT_STOCK）
-    → InventoryReservationFailedDomainEvent を EventBus.publish()
-    → Logger.write(WARN, 'reserve_inventory_insufficient')
+  if inventory === null || !inventory.stock.hasEnoughStock(item.quantity):
+    → InventoryReservationFailedDomainEvent(INSUFFICIENT_STOCK) を publish
+    → Logger.write(WARN, 'reserve_inventory_insufficient', productId)
     → return
 
-  inventories.push({ inventory, quantity: item.quantity })
+  reservations.push({ inventory, quantity: item.quantity })
 
-【Phase 2: 全商品を更新（書き込み）】
+【Phase 2: 全商品を更新（楽観ロック、最大3回リトライ）】
 
-succeededReservations = []
-for each { inventory, quantity } in inventories:
-  result = await InventoryRepository.reserveStock({
-    productId,
-    quantity,
-    expectedVersion: inventory.version,
-  })
+successRecords = []
+for each { inventory, quantity } in reservations:
+  currentInventory = inventory
+  for attempt in 0..MAX_RETRIES-1:
+    result = await InventoryRepository.reserveStock({
+      productId: currentInventory.productId,
+      quantity,
+      expectedVersion: currentInventory.version,
+    })
 
-  if result.success:
-    succeededReservations.push({ productId, remainingStock: result.remainingStock })
-    continue
+    if result.success:
+      finalResult = result; break
 
-  if result.reason === 'VERSION_CONFLICT':
-    リトライ（最大3回、指数バックオフ）
-    リトライ上限超過:
-      → 成功済み分をロールバック（InventoryRepository.incrementStock で在庫を戻す）
-      → InventoryReservationFailedDomainEvent(CONCURRENT_CONFLICT) を EventBus.publish()
-      → Logger.write(WARN, 'reserve_inventory_rollback')
-      → return
+    if result.reason === 'CONCURRENT_CONFLICT' && not last attempt:
+      await sleep(2^attempt * 100ms)  // 指数バックオフ
+      refreshed = await InventoryRepository.findByProductId(productId)
+      if refreshed && refreshed.stock.hasEnoughStock(quantity):
+        currentInventory = refreshed; continue
 
-【全商品成功】
-for each { inventory } in inventories:
-  inventory.reserve(orderId, items)   ← DomainEvent生成のみ
-  EventBus.publish(inventory.pullDomainEvents())
-  → InventoryReservedDomainEvent を発行（商品ごと）
+    finalResult = result; break
+
+  if !finalResult.success:
+    → InventoryReservationFailedDomainEvent(CONCURRENT_CONFLICT, reservedProductIds=成功済みIDリスト) を publish
+    → Logger.write(WARN, 'reserve_inventory_rollback', orderId)
+    → return  ※ DB ロールバック省略（既知制約、上記参照）
+
+  successRecords.push({ inventory: currentInventory, quantity, outcome: finalResult })
+
+【全商品成功 — DomainEvent 生成・一括発行】
+
+allEvents = successRecords.flatMap({ inventory, quantity, outcome }):
+  inventory.reserve(orderId, quantity, outcome)  ← InventoryReservedDomainEvent を record()
+  return inventory.pullDomainEvents()
+await EventBus.publish(allEvents)  ← 全商品まとめて1回のpublish（部分発行を防ぐ）
 
 Logger.write(INFO, 'reserve_inventory', orderId)
 ```
@@ -470,13 +474,14 @@ GetOrderUseCase.run(id: OrderId): Promise<OrderResponse>
 ec-backend.ec.order.placed.reserve-inventory-on-order-placed
 ```
 
+`ReserveInventory` は Subscriber のみがトリガー（HTTP エンドポイントなし）のため、CommandBus を介さず `ReserveInventoryUseCase` を直接 inject して呼ぶ（CodelyTV の `CreateBackofficeCourseOnCourseCreated` パターン）。
+
 ```
 1. RabbitMQからメッセージを受信する
 2. OrderPlacedDomainEvent.fromPrimitives() でデシリアライズする
-3. ReserveInventoryCommand を構築する
-4. ReserveInventoryCommandHandler.handle(command) を呼び出す
-5. 成功 → ack
-6. 失敗 → Logger.write(ERROR) → nack → DeadLetterキューに転送
+3. ReserveInventoryUseCase.run(event.aggregateId, event.items) を直接呼び出す
+4. 成功 → ack
+5. 失敗 → Logger.write(ERROR) → nack → DeadLetterキューに転送
 ```
 
 ---
@@ -590,9 +595,9 @@ RabbitMQ（並列配信）
   │   └─ ReserveInventoryCommandHandler
   │       ├─ Phase1: 全商品在庫確認（1品でも不足 → 全体Fail）
   │       └─ Phase2: 全商品更新（楽観ロック）
-  │           ├─ 全成功 → InventoryReservedDomainEvent publish（商品ごと）
-  │           └─ 競合 → リトライ → 上限超過 → 成功分をロールバック
-  │                      → InventoryReservationFailedDomainEvent(CONCURRENT_CONFLICT) publish
+  │           ├─ 全成功 → InventoryReservedDomainEvent 一括 publish（全商品まとめて1回）
+  │           └─ 競合 → リトライ → 上限超過
+  │                      → InventoryReservationFailedDomainEvent(CONCURRENT_CONFLICT, reservedProductIds) publish
   │
   ├─ [EC/Orders] CompensateOrderOnInventoryFailed
   │   └─ order.failInventory() → OrderRepository.save()

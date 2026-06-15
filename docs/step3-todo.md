@@ -110,7 +110,29 @@ QueryHandler インターフェース（src/Contexts/Shared/domain/QueryHandler.
 
 参考ドキュメント: docs/step3-application-layer.md の「GetOrderQueryHandler」「GetOrderUseCase」セクション
 
-# タスク 7: ReserveInventoryCommandHandler 実装
+# ~~タスク 7: ReserveInventoryUseCase 実装 + ReserveInventoryOnOrderPlaced リファクタ~~ ✅ 完了済み
+
+**設計メモ**:
+- `ReserveInventory` は `OrderPlacedDomainEvent` の Subscriber のみがトリガー。HTTP エンドポイントなし
+- CodelyTV パターン（`CreateBackofficeCourseOnCourseCreated` 参照）に従い、**Subscriber が UseCase を直接 inject して呼ぶ**。CommandBus 経由は不要な間接層
+- `ReserveInventoryCommand` と `ReserveInventoryCommandHandler` は削除（唯一の呼び出し元が Subscriber だったため不要）
+- `ReserveInventoryOnOrderPlaced` のコンストラクタを `CommandBus` → `ReserveInventoryUseCase` に変更し、`on()` で `useCase.run(event.aggregateId, event.items)` を直接呼ぶ
+- **既知制約**: `InventoryRepository` に `incrementStock` が存在しないため Phase2 途中失敗時の DB ロールバック不可。`InventoryReservationFailedDomainEvent` に `reservedProductIds`（成功済み商品IDリスト）を含めて publish し、補正 job が参照して在庫を戻す設計とした。Order 補償（`CompensateOrderOnInventoryFailed`）は従来通り機能する
+- **失敗イベントに成功リストを追加**: `InventoryReservationFailedDomainEvent` に `reservedProductIds?: string[]` フィールドを追加（省略時は `[]`）。Phase1失敗（INSUFFICIENT_STOCK）は `reservedProductIds` 不要のため省略
+- **一括 publish**: Phase3（全商品成功）の DomainEvent 発行を商品ごとの `publish` ループから `flatMap` で全イベントを集めて1回の `publish` に変更。RabbitMQEventBus 内部は逐次処理だが、呼び出し側で複数回 `publish` するとクラッシュ時に部分発行になるリスクがあるため
+- **シグネチャ修正**: `Inventory.reserve()` の実際の引数は `(orderId, quantity, outcome)` でドキュメント記載の `(orderId, items)` とは異なる
+- **在庫確認**: 正しくは `inventory.stock.hasEnoughStock(quantity)`（`StockQuantity` のメソッド）
+- リトライ: 指数バックオフ（100ms × 2^attempt）、最大3回。リトライ前に `findByProductId` で在庫を再取得してバージョンを更新
+
+**作成・修正・削除ファイル**:
+- 【新規作成】`src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryUseCase.ts`
+- 【修正】`src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryOnOrderPlaced.ts` — `CommandBus` → `ReserveInventoryUseCase` 直接呼び出しに変更
+- 【削除】`src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommand.ts`
+- 【削除】`src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommandHandler.ts`
+
+---
+
+（元プロンプト）
 
 概要: Phase1（全商品在庫確認）→ Phase2（楽観ロック更新）→ 補償のAll-or-Nothingフローを実装する。
 
