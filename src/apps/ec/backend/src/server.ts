@@ -1,3 +1,4 @@
+import cors from "cors";
 import express, { Application, Router } from "express";
 import http from "http";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -10,6 +11,7 @@ export class Server {
   constructor(private readonly port: number) {
     this.express = express();
     this.router = Router();
+    this.express.use(cors());
     this.express.use(express.json());
     this.express.use(this.router);
     this.express.use(errorHandler);
