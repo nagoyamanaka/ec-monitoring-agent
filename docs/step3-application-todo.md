@@ -188,7 +188,18 @@ subscribedTo() { return ReserveInventoryCommand; }
 参考ドキュメント: docs/step3-application-layer.md の「ReserveInventoryCommandHandler」セクション
 ※ InventoryRepository の reserveStock / incrementStock メソッドのシグネチャは既存の InventoryRepository.ts を確認して合わせること
 
-# タスク 8: CompensateOrderOnInventoryFailed Subscriber 実装
+# ~~タスク 8: CompensateOrderOnInventoryFailed Subscriber 実装~~ ✅ 完了済み
+
+**設計メモ**:
+- `order.failInventory()` は `record()` を呼ばないため DomainEvent が生成されない。EventBus は不要（タスク定義の依存リストから除外）
+- 冪等性: 注文未存在・PENDING以外はどちらも warn ログのみで ack（再処理しても安全）
+- ログの `action` は null/not-PENDING スキップを `compensate_order_skipped`、補償成功を `compensate_order` で分けた
+
+**作成ファイル**:
+- 【新規作成】`src/Contexts/EC/Orders/application/CompensateOrder/CompensateOrderUseCase.ts` — ビジネスロジック本体
+- 【新規作成】`src/Contexts/EC/Orders/application/CompensateOrder/CompensateOrderOnInventoryFailed.ts` — Subscriber（UseCase を呼ぶ薄いルーター）
+
+---
 
 概要: 在庫引き当て失敗イベントを受けてOrderをFAILEDに補償するSubscriberを実装する。
 
