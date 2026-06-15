@@ -24,6 +24,27 @@ export class PlaceOrderUseCase {
     items: OrderItems;
   }): Promise<void> {
     const { id, customerId, items } = params;
+
+    await this.processPayment(id, customerId, items);
+
+    const order = Order.place({ id, customerId, items });
+    await this.persistOrder(order);
+    await this.publishOrderEvents(id, order);
+
+    await this.logger.info({
+      service: "ec-backend",
+      trace_id: id.value,
+      span_id: "place_order",
+      action: "place_order",
+      message: `注文確定：${id.value}`,
+    });
+  }
+
+  private async processPayment(
+    id: OrderId,
+    customerId: CustomerId,
+    items: OrderItems,
+  ): Promise<void> {
     const amount = items.subtotalAmount().value;
 
     await this.logger.info({
@@ -68,15 +89,17 @@ export class PlaceOrderUseCase {
       action: "place_order_payment_succeeded",
       message: `決済完了：${id.value}, transactionId=${paymentResult.transactionId}`,
     });
+  }
 
-    const order = Order.place({ id, customerId, items });
-
+  private async persistOrder(order: Order): Promise<void> {
     try {
       await this.orderRepository.save(order);
     } catch (cause) {
       throw new RepositoryError("save", cause);
     }
+  }
 
+  private async publishOrderEvents(id: OrderId, order: Order): Promise<void> {
     try {
       await this.eventBus.publish(order.pullDomainEvents());
     } catch (cause) {
@@ -89,13 +112,5 @@ export class PlaceOrderUseCase {
         stack_trace: cause instanceof Error ? cause.stack : String(cause),
       });
     }
-
-    await this.logger.info({
-      service: "ec-backend",
-      trace_id: id.value,
-      span_id: "place_order",
-      action: "place_order",
-      message: `注文確定：${id.value}`,
-    });
   }
 }

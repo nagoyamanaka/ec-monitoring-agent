@@ -12,6 +12,8 @@ import {
 import { InventoryReservationFailedDomainEvent } from "../../domain/InventoryReservationFailedDomainEvent.js";
 import { ProductId } from "../../domain/ProductId.js";
 
+type Reservation = { inventory: Inventory; quantity: number };
+
 type SuccessRecord = {
   inventory: Inventory;
   quantity: number;
@@ -28,9 +30,20 @@ export class ReserveInventoryUseCase {
   ) {}
 
   async run(orderId: string, items: OrderItemPrimitive[]): Promise<void> {
-    // Phase 1: 全商品の在庫確認（読み取り）
-    // 1回でもinventory確保にfailしたら、注文全体をキャンセルするので、途中でイベント発行で中断する
-    const reservations: Array<{ inventory: Inventory; quantity: number }> = [];
+    const reservations = await this.validateStock(orderId, items);
+    if (!reservations) return;
+
+    const successRecords = await this.reserveAll(orderId, reservations);
+    if (!successRecords) return;
+
+    await this.publishReservationEvents(orderId, successRecords);
+  }
+
+  private async validateStock(
+    orderId: string,
+    items: OrderItemPrimitive[],
+  ): Promise<Reservation[] | null> {
+    const reservations: Reservation[] = [];
 
     for (const item of items) {
       const productId = new ProductId(item.productId);
@@ -54,66 +67,37 @@ export class ReserveInventoryUseCase {
           action: "reserve_inventory_insufficient",
           message: `在庫不足（Phase1）：${item.productId}`,
         });
-        return;
+        return null;
       }
 
       reservations.push({ inventory, quantity: item.quantity });
     }
 
-    // Phase 2: 全商品を更新（楽観ロック）
+    return reservations;
+  }
+
+  private async reserveAll(
+    orderId: string,
+    reservations: Reservation[],
+  ): Promise<SuccessRecord[] | null> {
     const successRecords: SuccessRecord[] = [];
 
-    for (const { inventory, quantity } of reservations) {
-      let currentInventory = inventory;
-      let finalResult: ReserveStockResult | undefined;
+    for (const r of reservations) {
+      const { result, inventory } = await this.attemptReserveWithRetry(
+        r.inventory,
+        r.quantity,
+      );
 
-      for (
-        let attempt = 0;
-        attempt < ReserveInventoryUseCase.MAX_RETRIES;
-        attempt++
-      ) {
-        const result = await this.inventoryRepository.reserveStock({
-          productId: currentInventory.productId,
-          quantity,
-          expectedVersion: currentInventory.version,
-        });
-
-        if (result.success) {
-          finalResult = result;
-          break;
-        }
-
-        const isLastAttempt =
-          attempt === ReserveInventoryUseCase.MAX_RETRIES - 1;
-        if (result.reason === "CONCURRENT_CONFLICT" && !isLastAttempt) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.pow(2, attempt) * 100),
-          );
-          const refreshed = await this.inventoryRepository.findByProductId(
-            currentInventory.productId,
-          );
-          if (refreshed && refreshed.stock.hasEnoughStock(quantity)) {
-            currentInventory = refreshed;
-            continue;
-          }
-        }
-
-        finalResult = result;
-        break;
-      }
-
-      if (!finalResult?.success) {
-        // 成功済み分の補償は reservedProductIds を受け取った補正 job が行う。
-        // Order 側は CompensateOrderOnInventoryFailed が FAILED に補償する。
+      if (!result.success) {
         await this.eventBus.publish([
           new InventoryReservationFailedDomainEvent({
-            productId: currentInventory.productId.value,
+            productId: inventory.productId.value,
             orderId,
-            requestedQuantity: quantity,
-            currentStock: currentInventory.stock.value,
+            requestedQuantity: r.quantity,
+            currentStock: inventory.stock.value,
             reason: InventoryFailureReason.CONCURRENT_CONFLICT,
             reservedProductIds: successRecords.map(
-              (r) => r.inventory.productId.value,
+              (s) => s.inventory.productId.value,
             ),
           }),
         ]);
@@ -124,17 +108,59 @@ export class ReserveInventoryUseCase {
           action: "reserve_inventory_rollback",
           message: `楽観ロック競合・ロールバック：${orderId}`,
         });
-        return;
+        return null;
       }
 
-      successRecords.push({
-        inventory: currentInventory,
-        quantity,
-        outcome: finalResult,
-      });
+      successRecords.push({ inventory, quantity: r.quantity, outcome: result });
     }
 
-    // 全商品成功 — DomainEvent 生成・一括発行
+    return successRecords;
+  }
+
+  private async attemptReserveWithRetry(
+    inventory: Inventory,
+    quantity: number,
+  ): Promise<{ result: ReserveStockResult; inventory: Inventory }> {
+    let current = inventory;
+
+    for (
+      let attempt = 0;
+      attempt < ReserveInventoryUseCase.MAX_RETRIES;
+      attempt++
+    ) {
+      const result = await this.inventoryRepository.reserveStock({
+        productId: current.productId,
+        quantity,
+        expectedVersion: current.version,
+      });
+
+      if (result.success) return { result, inventory: current };
+
+      const canRetry =
+        result.reason === "CONCURRENT_CONFLICT" &&
+        attempt < ReserveInventoryUseCase.MAX_RETRIES - 1;
+
+      if (!canRetry) return { result, inventory: current };
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.pow(2, attempt) * 100),
+      );
+      const refreshed = await this.inventoryRepository.findByProductId(
+        current.productId,
+      );
+      if (!refreshed || !refreshed.stock.hasEnoughStock(quantity)) {
+        return { result, inventory: current };
+      }
+      current = refreshed;
+    }
+
+    throw new Error("unreachable");
+  }
+
+  private async publishReservationEvents(
+    orderId: string,
+    successRecords: SuccessRecord[],
+  ): Promise<void> {
     const allEvents = successRecords.flatMap(
       ({ inventory, quantity, outcome }: SuccessRecord) => {
         inventory.reserve(orderId, quantity, outcome);
