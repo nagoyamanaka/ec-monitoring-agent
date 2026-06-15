@@ -135,15 +135,15 @@ src/Contexts/EC/
 ├── Orders/
 │   ├── domain/
 │   │   ├── Order.ts                                       # Order集約ルート（AggregateRoot継承）
-│   │   ├── OrderId.ts                                     # Value Object
+│   │   ├── OrderId.ts                                     # Value Object（Uuid継承）
 │   │   ├── OrderStatus.ts                                 # Value Object（PENDING/CONFIRMED/FAILED）
 │   │   ├── OrderItems.ts                                  # Value Object（OrderItemの集合）
 │   │   ├── OrderItem.ts                                   # Value Object（productId/quantity/price）
-│   │   ├── CustomerId.ts                                  # Value Object
+│   │   ├── CustomerId.ts                                  # Value Object（Uuid継承）
 │   │   ├── SubtotalAmount.ts                              # Value Object
+│   │   ├── PaymentGateway.ts                              # 決済ゲートウェイインターフェース（PaymentResult型含む）
 │   │   ├── OrderRepository.ts                             # Repositoryインターフェース（Domain層）
-│   │   └── events/
-│   │       └── OrderPlacedDomainEvent.ts                  # 注文確定イベント
+│   │   └── OrderPlacedDomainEvent.ts                      # 注文確定イベント
 │   ├── application/
 │   │   ├── PlaceOrder/
 │   │   │   ├── PlaceOrderCommand.ts                       # 注文作成コマンド
@@ -163,12 +163,11 @@ src/Contexts/EC/
 ├── Inventory/
 │   ├── domain/
 │   │   ├── Inventory.ts                                   # Inventory集約ルート（AggregateRoot継承）
-│   │   ├── ProductId.ts                                   # Value Object
+│   │   ├── ProductId.ts                                   # Value Object（Uuid継承）
 │   │   ├── StockQuantity.ts                               # Value Object（0以下を許容しない制約）
 │   │   ├── InventoryRepository.ts                         # Repositoryインターフェース（Domain層）
-│   │   └── events/
-│   │       ├── InventoryReservedDomainEvent.ts            # 在庫引き当て成功イベント
-│   │       └── InventoryReservationFailedDomainEvent.ts   # 在庫引き当て失敗（既知障害デモの核心）
+│   │   ├── InventoryReservedDomainEvent.ts                # 在庫引き当て成功イベント
+│   │   └── InventoryReservationFailedDomainEvent.ts       # 在庫引き当て失敗（既知障害デモの核心）
 │   ├── application/
 │   │   └── ReserveInventory/
 │   │       ├── ReserveInventoryUseCase.ts                 # ビジネスロジック本体（Phase1/Phase2/リトライ/イベント発行）
@@ -179,8 +178,7 @@ src/Contexts/EC/
 │
 └── Payment/
     ├── domain/
-    │   └── events/
-    │       └── PaymentTimeoutDomainEvent.ts               # 決済タイムアウトイベント（シナリオ1の核心）
+    │   └── PaymentTimeoutDomainEvent.ts                   # 決済タイムアウトイベント（シナリオ1の核心）
     └── infrastructure/
         └── PaymentMockGateway.ts                          # モック決済（success/random/timeout切り替え）
 ```
@@ -344,14 +342,23 @@ src/Contexts/Shared/infrastructure/persistence/elasticsearch/
 ```
 src/apps/ec/backend/
 ├── src/
-│   ├── server.ts                    # Expressサーバーエントリポイント
-│   ├── App.ts                       # Express appセットアップ（ミドルウェア登録）
+│   ├── start.ts                     # エントリーポイント（EcBackendApp.start()）
+│   ├── EcBackendApp.ts              # DIセットアップ・インフラ初期化・アプリ起動
+│   ├── server.ts                    # Expressサーバークラス（listen/stop）
 │   ├── routes/
-│   │   └── orderRoutes.ts           # POST /orders, GET /orders/:id
+│   │   ├── index.ts                 # registerRoutes（全ルートを集約）
+│   │   ├── orders.route.ts          # POST /orders, GET /orders/:orderId
+│   │   └── demo.route.ts            # POST /demo/payment-mode
 │   ├── controllers/
-│   │   └── OrderPostController.ts   # PlaceOrderCommandをディスパッチ
+│   │   ├── orders/
+│   │   │   ├── OrdersPostController.ts  # PlaceOrderCommandをディスパッチ
+│   │   │   └── OrderGetController.ts    # GetOrderQueryをディスパッチ
+│   │   └── demo/
+│   │       └── PaymentModePostController.ts
+│   ├── middleware/
+│   │   └── errorHandler.ts          # DomainError/ApplicationError/InfrastructureError → HTTPステータス変換
 │   └── subscribers/
-│       └── registerSubscribers.ts   # RabbitMQ Subscriber起動（ReserveInventoryOnOrderPlaced）
+│       └── EcSubscribers.ts         # buildEcSubscribers()（DomainEventSubscribersを構築して返す）
 └── package.json
 ```
 

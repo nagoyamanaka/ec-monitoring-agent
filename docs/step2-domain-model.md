@@ -117,9 +117,7 @@ toPrimitives(): {
 **ファイルパス**: `src/Contexts/EC/Orders/domain/OrderId.ts`
 
 ```typescript
-class OrderId extends ValueObject<string> {
-  constructor(value: string); // UUID v4形式を期待。空文字はInvalidOrderIdErrorをthrow
-}
+class OrderId extends Uuid {}
 ```
 
 #### `CustomerId`
@@ -127,9 +125,7 @@ class OrderId extends ValueObject<string> {
 **ファイルパス**: `src/Contexts/EC/Orders/domain/CustomerId.ts`
 
 ```typescript
-class CustomerId extends ValueObject<string> {
-  constructor(value: string); // UUID v4形式を期待
-}
+class CustomerId extends Uuid {}
 ```
 
 #### `OrderStatus`
@@ -209,7 +205,7 @@ class SubtotalAmount extends NumberValueObject {
 
 #### `OrderPlacedDomainEvent`
 
-**ファイルパス**: `src/Contexts/EC/Orders/domain/events/OrderPlacedDomainEvent.ts`
+**ファイルパス**: `src/Contexts/EC/Orders/domain/OrderPlacedDomainEvent.ts`
 
 ```typescript
 class OrderPlacedDomainEvent extends ECDomainEvent {
@@ -354,9 +350,7 @@ toPrimitives(): {
 **ファイルパス**: `src/Contexts/EC/Inventory/domain/ProductId.ts`
 
 ```typescript
-class ProductId extends ValueObject<string> {
-  constructor(value: string); // UUID v4形式を期待。空文字はInvalidProductIdErrorをthrow
-}
+class ProductId extends Uuid {}
 ```
 
 #### `StockQuantity`
@@ -380,7 +374,7 @@ class StockQuantity extends ValueObject<number> {
 
 #### `InventoryReservedDomainEvent`
 
-**ファイルパス**: `src/Contexts/EC/Inventory/domain/events/InventoryReservedDomainEvent.ts`
+**ファイルパス**: `src/Contexts/EC/Inventory/domain/InventoryReservedDomainEvent.ts`
 
 ```typescript
 class InventoryReservedDomainEvent extends ECDomainEvent {
@@ -414,7 +408,7 @@ class InventoryReservedDomainEvent extends ECDomainEvent {
 
 #### `InventoryReservationFailedDomainEvent`
 
-**ファイルパス**: `src/Contexts/EC/Inventory/domain/events/InventoryReservationFailedDomainEvent.ts`
+**ファイルパス**: `src/Contexts/EC/Inventory/domain/InventoryReservationFailedDomainEvent.ts`
 
 ```typescript
 // 失敗理由の列挙（Monitoringの既知パターン照合に使用）

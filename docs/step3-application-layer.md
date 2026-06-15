@@ -118,9 +118,12 @@ export function errorHandler(
 | `PlaceOrderCommandHandler`       | CommandHandler | `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderCommandHandler.ts`                |
 | `PlaceOrderUseCase`              | UseCase        | `src/Contexts/EC/Orders/application/PlaceOrder/PlaceOrderUseCase.ts`                       |
 | `ReserveInventoryUseCase`        | UseCase        | `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryUseCase.ts`        |
+| `CompensateOrderUseCase`         | UseCase        | `src/Contexts/EC/Orders/application/CompensateOrder/CompensateOrderUseCase.ts`             |
 | `GetOrderQuery`                  | Query          | `src/Contexts/EC/Orders/application/GetOrder/GetOrderQuery.ts`                             |
 | `GetOrderQueryHandler`           | QueryHandler   | `src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryHandler.ts`                      |
 | `GetOrderUseCase`                | UseCase        | `src/Contexts/EC/Orders/application/GetOrder/GetOrderUseCase.ts`                           |
+
+> **注**: `ReserveInventoryCommand` / `ReserveInventoryCommandHandler` は実装過程で削除。Subscriber が UseCase を直接呼ぶ。
 
 > **命名規則**: UseCase クラスは `UseCase` サフィックス統一。Handler は `XxxUseCase` を constructor injection し `handle()` から `useCase.run(VO引数)` を呼ぶだけの薄いルーター。
 
@@ -229,7 +232,7 @@ PlaceOrderUseCase.run({ id: OrderId, customerId: CustomerId, items: OrderItems }
 
 ### `PaymentGateway` (Interface)
 
-**ファイルパス**: `src/Contexts/EC/Orders/application/PlaceOrder/PaymentGateway.ts`
+**ファイルパス**: `src/Contexts/EC/Orders/domain/PaymentGateway.ts`
 
 ```typescript
 export type PaymentResult =
@@ -261,24 +264,8 @@ export interface PaymentGateway {
 
 ## ReserveInventory
 
-### `ReserveInventoryCommand`
-
-**ファイルパス**: `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommand.ts`
-
-```typescript
-export class ReserveInventoryCommand extends Command {
-  constructor(
-    readonly orderId: string,
-    readonly items: OrderItemPrimitive[],
-  ) {
-    super();
-  }
-}
-```
-
-このCommandはSubscriberから発行される（`OrderPlacedDomainEvent` を変換）。Controllerから直接呼ばれない。
-
----
+> `ReserveInventoryCommand` / `ReserveInventoryCommandHandler` は実装過程で削除。
+> `ReserveInventoryOnOrderPlaced` Subscriber が `ReserveInventoryUseCase` を直接 inject して呼ぶ（CodelyTV の `CreateBackofficeCourseOnCourseCreated` パターン準拠）。
 
 ### `ReserveInventoryUseCase`
 
@@ -386,29 +373,30 @@ export class GetOrderQuery extends Query {
 }
 ```
 
-### `GetOrderQueryResponse`
+### `OrderResponse`
 
-**ファイルパス**: `src/Contexts/EC/Orders/application/GetOrder/GetOrderQueryResponse.ts`
+**ファイルパス**: `src/Contexts/EC/Orders/application/OrderResponse.ts`
 
 ```typescript
-import { Response } from "../../../../Shared/domain/Response.js";
+import { Response } from "../../../Shared/domain/Response.js";
 
-export interface GetOrderQueryResponse extends Response {
+interface OrderResponseItem {
   id: string;
   customerId: string;
-  items: Array<{
-    productId: string;
-    quantity: number;
-    unitPrice: number;
-  }>;
+  items: Array<{ productId: string; quantity: number; unitPrice: number }>;
   totalAmount: number;
   status: string; // 'PENDING' | 'CONFIRMED' | 'FAILED'
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
 }
+
+export class OrderResponse implements Response {
+  public readonly orders: Array<OrderResponseItem>;
+  constructor(orders: Array<Order>); // toPrimitives() でマッピング
+}
 ```
 
-`QueryHandler<Q, R extends Response>` の型制約を満たすために `Response` を extends する。`Response` は空インターフェースなので構造的には省略可能だが、CodelyTV 準拠で明示する。Controllerがそのままレスポンスとして返せる形にする。
+`QueryHandler<Q, R extends Response>` の型制約を満たすために `Response` を implements する。`GetOrder` / 将来の `ListOrders` で横断的に再利用できるよう `GetOrder/` サブディレクトリではなく `application/` 直下に配置。
 
 ### `GetOrderQueryHandler`
 
@@ -424,7 +412,7 @@ export class GetOrderQueryHandler implements QueryHandler<GetOrderQuery, OrderRe
 
   async handle(query: GetOrderQuery): Promise<OrderResponse> {
     const id = new OrderId(query.orderId);
-    return this.getOrderUseCase.run(id);
+    return this.getOrderUseCase.run(id); // OrderResponse を返す
   }
 }
 ```
@@ -575,7 +563,7 @@ e2-medium（vCPU×2, RAM×4GB）でRabbitMQ・MongoDB・EC backend・backoffice 
 
 ```
 POST /orders
-  ↓ OrderPostController
+  ↓ OrdersPostController
   ↓ PlaceOrderCommand
 
 PlaceOrderCommandHandler
@@ -592,7 +580,7 @@ PlaceOrderCommandHandler
 
 RabbitMQ（並列配信）
   ├─ [EC/Inventory] ReserveInventoryOnOrderPlaced
-  │   └─ ReserveInventoryCommandHandler
+  │   └─ ReserveInventoryUseCase.run() を直接呼び出し
   │       ├─ Phase1: 全商品在庫確認（1品でも不足 → 全体Fail）
   │       └─ Phase2: 全商品更新（楽観ロック）
   │           ├─ 全成功 → InventoryReservedDomainEvent 一括 publish（全商品まとめて1回）
