@@ -1,4 +1,4 @@
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 
 const BASE_URL = process.env.EC_BASE_URL ?? "http://localhost:3000";
 const MONGO_URL = process.env.MONGO_URL ?? "mongodb://localhost:27017/ec";
@@ -27,8 +27,8 @@ async function seedInventory(): Promise<void> {
   const db = mongo.db();
   await db.collection("inventory").deleteMany({});
   await db.collection("inventory").insertMany([
-    { _id: PRODUCT_IN_STOCK,    stock: 100, version: 0, updatedAt: new Date() },
-    { _id: PRODUCT_OUT_OF_STOCK, stock: 0,   version: 0, updatedAt: new Date() },
+    { _id: PRODUCT_IN_STOCK as unknown as ObjectId,     stock: 100, version: 0, updatedAt: new Date() },
+    { _id: PRODUCT_OUT_OF_STOCK as unknown as ObjectId, stock: 0,   version: 0, updatedAt: new Date() },
   ]);
 }
 
