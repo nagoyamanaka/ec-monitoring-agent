@@ -1,4 +1,4 @@
-# 設計エージェント向けプロンプト v12
+# 設計エージェント向けプロンプト v14
 
 > **変更履歴（v11→v12）**
 > インフラ横断調査パイプラインを設計に追加。
@@ -11,7 +11,7 @@
 > | Step 1: ディレクトリ構成                   | `docs/step1-directory-structure.md` | ✅ 確定         |
 > | Step 2: ドメインモデル設計（EC）           | `docs/step2-domain-model.md`        | ✅ 確定         |
 > | Step 3: アプリケーション層設計（EC）       | `docs/step3-application-layer.md`   | ✅ 確定         |
-> | Step 4: Monitoringコンテキスト拡張ポイント | `docs/step4-monitoring-context.md`  | ✅ 確定         |
+> | Step 4: Monitoring（4分割）                | `docs/step4-1-strategy.md` 〜 `step4-4-backoffice-frontend.md`（各 `*-todo.md` 付き） | ✅ 確定         |
 > | Step 5: ADR                                | `docs/step5-adr.md`                 | 🔲 次のステップ |
 
 ---
@@ -68,10 +68,14 @@ AIエージェントは「アプリログを見る」だけでなく、**Cloud L
 | AI（現行）     | Gemini API                                                                         | `@google/generative-ai`。ハッカソン本体で使用                                                                    |
 | AI（将来P1）   | Vertex AI SDK                                                                      | `@google-cloud/vertexai`。フェーズ1で差し替え                                                                    |
 | AI（将来P2）   | ADK（Agents Development Kit）                                                      | フェーズ2でマルチエージェント構成                                                                                |
-| 検索（将来P1） | Elasticsearch（Elastic Cloud）                                                     | `ElasticAlertClassifier` でStrategyに追加。Elastic Agent Builder + A2AはP2                                       |
+| 検索（将来P1） | Elasticsearch（Elastic Cloud）                                                     | `ElasticAlertClassifier` でStrategyに追加。a2aは不使用（ADK in-processで代替）                                    |
 | Observability  | Cloud Logging・Cloud Monitoring・Cloud Trace                                       | GCPネイティブ。OTel SDK（`@opentelemetry/sdk-node`）からGCPエクスポーター経由で直接送信。Collectorコンテナ不使用 |
 | Logging        | OTel Logs → Cloud Logging（`@google-cloud/opentelemetry-cloud-trace-exporter` 等） | Winston不使用。OTel一括化でtrace_id/span_idはSDKが自動付与。`StructuredLog`型には含めない                        |
 | インフラ調査   | Cloud Logging API・Terraform CLI（読み取り専用）・GitHub REST API                  | インフラ横断調査エージェントが証拠収集に使用。apply等の書き込み操作は一切行わない                                |
+| CI/CD          | GitHub Actions                                                                     | 「まわす」。Trivy / npm audit を実行し脆弱性を `MonitoringEvent(SECURITY)` として通知（v13）                     |
+| セキュリティ   | Trivy・npm audit                                                                   | CIでHIGH以上の脆弱性を検出。調査パイプラインのSECURITYカテゴリ入力（v13）                                        |
+| リメディエーション | GitHub Pull Request API（write）                                                | `RemediationPort` 経由でPR草案のみ起票。自動マージなし・人間承認ゲート（v13）                                    |
+| デプロイ（とどける） | Cloud Run（一部）＋ Compute Engine                                            | 「とどける」の見せ場をCloud Runに載せる。EDA常駐Subscriberとステートレス性のトレードオフはADRで整理（v13）       |
 | Test           | Vitest (BDD)                                                                       |                                                                                                                  |
 | Infra          | GCP Compute Engine (e2-medium × 1)                                                 |                                                                                                                  |
 
@@ -124,7 +128,7 @@ src/
 > **ディレクトリ構成の詳細は `docs/step1-directory-structure.md` を参照**
 > **ドメインモデルの詳細は `docs/step2-domain-model.md` を参照**
 > **アプリケーション層の詳細は `docs/step3-application-layer.md` を参照**
-> **Monitoringコンテキストの詳細は `docs/step4-monitoring-context.md` を参照**
+> **Monitoringコンテキストの詳細は `docs/step4-2-monitoring-context.md` を参照（戦略は `step4-1`、backendは `step4-3`、frontendは `step4-4`）**
 
 ```
 src/Contexts/
@@ -135,7 +139,9 @@ src/Contexts/
 ├── Monitoring/
 │   ├── AlertAnalysis/
 │   ├── AIInvestigation/
-│   │   └── InfraInvestigation/        ← インフラ横断調査（v12追加）
+│   │   ├── InfraInvestigation/        ← インフラ横断調査（v12追加・read-only Gateway）
+│   │   ├── Remediation/               ← 自律リメディエーション（v13追加・PR起票のwrite隔離）
+│   │   └── infrastructure/adk/        ← ADKマルチエージェント（Coordinator + 専門agent。a2a不使用）
 │   └── ReportGeneration/
 └── Shared/
 ```
@@ -287,10 +293,25 @@ interface InfraEvidence {
                    ← これがシナジーの本丸。証拠が太るほど照合精度が上がる
   → ✅ コミットを切る
 
-【フェーズ3：Vertex AI / ADK移行（ポートフォリオ強化）】
+【フェーズ3：Vertex AI / ADKマルチエージェント移行（ポートフォリオ強化）】
   Step4-Vertex:   VertexAIInvestigationAdapter 実装（DI差し替えのみ）
-  Step4-ADK:      6/23 Bootcamp受講後に着手
+  Step4-ADK-a:    ADKAgentInvestigationAdapter（Coordinator起動）実装
+  Step4-ADK-b:    EvidenceCollector / RootCauseAnalyst / RemediationPlanner サブエージェント実装
+  Step4-ADK-c:    自律的な証拠追加収集ループ（analystが収集対象を判断）を実装
+                  ← a2aは使わない。1プロセス内のADKサブエージェント構成
+  → AIInvestigationPort のDI差し替えのみ。InvestigateAlertCommandHandler ノータッチ
 ```
+
+> **フェーズ1.5（DevOpsループ：CI/CDセキュリティ）— 差別化として優先度高**
+> 「DevOps × AI Agent」のDevOps半分を担う。フェーズ1（InfraInvestigation / GitHub Gateway）完成後に着手できる。
+>
+> ```
+> Step-CI-a:   GitHub Actions に Trivy / npm audit を組み込む
+> Step-CI-b:   POST /ingest/security-scan → MonitoringEvent(SECURITY) → AnalyzeAlert 合流
+> Step-CI-c:   RemediationPort / GitHubPullRequestGateway 実装（PR草案起票・人間承認ゲート）
+> Step-CI-d:   バックオフィスにCVEレポート + 修正PR + 承認ボタンを表示
+> Step-CI-Demo: デモシナリオ5がE2Eで通る
+> ```
 
 > フェーズ1（インフラ横断）とフェーズ2（Elastic）は直列で実装する。
 > フェーズ1が完成してからフェーズ2に入ることで、ElasticへのクエリをInfraEvidenceで強化できる。
@@ -341,11 +362,30 @@ interface InfraEvidence {
 5. バックオフィスに証拠一覧 + AI推定結果をSSEでリアルタイム表示
 ```
 
+### シナリオ5：CI/CD連携のセキュリティインシデント（DevOpsループ・v13追加）
+
+「DevOps × AI Agent」の DevOps 半分を担うフロー。調査(read)とリメディエーション(write)の分離原則のもと、**AIが調査し修正PRを起票、人間がレビュー・承認**する。
+
+```
+1. GitHub Actions（CI）が Trivy / npm audit を実行
+2. HIGH以上の脆弱性を検出 → POST /ingest/security-scan で backoffice へ送信
+3. SecurityScanIngestController が MonitoringEvent(category=SECURITY) を構築
+   ※ ECDomainEvent由来ではない。MonitoringEventがECと疎結合である設計の実証
+4. 既存の AnalyzeAlert → InvestigateAlert（ADKマルチエージェント）に合流
+   ├─ EvidenceCollector: GitHub Gatewayで利用箇所・依存グラフを収集
+   ├─ RootCauseAnalyst(security): CVE概要 / 影響範囲 / 修正版を分析
+   └─ RemediationPlanner: 修正方針 → RemediationPort.draftPullRequest()（write・人間承認ゲート）
+5. バックオフィスにCVEレポート + 修正PRのURLをSSE表示
+6. 人間が PR と reviewStatus をレビュー・承認/却下（自動マージはしない）
+```
+
+> このシナリオで「つくる（調査エージェント）・まわす（GitHub Actions/CI）・とどける（デプロイ）」の3コンセプトを1ループで踏む。PR起票は唯一のwrite操作で `RemediationPort` に隔離する。
+
 ---
 
 ## Monitoringコンテキスト設計方針
 
-> 詳細は `docs/step4-monitoring-context.md` を参照。以下は実装時に必ず守る制約のサマリー。
+> 詳細は `docs/step4-2-monitoring-context.md` を参照。以下は実装時に必ず守る制約のサマリー。
 
 ### AlertClassifierのStrategyパターン
 
@@ -388,15 +428,18 @@ AlertClassifier（インターフェース）← 抽象に依存
 インフラ横断調査（フェーズ1）を先に完成させてからElastic（フェーズ2）に入ること。
 アプリログのみをクエリにするより、`InfraEvidence`（アプリログ + Terraform差分 + GitHubコミット）を合わせた多次元コンテキストでハイブリッド検索する方が類似障害パターンのマッチ精度が大幅に向上する。
 
-#### Step3：A2A統合（ポートフォリオ別格化）
+#### Step3：ScoringAlertClassifier（将来・stretch）
 
-| 項目           | 内容                                                                                                    |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| 実装クラス     | `ADKAgentInvestigationAdapter`（`AIInvestigationPort` に差し込む）                                      |
-| 連携方式       | Elastic Agent Builder → A2Aプロトコル → Gemini Enterprise                                               |
-| 前提           | Step2完了（Elastic Agent BuilderはElasticsearchの上にのみ構築できる）                                   |
-| **完了条件**   | Gemini EnterpriseからA2A経由でElasticエージェントを呼び出せる。`AIInvestigationPort` のDI差し替えで動く |
-| 着手タイミング | Elastic Agent Builder Bootcamp（6/23）受講後に着手                                                      |
+> **注意**: Step3 はあくまで `AlertClassifier` の第3実装。`ADKAgentInvestigationAdapter` は `AIInvestigationPort` 側の進化であり、`AlertClassifier` の段階ではない（混在させない）。a2aは使用しない。
+
+| 項目           | 内容                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| 実装クラス     | `ScoringAlertClassifier`                                                                                 |
+| マッチ戦略     | 複数パターンへの重み付けスコア合算（部分一致の度合いを数値化して並列提示）                               |
+| confidence     | 重み付きスコアを正規化して返す（0.0〜1.0）                                                               |
+| インフラ依存   | なし（スコアリングロジックのみ。ElasticをQueryに使う場合はStep2ベース）                                   |
+| **完了条件**   | `ScoringAlertClassifier` がDI切り替えで差し替え可能。`AnalyzeAlertCommandHandler` ノータッチ             |
+| 着手タイミング | Step2（Elastic）完了後。ハッカソン締切後のポートフォリオ強化フェーズ                                     |
 
 #### リスク管理方針
 
@@ -405,11 +448,11 @@ AlertClassifier（インターフェース）← 抽象に依存
   ↓
 フェーズ1：インフラ横断調査（最優先の差別化）
   ↓
+フェーズ1.5：DevOpsループ（CI/CD・セキュリティ・PR起票）
+  ↓
 フェーズ2：Elastic類似検索（シナジー完成）
   ↓
-6/23 Bootcamp受講（A2Aのパターン・設計を学ぶ）
-  ↓
-フェーズ3（Bootcamp後）：ADK/A2A統合
+フェーズ3：ADK in-processマルチエージェント（a2a不使用・DI差し替えのみ）
   ↓
 〆切7/10 → 到達したフェーズで提出
 ```
@@ -420,7 +463,7 @@ AlertClassifier（インターフェース）← 抽象に依存
 AIInvestigationPort（インターフェース）← Application層が依存する抽象
   ├─ GeminiAIInvestigationAdapter      ← フェーズ0：ハッカソン本体（Gemini API直接）
   ├─ VertexAIInvestigationAdapter      ← フェーズ1：Vertex AI SDK経由（推奨経路）
-  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADKエージェント構成（A2A統合）
+  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADKエージェント構成（in-process・a2a不使用）
 ```
 
 ### AlertClassification VOの設計原則（OCP適用）
@@ -527,6 +570,11 @@ GET  /demo/status
 # インフラ調査関連（v12追加）
 GET  /alerts/:id/evidence              ← 収集済みInfraEvidenceの取得
 GET  /alerts/:id/investigation/status  ← 調査ステータス（collecting / analyzing / done）
+
+# CI/CD連携・自律リメディエーション（v13追加）
+POST /ingest/security-scan             ← CIからの脆弱性スキャン結果受信（MonitoringEvent(SECURITY)化）
+POST /alerts/:id/remediation/draft-pr  ← 承認操作：RemediationPlanからPR草案を起票（write・人間承認ゲート）
+GET  /alerts/:id/remediation           ← 起票済みPRのURL・ステータス取得
 ```
 
 ---
@@ -582,7 +630,7 @@ interface StructuredLog {
 - `ClassificationConfidence` のみVOとしてクラス化する
 - **`AIInvestigationPort` はポートインターフェース名にプロダクト名を含めない**（v10）
 - **`ElasticAlertClassifier` はElastic Cloud公式サイトから直接登録したインスタンスに接続する**（v11）
-- **Step3（A2A）はStep2（Elastic）完了後に着手する**（v11）
+- **Step3（ScoringAlertClassifier）はStep2（Elastic）完了後に着手する。a2aは使わない**（v11/v14改訂）
 - **`TerraformGateway` / `GitHubGateway` / `CloudLoggingGateway` はすべて読み取り専用。書き込み操作のメソッドを定義しない**（v12）
 - **`InfraEvidence` はInfrastructure層の生レスポンスをドメイン型に正規化してから渡す。各Gatewayの生レスポンス型をMonitoringドメインに持ち込まない**（v12）
 
@@ -596,7 +644,7 @@ interface StructuredLog {
 - AlertClassifierはfirst-matchのみ実装。スコアリングはインターフェースのコメントに将来実装として明記
 - SSEAlertNotifierはEventEmitterオンメモリ
 - **AIはGemini API直接（フェーズ0）のみ実装。Vertex AI / ADKへの移行はAIInvestigationPortの差し替えで対応できる設計にし、実装はハッカソン後のフェーズに委ねる**（v10）
-- **AlertClassifierはStep1（InMemory）のみハッカソン提出必須。Step2（Elastic）・Step3（A2A）は工数が許す範囲で積み上げる**（v11）
+- **AlertClassifierはStep1（InMemory）のみハッカソン提出必須。Step2（Elastic）・Step3（ScoringAlertClassifier）は工数が許す範囲で積み上げる。a2aは使わない**（v11/v14改訂）
 - **Cloud Monitoring / Cloud Trace ゲートウェイは設計・ADRのみ。実装は次フェーズ**（v12）
 
 ---
@@ -608,7 +656,7 @@ interface StructuredLog {
 | **Step 1** | `docs/step1-directory-structure.md` | ✅ **確定済み** |
 | **Step 2** | `docs/step2-domain-model.md`        | ✅ **確定済み** |
 | **Step 3** | `docs/step3-application-layer.md`   | ✅ **確定済み** |
-| **Step 4** | `docs/step4-monitoring-context.md`  | ✅ **確定済み** |
+| **Step 4** | `docs/step4-{1-strategy,2-monitoring-context,3-backoffice-backend,4-backoffice-frontend}.md`（各 `*-todo.md` 付き） | ✅ **確定済み** |
 | **Step 5** | ADR                                 | 🔲 次のステップ |
 
 ### Step 5で作成するADR
@@ -625,7 +673,7 @@ interface StructuredLog {
 1. AlertClassification VOに重み情報を持たせずClassifier実装クラスに閉じる理由
 1. AIInvestigationPortをプロダクト名に依存しない抽象名にする理由と段階移行設計（v10）
 1. ハッカソン本体でGemini API直接を選択しVertex AI / ADK移行を後続フェーズとする理由（v10）
-1. AlertClassifierをInMemory → Elastic → A2Aの3ステップで段階強化する理由と各ステップの完了条件（v11）
+1. **AlertClassifierをInMemory → Elastic → ScoringAlertClassifierの3ステップで段階強化する理由と各ステップの完了条件（a2aは使わない理由を含む）**（v11/v14改訂）
 1. **インフラ横断調査をAlertClassifier（Elastic類似検索）と別レイヤーに分離し、証拠収集→事例照合→AI推定のパイプラインとして設計する理由**（v12追加）
 1. **TerraformGateway・GitHubGateway・CloudLoggingGatewayを読み取り専用に限定する理由**（v12追加）
 1. **Cloud Monitoring・Cloud Traceのゲートウェイ実装を次フェーズとしてADRに明記する理由と移行トリガー**（v12追加）
@@ -633,10 +681,39 @@ interface StructuredLog {
 1. **Turborepoを導入しDockerビルドでturbo pruneを使用する理由**（v13追加）
 1. **コンテナ環境をlocal/prodの2環境のみに絞った理由とdocker-compose分割方針**（v13追加）
 1. **アプリをコンテナ化してローカルE2Eを可能にした理由（インフラのみコンテナ vs アプリも含む）**（v13追加）
+1. **マルチエージェントをa2aでなくADK in-processで構成する理由（a2aは異ベンダー相互運用専用であり本構成には不要）**（v13追加）
+1. **`MonitoringEvent.category` を弁別子フィールドにし、調査担当ルーティングのキーとする理由（a2a非依存の前方互換）**（v13追加）
+1. **調査(read)とリメディエーション(write)を分離し、PR起票のみを `RemediationPort` に隔離し自動マージしない理由**（v13追加）
+1. **CIで検出した脆弱性を `MonitoringEvent(SECURITY)` 化して同一調査パイプラインに流す理由（DevOpsループの実証）**（v13追加）
+1. **「とどける」の見せ場を Compute Engine 単機でなく Cloud Run（一部）に載せる判断と、EDA（RabbitMQ常駐Subscriber）とCloud Runステートレス性のトレードオフ**（v13追加）
 
 ---
 
 ## 変更履歴
+
+### v14（a2a廃止に伴う Monitoringコンテキスト設計方針の整合修正）
+
+- AlertClassifier Step3テーブルを「A2A統合（ADKAgentInvestigationAdapter）」から「ScoringAlertClassifier」に全面差し替え
+  - `ADKAgentInvestigationAdapter` は `AIInvestigationPort` 側の実装であり `AlertClassifier` の段階に混在していたのは誤り
+  - A2A連携方式・Bootcamp着手タイミングをすべて削除
+- AIInvestigationPort図のフェーズ2ラベルを「A2A統合」→「in-process・a2a不使用」に修正
+- リスク管理方針から `6/23 Bootcamp受講（A2Aのパターン）` 行を削除し、フェーズ1.5（DevOpsループ）を明記
+- 「必ず守ること」「許容する妥協」「ADR項目13」の `Step3（A2A）` 表記を `Step3（ScoringAlertClassifier）` に統一
+- 技術スタック表の `Elastic Agent Builder + A2AはP2` を `a2aは不使用（ADK in-processで代替）` に修正
+- ヘッダーバージョンを v12（古いまま放置）→ v14 に更新
+
+### v13.1（マルチエージェント・DevOpsループ・カテゴリ弁別子）
+
+- a2aを使わない方針を確定。マルチエージェントはADK in-processで構成（Coordinator + EvidenceCollector / RootCauseAnalyst / RemediationPlanner）
+- `MonitoringEvent.category`（APPLICATION/INFRASTRUCTURE/CAPACITY/SECURITY）を弁別子として追加。調査担当ルーティングのキー
+- CI/CD連携のセキュリティインシデント（Trivy/npm audit → `MonitoringEvent(SECURITY)` → 調査 → PR起票）を追加し、デモシナリオ5として明文化
+- 調査(read)とリメディエーション(write)を分離。PR起票のみ `RemediationPort`（人間承認ゲート・自動マージなし）に隔離
+- コンテキスト構成に `Remediation/` と `infrastructure/adk/` を追加
+- 「とどける」の見せ場を Cloud Run（一部）に載せる方針とEDAとのトレードオフをADR項目化
+- バックオフィスAPIに `/ingest/security-scan` / `/alerts/:id/remediation/*` を追加
+- Step 5 ADR項目に6件追加
+- 詳細は `docs/step4-2-monitoring-context.md`（ADKマルチエージェント／セキュリティ＋リメディエーション節）を参照
+- Step4 を4スコープに分割（戦略/Monitoring/backoffice-backend/backoffice-frontend）し各 `*-todo.md` を新設。フロントは feature-sliced（校正版）に方針確定
 
 ### v13（インフラ・ビルドツール整備）
 

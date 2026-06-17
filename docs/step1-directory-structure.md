@@ -24,6 +24,8 @@
 | レビューステータスの管理                  | `reviewStatus: PENDING_REVIEW / APPROVED / REJECTED` を `InvestigationReport` に持たせる                                                                                                                                                        | 承認/却下フィードバックを既存の `SubmitFeedbackCommandHandler` に統合できる。新規コンテキスト不要                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **仮完成後の優先追加実装**                | `ElasticsearchAlertClassifier` を `AlertClassifier` Strategyの第2実装として追加する                                                                                                                                                             | ハッカソン本体完成後のROIが最も高い追加実装。工数約6時間。`AnalyzeAlertCommandHandler` はインターフェースにのみ依存しているため既存コードをノータッチで差し替え可能。`InMemoryAlertClassifier`（完全一致・confidence 1.0固定）に対し、BM25スコアリングによるconfidence実数値化が実現できる。面接で「将来できます」ではなく「実装済みです」として説明できる点が転職ポートフォリオとしての価値を高める。`Shared/infrastructure/persistence/elasticsearch/` に `ElasticClientFactory` / `ElasticCriteriaConverter` が既に設計済みのため追加コストが低い |
 | **AIInvestigationPort の命名設計**        | ポート名を `AIInvestigationPort` のまま維持。実装クラス名のみ差し替え先を明示する                                                                                                                                                               | ポートはプロダクト名に依存しない抽象名にすることで、Gemini API直接 → Vertex AI SDK → ADK エージェントへの段階移行においてApplication層・Domain層がノータッチになる。ハッカソン要件（GCP必須・Gemini API）を現行実装で満たしつつ、将来の評価点強化をInfrastructure層の差し替えのみで実現できる                                                                                                                                                                                                                                                        |
+| **マルチエージェントをa2aでなくADK in-processで構成**   | `AIInvestigationPort` の裏に ADK の Coordinator + 専門agent（Evidence/RootCause/Remediation）を1プロセス内で構成。a2aは使わない | マルチエージェント分割（並列専門調査・自律的な証拠追加収集ループ）はa2aなしでADKサブエージェントで実現できる。a2aは異ベンダー/別ランタイム相互運用（Elastic Agent Builder↔Gemini）専用で本構成には不要。ポートの継ぎ目で単一Gemini→ADKを差し替えるため、フェーズ0で提出可能状態を確保したまま段階的に載せられる |
+| **調査(read)とリメディエーション(write)の分離** | 調査系Gateway（CloudLogging/Terraform/GitHub）は読み取り専用。write操作はPR起票のみで `RemediationPort`（`GitHubPullRequestGateway`）に隔離。自動マージしない | 「AIが調査・人間がレビューして承認」という体験価値（reviewStatus）を構造で体現する。CIで検出した脆弱性をMonitoringEvent(SECURITY)化し同一調査パイプラインに流すことで、DevOps（まわす）×AIエージェントの必然性を示す。PR草案は人間がレビューする成果物 |
 
 ---
 
@@ -253,11 +255,34 @@ src/Contexts/Monitoring/
 │       │                                      # 移行トリガー：ハッカソン審査後・ポートフォリオ強化フェーズ
 │       │                                      # 審査員評価：「推奨」項目（Vertex AI経由）を達成できる
 │       │
-│       └── ADKAgentInvestigationAdapter.ts    # 【将来実装・フェーズ2】AIInvestigationPort実装
-│                                              # Google ADK（Agents Development Kit）でエージェント構成
-│                                              # InvestigateAlertCommandHandler は完全にノータッチ
-│                                              # 移行トリガー：マルチエージェント構成が必要になった時点
-│                                              # 審査員評価：「Gemini Enterprise Agent Platform + ADK」2項目達成
+│       └── adk/                              # 【将来実装・フェーズ2】ADKマルチエージェント（a2a不使用・1プロセス内）
+│           ├── ADKAgentInvestigationAdapter.ts # AIInvestigationPort実装。Coordinatorを起動するだけ
+│           │                                  # InvestigateAlertCommandHandler は完全にノータッチ
+│           │                                  # 審査員評価：「ADK」項目達成・マルチエージェントの必然性を提示
+│           ├── InvestigationCoordinator.ts    # オーケストレータ。category でサブエージェントをディスパッチ・統合
+│           ├── EvidenceCollectorAgent.ts      # 証拠の横断収集（InfraInvestigationの各Gatewayをtoolとして保持）
+│           ├── RootCauseAnalystAgent.ts       # category別プロンプトで原因仮説・確信度・追加収集の判断（自律ループ）
+│           └── RemediationPlannerAgent.ts     # 推奨アクション・修正方針・PR草案（SECURITY時はRemediationPortへ）
+│
+├── InfraInvestigation/                        # インフラ横断調査（v12）。AIInvestigation配下のサブモジュール
+│   ├── domain/
+│   │   ├── InfraInvestigationPort.ts          # 証拠収集ポート（collect(monitoringEvent)）。Application層は抽象に依存
+│   │   ├── InfraEvidence.ts                   # 正規化済みドメイン型（appLogs / terraformDiff / recentCommits）
+│   │   ├── CloudLoggingGateway.ts             # インターフェース（読み取り専用）
+│   │   ├── TerraformGateway.ts                # インターフェース（plan/diff・読み取り専用）
+│   │   └── GitHubGateway.ts                   # インターフェース（直近コミット・PR・読み取り専用）
+│   └── infrastructure/
+│       ├── DefaultInfraInvestigationAdapter.ts # InfraInvestigationPort実装（category別に証拠源を出し分け）
+│       ├── CloudLoggingGatewayImpl.ts         # Cloud Logging API（read-only）
+│       ├── TerraformGatewayImpl.ts            # Terraform CLI / git diff（read-only）
+│       └── GitHubGatewayImpl.ts               # GitHub REST API（read-only）
+│
+├── Remediation/                               # 自律リメディエーション（v13）。write操作を隔離
+│   ├── domain/
+│   │   ├── RemediationPort.ts                 # draftPullRequest(plan)。マージはしない（人間承認ゲート）
+│   │   └── RemediationPlan.ts                 # title / branch / fileChanges / body
+│   └── infrastructure/
+│       └── GitHubPullRequestGateway.ts        # RemediationPort実装。GITHUB_TOKEN必須・対象リポジトリを環境変数で限定
 │
 ├── ReportGeneration/
 │   ├── domain/
@@ -374,6 +399,9 @@ src/apps/backoffice/backend/
 │   ├── App.ts                       # Express appセットアップ
 │   ├── routes/
 │   │   ├── alertRoutes.ts           # GET /alerts, GET /alerts/:id, PATCH /alerts/:id/feedback
+│   │   ├── evidenceRoutes.ts        # GET /alerts/:id/evidence, GET /alerts/:id/investigation/status（v12）
+│   │   ├── remediationRoutes.ts     # POST /alerts/:id/remediation/draft-pr, GET /alerts/:id/remediation（v13）
+│   │   ├── ingestRoutes.ts          # POST /ingest/security-scan（CIからの脆弱性スキャン受信。v13）
 │   │   ├── patternRoutes.ts         # GET /patterns, POST /patterns/:id/promote
 │   │   ├── analyticsRoutes.ts       # GET /analytics
 │   │   ├── streamRoutes.ts          # GET /alerts/stream（SSEエンドポイント）
@@ -382,6 +410,10 @@ src/apps/backoffice/backend/
 │   │   ├── AlertsGetController.ts
 │   │   ├── AlertGetController.ts
 │   │   ├── AlertFeedbackPatchController.ts   # レポートレビュー（承認/却下）も同エンドポイントで受け付ける
+│   │   ├── AlertEvidenceGetController.ts     # 収集済みInfraEvidence・調査ステータス取得（v12）
+│   │   ├── RemediationDraftPrPostController.ts # 承認操作：RemediationPlanからPR草案を起票（v13）
+│   │   ├── RemediationGetController.ts       # 起票済みPRのURL・ステータス取得（v13）
+│   │   ├── SecurityScanIngestPostController.ts # CIスキャン結果→MonitoringEvent(SECURITY)化→AnalyzeAlert（v13）
 │   │   ├── AlertsStreamController.ts        # SSEコネクション管理
 │   │   ├── PatternsGetController.ts
 │   │   ├── PatternPromotePostController.ts
