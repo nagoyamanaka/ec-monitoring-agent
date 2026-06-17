@@ -9,12 +9,12 @@ import {
   InventoryFailureReasonValue,
 } from "./InventoryReservationFailedDomainEvent.js";
 
-interface InventoryPrimitives {
+type InventoryPrimitives = {
   productId: string;
   stock: number;
   version: number;
   updatedAt: Date;
-}
+};
 
 export class Inventory extends AggregateRoot {
   private constructor(
@@ -53,7 +53,9 @@ export class Inventory extends AggregateRoot {
   reserve(
     orderId: string,
     quantity: number,
-    outcome: { success: true; remainingStock: number; newVersion: number } | { success: false; reason: InventoryFailureReasonValue },
+    outcome:
+      | { success: true; remainingStock: number; newVersion: number }
+      | { success: false; reason: InventoryFailureReasonValue },
   ): void {
     if (outcome.success) {
       this._stock = new StockQuantity(outcome.remainingStock);
