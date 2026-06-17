@@ -115,7 +115,7 @@ src/
 1. **CommandHandler**: `CommandHandler<T>` インターフェースを実装
 1. **Repository**: インターフェースをdomainに、実装をinfrastructureに配置
 1. **RabbitMQ**: Subscriber登録、Queue命名規則（`{appName}.{eventName}.{subscriberName}`）、Failover Publisher
-1. **DI**: `node-dependency-injection` + YAMLファイルによる設定（ハッカソンスコープでは後回しにしてよい。ただし差し替えやすい構造にしておくこと）
+1. **DI**: コンストラクタ手動注入（Poor Man's DI）。`EcBackendApp.ts` の `start()` で依存関係を手動で組み立てる。`node-dependency-injection` は使用しない。インターフェース注入による差し替えやすい構造は維持すること
 
 ---
 

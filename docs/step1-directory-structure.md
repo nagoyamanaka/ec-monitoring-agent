@@ -334,7 +334,7 @@ src/Contexts/Shared/infrastructure/persistence/elasticsearch/
 - `AIInvestigationPort` のポート名にプロダクト名を含めない
 - `InvestigateAlertCommandHandler` はポートインターフェースにのみ依存
 - Infrastructure層のファイルとして将来実装のプレースホルダー名を設計ドキュメントに明記
-- フェーズ移行時の変更箇所はDIの差し替え1箇所のみ（ハッカソンスコープではDI設定ファイルまたはファクトリ関数）
+- フェーズ移行時の変更箇所はDIの差し替え1箇所のみ（`EcBackendApp.ts` のファクトリ関数で差し替え）
 
 ---
 
