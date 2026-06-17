@@ -70,7 +70,7 @@ AIエージェントは「アプリログを見る」だけでなく、**Cloud L
 | AI（将来P2）   | ADK（Agents Development Kit）                                                      | フェーズ2でマルチエージェント構成                                                                                |
 | 検索（将来P1） | Elasticsearch（Elastic Cloud）                                                     | `ElasticAlertClassifier` でStrategyに追加。Elastic Agent Builder + A2AはP2                                       |
 | Observability  | Cloud Logging・Cloud Monitoring・Cloud Trace                                       | GCPネイティブ。OTel SDK（`@opentelemetry/sdk-node`）からGCPエクスポーター経由で直接送信。Collectorコンテナ不使用 |
-| Logging        | OTel Logs → Cloud Logging（`@google-cloud/opentelemetry-cloud-trace-exporter` 等） | Winston不使用。OTel一括化でtrace_id自動付与                                                                      |
+| Logging        | OTel Logs → Cloud Logging（`@google-cloud/opentelemetry-cloud-trace-exporter` 等） | Winston不使用。OTel一括化でtrace_id/span_idはSDKが自動付与。`StructuredLog`型には含めない                        |
 | インフラ調査   | Cloud Logging API・Terraform CLI（読み取り専用）・GitHub REST API                  | インフラ横断調査エージェントが証拠収集に使用。apply等の書き込み操作は一切行わない                                |
 | Test           | Vitest (BDD)                                                                       |                                                                                                                  |
 | Infra          | GCP Compute Engine (e2-medium × 1)                                                 |                                                                                                                  |
@@ -527,8 +527,6 @@ GET  /alerts/:id/investigation/status  ← 調査ステータス（collecting / 
 interface StructuredLog {
   severity: "DEBUG" | "INFO" | "WARN" | "ERROR" | "FATAL";
   service: string;
-  trace_id: string;
-  span_id: string;
   user_id?: string;
   action?: string;
   message: string;
@@ -537,6 +535,8 @@ interface StructuredLog {
   retry_count?: number;
   stack_trace?: string;
 }
+// trace_id / span_id は OTel SDK がアクティブスパンから自動付与する。
+// StructuredLog には含めない。SDK未初期化時（テスト等）はそのフィールドごと省略される。
 ```
 
 ---

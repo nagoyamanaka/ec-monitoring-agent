@@ -22,10 +22,11 @@ export class OTelLogger extends Logger {
     log: StructuredLog,
     spanContext: SpanContext | undefined,
   ): Record<string, unknown> {
-    return {
-      ...log,
-      trace_id: spanContext?.traceId ?? log.trace_id,
-      span_id: spanContext?.spanId ?? log.span_id,
-    };
+    const entry: Record<string, unknown> = { ...log };
+    if (spanContext) {
+      entry.trace_id = spanContext.traceId;
+      entry.span_id = spanContext.spanId;
+    }
+    return entry;
   }
 }

@@ -15,9 +15,7 @@ export class CompensateOrderUseCase {
     if (!order) {
       await this.logger.warn({
         service: "ec-backend",
-        trace_id: orderId,
-        span_id: "compensate_order",
-        action: "compensate_order_skipped",
+action: "compensate_order_skipped",
         message: `注文未存在のためスキップ：${orderId}`,
       });
       return;
@@ -26,9 +24,7 @@ export class CompensateOrderUseCase {
     if (!order.status.isPending()) {
       await this.logger.warn({
         service: "ec-backend",
-        trace_id: orderId,
-        span_id: "compensate_order",
-        action: "compensate_order_skipped",
+action: "compensate_order_skipped",
         message: `注文が既にPENDING以外のためスキップ：${orderId}（status=${order.status.value}）`,
       });
       return;
@@ -39,8 +35,6 @@ export class CompensateOrderUseCase {
 
     await this.logger.warn({
       service: "ec-backend",
-      trace_id: orderId,
-      span_id: "compensate_order",
       action: "compensate_order",
       message: `注文補償処理：${orderId} → FAILED`,
     });

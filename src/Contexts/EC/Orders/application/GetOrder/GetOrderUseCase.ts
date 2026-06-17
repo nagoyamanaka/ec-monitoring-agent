@@ -16,8 +16,6 @@ export class GetOrderUseCase {
     if (!order) {
       await this.logger.warn({
         service: "ec-backend",
-        trace_id: id.value,
-        span_id: "get_order",
         action: "get_order_not_found",
         message: `注文未存在：${id.value}`,
       });

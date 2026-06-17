@@ -33,8 +33,6 @@ export class PlaceOrderUseCase {
 
     await this.logger.info({
       service: "ec-backend",
-      trace_id: id.value,
-      span_id: "place_order",
       action: "place_order",
       message: `注文確定：${id.value}`,
     });
@@ -49,8 +47,6 @@ export class PlaceOrderUseCase {
 
     await this.logger.info({
       service: "ec-backend",
-      trace_id: id.value,
-      span_id: "place_order",
       action: "place_order_payment_started",
       message: `決済開始：${id.value}, amount=${amount}`,
     });
@@ -71,8 +67,6 @@ export class PlaceOrderUseCase {
       ]);
       await this.logger.warn({
         service: "ec-backend",
-        trace_id: id.value,
-        span_id: "place_order",
         action: "place_order_payment_failed",
         message: `決済失敗：${id.value}, reason=${paymentResult.reason}`,
       });
@@ -84,8 +78,6 @@ export class PlaceOrderUseCase {
     // Cloud Logging で検出し、未消込の決済として検知できる。
     await this.logger.info({
       service: "ec-backend",
-      trace_id: id.value,
-      span_id: "place_order",
       action: "place_order_payment_succeeded",
       message: `決済完了：${id.value}, transactionId=${paymentResult.transactionId}`,
     });
@@ -105,8 +97,6 @@ export class PlaceOrderUseCase {
     } catch (cause) {
       await this.logger.warn({
         service: "ec-backend",
-        trace_id: id.value,
-        span_id: "place_order",
         action: "place_order_event_publish_failed",
         message: `EventBus publish失敗：${id.value}`,
         stack_trace: cause instanceof Error ? cause.stack : String(cause),

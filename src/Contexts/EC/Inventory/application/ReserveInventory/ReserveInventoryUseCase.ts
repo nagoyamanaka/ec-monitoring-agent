@@ -62,9 +62,7 @@ export class ReserveInventoryUseCase {
         ]);
         await this.logger.warn({
           service: "ec-backend",
-          trace_id: orderId,
-          span_id: "reserve_inventory",
-          action: "reserve_inventory_insufficient",
+action: "reserve_inventory_insufficient",
           message: `在庫不足（Phase1）：${item.productId}`,
         });
         return null;
@@ -103,9 +101,7 @@ export class ReserveInventoryUseCase {
         ]);
         await this.logger.warn({
           service: "ec-backend",
-          trace_id: orderId,
-          span_id: "reserve_inventory",
-          action: "reserve_inventory_rollback",
+action: "reserve_inventory_rollback",
           message: `楽観ロック競合・ロールバック：${orderId}`,
         });
         return null;
@@ -171,8 +167,6 @@ export class ReserveInventoryUseCase {
 
     await this.logger.info({
       service: "ec-backend",
-      trace_id: orderId,
-      span_id: "reserve_inventory",
       action: "reserve_inventory",
       message: `在庫引き当て成功：${orderId}`,
     });
