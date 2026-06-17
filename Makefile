@@ -43,7 +43,7 @@ rebuild:
 
 # ── Test ──────────────────────────────────────────────────────
 test:
-	npm test
+	pnpm test
 
 e2e: up
-	npm run test:e2e
+	pnpm run test:e2e

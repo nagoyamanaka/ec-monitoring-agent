@@ -485,11 +485,11 @@ InfrastructureError  → errorHandler → 500
 
 **完全なアトミック性を得るための選択肢とトレードオフ**:
 
-| アプローチ                            | 効果                                   | コスト                                                          |
-| ------------------------------------- | -------------------------------------- | --------------------------------------------------------------- |
-| DB atomic check-and-reserve（1クエリ）| 単一アイテムのvalidate+reserveを1往復化 | 複数アイテム間の部分成功は解消しない                            |
-| MongoDBマルチドキュメントトランザクション | 全アイテムの真のACID原子性             | ReplicaSet必須。ホット商品でロック競合→スループット低下のリスク |
-| Soft Reserve（在庫ホールド）パターン  | 部分成功が外部に漏れない               | pending状態のステートマシン・期限切れ処理が必要。実装コスト大   |
+| アプローチ                                | 効果                                    | コスト                                                          |
+| ----------------------------------------- | --------------------------------------- | --------------------------------------------------------------- |
+| DB atomic check-and-reserve（1クエリ）    | 単一アイテムのvalidate+reserveを1往復化 | 複数アイテム間の部分成功は解消しない                            |
+| MongoDBマルチドキュメントトランザクション | 全アイテムの真のACID原子性              | ReplicaSet必須。ホット商品でロック競合→スループット低下のリスク |
+| Soft Reserve（在庫ホールド）パターン      | 部分成功が外部に漏れない                | pending状態のステートマシン・期限切れ処理が必要。実装コスト大   |
 
 ハッカソンスコープでは「補償トランザクション」を採用。
 EC系本番の標準パターンであり、MongoDBのReplicaSet未構成・低競合の前提条件に適合している。
@@ -629,10 +629,24 @@ interface StructuredLog {
 1. **インフラ横断調査をAlertClassifier（Elastic類似検索）と別レイヤーに分離し、証拠収集→事例照合→AI推定のパイプラインとして設計する理由**（v12追加）
 1. **TerraformGateway・GitHubGateway・CloudLoggingGatewayを読み取り専用に限定する理由**（v12追加）
 1. **Cloud Monitoring・Cloud Traceのゲートウェイ実装を次フェーズとしてADRに明記する理由と移行トリガー**（v12追加）
+1. **パッケージマネージャーをnpmからpnpmに移行した理由**（v13追加）
+1. **Turborepoを導入しDockerビルドでturbo pruneを使用する理由**（v13追加）
+1. **コンテナ環境をlocal/prodの2環境のみに絞った理由とdocker-compose分割方針**（v13追加）
+1. **アプリをコンテナ化してローカルE2Eを可能にした理由（インフラのみコンテナ vs アプリも含む）**（v13追加）
 
 ---
 
 ## 変更履歴
+
+### v13（インフラ・ビルドツール整備）
+
+- パッケージマネージャーをnpmからpnpmに移行（`--filter`でコンテナへの不要な依存混入を防止）
+- Turborepoを導入。`turbo prune`でDockerビルド時のbackoffice資材混入を排除
+- `docker-compose.yml`（ベース）+ `docker-compose.local.yml` / `docker-compose.prod.yml`の分割構成を確立
+- `src/apps/ec/backend/Dockerfile`をmulti-stage（pruner/deps/dev/prod）で整備
+- `Makefile`に`ENV=local/prod`変数でターゲットを共通化
+- 環境変数を`EcBackendApp.ts`から`config.ts`に集約
+- Step 5 ADR項目に4件追加
 
 ### v12（インフラ横断調査パイプライン追加）
 

@@ -2,16 +2,12 @@
   "name": "ec-monitoring-agent",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "src/apps/ec/backend",
-    "src/apps/backoffice/backend",
-    "src/apps/backoffice/frontend"
-  ],
+  "packageManager": "pnpm@10.4.1",
   "scripts": {
-    "dev:ec": "npm run dev --workspace=src/apps/ec/backend",
-    "start:ec": "npm run start --workspace=src/apps/ec/backend",
-    "dev:backoffice": "npm run dev --workspace=src/apps/backoffice/backend",
-    "dev:frontend": "npm run dev --workspace=src/apps/backoffice/frontend",
+    "dev:ec": "pnpm --filter @ec-monitoring-agent/ec-backend run dev",
+    "start:ec": "pnpm --filter @ec-monitoring-agent/ec-backend run start",
+    "dev:backoffice": "pnpm --filter @ec-monitoring-agent/backoffice-backend run dev",
+    "dev:frontend": "pnpm --filter @ec-monitoring-agent/backoffice-frontend run dev",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -22,8 +18,15 @@
     "@types/node": "^20.14.0",
     "@types/uuid": "^9.0.0",
     "tsx": "^4.22.4",
+    "turbo": "^2.9.18",
     "typescript": "^5.5.0",
     "vitest": "^1.6.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "protobufjs"
+    ]
   },
   "dependencies": {
     "@google-cloud/opentelemetry-cloud-trace-exporter": "^3.0.0",
