@@ -13,6 +13,7 @@ export class Server {
     this.router = Router();
     this.express.use(cors());
     this.express.use(express.json());
+    this.express.get("/health", (_, res) => res.sendStatus(200));
     this.express.use(this.router);
     this.express.use(errorHandler);
   }
