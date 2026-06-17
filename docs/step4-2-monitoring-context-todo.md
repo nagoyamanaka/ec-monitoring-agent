@@ -6,6 +6,11 @@
 >
 > **実装プロンプト雛形**（各タスクで使う）:
 > 「`/home/shigeyasu/Project/ec-monitoring-agent` の TypeScript DDD プロジェクトで、下記ファイルを新規作成。CodelyTV パターン準拠（AggregateRoot/DomainEvent/VO/CommandHandler）。参考: `docs/step4-2-monitoring-context.md` の該当節。テストは隣にコロケーション（`*.test.ts`）。」
+>
+> **テスト方針**:
+> - `type` / `as const` 定義のみのファイル（MonitoringEvent, AlertSeverity, AlertStatus 等）はテスト不要
+> - ドメイン制約（範囲検証・不変条件）や振る舞い（状態遷移・集計ロジック）があるものだけテストを書く
+> - 例: `ClassificationConfidence.of()` の範囲制約、`Alert` の状態遷移メソッドは対象
 
 ---
 
