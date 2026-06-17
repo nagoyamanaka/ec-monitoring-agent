@@ -1,4 +1,4 @@
-# 設計エージェント向けプロンプト v14
+# 設計エージェント向けプロンプト v15
 
 > **変更履歴（v11→v12）**
 > インフラ横断調査パイプラインを設計に追加。
@@ -142,6 +142,7 @@ src/Contexts/
 │   │   ├── InfraInvestigation/        ← インフラ横断調査（v12追加・read-only Gateway）
 │   │   ├── Remediation/               ← 自律リメディエーション（v13追加・PR起票のwrite隔離）
 │   │   └── infrastructure/adk/        ← ADKマルチエージェント（Coordinator + 専門agent。a2a不使用）
+│   ├── Forecast/                      ← 予兆ブリーフィング（v15追加・stretchⅡ・reactive→proactive）
 │   └── ReportGeneration/
 └── Shared/
 ```
@@ -300,6 +301,17 @@ interface InfraEvidence {
   Step4-ADK-c:    自律的な証拠追加収集ループ（analystが収集対象を判断）を実装
                   ← a2aは使わない。1プロセス内のADKサブエージェント構成
   → AIInvestigationPort のDI差し替えのみ。InvestigateAlertCommandHandler ノータッチ
+
+【フェーズ4：予兆ブリーフィング（stretchⅡ・reactive → proactive）】
+  ← フェーズ0〜3 ＋ シナリオ5 ＋ GCP実機が全部着地してからのcapstone
+  Step5-Forecast-a: ForecastSignal / RiskForecast / Schedule ドメイン型追加（新規・既存無傷）
+  Step5-Forecast-b: ForecastMemory projection（突合キーB）+ InvestigationReport に optional subject 追記
+  Step5-Forecast-c: Gateway 未来シグナルメソッド追加（listOpenPullRequests / getPendingPlan・read-only維持）
+  Step5-Forecast-d: ForecastPort + GeminiForecastAdapter（citations必須強制・引用検証）
+  Step5-Forecast-e: ForecastRiskCommandHandler（シグナル収集→正規化→LLM→引用検証・write無し）
+  Step5-Forecast-f: POST /forecast・GET /forecast ＋ DI追記・ScheduleSource seed
+  Step5-Forecast-g: ForecastPage + RiskCard + CitationList（引用チップ＝体験の肝）
+  Step5-Demo:       デモシナリオ6（seed→予兆生成→引用付きリスク）を録画
 ```
 
 > **フェーズ1.5（DevOpsループ：CI/CDセキュリティ）— 差別化として優先度高**
@@ -380,6 +392,33 @@ interface InfraEvidence {
 ```
 
 > このシナリオで「つくる（調査エージェント）・まわす（GitHub Actions/CI）・とどける（デプロイ）」の3コンセプトを1ループで踏む。PR起票は唯一のwrite操作で `RemediationPort` に隔離する。
+
+### シナリオ6：予兆ブリーフィング（stretchⅡ・v15追加）
+
+reactive（事後対応）から **proactive（事前予防）** へのシフトレフト。統計MLではなく **既知の未来シグナル × 蓄積記憶 の LLM推論＋引用検証** で根拠付き予報を出す。録画前提（ライブ安定化コスト不要）。
+
+```
+前提: シナリオ1〜3でSimilarIncident/KnownErrorPatternが数件蓄積済み
+      Terraform にpool縮小PRをステージ済み（未マージ）
+      Schedule seed（週末セール=checkout 負荷x5）を設定済み
+
+1. バックオフィスから POST /forecast（horizon="今週末"）
+2. ForecastRiskCommandHandler が自律的に収集:
+   ├─ GitHubGateway.listOpenPullRequests()    → PR#123「DB pool 100→40」
+   ├─ TerraformGateway.getPendingPlan()        → 未適用: connection_pool縮小
+   └─ ScheduleSource.list("今週末")            → Sat 20:00-23:00 checkout x5
+   ├─ ForecastMemoryRepository.findBySubjects  → 過去「pool縮小+高負荷→枯渇」3件
+3. 全シグナルを ForecastSignal[] に正規化 → ForecastContext 構築
+4. GeminiForecastAdapter（引用必須プロンプト）→ RiskForecast 生成
+5. 引用検証: 各リスクの citations が実在シグナルを参照しているか照合
+   → 根拠なし予報は自動除外（ハルシネーション・ガード）
+6. バックオフィスに結果表示:
+   「土20:00、DB接続枯渇 HIGH（confidence 0.78）
+    根拠: [PR#123 pool縮小] × [Sat 20:00 負荷x5] × [過去同型3件]」
+   ← CitationList で引用チップを可視化（嘘でない証拠を視覚的に示す）
+```
+
+> **差別化軸**: 既存 stretch（ADK）は「どれだけ高度に作ったか」、予兆は「どんな独自価値か」。P1（InfraInvestigation Gateway群）の先行投資が伏線回収される構造。
 
 ---
 
@@ -575,6 +614,10 @@ GET  /alerts/:id/investigation/status  ← 調査ステータス（collecting / 
 POST /ingest/security-scan             ← CIからの脆弱性スキャン結果受信（MonitoringEvent(SECURITY)化）
 POST /alerts/:id/remediation/draft-pr  ← 承認操作：RemediationPlanからPR草案を起票（write・人間承認ゲート）
 GET  /alerts/:id/remediation           ← 起票済みPRのURL・ステータス取得
+
+# 予兆ブリーフィング（v15追加・stretchⅡ）
+POST /forecast                         ← 予兆生成トリガー（horizon指定）→ ForecastRiskCommandHandler
+GET  /forecast                         ← 最新 RiskForecast 取得（引用付きリスク一覧）
 ```
 
 ---
@@ -686,10 +729,24 @@ interface StructuredLog {
 1. **調査(read)とリメディエーション(write)を分離し、PR起票のみを `RemediationPort` に隔離し自動マージしない理由**（v13追加）
 1. **CIで検出した脆弱性を `MonitoringEvent(SECURITY)` 化して同一調査パイプラインに流す理由（DevOpsループの実証）**（v13追加）
 1. **「とどける」の見せ場を Compute Engine 単機でなく Cloud Run（一部）に載せる判断と、EDA（RabbitMQ常駐Subscriber）とCloud Runステートレス性のトレードオフ**（v13追加）
+1. **予測を統計MLでなくLLM推論＋引用検証で構成する理由（データ依存を切る判断・デモ規模での成立）**（v15追加）
+1. **joinを自前ルールエンジンでなくLLMに委譲し、人間は正規化／引用縛り／引用検証の3点足場に限定する理由**（v15追加）
+1. **突合キーを(A)テキストjoin→(B)構造化タグへ段階移行する理由（精度と既存P0無傷のトレードオフ）**（v15追加）
+1. **予兆ブリーフィングをP0パイプライン無傷の追加レイヤー（read-onlyの調査の一種）として載せる設計判断**（v15追加）
 
 ---
 
 ## 変更履歴
+
+### v15（予兆ブリーフィング stretchⅡ追加）
+
+- デモシナリオ6（予兆ブリーフィング）を追加。reactive（事後）→ proactive（事前）のシフトレフト
+- コンテキスト構成に `Forecast/`（stretchⅡ）を追加
+- APIエンドポイントに `POST /forecast` / `GET /forecast` を追加
+- 実装TODOにフェーズ4（Step5-Forecast-a〜g + Step5-Demo）を追加
+- Step 5 ADR項目に4件追加（LLM推論+引用検証・join委譲・突合キー段階移行・P0無傷の追加レイヤー）
+- ヘッダーバージョンを v14 → v15 に更新
+- 詳細は `step4-1` §7・`step4-2`「予兆ブリーフィング」節・`step4-3/4`「stretchⅡ」節・各 todo `stretchⅡ` セクション
 
 ### v14（a2a廃止に伴う Monitoringコンテキスト設計方針の整合修正）
 

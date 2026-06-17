@@ -110,3 +110,83 @@
 > 各スコープ内で「P0だけ先に全部 → P1 → stretch」と進めれば、途中で止まっても**常に提出可能な状態**を保てる。
 
 ---
+
+## 7. 予兆ブリーフィング（stretchⅡ・reactive → proactive）
+
+> **位置づけ**: P0 ＋ P1 ＋ 既存stretch（ADK in-process）が**全部着地した後**にのみ着手する capstone。設計は本書で今固め、実装は最後。間に合わなければ設計書とADRで語る。
+
+### 7.1 何をする機能か
+
+既存はすべて**反応的**（インシデントが因果的に発生してから調査・評価・レビュー）。予兆ブリーフィングは**予防的**——「**既に分かっている未来シグナル**（未マージPR・未適用Terraform plan・業務/負荷スケジュール）」と「**蓄積した記憶**（SimilarIncident / KnownErrorPattern）」をエージェントが突き合わせ、**根拠（引用）付きのリスク予報**を出す。
+
+```
+[未来シグナル]                          [記憶＝既存資産]
+ ├ GitHub open PR（未マージ）             ├ SimilarIncident（過去事例）
+ ├ Terraform pending plan（未適用）        └ KnownErrorPattern
+ └ Schedule（週末セール→負荷x5）                ↓ エージェントが突合・推論
+   → 「土20:00、DB接続枯渇 HIGH（confidence 0.78）
+       根拠: PR#123のpool縮小 × 過去同型3件 × セール負荷」
+```
+
+### 7.2 なぜ差別化として強いか（既存への上乗せ価値）
+
+- **既存投資の伏線回収**: P1（InfraEvidence Gateway群）と P0（SimilarIncident記憶）を**再利用**するだけで成立。先行投資が「目的的」に見える構造。
+- **差別化軸が直交**: 既存stretch（ADK）は「どれだけ高度に作ったか」、予兆は「どんな独自価値か」。審査基準（自律性・必然性・体験）への効きは **予兆 > ADK**。
+- **統計MLでない**: フォージャストはレッドオーシャン＆データ大量要。本機能は **LLMによる"既知シグナルの突合推論"** なのでデモ規模でも成立する（→ ADR）。
+- **設計だけでも効く**: 「P0パイプラインを一切触らず、read-only Gateway＋記憶の再利用で予報能力を**追加的に**載せられる」＝アーキテクチャ拡張性の証明。
+
+### 7.3 統合の難所は"自前で解かない"（3点の足場＋LLM委譲）
+
+突合（join）はルールエンジンで解くとブリットルで終わらない。**joinはGeminiに委譲**し、人間側は3点だけ用意する：
+
+1. **正規化**: 全シグナルを共通の突合軸 `subject`（対象コンポーネント）＋ `when`（時間窓）＋ `desc` に揃える（`ForecastSignal`）。
+2. **引用縛り**: 出力JSONで各リスクに「使ったシグナルidの `citations`」を**必須**にする（空は不正）。
+3. **引用検証**: Handler側で `citations` のidが収集済みシグナルに**実在するか照合**し、実在しない引用のリスクは落とす/フラグ（ハルシネーション・ガード、数十行）。
+
+→ what/when/how の推論はモデルがやる。人間は「joinできる形に整える・引用を強制する・引用の実在を検証する」だけ。
+
+### 7.4 段階設計（A→B移行の物語をそのまま採用）
+
+突合キーをどこまで構造化するかが唯一の判断点。**本プロジェクトは (B) を採る**（将来移行込み・時間があれば実装）。
+
+| 段階 | 突合方式 | 既存データ構造への影響 | 精度 |
+| ---- | -------- | ---------------------- | ---- |
+| (A) | 既存 `InvestigationReport`/`InfraEvidence` を**テキストのまま**contextに流しLLMに意味joinさせる | 変更ゼロ | ブレやすい |
+| **(B)（採用）** | 過去インシデントに **`subject`/`component` 構造化タグ**を持たせて突合 | `InvestigationReport` に optional `subject` 追記 **or** `ForecastMemory` projection新設 | 安定・引用検証が効く |
+
+> 「最初テキストjoin(A)で動かし、精度のために部品タグ(B)を構造化した」という**進化自体がADRになる**。
+
+### 7.5 データ構造への影響範囲（既存P0は無傷）
+
+| 階層 | 内容 | 既存step4項目 |
+| ---- | ---- | ------------- |
+| ① 完全新規型 | `RiskForecast`（集約/read-model）/ `ForecastSignal` / `Schedule`・`ScheduleSource` | 追加のみ（既存無傷） |
+| ② 既存への追記 | `GitHubGateway.listOpenPullRequests()` / `TerraformGateway.getPendingPlan()`（read-only維持） | メソッド追加 |
+| ③ 記憶の突合キー | (B採用)`InvestigationReport` に optional `subject` **or** `ForecastMemory` projection | optional追記 or 新規projection |
+
+> **ランタイムの反応的パイプライン（AnalyzeAlert/InvestigateAlert）は無傷**。予兆は新規 `ForecastRiskCommandHandler` として横に生やす（write無し＝read-onlyの調査の一種）。
+
+### 7.6 デモ方針（録画前提）
+
+- ハッカソンはデモ動画提出が通る。**ライブ安定動作のコストは不要**。「実際に動いた1回を録る」（捏造はNG）。
+- seed: 過去インシデント2〜3件＋ステージした未マージPR＋スケジュール。`/forecast` 起動でライブ生成 → 引用付きリスクをデモシナリオ6として収録。
+
+### 7.7 見積もり（P1完了を前提とした増分・(B)採用）
+
+| 工程 | 工数 |
+| ---- | ---- |
+| シグナル正規化（既存Gateway結果に subject/when ラベル付け＋②のメソッド追加） | 1d |
+| ForecastMemory projection＋ `subject` タグ付け（③・B採用分） | 0.5〜1d |
+| Forecast context builder＋引用縛りプロンプト＋JSONスキーマ＋**引用検証** | 1d |
+| API（POST/GET /forecast）＋最小表示（既存UI相乗り可） | 0.5d |
+| seed＋いい1テイク録る | 0.5d |
+| **合計（B採用・録画前提）** | **≈ 3.5〜4日** |
+
+### 7.8 ADR種（Step5）
+
+- 予測を統計MLでなく **LLM推論＋引用検証** で構成する理由（データ依存を切る判断・デモ規模での成立）
+- joinを自前ルールエンジンでなく **LLMに委譲し、人間は正規化／引用縛り／引用検証の3点足場に限定**する理由
+- 突合キーを **(A)テキストjoin → (B)構造化タグ** へ段階移行する理由（精度と既存無傷のトレードオフ）
+- 予兆能力を **P0パイプライン無傷の追加レイヤー**（read-onlyの調査の一種）として載せる設計判断
+
+---

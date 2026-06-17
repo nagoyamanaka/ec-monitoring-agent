@@ -157,3 +157,35 @@ useAlertStream():
 ## step1 との差分（要反映）
 
 step1 のフロント節は layer-first（`pages/ components/ hooks/ infrastructure/`）。本書の feature-sliced が正。step1 側のフロント構成図は本構成に合わせて更新する（TODO: `step4-4-backoffice-frontend-todo.md` のタスクに含む）。
+
+---
+
+## 予兆ブリーフィング UI（stretchⅡ）
+
+> **位置づけ**: P0 ＋ P1 ＋ 既存stretch 着地後の capstone。設計全体は `step4-1` 7章、API は `step4-3`「予兆ブリーフィング配線」節。本節は **UI（feature slice）** に限定。既存 feature は無傷で `features/forecast/` を新設するだけ。
+
+### feature slice（新設）
+
+```
+features/forecast/
+  domain/        ForecastView.ts（RiskItem→level色・confidence→%）/ RiskLevel.ts（純関数のみ）
+  infrastructure/ forecastApi.ts（POST /forecast, GET /forecast）
+  application/   triggerForecast.ts（生成トリガー）
+  presentation/
+    pages/ForecastPage.tsx（リスク一覧・level降順）
+    components/
+      RiskCard.tsx（window・subject・level バッジ・confidence）
+      CitationList.tsx（★引用チップ: PR#123 / schedule / incident#7 を可視化＝根拠の明示）
+```
+
+### 表示の肝
+
+- **引用チップ（`CitationList`）が主役**。各リスクが「どの未来シグナル × どの過去事例」を根拠にしたかをチップで明示し、**ハルシネーションでない＝根拠ありを視覚化**する。これが「効く出力」の体験価値。
+- `RiskCard`: 時間窓（"土20:00"）・対象（subject）・level バッジ（HIGH/MEDIUM/LOW）・confidence ゲージ・reasoning 文。
+- ルーティングに `/forecast` を追加。`FORECAST_ENABLED` off 時はナビ非表示（本番非侵食）。
+- デモシナリオ6: `/forecast` でトリガー → 引用付きリスクが降ってくる演出（録画前提・ライブ安定化は不要）。
+
+### 既存との関係
+
+- 既存 `features/alerts` / `features/demo` / `features/analytics` はノータッチ。
+- `shared/`（HttpClient/FetchHttpClient/SeverityBadge/layouts）を流用。`SeverityBadge` は RiskLevel にも転用可。

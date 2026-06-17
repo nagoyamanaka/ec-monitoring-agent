@@ -158,3 +158,35 @@ backoffice プロセスが起動時に登録。EC backend とは別プロセス�
 
 - `errorHandler`: step3 と同一マッピング（DomainError→400 / ApplicationError→400・ResourceNotFound→404 / InfrastructureError→500）。`AIInvestigationError` は Handler 内 catch で fallback 化されるため 500 に波及しない（step4-2）。
 - `config.ts`: 環境変数を集約（MONGO_URL / RABBITMQ_URL / GEMINI_API_KEY / GEMINI_MODEL / GITHUB_TOKEN / GITHUB_TARGET_REPO / INGEST_TOKEN / FEEDBACK_AUTO_PROMOTE_THRESHOLD / DEMO_ENABLED）。`EcBackendApp` の config.ts 集約に倣う。
+
+---
+
+## 予兆ブリーフィング 配線（stretchⅡ）
+
+> **位置づけ**: P0 ＋ P1 ＋ 既存stretch 着地後の capstone。設計全体は `step4-1` 7章、ドメイン/アプリ/インフラは `step4-2`「予兆ブリーフィング」節。本節は **Express 配線（routes/controllers/DI/seed）** に限定。既存配線は無傷で、ルート1系統と DI を追加するだけ。
+
+### ルート・コントローラ（追加）
+
+| メソッド | パス | コントローラ | 委譲先 |
+| -------- | ---- | ------------ | ------ |
+| POST | `/forecast` | `ForecastPostController` | `ForecastRiskCommandHandler`（step4-2）→ 202 / 生成結果 |
+| GET | `/forecast` | `ForecastGetController` | 最新 `RiskForecast` を返す（read-model） |
+
+- `routes/forecastRoutes.ts` を追加し `routes/index.ts` に登録。既存ルートはノータッチ。
+- 出力の `risks[]` は引用検証済み（step4-2 手順5）。Controllerは整形のみ。
+
+### DI 追記（BackofficeApp.ts）
+
+- read-only 依存を new して `ForecastRiskCommandHandler` を Bus 登録:
+  `GitHubGateway`（`listOpenPullRequests` 追加済み）/ `TerraformGateway`（`getPendingPlan` 追加済み）/ `ScheduleSource` / `ForecastMemoryRepository` / `ForecastPort`（★差し替えポイント＝ `GeminiForecastAdapter`）。
+- 起動時に `ForecastMemoryRepository.warmUp()`（Resolved から subject 投影）。`SimilarIncidentRepository.warmUp()` と同じ起動フックに並べる。
+- **write は発生しない**（全Gateway read-only）。リメディエーションが要る場合のみ既存 `RemediationPort`（人間承認ゲート）を再利用。
+
+### Schedule ソース（seed）
+
+- `ScheduleSource` の実装は seed（JSON/config）で開始。本番は将来カレンダー/負荷予測連携に差し替え（interface維持）。
+- `DEMO_ENABLED` 配下で seed スケジュールを投入し、デモシナリオ6を再現可能にする。
+
+### config 追記
+
+- `FORECAST_ENABLED`（予兆機能のトグル・既定 off で本番非侵食）/ `FORECAST_HORIZON`（既定 "今週末"）を追加。

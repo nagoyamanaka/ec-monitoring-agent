@@ -66,3 +66,18 @@
 ### タスク 12: デモ演出の磨き込み 〔stretch〕
 - 証拠到着アニメーション、confidenceゲージ、reviewStatus遷移のトランジション
 - 審査の体験価値（基準3・4）に直結。**設計よりここに時間を割く価値が高い**
+
+---
+
+## stretchⅡ: 予兆ブリーフィング UI
+
+> **着手条件**: P0 ＋ P1 ＋ 既存stretch 着地後。設計は `step4-4`「予兆ブリーフィングUI」節。既存featureは無傷で `features/forecast/` を新設するだけ。
+
+### タスク 13: forecast feature slice 〔stretchⅡ〕
+- 【新規】`features/forecast/domain/ForecastView.ts`（RiskItem→level色）/ `RiskLevel.ts`（純関数のみ）
+- 【新規】`features/forecast/infrastructure/forecastApi.ts`（POST /forecast, GET /forecast）/ `application/triggerForecast.ts`
+- 【新規】`presentation/pages/ForecastPage.tsx`（リスク一覧・level降順）
+- 【新規】`components/RiskCard.tsx`（window・subject・level バッジ・confidenceゲージ・reasoning）/ **`CitationList.tsx`（引用チップ＝根拠の明示・ハルシネーション否定の可視化・本機能の体験の肝）**
+- 【修正】`App.tsx` に `/forecast` 追加（`FORECAST_ENABLED` off時はナビ非表示）
+- `shared/`（HttpClient/SeverityBadge/layouts）流用。`SeverityBadge` を RiskLevel に転用
+- デモシナリオ6（録画）: `/forecast` トリガー → 引用付きリスク降下演出

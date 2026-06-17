@@ -117,3 +117,34 @@
 - 【新規】`infrastructure/adk/`: `ADKAgentInvestigationAdapter.ts` / `InvestigationCoordinator.ts` / `EvidenceCollectorAgent.ts` / `RootCauseAnalystAgent.ts` / `RemediationPlannerAgent.ts`
 - a2a不使用・in-process。自律的証拠追加収集ループを実装
 - `AIInvestigationPort` のDI差し替えのみ。参考: 「ADKマルチエージェント実装」節
+
+---
+
+## stretchⅡ: 予兆ブリーフィング（reactive → proactive）
+
+> **着手条件**: P0 ＋ P1 ＋ 既存stretch（タスク18）が**全部着地後**の capstone。設計は `step4-1` 7章＋`step4-2`「予兆ブリーフィング」節。突合キーは **(B) 構造化タグ**採用。**既存P0パイプラインは無傷**で横に生やす。
+
+### タスク 19: Forecast ドメイン型 〔stretchⅡ〕
+- 【新規】`Forecast/domain/ForecastSignal.ts`（id/kind/subject/when/desc/source・kind=FUTURE_CHANGE|SCHEDULE|MEMORY）
+- 【新規】`RiskForecast.ts`（forecastId/generatedAt/horizon/risks[]/isFallback、`RiskItem`=window/subject/level/confidence/**citations**/reasoning）
+- 【新規】`Schedule.ts`（`ScheduleWindow`）/ `ScheduleSource.ts`（interface・read-only）
+
+### タスク 20: ForecastMemory projection（突合キーB）〔stretchⅡ〕
+- 【新規】`Forecast/domain/ForecastMemory.ts`（`ForecastMemoryEntry`=incidentId/subject/trigger/outcome、`ForecastMemoryRepository`：warmUp/findBySubjects）
+- 【新規】`infrastructure/` 実装（Resolved から subject 投影）
+- 【修正】`InvestigationReport` に optional `subject?: string` 追記（後方互換）＋ `InvestigateAlertCommandHandler` で導出して埋める ← **唯一の既存P0変更点**
+
+### タスク 21: Gateway 未来シグナル取得メソッド追加 〔stretchⅡ〕
+- 【修正】`GitHubGateway` に `listOpenPullRequests()`（未マージ）/ `TerraformGateway` に `getPendingPlan()`（未適用）を追加（**read-only維持**）
+- 各 `*Impl.ts` に実装追加
+
+### タスク 22: ForecastPort ＋ Gemini アダプタ 〔stretchⅡ〕
+- 【新規】`Forecast/domain/ForecastPort.ts` / `ForecastContext.ts`
+- 【新規】`infrastructure/GeminiForecastAdapter.ts`（既存Geminiアダプタ踏襲・JSON固定・**citations必須をプロンプト強制**・safeParse・confidenceクランプ・fallback）
+
+### タスク 23: ForecastRiskCommandHandler 〔stretchⅡ〕
+- 【新規】`Forecast/application/ForecastRisk/ForecastRiskCommand.ts` / `ForecastRiskCommandHandler.ts`
+- 未来シグナル収集（PR/plan/schedule）→ subject抽出→ ForecastMemory.findBySubjects → ForecastSignal[]正規化 → Context → Port.forecast → **引用検証（citations実在照合・偽引用は落とす）** → 保存（最小はメモリ最新）
+- 依存は全て read-only（write無し）。参考: 「ForecastRiskCommandHandler」節
+
+> ✅ **デモシナリオ6（録画）: seed → `POST /forecast` → 引用付きリスク予報。** API は step4-3 の予兆タスク、UI は step4-4 の予兆タスクと結線。

@@ -1338,3 +1338,145 @@ SubmitFeedbackCommandHandler
 | `InfraInvestigationPort`               | CloudLogging/Terraform/GitHub の3Gateway（読み取り専用）     | `CloudMonitoringGateway` / `CloudTraceGateway` を追加（次フェーズ）。`InfraEvidence` の正規化スキーマは維持（project-prompt v12）                                                                                                                                              |
 | `AlertClassifier`                      | `InMemoryAlertClassifier`（first-match、confidence 1.0固定） | `ElasticAlertClassifier`（hybrid search）→ `ScoringAlertClassifier`（重み付けスコア合算、閾値判定）。`AlertClassificationResult` の型は変わらず、`KnownAlertClassification` VOに `unmatchedConditions` の反証情報が入るようになる。移行トリガー: 自動昇格パターンが10件超 or 誤分類率が計測可能になった時点（ADR Step 5） |
 | `recentEvents` in InvestigationContext | 省略（将来拡張ポイント）                                     | AlertRepository.findByCriteria で直近30分のAlertを収集し追加                                                                                                                                                                                                                   |
+
+---
+
+## 予兆ブリーフィング（stretchⅡ・reactive → proactive）
+
+> **位置づけ**: P0 ＋ P1 ＋ 既存stretch（ADK）着地後の capstone。戦略・差別化・段階設計の全体像は `step4-1-strategy.md` 7章。本節は **Monitoringコンテキストの domain / application / infrastructure** の設計に限定する。
+> **大原則**: 既存の反応的パイプライン（AnalyzeAlert/InvestigateAlert）は**一切変更しない**。予兆は新規 `ForecastRiskCommandHandler` として横に生やす（write無し＝read-onlyの調査の一種）。突合キーは **(B) 構造化タグ方式**を採用（`step4-1` 7.4）。
+
+### 設計判断メモ（予兆）
+
+| 判断項目 | 決定内容 | 理由 |
+| -------- | -------- | ---- |
+| Alertに相乗りさせない | `RiskForecast` を独立した read-model にする | 予報は起点MonitoringEventが無く・未発生で・reviewStatusの意味も違う。Alert集約に混ぜると不変条件が壊れる |
+| 突合（join）の実装場所 | 自前ルールエンジンを作らず **LLMに委譲**。人間は「正規化／引用縛り／引用検証」の3点足場のみ | コンポーネント分類体系＋相関ロジックはブリットル。joinはモデルの得意領域 |
+| 突合キーの構造化 | (B) 過去インシデントに `subject`（コンポーネントラベル）を構造化付与（`ForecastMemory` projection） | テキストjoin(A)より引用検証が安定。将来移行の物語もADR化できる |
+| 予測の構成 | 統計MLでなく **既知未来シグナル × 記憶 のLLM推論** | データ大量を要さず、デモ規模で成立。レッドオーシャン回避 |
+| write境界 | 予兆も read-only。リメディエーションが要る場合は既存 `RemediationPort`（人間承認ゲート）を再利用 | 「AIが調査・人間が承認」の構造を予兆でも崩さない |
+
+### ドメイン型（完全新規・既存無傷）
+
+**ファイルパス**: `src/Contexts/Monitoring/Forecast/domain/`
+
+```typescript
+// ForecastSignal.ts ── 異種ソースを共通の突合軸に正規化する器
+interface ForecastSignal {
+  readonly id: string;            // "chg-1" / "sch-1" / "inc-7"（citationsで参照される）
+  readonly kind: ForecastSignalKind; // FUTURE_CHANGE | SCHEDULE | MEMORY
+  readonly subject: string;       // 突合キー（例: "db.connection_pool" / "checkout"）
+  readonly when: string;          // 時間窓（例: "Fri merge予定" / "Sat 20:00-23:00"）
+  readonly desc: string;          // 要約（例: "max_connections 100→40に縮小"）
+  readonly source: string;        // "github.pr#123" / "schedule.seed" / "incident.7"
+}
+
+const ForecastSignalKind = {
+  FUTURE_CHANGE: "FUTURE_CHANGE", // 未マージPR / 未適用plan
+  SCHEDULE: "SCHEDULE",           // 業務/負荷スケジュール
+  MEMORY: "MEMORY",               // 過去インシデント（ForecastMemory由来）
+} as const;
+
+// RiskForecast.ts ── 出力（read-model）。Alertではない
+interface RiskItem {
+  readonly window: string;        // "Sat 20:00"
+  readonly subject: string;       // "db.connection_pool"
+  readonly level: RiskLevel;      // HIGH | MEDIUM | LOW
+  readonly confidence: number;    // 0.0〜1.0（クランプ）
+  readonly citations: string[];   // 使ったForecastSignal.id（空は不正＝検証で落とす）
+  readonly reasoning: string;     // 引用を踏まえた根拠文
+}
+
+interface RiskForecast {
+  readonly forecastId: string;
+  readonly generatedAt: Date;
+  readonly horizon: string;       // "今週末" など対象期間
+  readonly risks: RiskItem[];     // level降順
+  readonly isFallback: boolean;   // 生成失敗時の縮退
+}
+```
+
+```typescript
+// Schedule.ts ── 現状どこにも無い概念（完全新規）
+interface ScheduleWindow {
+  readonly subject: string;       // "checkout"
+  readonly when: string;          // "Sat 20:00-23:00"
+  readonly load: string;          // "x5 (セール)"
+}
+// ScheduleSource.ts（domain interface・read-only）
+interface ScheduleSource {
+  list(horizon: string): Promise<ScheduleWindow[]>;
+}
+```
+
+### 記憶の突合キー（(B) ForecastMemory projection）
+
+**ファイルパス**: `src/Contexts/Monitoring/Forecast/domain/ForecastMemory.ts` ＋ `infrastructure/`
+
+過去の Resolved Alert / SimilarIncident を **`subject`（コンポーネント）でタグ付けした投影**として構築する。タグは `InvestigationReport.suggestedPatternName` ＋ `category` ＋ `InfraEvidence`（terraform resource / 影響コンポーネント）から導出する。
+
+```typescript
+interface ForecastMemoryEntry {
+  readonly incidentId: string;
+  readonly subject: string;       // ★突合キー（例: "db.connection_pool"）
+  readonly trigger: string;       // "pool縮小+高負荷"
+  readonly outcome: string;       // "接続枯渇 502"
+}
+interface ForecastMemoryRepository {
+  warmUp(): Promise<void>;            // 起動時に Resolved から投影
+  findBySubjects(subjects: string[]): Promise<ForecastMemoryEntry[]>;
+}
+```
+
+> **既存への影響**: `InvestigationReport` に optional `subject?: string` を**追記**（後方互換）。`InvestigateAlertCommandHandler` で導出して埋める。これだけが既存P0設計への唯一の変更点。
+
+### Gateway 追記（既存に read-only メソッドを追加）
+
+既存の `GitHubGateway` / `TerraformGateway`（`AIInvestigation/InfraInvestigation/domain/`・全て読み取り専用）に**未来シグナル取得メソッドを追加**する。read-onlyの原則は崩さない。
+
+```typescript
+interface GitHubGateway {
+  listRecentCommits(...): Promise<...>;        // 既存（過去）
+  listOpenPullRequests(): Promise<OpenPr[]>;   // ★追加（未マージ＝未来）
+}
+interface TerraformGateway {
+  getAppliedDiff(...): Promise<...>;           // 既存（適用済み）
+  getPendingPlan(): Promise<PendingPlan[]>;    // ★追加（未適用＝未来）
+}
+```
+
+### ForecastPort ＋ Gemini アダプタ
+
+**ファイルパス**: `Forecast/domain/ForecastPort.ts` / `infrastructure/GeminiForecastAdapter.ts`
+
+```typescript
+interface ForecastContext {
+  readonly horizon: string;
+  readonly signals: ForecastSignal[];  // FUTURE_CHANGE + SCHEDULE + MEMORY を正規化済み
+}
+interface ForecastPort {
+  forecast(context: ForecastContext): Promise<RiskForecast>;
+}
+```
+
+`GeminiForecastAdapter` は既存 `GeminiAIInvestigationAdapter` のパターンを踏襲（`@google/generative-ai`・JSON固定出力・safeParse・confidenceクランプ・タイムアウト1回リトライ・fallback）。**プロンプトで `citations` 必須を強制**し、出力スキーマに `citations: string[]` を固定。
+
+### ForecastRiskCommandHandler（オーケストレーション）
+
+**ファイルパス**: `Forecast/application/ForecastRisk/ForecastRiskCommand.ts` / `ForecastRiskCommandHandler.ts`
+
+```
+1. 未来シグナル収集:
+     GitHubGateway.listOpenPullRequests() / TerraformGateway.getPendingPlan()
+     ScheduleSource.list(horizon)
+2. subject 抽出 → ForecastMemoryRepository.findBySubjects(subjects)
+3. 全て ForecastSignal[] に正規化（FUTURE_CHANGE / SCHEDULE / MEMORY）
+4. ForecastContext 構築 → ForecastPort.forecast()
+5. ★引用検証: 各 RiskItem.citations が手順3のシグナルidに実在するか照合。
+     実在しない引用 → そのリスクを落とす or isFallback フラグ（ハルシネーション・ガード）
+6. RiskForecast を保存（最小実装はメモリ最新保持）→ SSEAlertNotifier.notify()（任意）
+```
+
+依存: GitHubGateway / TerraformGateway / ScheduleSource / ForecastMemoryRepository / ForecastPort / Logger（全て read-only。write無し）。
+
+> デモシナリオ6: seed（過去2-3件＋ステージ未マージPR＋スケジュール）→ `POST /forecast` → 引用付きリスク予報をライブ生成（録画）。`step4-3` の API、`step4-4` の ForecastPanel と結線。
