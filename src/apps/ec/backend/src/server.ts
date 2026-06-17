@@ -2,6 +2,7 @@ import cors from "cors";
 import express, { Application, Router } from "express";
 import http from "http";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { openApiSpec } from "./openapi.js";
 
 export class Server {
   readonly express: Application;
@@ -14,6 +15,7 @@ export class Server {
     this.express.use(cors());
     this.express.use(express.json());
     this.express.get("/health", (_, res) => res.sendStatus(200));
+    this.express.get("/openapi.json", (_, res) => res.json(openApiSpec));
     this.express.use(this.router);
     this.express.use(errorHandler);
   }

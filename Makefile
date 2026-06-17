@@ -1,6 +1,6 @@
 .PHONY: infra-up infra-down \
         ec-up ec-down ec-restart ec-logs ec-build \
-        up down rebuild test e2e \
+        up down rebuild test e2e swagger \
         prune prune-all
 
 # ENV=local (default) or ENV=prod
@@ -48,6 +48,10 @@ test:
 
 e2e: ec-up
 	$(DC) run --rm e2e
+
+swagger: ec-up
+	$(DC) --profile swagger up -d swagger-ui
+	@echo "Swagger UI: http://localhost:8080"
 
 # ── Cleanup ───────────────────────────────────────────────────
 prune:

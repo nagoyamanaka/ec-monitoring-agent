@@ -26,6 +26,15 @@ services:
       FEEDBACK_AUTO_PROMOTE_THRESHOLD: "3"
       GCP_PROJECT_ID: local
 
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    ports:
+      - "8080:8080"
+    environment:
+      SWAGGER_JSON_URL: http://localhost:3000/openapi.json
+    profiles:
+      - swagger
+
   e2e:
     build:
       context: .
