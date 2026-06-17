@@ -25,3 +25,14 @@ services:
       DEMO_CONTROLS_ENABLED: "true"
       FEEDBACK_AUTO_PROMOTE_THRESHOLD: "3"
       GCP_PROJECT_ID: local
+
+  e2e:
+    build:
+      context: .
+      dockerfile: e2e/Dockerfile
+    depends_on:
+      ec-backend:
+        condition: service_healthy
+    environment:
+      EC_BASE_URL: http://ec-backend:3000
+      MONGO_URL: mongodb://mongo:27017/ec

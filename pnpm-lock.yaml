@@ -46,6 +46,15 @@ importers:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@20.19.43)
 
+  e2e:
+    devDependencies:
+      mongodb:
+        specifier: ^7.3.0
+        version: 7.3.0
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.43)
+
   src/apps/backoffice/backend:
     dependencies:
       express:

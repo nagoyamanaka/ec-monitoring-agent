@@ -2,3 +2,4 @@ packages:
   - src/apps/ec/backend
   - src/apps/backoffice/backend
   - src/apps/backoffice/frontend
+  - e2e

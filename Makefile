@@ -1,6 +1,7 @@
 .PHONY: infra-up infra-down \
         ec-up ec-down ec-restart ec-logs ec-build \
-        up down rebuild test e2e
+        up down rebuild test e2e \
+        prune prune-all
 
 # ENV=local (default) or ENV=prod
 ENV ?= local
@@ -45,5 +46,12 @@ rebuild:
 test:
 	pnpm test
 
-e2e: up
-	pnpm run test:e2e
+e2e: ec-up
+	$(DC) run --rm e2e
+
+# ── Cleanup ───────────────────────────────────────────────────
+prune:
+	docker image prune -f
+
+prune-all:
+	docker system prune -af --volumes

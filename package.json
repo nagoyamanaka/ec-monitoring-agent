@@ -10,6 +10,7 @@
     "dev:frontend": "pnpm --filter @ec-monitoring-agent/backoffice-frontend run dev",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "pnpm --filter @ec-monitoring-agent/e2e run test",
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },
