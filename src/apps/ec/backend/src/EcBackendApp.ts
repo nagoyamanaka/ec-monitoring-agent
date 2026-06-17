@@ -22,31 +22,22 @@ import { QueryHandlers } from "../../../../Contexts/Shared/infrastructure/QueryB
 import { Server } from "./server.js";
 import { registerRoutes } from "./routes/index.js";
 import { buildEcSubscribers } from "./subscribers/EcSubscribers.js";
-
-const MONGO_URL = process.env.MONGO_URL ?? "mongodb://localhost:27017/ec";
-const RABBITMQ_HOST = process.env.RABBITMQ_HOST ?? "localhost";
-const RABBITMQ_PORT = parseInt(process.env.RABBITMQ_PORT ?? "5672");
-const RABBITMQ_USER = process.env.RABBITMQ_USER ?? "guest";
-const RABBITMQ_PASS = process.env.RABBITMQ_PASS ?? "guest";
-const RABBITMQ_VHOST = process.env.RABBITMQ_VHOST ?? "/";
-const RABBITMQ_RETRY_TTL = parseInt(process.env.RABBITMQ_RETRY_TTL ?? "5000");
-const EXCHANGE_NAME = process.env.EXCHANGE_NAME ?? "ec-domain-events";
-const PORT = parseInt(process.env.PORT ?? "3000");
+import { config } from "./config.js";
 
 export class EcBackendApp {
   private server!: Server;
   private connection!: RabbitMqConnection;
 
   async start(): Promise<void> {
-    const mongoClient = await MongoClientFactory.createClient("ec", { url: MONGO_URL });
+    const mongoClient = await MongoClientFactory.createClient("ec", { url: config.mongoUrl });
     const logger = new GcpCloudLoggingLogger();
 
     this.connection = new RabbitMqConnection({
       connectionSettings: {
-        username: RABBITMQ_USER,
-        password: RABBITMQ_PASS,
-        vhost: RABBITMQ_VHOST,
-        connection: { secure: false, hostname: RABBITMQ_HOST, port: RABBITMQ_PORT },
+        username: config.rabbitmq.user,
+        password: config.rabbitmq.pass,
+        vhost: config.rabbitmq.vhost,
+        connection: { secure: false, hostname: config.rabbitmq.host, port: config.rabbitmq.port },
       },
     });
     await this.connection.connect();
@@ -56,7 +47,7 @@ export class EcBackendApp {
     const eventBus = new RabbitMQEventBus({
       failoverPublisher,
       connection: this.connection,
-      exchange: EXCHANGE_NAME,
+      exchange: config.rabbitmq.exchangeName,
       queueNameFormatter,
       maxRetries: 3,
     });
@@ -83,7 +74,7 @@ export class EcBackendApp {
       buildEcSubscribers(reserveInventoryUseCase, compensateOrderUseCase),
     );
 
-    this.server = new Server(PORT);
+    this.server = new Server(config.port);
     registerRoutes(this.server.router, commandBus, queryBus, paymentGateway);
     await this.server.listen();
   }
@@ -98,8 +89,8 @@ export class EcBackendApp {
     queueNameFormatter: RabbitMQQueueNameFormatter,
     subscribers: DomainEventSubscribers,
   ): Promise<void> {
-    const configurer = new RabbitMQConfigurer(this.connection, queueNameFormatter, RABBITMQ_RETRY_TTL);
-    await configurer.configure({ exchange: EXCHANGE_NAME, subscribers: subscribers.items });
+    const configurer = new RabbitMQConfigurer(this.connection, queueNameFormatter, config.rabbitmq.retryTtl);
+    await configurer.configure({ exchange: config.rabbitmq.exchangeName, subscribers: subscribers.items });
     await eventBus.addSubscribers(subscribers);
   }
 }
