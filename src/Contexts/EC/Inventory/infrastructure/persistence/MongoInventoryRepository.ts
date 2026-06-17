@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { MongoClient } from "mongodb";
+import { Document, Filter } from "mongodb";
 import { MongoRepository } from "../../../../Shared/infrastructure/persistence/mongo/MongoRepository.js";
 import { Inventory } from "../../domain/Inventory.js";
 import { ProductId } from "../../domain/ProductId.js";
@@ -7,6 +6,8 @@ import {
   InventoryRepository,
   ReserveStockResult,
 } from "../../domain/InventoryRepository.js";
+
+type InventoryDoc = { _id: string; stock: number; version: number } & Record<string, unknown>;
 
 export class MongoInventoryRepository
   extends MongoRepository<Inventory>
@@ -21,11 +22,15 @@ export class MongoInventoryRepository
   }
 
   async findByProductId(productId: ProductId): Promise<Inventory | null> {
-    const doc = await this.collection().findOne({ _id: productId.value });
+    const doc = await this.collection().findOne(
+      { _id: productId.value } as unknown as Filter<Document>,
+    );
     if (!doc) return null;
 
-    const { _id, ...rest } = doc;
-    return Inventory.fromPrimitives({ productId: _id, ...rest });
+    const { _id, ...rest } = doc as unknown as InventoryDoc;
+    return Inventory.fromPrimitives(
+      { productId: _id, ...rest } as Parameters<typeof Inventory.fromPrimitives>[0],
+    );
   }
 
   async reserveStock(params: {
@@ -37,8 +42,8 @@ export class MongoInventoryRepository
       {
         _id: params.productId.value,
         version: params.expectedVersion,
-        stock: { $gte: params.quantity }, // stock >= quantityであることを条件付け
-      },
+        stock: { $gte: params.quantity },
+      } as unknown as Filter<Document>,
       {
         $inc: { stock: -params.quantity, version: 1 },
         $set: { updatedAt: new Date() },
@@ -47,17 +52,18 @@ export class MongoInventoryRepository
     );
 
     if (result) {
+      const doc = result as unknown as InventoryDoc;
       return {
         success: true,
-        remainingStock: result.stock,
-        newVersion: result.version,
+        remainingStock: doc.stock,
+        newVersion: doc.version,
       };
     }
 
-    const existing = await this.collection().findOne({
-      _id: params.productId.value,
-    });
-    if (!existing || existing.stock < params.quantity) {
+    const existing = await this.collection().findOne(
+      { _id: params.productId.value } as unknown as Filter<Document>,
+    );
+    if (!existing || (existing as unknown as InventoryDoc).stock < params.quantity) {
       return { success: false, reason: "INSUFFICIENT_STOCK" };
     }
     return { success: false, reason: "CONCURRENT_CONFLICT" };

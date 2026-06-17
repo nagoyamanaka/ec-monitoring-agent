@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { MongoClient } from 'mongodb';
 import MongoConfig from './MongoConfig.js';
 
@@ -18,7 +17,7 @@ export class MongoClientFactory {
   }
 
   private static getClient(contextName: string): MongoClient | null {
-    return MongoClientFactory.clients[contextName];
+    return MongoClientFactory.clients[contextName] ?? null;
   }
 
   private static async createAndConnectClient(config: MongoConfig): Promise<MongoClient> {

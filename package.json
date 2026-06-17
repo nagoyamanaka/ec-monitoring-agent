@@ -17,6 +17,7 @@
     "build": "tsc"
   },
   "devDependencies": {
+    "@types/amqplib": "^0.10.8",
     "@types/node": "^20.14.0",
     "@types/uuid": "^9.0.0",
     "typescript": "^5.5.0",
@@ -25,6 +26,8 @@
   "dependencies": {
     "@google-cloud/opentelemetry-cloud-trace-exporter": "^3.0.0",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/sdk-node": "^0.219.0"
+    "@opentelemetry/sdk-node": "^0.219.0",
+    "amqplib": "^2.0.1",
+    "mongodb": "^7.3.0"
   }
 }

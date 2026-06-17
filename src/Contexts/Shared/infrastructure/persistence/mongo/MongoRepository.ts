@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { Collection, MongoClient } from "mongodb";
+import { Collection, Document, Filter, MongoClient } from "mongodb";
 import { AggregateRoot } from "../../../domain/AggregateRoot.js";
 import { Criteria } from "../../../domain/criteria/Criteria.js";
 import { MongoCriteriaConverter } from "./MongoCriteriaConverter.js";
@@ -11,17 +10,28 @@ export abstract class MongoRepository<T extends AggregateRoot> {
 
   protected abstract collectionName(): string;
 
-  protected collection(): Collection {
+  protected collection(): Collection<Document> {
     return this._client.db().collection(this.collectionName());
   }
 
   protected async persist(id: string, aggregateRoot: T): Promise<void> {
-    const document = { ...aggregateRoot.toPrimitives(), _id: id, id: undefined };
-    await this.collection().updateOne({ _id: id }, { $set: document }, { upsert: true });
+    const primitives = aggregateRoot.toPrimitives() as Record<string, unknown>;
+    const document = { ...primitives, _id: id, id: undefined };
+    await this.collection().updateOne(
+      { _id: id } as unknown as Filter<Document>,
+      { $set: document },
+      { upsert: true },
+    );
   }
 
   protected async searchByCriteria<D>(criteria: Criteria): Promise<D[]> {
     const { filter, sort, skip, limit } = this.criteriaConverter.convert(criteria);
-    return this.collection().find(filter).sort(sort).skip(skip).limit(limit).toArray();
+    const docs = await this.collection()
+      .find(filter as unknown as Filter<Document>)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+    return docs as unknown as D[];
   }
 }

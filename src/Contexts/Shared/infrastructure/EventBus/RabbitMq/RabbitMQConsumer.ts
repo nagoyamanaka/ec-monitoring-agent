@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ConsumeMessage } from 'amqplib';
 import { DomainEvent } from '../../../domain/DomainEvent.js';
 import { DomainEventSubscriber } from '../../../domain/DomainEventSubscriber.js';
@@ -9,7 +8,7 @@ export class RabbitMQConsumer {
   private subscriber: DomainEventSubscriber<DomainEvent>;
   private deserializer: DomainEventDeserializer;
   private connection: RabbitMqConnection;
-  private maxRetries: Number;
+  private maxRetries: number;
   private queueName: string;
   private exchange: string;
 
@@ -19,7 +18,7 @@ export class RabbitMQConsumer {
     connection: RabbitMqConnection;
     queueName: string;
     exchange: string;
-    maxRetries: Number;
+    maxRetries: number;
   }) {
     this.subscriber = params.subscriber;
     this.deserializer = params.deserializer;
@@ -60,13 +59,13 @@ export class RabbitMQConsumer {
 
   private hasBeenRedeliveredTooMuch(message: ConsumeMessage) {
     if (this.hasBeenRedelivered(message)) {
-      const count = parseInt(message.properties.headers['redelivery_count']);
+      const count = parseInt(message.properties.headers?.['redelivery_count'] as string);
       return count >= this.maxRetries;
     }
     return false;
   }
 
   private hasBeenRedelivered(message: ConsumeMessage) {
-    return message.properties.headers['redelivery_count'] !== undefined;
+    return message.properties.headers?.['redelivery_count'] !== undefined;
   }
 }

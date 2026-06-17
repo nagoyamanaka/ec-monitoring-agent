@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Collection, MongoClient } from 'mongodb';
 import { DomainEvent } from '../../../domain/DomainEvent.js';
 import { DomainEventDeserializer } from '../DomainEventDeserializer.js';
