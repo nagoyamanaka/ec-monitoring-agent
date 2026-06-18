@@ -8,27 +8,28 @@
 > 「`/home/shigeyasu/Project/ec-monitoring-agent` の TypeScript DDD プロジェクトで、下記ファイルを新規作成。CodelyTV パターン準拠（AggregateRoot/DomainEvent/VO/CommandHandler）。参考: `docs/step4-2-monitoring-context.md` の該当節。テストは隣にコロケーション（`*.test.ts`）。」
 >
 > **テスト方針**:
-> - `type` / `as const` 定義のみのファイル（MonitoringEvent, AlertSeverity, AlertStatus 等）はテスト不要
+> - `type` / `as const` 定義のみのファイルはテスト不要
 > - ドメイン制約（範囲検証・不変条件）や振る舞い（状態遷移・集計ロジック）があるものだけテストを書く
-> - 例: `ClassificationConfidence.of()` の範囲制約、`Alert` の状態遷移メソッドは対象
+> - 例: `ClassificationConfidence.of()` の範囲制約、`Alert` の状態遷移メソッド、`EnumValueObject`クラスの`fromString()`バリデーション等は対象
 
 ---
 
 ## P0: 提出ライン（フェーズ0）
 
-### タスク 1: MonitoringEvent ＋ category 〔P0〕
-- 【新規】`src/Contexts/Monitoring/Shared/domain/MonitoringEvent.ts`
-- `category: MonitoringEventCategory`（APPLICATION/INFRASTRUCTURE/CAPACITY/SECURITY）＋ `source: string`
+### タスク 1: MonitoringEvent ＋ category 〔P0〕✅ 完了済み
+- 【完了】`src/Contexts/Monitoring/Shared/domain/MonitoringEvent.ts` - classとして実装、toPrimitives/fromPrimitives付き
+- 【完了】`src/Contexts/Monitoring/Shared/domain/MonitoringEventCategory.ts` - EnumValueObjectクラスとして実装（APPLICATION/INFRASTRUCTURE/CAPACITY/SECURITY）
 - ECの型を直接importしない。`payload: Record<string, unknown>`
 - 参考: 「MonitoringEvent」「category の役割」節
 
-### タスク 2: Alert 集約 ＋ VO 〔P0〕
-- 【新規】`Alert.ts` / `AlertId.ts`(Uuid) / `AlertSeverity.ts`(CRITICAL/WARNING/INFO) / `AlertStatus.ts`(OPEN/ANALYZING/RESOLVED)
-- ファクトリ: `createFromKnownPattern` / `createAsUnknown`、メソッド: `attachInvestigationReport`（reviewStatus=PENDING_REVIEW初期化）/ `submitFeedback`（isCorrect→reviewStatus APPROVED/REJECTED, correctFeedbackCount++）/ `toPrimitives`/`fromPrimitives`
+### タスク 2: Alert 集約 ＋ VO 〔P0〕✅ 完了済み
+- 【完了】`Alert.ts` / `AlertId.ts`(Uuid) / `AlertSeverity.ts`(CRITICAL/WARNING/INFO) / `AlertStatus.ts`(OPEN/ANALYZING/RESOLVED)
+- ファクトリ: `createFromKnownPattern` / `createAsUnknown`、メソッド: `attachInvestigationReport`（イミュータブル・Alert返却）/ `submitFeedback`（イミュータブル・Alert返却）/ `toPrimitives`/`fromPrimitives`
 - 参考: 「Alert集約」節
 
-### タスク 3: AlertClassification VO 〔P0〕
-- 【新規】`AlertClassification.ts`: `ClassificationConfidence`（クラス・0〜1制約・`certain()`/`isHighConfidence()`）、`MatchedCondition`/`UnmatchedCondition`（interface）、`Known`/`Unknown` union
+### タスク 3: AlertClassification VO 〔P0〕✅ 完了済み
+- 【完了】`AlertClassification.ts`: `ClassificationConfidence`（クラス・0〜1制約・`certain()`/`isHighConfidence()`）、`MatchedCondition`/`UnmatchedCondition`（type）、`Known`/`Unknown` union
+- `KnownAlertClassification`に`severity: AlertSeverity`を含む（KnownErrorPattern非依存設計）
 - 重みはVOに持たせない（Classifier内部）。参考: 「AlertClassification」節
 
 ### タスク 4: KnownErrorPattern ＋ シード 〔P0〕
@@ -58,9 +59,9 @@
 - 変換規則: OrderPlaced=subtotalAmount / ReservationFailed=+reservedProductIds / PaymentTimeout=aggregateId=paymentAttemptId,payload{orderId,customerId,amount}
 - 参考: 「変換規則表」「CollectMonitoringEvent」節
 
-### タスク 9: InvestigationReport ＋ ReviewStatus 〔P0〕
-- 【新規】`AIInvestigation/domain/InvestigationReport.ts`（summary/confidence/severity/investigationSteps/suggestedActions/suggestedPatternName/reviewStatus/investigatedAt/isFallback）
-- 【新規】`AIInvestigation/domain/ReviewStatus.ts`（PENDING_REVIEW/APPROVED/REJECTED）
+### タスク 9: InvestigationReport ＋ ReviewStatus 〔P0〕✅ 完了済み
+- 【完了】`AIInvestigation/domain/InvestigationReport.ts` - classとして実装、withReviewStatus/toPrimitives/fromPrimitives付き
+- 【完了】`AIInvestigation/domain/ReviewStatus.ts` - EnumValueObjectクラスとして実装（PENDING_REVIEW/APPROVED/REJECTED）
 
 ### タスク 10: AIInvestigationPort ＋ Gemini Adapter 〔P0〕
 - 【新規】`domain/AIInvestigationPort.ts` / `domain/InvestigationContext.ts`

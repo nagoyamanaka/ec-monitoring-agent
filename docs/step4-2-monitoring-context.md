@@ -110,7 +110,17 @@ ECコンテキストのDomainEventをMonitoringコンテキスト固有の型に
 Monitoringは「何が起きたか」を均質なデータとして扱い、ECの型構造に依存しない。
 
 ```typescript
-interface MonitoringEvent {
+export type MonitoringEventPrimitives = {
+  readonly eventId: string;
+  readonly eventName: string;
+  readonly aggregateId: string;
+  readonly occurredOn: string; // ISO 8601
+  readonly payload: Record<string, unknown>;
+  readonly category: string;
+  readonly source: string;
+};
+
+export class MonitoringEvent {
   readonly eventId: string; // DomainEvent.eventId そのまま
   readonly eventName: string; // DomainEvent.EVENT_NAME そのまま（例: 'ec.payment.timeout'）
   readonly aggregateId: string; // orderId / productId など
@@ -118,23 +128,39 @@ interface MonitoringEvent {
   readonly payload: Record<string, unknown>; // toPrimitives() の結果（ECの型を直接importしない）
   readonly category: MonitoringEventCategory; // 障害レイヤーの粗い弁別子（ルーティングキー）
   readonly source: string; // 発生元の細粒度ラベル（'order' / 'inventory' / 'payment' / 'rabbitmq' など。拡張に開く）
+
+  constructor(params: { ... }) { ... }
+
+  toPrimitives(): MonitoringEventPrimitives { ... }
+  static fromPrimitives(primitives: MonitoringEventPrimitives): MonitoringEvent { ... }
+}
+```
+
+---
+
+## MonitoringEventCategory（障害レイヤーの弁別子）
+
+**ファイルパス**: `src/Contexts/Monitoring/Shared/domain/MonitoringEventCategory.ts`
+
+サブクラスではなく単一 `MonitoringEvent` 型上の弁別子フィールドにする。
+「どの調査担当（InfraInvestigationの証拠源 / 将来の専門エージェント）に振るか」の
+ルーティングキーとして機能し、a2aの有無に関わらず前方互換。
+
+```typescript
+export enum MonitoringEventCategories {
+  APPLICATION = "APPLICATION", // アプリコード起因（PaymentTimeout / InventoryReservationFailed 等）
+  INFRASTRUCTURE = "INFRASTRUCTURE", // インフラ起因（RabbitMQ断 / IaC変更 等）
+  CAPACITY = "CAPACITY", // キャパシティ起因（TrafficSpike 等）
+  SECURITY = "SECURITY", // セキュリティ起因（Critical Vulnerability 等）
 }
 
-// -------------------------------------------------------------------
-// MonitoringEventCategory（障害レイヤーの弁別子）
-// サブクラスではなく単一 MonitoringEvent 型上の弁別子フィールドにする。
-// 「どの調査担当（InfraInvestigationの証拠源 / 将来の専門エージェント）に振るか」の
-// ルーティングキーとして機能し、a2aの有無に関わらず前方互換。
-// -------------------------------------------------------------------
-const MonitoringEventCategory = {
-  APPLICATION: "APPLICATION", // アプリコード起因（PaymentTimeout / InventoryReservationFailed 等）
-  INFRASTRUCTURE: "INFRASTRUCTURE", // インフラ起因（RabbitMQ断 / IaC変更 等）
-  CAPACITY: "CAPACITY", // キャパシティ起因（TrafficSpike 等）
-  SECURITY: "SECURITY", // セキュリティ起因（Critical Vulnerability 等）
-} as const;
-
-type MonitoringEventCategory =
-  (typeof MonitoringEventCategory)[keyof typeof MonitoringEventCategory];
+export class MonitoringEventCategory extends EnumValueObject<MonitoringEventCategories> {
+  static application(): MonitoringEventCategory { ... }
+  static infrastructure(): MonitoringEventCategory { ... }
+  static capacity(): MonitoringEventCategory { ... }
+  static security(): MonitoringEventCategory { ... }
+  static fromString(value: string): MonitoringEventCategory { ... }
+}
 ```
 
 ### category の役割と弁別子設計（a2a前方互換）
@@ -261,9 +287,10 @@ static createAsUnknown(params: {
 ### 状態変更メソッド
 
 ```typescript
-attachInvestigationReport(report: InvestigationReport): void
+attachInvestigationReport(report: InvestigationReport): Alert
 ```
 
+- イミュータブル設計。新しい `Alert` インスタンスを返す
 - `investigationReport` にセットする
 - `severity` を `report.severity` で上書きする
 - `status` を `OPEN` に変更する（ANALYZINGからの遷移）
@@ -273,12 +300,13 @@ attachInvestigationReport(report: InvestigationReport): void
 submitFeedback(params: {
   isCorrect: boolean;
   operatorNote?: string;
-}): void
+}): Alert
 ```
 
+- イミュータブル設計。新しい `Alert` インスタンスを返す
 - `feedback` にセットする
 - `isCorrect === true` の場合は `correctFeedbackCount` をインクリメントする
-- `investigationReport` が存在する場合は `reviewStatus` を `isCorrect ? APPROVED : REJECTED` に更新する（承認/却下フィードバック）
+- `investigationReport` が存在する場合は `investigationReport.withReviewStatus(isCorrect ? APPROVED : REJECTED)` で新しいレポートを生成する（承認/却下フィードバック）
 - `updatedAt` を更新する
 
 ```typescript
@@ -361,6 +389,8 @@ interface KnownAlertClassification {
   readonly type: "known";
   readonly patternId: string;
   readonly patternName: string;
+  // KnownErrorPattern.severity を Classifier 側で解決済み（Alert が KnownErrorPattern に直接依存しない）
+  readonly severity: AlertSeverity;
   readonly confidence: ClassificationConfidence; // VOとして制約と振る舞いを持つ
   readonly matchedConditions: MatchedCondition[]; // 何が一致したか（根拠）
   readonly unmatchedConditions: UnmatchedCondition[]; // 何が一致しなかったか（反証・作業員の意思決定補助）
@@ -532,12 +562,13 @@ interface PayloadCondition {
 interface AnalyzeAlertCommand {
   readonly alertId: string; // 新規生成UUID（Controller/Subscriber側で生成）
   readonly monitoringEvent: {
-    // MonitoringEvent のプリミティブ
+    // MonitoringEvent のプリミティブ（MonitoringEventPrimitives と対応）
     eventId: string;
     eventName: string;
     aggregateId: string;
     occurredOn: string; // ISO 8601
     payload: Record<string, unknown>;
+    category: string; // MonitoringEventCategory の string 値
     source: string;
   };
 }
@@ -591,11 +622,13 @@ interface AnalyzeAlertCommand {
 interface InvestigateAlertCommand {
   readonly alertId: string;
   readonly monitoringEvent: {
+    // MonitoringEventPrimitives と対応
     eventId: string;
     eventName: string;
     aggregateId: string;
     occurredOn: string;
     payload: Record<string, unknown>;
+    category: string; // MonitoringEventCategory の string 値
     source: string;
   };
 }
@@ -644,10 +677,11 @@ interface InvestigateAlertCommand {
         isFallback: true,
       }
 
-5. alert.attachInvestigationReport(report) を呼び出す
+5. const updatedAlert = alert.attachInvestigationReport(report) を呼び出す
+   ※ イミュータブル設計。新しいAlertを返す
    ※ report.reviewStatus は PENDING_REVIEW で初期化される（レビュー待ち）
-6. AlertRepository.save(alert) を呼び出す
-7. SSEAlertNotifier.notify(alert.toPrimitives())  ← 分析完了をフロントにpush
+6. AlertRepository.save(updatedAlert) を呼び出す
+7. SSEAlertNotifier.notify(updatedAlert.toPrimitives())  ← 分析完了をフロントにpush
 8. Logger.write(INFO, 'alert_investigated', { alertId, confidence: report.confidence })
 ```
 
@@ -662,7 +696,7 @@ interface InvestigateAlertCommand {
 > 分類ツールではなく**調査エージェント**として機能させるための核心フィールド。
 
 ```typescript
-interface InvestigationReport {
+export class InvestigationReport {
   readonly summary: string; // 「DBコネクションプール枯渇の可能性87%」などの自然言語説明
   readonly confidence: number; // 0.0〜1.0（Geminiが返すconfidence）
   readonly severity: AlertSeverity; // GeminiがCRITICAL/WARNING/INFOを判定
@@ -672,6 +706,14 @@ interface InvestigationReport {
   readonly reviewStatus: ReviewStatus; // PENDING_REVIEW / APPROVED / REJECTED
   readonly investigatedAt: Date;
   readonly isFallback: boolean; // Gemini APIエラー時のfallbackか
+
+  constructor(params: { ... }) { ... }
+
+  // イミュータブル更新（Alert.submitFeedbackで使用）
+  withReviewStatus(reviewStatus: ReviewStatus): InvestigationReport { ... }
+
+  toPrimitives(): InvestigationReportPrimitives { ... }
+  static fromPrimitives(primitives: InvestigationReportPrimitives): InvestigationReport { ... }
 }
 ```
 
@@ -680,13 +722,18 @@ interface InvestigationReport {
 **ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/domain/ReviewStatus.ts`
 
 ```typescript
-const ReviewStatusValues = {
-  PENDING_REVIEW: "PENDING_REVIEW", // AI調査直後の初期値
-  APPROVED: "APPROVED", // オペレーターが承認（= 正解フィードバック）
-  REJECTED: "REJECTED", // オペレーターが却下
-} as const;
+export enum ReviewStatuses {
+  PENDING_REVIEW = "PENDING_REVIEW", // AI調査直後の初期値
+  APPROVED = "APPROVED", // オペレーターが承認（= 正解フィードバック）
+  REJECTED = "REJECTED", // オペレーターが却下
+}
 
-type ReviewStatus = (typeof ReviewStatusValues)[keyof typeof ReviewStatusValues];
+export class ReviewStatus extends EnumValueObject<ReviewStatuses> {
+  static pendingReview(): ReviewStatus { ... }
+  static approved(): ReviewStatus { ... }
+  static rejected(): ReviewStatus { ... }
+  static fromString(value: string): ReviewStatus { ... }
+}
 ```
 
 **設計ポイント**: `reviewStatus` は `attachInvestigationReport()` 時に `PENDING_REVIEW` で初期化し、
@@ -1036,33 +1083,34 @@ const AUTO_PROMOTE_THRESHOLD = 3; // 正解フィードバック3回で自動昇
 1. AlertRepository.findById(alertId) を呼び出す
    └─ null → ResourceNotFoundError をthrow
 
-2. alert.submitFeedback({ isCorrect, operatorNote }) を呼び出す
+2. const updatedAlert = alert.submitFeedback({ isCorrect, operatorNote }) を呼び出す
+   ※ イミュータブル設計。新しいAlertを返す
 
-3. AlertRepository.save(alert) を呼び出す
+3. AlertRepository.save(updatedAlert) を呼び出す
 
 【isCorrect === true の場合の追加処理】
 
 4. SimilarIncidentRepository.index(
      new ResolvedIncident({
-       eventName: alert.monitoringEvent.eventName,
-       occurredOn: alert.monitoringEvent.occurredOn,
+       eventName: updatedAlert.monitoringEvent.eventName,
+       occurredOn: updatedAlert.monitoringEvent.occurredOn,
        resolvedNote: operatorNote ?? '正解フィードバックによる解決',
      })
    ) を呼び出す
 
-5. alert.correctFeedbackCount >= AUTO_PROMOTE_THRESHOLD の場合:
+5. updatedAlert.correctFeedbackCount >= AUTO_PROMOTE_THRESHOLD の場合:
    └─ 自動昇格処理
 
-   5a. alert.classification.type === 'unknown' かつ investigationReport が存在する場合:
+   5a. updatedAlert.classification.type === 'unknown' かつ investigationReport が存在する場合:
        新規 KnownErrorPattern を構築する:
        {
          id: uuid(),
-         name: `AUTO_PROMOTED_${alert.monitoringEvent.eventName.toUpperCase()}`,
-         description: alert.investigationReport.summary,
-         eventNamePattern: alert.monitoringEvent.eventName,
+         name: `AUTO_PROMOTED_${updatedAlert.monitoringEvent.eventName.toUpperCase()}`,
+         description: updatedAlert.investigationReport.summary,
+         eventNamePattern: updatedAlert.monitoringEvent.eventName,
          payloadConditions: [],          // 自動昇格は eventName のみでマッチ（安全側）
-         severity: alert.investigationReport.severity,
-         suggestedAction: alert.investigationReport.suggestedActions.join('\n'),
+         severity: updatedAlert.investigationReport.severity,
+         suggestedAction: updatedAlert.investigationReport.suggestedActions.join('\n'),
          isPromoted: true,
          promotedAt: new Date(),
        }
