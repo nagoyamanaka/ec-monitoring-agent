@@ -1,9 +1,9 @@
 import { AlertSeverity } from "./AlertSeverity.js";
 
-export interface PayloadCondition {
+export type PayloadCondition = {
   readonly field: string;
   readonly value: unknown;
-}
+};
 
 export type KnownErrorPatternPrimitives = {
   id: string;
@@ -105,7 +105,9 @@ export class KnownErrorPattern {
     };
   }
 
-  static fromPrimitives(primitives: KnownErrorPatternPrimitives): KnownErrorPattern {
+  static fromPrimitives(
+    primitives: KnownErrorPatternPrimitives,
+  ): KnownErrorPattern {
     return new KnownErrorPattern({
       id: primitives.id,
       name: primitives.name,
@@ -115,7 +117,9 @@ export class KnownErrorPattern {
       severity: AlertSeverity.fromString(primitives.severity),
       suggestedAction: primitives.suggestedAction,
       isPromoted: primitives.isPromoted,
-      promotedAt: primitives.promotedAt ? new Date(primitives.promotedAt) : null,
+      promotedAt: primitives.promotedAt
+        ? new Date(primitives.promotedAt)
+        : null,
       createdAt: new Date(primitives.createdAt),
     });
   }
