@@ -202,7 +202,7 @@ export class MonitoringEventCategory extends EnumValueObject<MonitoringEventCate
 
 ## CollectMonitoringEventOnECDomainEvent（詳細）
 
-**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/infrastructure/subscribers/CollectMonitoringEventOnECDomainEvent.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/application/AnalyzeAlert/CollectMonitoringEventOnECDomainEvent.ts`
 
 ### 購読キュー
 

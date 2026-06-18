@@ -54,7 +54,7 @@
 - 参考: 「AnalyzeAlertCommandHandler」節（重複3a行は無し）
 
 ### タスク 8: CollectMonitoringEventOnECDomainEvent 〔P0〕
-- 【新規】`infrastructure/subscribers/CollectMonitoringEventOnECDomainEvent.ts`
+- 【新規】`application/AnalyzeAlert/CollectMonitoringEventOnECDomainEvent.ts`
 - eventNameで分岐デシリアライズ → MonitoringEvent変換（category=APPLICATION）→ AnalyzeAlertCommand
 - 変換規則: OrderPlaced=subtotalAmount / ReservationFailed=+reservedProductIds / PaymentTimeout=aggregateId=paymentAttemptId,payload{orderId,customerId,amount}
 - 参考: 「変換規則表」「CollectMonitoringEvent」節

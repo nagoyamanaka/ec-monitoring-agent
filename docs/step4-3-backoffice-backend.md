@@ -43,7 +43,7 @@ src/apps/backoffice/backend/src/
 ├── middleware/
 │   └── errorHandler.ts          # step3と同一マッピング（Monitoringのエラーも同基底3クラス）
 └── subscribers/
-    └── registerSubscribers.ts   # CollectMonitoringEventOnECDomainEvent 起動
+    └── registerSubscribers.ts   # CollectMonitoringEventOnECDomainEvent（application層）を EventBus に登録
 ```
 
 ---
