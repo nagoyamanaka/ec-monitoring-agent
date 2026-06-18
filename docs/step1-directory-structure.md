@@ -26,6 +26,7 @@
 | **AIInvestigationPort の命名設計**        | ポート名を `AIInvestigationPort` のまま維持。実装クラス名のみ差し替え先を明示する                                                                                                                                                               | ポートはプロダクト名に依存しない抽象名にすることで、Gemini API直接 → Vertex AI SDK → ADK エージェントへの段階移行においてApplication層・Domain層がノータッチになる。ハッカソン要件（GCP必須・Gemini API）を現行実装で満たしつつ、将来の評価点強化をInfrastructure層の差し替えのみで実現できる                                                                                                                                                                                                                                                        |
 | **マルチエージェントをa2aでなくADK in-processで構成**   | `AIInvestigationPort` の裏に ADK の Coordinator + 専門agent（Evidence/RootCause/Remediation）を1プロセス内で構成。a2aは使わない | マルチエージェント分割（並列専門調査・自律的な証拠追加収集ループ）はa2aなしでADKサブエージェントで実現できる。a2aは異ベンダー/別ランタイム相互運用（Elastic Agent Builder↔Gemini）専用で本構成には不要。ポートの継ぎ目で単一Gemini→ADKを差し替えるため、フェーズ0で提出可能状態を確保したまま段階的に載せられる |
 | **調査(read)とリメディエーション(write)の分離** | 調査系Gateway（CloudLogging/Terraform/GitHub）は読み取り専用。write操作はPR起票のみで `RemediationPort`（`GitHubPullRequestGateway`）に隔離。自動マージしない | 「AIが調査・人間がレビューして承認」という体験価値（reviewStatus）を構造で体現する。CIで検出した脆弱性をMonitoringEvent(SECURITY)化し同一調査パイプラインに流すことで、DevOps（まわす）×AIエージェントの必然性を示す。PR草案は人間がレビューする成果物 |
+| **予兆ブリーフィング（reactive→proactive）をstretchⅡとして追加（stretchⅡ）** | `Monitoring/Forecast/` を新規モジュールとして追加。既存の反応的パイプライン（AnalyzeAlert/InvestigateAlert）は**一切変更しない**。`RiskForecast` を Alert と別の read-model にし、`ForecastRiskCommandHandler` を横に生やす（全て read-only・write無し） | 「起きたこと」の調査だけでなく「これから落ちそうな箇所」を**既知の未来シグナル（未マージPR/未適用plan/スケジュール）×蓄積した過去事例**から推論する差別化。予測は統計MLでなく**LLM推論＋引用検証**で構成し、joinはLLMに委譲（自前ルールエンジンを作らない）。突合キーは(B)構造化タグ方式（`ForecastMemory` projection）。詳細は `step4-1` 7章・`step4-2` 予兆節 |
 
 ---
 
@@ -270,7 +271,9 @@ src/Contexts/Monitoring/
 │   │   ├── InfraEvidence.ts                   # 正規化済みドメイン型（appLogs / terraformDiff / recentCommits）
 │   │   ├── CloudLoggingGateway.ts             # インターフェース（読み取り専用）
 │   │   ├── TerraformGateway.ts                # インターフェース（plan/diff・読み取り専用）
+│   │   │                                      #   ※ 予兆(stretchⅡ)で getPendingPlan()（未適用plan）を追加。read-only維持
 │   │   └── GitHubGateway.ts                   # インターフェース（直近コミット・PR・読み取り専用）
+│   │                                          #   ※ 予兆(stretchⅡ)で listOpenPullRequests()（未マージPR）を追加。read-only維持
 │   └── infrastructure/
 │       ├── DefaultInfraInvestigationAdapter.ts # InfraInvestigationPort実装（category別に証拠源を出し分け）
 │       ├── CloudLoggingGatewayImpl.ts         # Cloud Logging API（read-only）
@@ -283,6 +286,29 @@ src/Contexts/Monitoring/
 │   │   └── RemediationPlan.ts                 # title / branch / fileChanges / body
 │   └── infrastructure/
 │       └── GitHubPullRequestGateway.ts        # RemediationPort実装。GITHUB_TOKEN必須・対象リポジトリを環境変数で限定
+│
+├── Forecast/                                   # 予兆ブリーフィング（stretchⅡ）。反応的パイプライン無傷の追加レイヤー・全て read-only
+│   ├── domain/
+│   │   ├── ForecastSignal.ts                  # 異種ソースを共通の突合軸に正規化する器（subject/when/desc）
+│   │   │                                       #   ForecastSignalKind: FUTURE_CHANGE / SCHEDULE / MEMORY
+│   │   ├── RiskForecast.ts                     # 出力 read-model（RiskItem[]・level降順）。Alertではない（起点イベント無し・未発生）
+│   │   ├── RiskLevel.ts                        # Value Object（HIGH / MEDIUM / LOW）
+│   │   ├── Schedule.ts                         # ScheduleWindow（負荷窓・セール予定）。現状どこにも無い完全新規概念
+│   │   ├── ScheduleSource.ts                  # スケジュール取得インターフェース（list(horizon)・read-only）
+│   │   ├── ForecastMemory.ts                  # 突合キー(B)：過去インシデントにsubjectタグを構造化付与する投影
+│   │   │                                       #   ForecastMemoryRepository（findBySubjects / warmUp）
+│   │   └── ForecastPort.ts                     # AI予報ポート（forecast(context): RiskForecast）
+│   │                                           #   ※ プロンプトで citations 必須を強制（引用縛り）
+│   ├── application/
+│   │   └── ForecastRisk/
+│   │       ├── ForecastRiskCommand.ts
+│   │       └── ForecastRiskCommandHandler.ts   # 未来シグナル収集→正規化→Port→★引用検証（偽引用を落とす）→保存
+│   │                                           #   依存は全て read-only（write無し）
+│   └── infrastructure/
+│       ├── GeminiForecastAdapter.ts            # ForecastPort実装。GeminiAIInvestigationAdapter踏襲・citations: string[]固定
+│       ├── SeedScheduleSource.ts               # ScheduleSource実装（seed JSON/config。本番はカレンダー/負荷予測連携に差し替え）
+│       └── persistence/
+│           └── InMemoryForecastMemoryRepository.ts # 起動時にMongoのResolvedからsubject投影をウォームアップ
 │
 ├── ReportGeneration/
 │   ├── domain/
@@ -405,6 +431,7 @@ src/apps/backoffice/backend/
 │   │   ├── patternRoutes.ts         # GET /patterns, POST /patterns/:id/promote
 │   │   ├── analyticsRoutes.ts       # GET /analytics
 │   │   ├── streamRoutes.ts          # GET /alerts/stream（SSEエンドポイント）
+│   │   ├── forecastRoutes.ts        # POST /forecast, GET /forecast（予兆ブリーフィング・stretchⅡ。FORECAST_ENABLEDで本番無効化）
 │   │   └── demoRoutes.ts            # POST /demo/** （環境変数で本番無効化）
 │   ├── controllers/
 │   │   ├── AlertsGetController.ts
@@ -418,6 +445,8 @@ src/apps/backoffice/backend/
 │   │   ├── PatternsGetController.ts
 │   │   ├── PatternPromotePostController.ts
 │   │   ├── AnalyticsGetController.ts
+│   │   ├── ForecastPostController.ts        # POST /forecast → ForecastRiskCommandHandler（stretchⅡ）
+│   │   ├── ForecastGetController.ts         # GET /forecast → 最新RiskForecast read-model（stretchⅡ）
 │   │   └── demo/
 │   │       ├── DemoPaymentModePostController.ts
 │   │       ├── DemoScenarioTriggerPostController.ts
@@ -443,7 +472,8 @@ src/apps/backoffice/frontend/
 │   ├── pages/
 │   │   ├── AlertsPage.tsx           # /alerts（デモのメイン舞台）
 │   │   ├── AlertDetailPage.tsx      # /alerts/:id（運用想定フル詳細・デモドロワー非表示）
-│   │   └── AnalyticsPage.tsx        # /analytics（AI精度トラッキング）
+│   │   ├── AnalyticsPage.tsx        # /analytics（AI精度トラッキング）
+│   │   └── ForecastPage.tsx         # /forecast（予兆リスク一覧・level降順・stretchⅡ。FORECAST_ENABLED off時はナビ非表示）
 │   │
 │   ├── components/
 │   │   ├── alerts/
@@ -461,12 +491,17 @@ src/apps/backoffice/frontend/
 │   │   │   ├── ScenarioControls.tsx # シナリオ実行ボタン群
 │   │   │   ├── PaymentModeToggle.tsx # 決済モード切り替え（OK/RD/TM）
 │   │   │   └── SystemStatus.tsx     # RabbitMQ接続・SSE接続数・インシデント数
+│   │   ├── forecast/                # 予兆リスク表示（stretchⅡ）
+│   │   │   ├── RiskCard.tsx         # window・subject・levelバッジ・confidenceゲージ・reasoning
+│   │   │   └── CitationList.tsx     # ★引用チップ（PR#123/schedule/incident#7）＝根拠の明示・ハルシネーション否定の可視化
 │   │   └── shared/
-│   │       └── SeverityBadge.tsx    # CRITICAL/WARNING/INFO バッジ
+│   │       └── SeverityBadge.tsx    # CRITICAL/WARNING/INFO バッジ（RiskLevelにも転用可）
 │   │
 │   ├── hooks/
 │   │   ├── alerts/
 │   │   │   └── useAlertStream.ts    # SSE接続フック（AlertStream interfaceを利用）
+│   │   ├── forecast/
+│   │   │   └── useForecast.ts       # POST /forecast トリガー ＋ GET /forecast 取得（stretchⅡ）
 │   │   └── demo/
 │   │       └── useDemoControls.ts   # デモAPIへのfetchフック
 │   │
@@ -478,14 +513,16 @@ src/apps/backoffice/frontend/
 │   │       ├── SSEAlertStream.ts        # AlertStream のSSE実装
 │   │       ├── alertsApi.ts             # GET /alerts, PATCH /alerts/:id/feedback（HttpClientに依存）
 │   │       ├── analyticsApi.ts          # GET /analytics（HttpClientに依存）
+│   │       ├── forecastApi.ts           # POST /forecast, GET /forecast（HttpClientに依存・stretchⅡ）
 │   │       └── demoApi.ts               # POST /demo/**（HttpClientに依存）
 │   │
 │   └── types/
-│       └── alert.ts                 # フロントエンド用型定義
-│                                    # InvestigationReport の表示型を含む
-│                                    #   investigationSteps: string[]
-│                                    #   suggestedActions: string[]
-│                                    #   reviewStatus: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED'
+│       ├── alert.ts                 # フロントエンド用型定義
+│       │                            # InvestigationReport の表示型を含む
+│       │                            #   investigationSteps: string[]
+│       │                            #   suggestedActions: string[]
+│       │                            #   reviewStatus: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED'
+│       └── forecast.ts              # RiskForecast / RiskItem / RiskLevel / Citation の表示型（stretchⅡ）
 │
 ├── index.html
 ├── vite.config.ts
@@ -514,7 +551,13 @@ SubmitFeedbackCommandHandler → InvestigationReport.reviewStatus の更新も�
 InvestigateAlertCommandHandler → AIInvestigationPort インターフェースのみ依存
                                   GeminiAIInvestigationAdapter / VertexAIInvestigationAdapter /
                                   ADKAgentInvestigationAdapter を直接importしない
+
+ForecastRiskCommandHandler（stretchⅡ）→ ForecastPort / GitHubGateway / TerraformGateway /
+                                  ScheduleSource / ForecastMemoryRepository（全て read-only・write無し）
+                                  既存の AnalyzeAlert / InvestigateAlert パイプラインに一切依存・干渉しない（横付けの追加レイヤー）
 ```
+
+> **フロント構成の正準**: 予兆UI（`features/forecast/`）を含むバックオフィスフロントの正準構成は `step4-4-backoffice-frontend.md`（feature-sliced）。本書（step1）は既存のレイヤー優先構成に合わせて予兆ファイルを記載しているため、両者は表現が異なる。実装時は **step4-4 を正**とする。
 
 ---
 
