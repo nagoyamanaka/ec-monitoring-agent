@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
+import { InventoryReservationFailedDomainEvent } from "./InventoryReservationFailedDomainEvent.js";
 import {
-  InventoryReservationFailedDomainEvent,
   InventoryFailureReason,
-} from "./InventoryReservationFailedDomainEvent.js";
+  InventoryFailureReasons,
+} from "./InventoryFailureReason.js";
 
 const PRODUCT_ID = "550e8400-e29b-41d4-a716-446655440000";
 const ORDER_ID = "550e8400-e29b-41d4-a716-446655440001";
@@ -26,7 +27,7 @@ describe("InventoryReservationFailedDomainEvent", () => {
         orderId: ORDER_ID,
         requestedQuantity: 5,
         currentStock: 2,
-        reason: InventoryFailureReason.INSUFFICIENT_STOCK,
+        reason: InventoryFailureReason.insufficientStock(),
         eventId: EVENT_ID,
         occurredOn,
       });
@@ -42,7 +43,7 @@ describe("InventoryReservationFailedDomainEvent", () => {
       expect(restored.orderId).toBe(ORDER_ID);
       expect(restored.requestedQuantity).toBe(5);
       expect(restored.currentStock).toBe(2);
-      expect(restored.reason).toBe(InventoryFailureReason.INSUFFICIENT_STOCK);
+      expect(restored.reason.value).toBe(InventoryFailureReasons.INSUFFICIENT_STOCK);
       expect(restored.eventId).toBe(EVENT_ID);
     });
 
@@ -53,7 +54,7 @@ describe("InventoryReservationFailedDomainEvent", () => {
         orderId: ORDER_ID,
         requestedQuantity: 1,
         currentStock: 0,
-        reason: InventoryFailureReason.CONCURRENT_CONFLICT,
+        reason: InventoryFailureReason.concurrentConflict(),
         eventId: EVENT_ID,
         occurredOn,
       });
@@ -65,7 +66,7 @@ describe("InventoryReservationFailedDomainEvent", () => {
         attributes: original.toPrimitives(),
       });
 
-      expect(restored.reason).toBe(InventoryFailureReason.CONCURRENT_CONFLICT);
+      expect(restored.reason.isConcurrentConflict()).toBe(true);
     });
 
     it("reservedProductIds がラウンドトリップで復元される", () => {
@@ -75,7 +76,7 @@ describe("InventoryReservationFailedDomainEvent", () => {
         orderId: ORDER_ID,
         requestedQuantity: 1,
         currentStock: 0,
-        reason: InventoryFailureReason.CONCURRENT_CONFLICT,
+        reason: InventoryFailureReason.concurrentConflict(),
         reservedProductIds: [RESERVED_PRODUCT_ID],
         eventId: EVENT_ID,
         occurredOn,
@@ -97,7 +98,7 @@ describe("InventoryReservationFailedDomainEvent", () => {
         orderId: ORDER_ID,
         requestedQuantity: 5,
         currentStock: 2,
-        reason: InventoryFailureReason.INSUFFICIENT_STOCK,
+        reason: InventoryFailureReason.insufficientStock(),
       });
 
       expect(original.reservedProductIds).toEqual([]);

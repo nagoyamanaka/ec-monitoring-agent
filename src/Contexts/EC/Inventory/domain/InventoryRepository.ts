@@ -1,10 +1,10 @@
 import { Inventory } from "./Inventory.js";
 import { ProductId } from "./ProductId.js";
-import { InventoryFailureReasonValue } from "./InventoryReservationFailedDomainEvent.js";
+import { InventoryFailureReasons } from "./InventoryFailureReason.js";
 
 export type ReserveStockResult =
   | { success: true; remainingStock: number; newVersion: number }
-  | { success: false; reason: Extract<InventoryFailureReasonValue, "INSUFFICIENT_STOCK" | "CONCURRENT_CONFLICT"> };
+  | { success: false; reason: InventoryFailureReasons };
 
 export interface InventoryRepository {
   save(inventory: Inventory): Promise<void>;

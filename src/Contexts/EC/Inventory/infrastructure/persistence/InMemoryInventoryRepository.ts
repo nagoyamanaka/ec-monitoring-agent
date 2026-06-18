@@ -1,6 +1,7 @@
 import { Inventory } from "../../domain/Inventory.js";
 import { ProductId } from "../../domain/ProductId.js";
 import { InventoryRepository, ReserveStockResult } from "../../domain/InventoryRepository.js";
+import { InventoryFailureReasons } from "../../domain/InventoryFailureReason.js";
 
 export class InMemoryInventoryRepository implements InventoryRepository {
   private readonly store = new Map<
@@ -26,15 +27,15 @@ export class InMemoryInventoryRepository implements InventoryRepository {
     const data = this.store.get(params.productId.value);
 
     if (!data) {
-      return { success: false, reason: "INSUFFICIENT_STOCK" };
+      return { success: false, reason: InventoryFailureReasons.INSUFFICIENT_STOCK };
     }
 
     if (data.version !== params.expectedVersion) {
-      return { success: false, reason: "CONCURRENT_CONFLICT" };
+      return { success: false, reason: InventoryFailureReasons.CONCURRENT_CONFLICT };
     }
 
     if (data.stock < params.quantity) {
-      return { success: false, reason: "INSUFFICIENT_STOCK" };
+      return { success: false, reason: InventoryFailureReasons.INSUFFICIENT_STOCK };
     }
 
     const remainingStock = data.stock - params.quantity;

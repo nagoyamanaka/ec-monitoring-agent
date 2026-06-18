@@ -7,10 +7,8 @@ import { Inventory } from "../../domain/Inventory.js";
 import { ProductId } from "../../domain/ProductId.js";
 import { StockQuantity } from "../../domain/StockQuantity.js";
 import { InventoryReservedDomainEvent } from "../../domain/InventoryReservedDomainEvent.js";
-import {
-  InventoryReservationFailedDomainEvent,
-  InventoryFailureReason,
-} from "../../domain/InventoryReservationFailedDomainEvent.js";
+import { InventoryReservationFailedDomainEvent } from "../../domain/InventoryReservationFailedDomainEvent.js";
+import { InventoryFailureReasons } from "../../domain/InventoryFailureReason.js";
 
 const ORDER_ID = "550e8400-e29b-41d4-a716-446655440000";
 const PRODUCT_ID_1 = "550e8400-e29b-41d4-a716-446655440002";
@@ -48,8 +46,8 @@ describe("ReserveInventoryUseCase", () => {
       expect(events).toHaveLength(1);
       expect(events[0]).toBeInstanceOf(InventoryReservationFailedDomainEvent);
       expect(
-        (events[0] as InventoryReservationFailedDomainEvent).reason,
-      ).toBe(InventoryFailureReason.INSUFFICIENT_STOCK);
+        (events[0] as InventoryReservationFailedDomainEvent).reason.isInsufficientStock(),
+      ).toBe(true);
     });
 
     it("在庫が不足している場合 InventoryReservationFailedDomainEvent(INSUFFICIENT_STOCK) を publish して処理を終了する", async () => {
@@ -64,8 +62,8 @@ describe("ReserveInventoryUseCase", () => {
       expect(events).toHaveLength(1);
       expect(events[0]).toBeInstanceOf(InventoryReservationFailedDomainEvent);
       expect(
-        (events[0] as InventoryReservationFailedDomainEvent).reason,
-      ).toBe(InventoryFailureReason.INSUFFICIENT_STOCK);
+        (events[0] as InventoryReservationFailedDomainEvent).reason.isInsufficientStock(),
+      ).toBe(true);
     });
 
     it("複数商品のうち1品でも在庫不足なら全体を失敗にして処理を終了する", async () => {
@@ -82,8 +80,8 @@ describe("ReserveInventoryUseCase", () => {
       expect(events).toHaveLength(1);
       expect(events[0]).toBeInstanceOf(InventoryReservationFailedDomainEvent);
       expect(
-        (events[0] as InventoryReservationFailedDomainEvent).reason,
-      ).toBe(InventoryFailureReason.INSUFFICIENT_STOCK);
+        (events[0] as InventoryReservationFailedDomainEvent).reason.isInsufficientStock(),
+      ).toBe(true);
     });
   });
 
@@ -131,7 +129,7 @@ describe("ReserveInventoryUseCase", () => {
       await inventoryRepo.save(makeInventory(PRODUCT_ID_1, 10));
       vi.spyOn(inventoryRepo, "reserveStock").mockResolvedValue({
         success: false,
-        reason: "CONCURRENT_CONFLICT",
+        reason: InventoryFailureReasons.CONCURRENT_CONFLICT,
       });
       const publishSpy = vi.spyOn(bus, "publish");
 
@@ -145,8 +143,8 @@ describe("ReserveInventoryUseCase", () => {
       expect(events).toHaveLength(1);
       expect(events[0]).toBeInstanceOf(InventoryReservationFailedDomainEvent);
       expect(
-        (events[0] as InventoryReservationFailedDomainEvent).reason,
-      ).toBe(InventoryFailureReason.CONCURRENT_CONFLICT);
+        (events[0] as InventoryReservationFailedDomainEvent).reason.isConcurrentConflict(),
+      ).toBe(true);
     });
 
     it("2品目で競合が発生した場合 reservedProductIds に1品目の ID が含まれる", async () => {
@@ -157,7 +155,7 @@ describe("ReserveInventoryUseCase", () => {
       const original = inventoryRepo.reserveStock.bind(inventoryRepo);
       vi.spyOn(inventoryRepo, "reserveStock").mockImplementation((params) => {
         if (params.productId.value === PRODUCT_ID_2) {
-          return Promise.resolve({ success: false, reason: "CONCURRENT_CONFLICT" });
+          return Promise.resolve({ success: false, reason: InventoryFailureReasons.CONCURRENT_CONFLICT });
         }
         return original(params);
       });
@@ -175,7 +173,7 @@ describe("ReserveInventoryUseCase", () => {
         (e) => e instanceof InventoryReservationFailedDomainEvent,
       ) as InventoryReservationFailedDomainEvent;
       expect(failedEvent).toBeDefined();
-      expect(failedEvent.reason).toBe(InventoryFailureReason.CONCURRENT_CONFLICT);
+      expect(failedEvent.reason.isConcurrentConflict()).toBe(true);
       expect(failedEvent.reservedProductIds).toContain(PRODUCT_ID_1);
     });
   });

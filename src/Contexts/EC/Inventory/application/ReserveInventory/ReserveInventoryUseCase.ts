@@ -3,6 +3,7 @@ import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import {
   Inventory,
   InventoryFailureReason,
+  InventoryFailureReasons,
   OrderItemPrimitive,
 } from "../../domain/Inventory.js";
 import {
@@ -57,7 +58,7 @@ export class ReserveInventoryUseCase {
             orderId,
             requestedQuantity: item.quantity,
             currentStock: inventory?.stock.value ?? 0,
-            reason: InventoryFailureReason.INSUFFICIENT_STOCK,
+            reason: InventoryFailureReason.insufficientStock(),
           }),
         ]);
         await this.logger.warn({
@@ -93,7 +94,7 @@ action: "reserve_inventory_insufficient",
             orderId,
             requestedQuantity: r.quantity,
             currentStock: inventory.stock.value,
-            reason: InventoryFailureReason.CONCURRENT_CONFLICT,
+            reason: InventoryFailureReason.concurrentConflict(),
             reservedProductIds: successRecords.map(
               (s) => s.inventory.productId.value,
             ),
@@ -133,7 +134,7 @@ action: "reserve_inventory_rollback",
       if (result.success) return { result, inventory: current };
 
       const canRetry =
-        result.reason === "CONCURRENT_CONFLICT" &&
+        result.reason === InventoryFailureReasons.CONCURRENT_CONFLICT &&
         attempt < ReserveInventoryUseCase.MAX_RETRIES - 1;
 
       if (!canRetry) return { result, inventory: current };

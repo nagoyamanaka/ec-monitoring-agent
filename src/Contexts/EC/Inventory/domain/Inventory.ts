@@ -3,11 +3,11 @@ import { ProductId } from "./ProductId.js";
 import { StockQuantity } from "./StockQuantity.js";
 import { OrderItemPrimitive } from "../../Orders/domain/OrderItem.js";
 import { InventoryReservedDomainEvent } from "./InventoryReservedDomainEvent.js";
+import { InventoryReservationFailedDomainEvent } from "./InventoryReservationFailedDomainEvent.js";
 import {
-  InventoryReservationFailedDomainEvent,
   InventoryFailureReason,
-  InventoryFailureReasonValue,
-} from "./InventoryReservationFailedDomainEvent.js";
+  InventoryFailureReasons,
+} from "./InventoryFailureReason.js";
 
 type InventoryPrimitives = {
   productId: string;
@@ -55,7 +55,7 @@ export class Inventory extends AggregateRoot {
     quantity: number,
     outcome:
       | { success: true; remainingStock: number; newVersion: number }
-      | { success: false; reason: InventoryFailureReasonValue },
+      | { success: false; reason: InventoryFailureReasons },
   ): void {
     if (outcome.success) {
       this._stock = new StockQuantity(outcome.remainingStock);
@@ -77,7 +77,7 @@ export class Inventory extends AggregateRoot {
           orderId,
           requestedQuantity: quantity,
           currentStock: this._stock.value,
-          reason: outcome.reason,
+          reason: InventoryFailureReason.fromString(outcome.reason),
         }),
       );
     }
@@ -103,4 +103,4 @@ export class Inventory extends AggregateRoot {
 }
 
 export type { OrderItemPrimitive };
-export { InventoryFailureReason };
+export { InventoryFailureReason, InventoryFailureReasons };

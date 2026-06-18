@@ -6,6 +6,7 @@ import {
   InventoryRepository,
   ReserveStockResult,
 } from "../../domain/InventoryRepository.js";
+import { InventoryFailureReasons } from "../../domain/InventoryFailureReason.js";
 
 type InventoryDoc = { _id: string; stock: number; version: number } & Record<string, unknown>;
 
@@ -64,8 +65,8 @@ export class MongoInventoryRepository
       { _id: params.productId.value } as unknown as Filter<Document>,
     );
     if (!existing || (existing as unknown as InventoryDoc).stock < params.quantity) {
-      return { success: false, reason: "INSUFFICIENT_STOCK" };
+      return { success: false, reason: InventoryFailureReasons.INSUFFICIENT_STOCK };
     }
-    return { success: false, reason: "CONCURRENT_CONFLICT" };
+    return { success: false, reason: InventoryFailureReasons.CONCURRENT_CONFLICT };
   }
 }

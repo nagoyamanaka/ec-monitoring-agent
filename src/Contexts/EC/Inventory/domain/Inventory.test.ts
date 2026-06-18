@@ -3,7 +3,8 @@ import { Inventory } from "./Inventory.js";
 import { ProductId } from "./ProductId.js";
 import { StockQuantity } from "./StockQuantity.js";
 import { InventoryReservedDomainEvent } from "./InventoryReservedDomainEvent.js";
-import { InventoryReservationFailedDomainEvent, InventoryFailureReason } from "./InventoryReservationFailedDomainEvent.js";
+import { InventoryReservationFailedDomainEvent } from "./InventoryReservationFailedDomainEvent.js";
+import { InventoryFailureReasons } from "./InventoryFailureReason.js";
 
 const PRODUCT_ID = "550e8400-e29b-41d4-a716-446655440000";
 const ORDER_ID = "550e8400-e29b-41d4-a716-446655440001";
@@ -68,7 +69,7 @@ describe("Inventory", () => {
       const inventory = makeInventory(2);
       inventory.reserve(ORDER_ID, 5, {
         success: false,
-        reason: InventoryFailureReason.INSUFFICIENT_STOCK,
+        reason: InventoryFailureReasons.INSUFFICIENT_STOCK,
       });
       expect(inventory.stock.value).toBe(2);
     });
@@ -77,7 +78,7 @@ describe("Inventory", () => {
       const inventory = makeInventory(2);
       inventory.reserve(ORDER_ID, 5, {
         success: false,
-        reason: InventoryFailureReason.INSUFFICIENT_STOCK,
+        reason: InventoryFailureReasons.INSUFFICIENT_STOCK,
       });
       const events = inventory.pullDomainEvents();
       expect(events).toHaveLength(1);
@@ -88,10 +89,10 @@ describe("Inventory", () => {
       const inventory = makeInventory(2);
       inventory.reserve(ORDER_ID, 5, {
         success: false,
-        reason: InventoryFailureReason.INSUFFICIENT_STOCK,
+        reason: InventoryFailureReasons.INSUFFICIENT_STOCK,
       });
       const event = inventory.pullDomainEvents()[0] as InventoryReservationFailedDomainEvent;
-      expect(event.reason).toBe(InventoryFailureReason.INSUFFICIENT_STOCK);
+      expect(event.reason.isInsufficientStock()).toBe(true);
       expect(event.requestedQuantity).toBe(5);
       expect(event.currentStock).toBe(2);
       expect(event.orderId).toBe(ORDER_ID);
@@ -103,10 +104,10 @@ describe("Inventory", () => {
       const inventory = makeInventory(10);
       inventory.reserve(ORDER_ID, 3, {
         success: false,
-        reason: InventoryFailureReason.CONCURRENT_CONFLICT,
+        reason: InventoryFailureReasons.CONCURRENT_CONFLICT,
       });
       const event = inventory.pullDomainEvents()[0] as InventoryReservationFailedDomainEvent;
-      expect(event.reason).toBe(InventoryFailureReason.CONCURRENT_CONFLICT);
+      expect(event.reason.isConcurrentConflict()).toBe(true);
     });
   });
 

@@ -1,12 +1,5 @@
 import { ECDomainEvent } from "../../Shared/domain/ECDomainEvent.js";
-
-export const InventoryFailureReason = {
-  INSUFFICIENT_STOCK: "INSUFFICIENT_STOCK",
-  CONCURRENT_CONFLICT: "CONCURRENT_CONFLICT",
-} as const;
-
-export type InventoryFailureReasonValue =
-  (typeof InventoryFailureReason)[keyof typeof InventoryFailureReason];
+import { InventoryFailureReason } from "./InventoryFailureReason.js";
 
 export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
   static readonly EVENT_NAME = "ec.inventory.reservation_failed";
@@ -14,7 +7,7 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
   readonly orderId: string;
   readonly requestedQuantity: number;
   readonly currentStock: number;
-  readonly reason: InventoryFailureReasonValue;
+  readonly reason: InventoryFailureReason;
   readonly reservedProductIds: string[];
 
   constructor(params: {
@@ -22,7 +15,7 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
     orderId: string;
     requestedQuantity: number;
     currentStock: number;
-    reason: InventoryFailureReasonValue;
+    reason: InventoryFailureReason;
     reservedProductIds?: string[];
     eventId?: string;
     occurredOn?: Date;
@@ -45,7 +38,7 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
       orderId: this.orderId,
       requestedQuantity: this.requestedQuantity,
       currentStock: this.currentStock,
-      reason: this.reason,
+      reason: this.reason.value,
       reservedProductIds: this.reservedProductIds,
     };
   }
@@ -61,7 +54,7 @@ export class InventoryReservationFailedDomainEvent extends ECDomainEvent {
       orderId: params.attributes.orderId as string,
       requestedQuantity: params.attributes.requestedQuantity as number,
       currentStock: params.attributes.currentStock as number,
-      reason: params.attributes.reason as InventoryFailureReasonValue,
+      reason: InventoryFailureReason.fromString(params.attributes.reason as string),
       reservedProductIds: params.attributes.reservedProductIds as string[],
       eventId: params.eventId,
       occurredOn: params.occurredOn,
