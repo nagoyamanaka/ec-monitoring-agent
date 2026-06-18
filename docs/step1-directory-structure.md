@@ -22,7 +22,7 @@
 | DomainEvent.fromPrimitives シグネチャ変更 | 旧: `(aggregateId, body, eventId, occurredOn)` → 新: `{aggregateId, eventId, occurredOn, attributes}` named params                                                                                                                              | CodelyTV 準拠。RabbitMQ Subscriber がデシリアライズ時に呼び出すシグネチャを統一                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | AIInvestigationのレポート設計             | `InvestigationReport` に `investigationSteps` / `suggestedActions` / `reviewStatus` を持たせる                                                                                                                                                  | 「AIが調査して人間はレビューするだけ」という体験価値を実現するため。保守業務における対向先起因の障害調査を自動化するというサービスの核心。分類ツールではなく調査エージェントとして機能させる                                                                                                                                                                                                                                                                                                                                                         |
 | レビューステータスの管理                  | `reviewStatus: PENDING_REVIEW / APPROVED / REJECTED` を `InvestigationReport` に持たせる                                                                                                                                                        | 承認/却下フィードバックを既存の `SubmitFeedbackCommandHandler` に統合できる。新規コンテキスト不要                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **仮完成後の優先追加実装**                | `ElasticsearchAlertClassifier` を `AlertClassifier` Strategyの第2実装として追加する                                                                                                                                                             | ハッカソン本体完成後のROIが最も高い追加実装。工数約6時間。`AnalyzeAlertCommandHandler` はインターフェースにのみ依存しているため既存コードをノータッチで差し替え可能。`InMemoryAlertClassifier`（完全一致・confidence 1.0固定）に対し、BM25スコアリングによるconfidence実数値化が実現できる。面接で「将来できます」ではなく「実装済みです」として説明できる点が転職ポートフォリオとしての価値を高める。`Shared/infrastructure/persistence/elasticsearch/` に `ElasticClientFactory` / `ElasticCriteriaConverter` が既に設計済みのため追加コストが低い |
+| **仮完成後の優先追加実装**                | `SimilarPatternRule`（kind=SIMILARITY・Elastic を内包）を `ApplicationClassificationPolicy` の Rule として追加する                                                                                                                             | ハッカソン本体完成後のROIが最も高い追加実装。工数約6時間。`AnalyzeAlertCommandHandler` は `AlertClassifier` IF にのみ依存し、追加は Policy の Rule 配列に足すだけ（`ClassificationRuleSorter` が SIMILARITY を自動配置）で既存コードをノータッチ。`KnownPatternRule`（完全一致・confidence 1.0固定）に対し、BM25スコアリングによるconfidence実数値化が実現できる。面接で「将来できます」ではなく「実装済みです」として説明できる点が転職ポートフォリオとしての価値を高める。`Shared/infrastructure/persistence/elasticsearch/` に `ElasticClientFactory` / `ElasticCriteriaConverter` が既に設計済みのため追加コストが低い |
 | **AIInvestigationPort の命名設計**        | ポート名を `AIInvestigationPort` のまま維持。実装クラス名のみ差し替え先を明示する                                                                                                                                                               | ポートはプロダクト名に依存しない抽象名にすることで、Gemini API直接 → Vertex AI SDK → ADK エージェントへの段階移行においてApplication層・Domain層がノータッチになる。ハッカソン要件（GCP必須・Gemini API）を現行実装で満たしつつ、将来の評価点強化をInfrastructure層の差し替えのみで実現できる                                                                                                                                                                                                                                                        |
 | **マルチエージェントをa2aでなくADK in-processで構成**   | `AIInvestigationPort` の裏に ADK の Coordinator + 専門agent（Evidence/RootCause/Remediation）を1プロセス内で構成。a2aは使わない | マルチエージェント分割（並列専門調査・自律的な証拠追加収集ループ）はa2aなしでADKサブエージェントで実現できる。a2aは異ベンダー/別ランタイム相互運用（Elastic Agent Builder↔Gemini）専用で本構成には不要。ポートの継ぎ目で単一Gemini→ADKを差し替えるため、フェーズ0で提出可能状態を確保したまま段階的に載せられる |
 | **調査(read)とリメディエーション(write)の分離** | 調査系Gateway（CloudLogging/Terraform/GitHub）は読み取り専用。write操作はPR起票のみで `RemediationPort`（`GitHubPullRequestGateway`）に隔離。自動マージしない | 「AIが調査・人間がレビューして承認」という体験価値（reviewStatus）を構造で体現する。CIで検出した脆弱性をMonitoringEvent(SECURITY)化し同一調査パイプラインに流すことで、DevOps（まわす）×AIエージェントの必然性を示す。PR草案は人間がレビューする成果物 |
@@ -330,20 +330,24 @@ src/Contexts/Monitoring/
         └── InMemoryCriteriaConverter.ts          # Criteria→array filter/sort変換
 ```
 
-### AlertClassifier Strategyパターン 拡張ロードマップ（仮完成後の優先実装）
+### AlertClassifier 拡張ロードマップ（Policy / Rule / Sorter・仮完成後の優先実装）
+
+分類は3層（`AlertClassifier`（IF）→ `ClassificationPolicy`（category単位）→ `ClassificationRule`（最小単位・依存を内包））。拡張は「Classifier 丸ごと差し替え」ではなく「**Policy に Rule を足す**」。各 Rule は `kind`（EXACT_MATCH/SIMILARITY/INFERENCE）を持ち、`ClassificationRuleSorter` が kind 優先順位で並べる。
 
 ```
-AlertClassifier（インターフェース）
-  ├─ InMemoryAlertClassifier        ← ハッカソン本体で実装（完全一致・confidence 1.0固定）
-  └─ ElasticsearchAlertClassifier   ← 仮完成後に追加（BM25スコアリング・confidence実数値）
+PolicyBasedAlertClassifier（AlertClassifier 実装）
+  └─ ApplicationClassificationPolicy
+       ├─ KnownPatternRule      ← ハッカソン本体（kind=EXACT_MATCH・完全一致・confidence 1.0固定）
+       ├─ SimilarPatternRule    ← 仮完成後に追加（kind=SIMILARITY・Elastic BM25スコアリング・confidence実数値）
+       └─ AiInferenceRule       ← 将来（kind=INFERENCE・AI port 内包）
 ```
 
 **追加ファイル（既存コードへの変更ゼロ）**
 
 ```
-src/Contexts/Monitoring/AlertAnalysis/
-└── infrastructure/
-    └── ElasticsearchAlertClassifier.ts   # AlertClassifier実装（BM25スコア→confidenceマッピング）
+src/Contexts/Monitoring/AlertAnalysis/domain/classification/rules/
+└── SimilarPatternRule.ts                 # ClassificationRule実装（Elastic を内包・BM25スコア→confidence）
+                                          # Policy の Rule 配列に足すだけ。Sorter が SIMILARITY を自動配置
 
 src/Contexts/Shared/infrastructure/persistence/elasticsearch/
 ├── ElasticClientFactory.ts               # 設計済み（追加コストなし）

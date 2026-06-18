@@ -1,4 +1,4 @@
-# 設計エージェント向けプロンプト v15
+# 設計エージェント向けプロンプト v16
 
 > **変更履歴（v11→v12）**
 > インフラ横断調査パイプラインを設計に追加。
@@ -68,7 +68,7 @@ AIエージェントは「アプリログを見る」だけでなく、**Cloud L
 | AI（現行）     | Gemini API                                                                         | `@google/generative-ai`。ハッカソン本体で使用                                                                    |
 | AI（将来P1）   | Vertex AI SDK                                                                      | `@google-cloud/vertexai`。フェーズ1で差し替え                                                                    |
 | AI（将来P2）   | ADK（Agents Development Kit）                                                      | フェーズ2でマルチエージェント構成                                                                                |
-| 検索（将来P1） | Elasticsearch（Elastic Cloud）                                                     | `ElasticAlertClassifier` でStrategyに追加。a2aは不使用（ADK in-processで代替）                                    |
+| 検索（将来P1） | Elasticsearch（Elastic Cloud）                                                     | `SimilarPatternRule`（kind=SIMILARITY）として `ApplicationClassificationPolicy` に追加。a2aは不使用（ADK in-processで代替）                                    |
 | Observability  | Cloud Logging・Cloud Monitoring・Cloud Trace                                       | GCPネイティブ。OTel SDK（`@opentelemetry/sdk-node`）からGCPエクスポーター経由で直接送信。Collectorコンテナ不使用 |
 | Logging        | OTel Logs → Cloud Logging（`@google-cloud/opentelemetry-cloud-trace-exporter` 等） | Winston不使用。OTel一括化でtrace_id/span_idはSDKが自動付与。`StructuredLog`型には含めない                        |
 | インフラ調査   | Cloud Logging API・Terraform CLI（読み取り専用）・GitHub REST API                  | インフラ横断調査エージェントが証拠収集に使用。apply等の書き込み操作は一切行わない                                |
@@ -189,7 +189,7 @@ Alert発生
 
   ↓ 収集した「障害コンテキスト」がリッチになるほど
 
-【レイヤー2：事例照合】AlertClassifier（ElasticAlertClassifier）
+【レイヤー2：事例照合】AlertClassifier（SimilarPatternRule・Elastic）
   └─ ハイブリッド検索（BM25 + ベクトル）で過去パターンと突合
 
   ↓
@@ -273,7 +273,7 @@ interface InfraEvidence {
 【フェーズ0：提出ライン確保】
   Step1-EC:       ECドメイン（注文・在庫）の基本フロー実装
   Step1-Monitor:  MonitoringコンテキストのAlertAnalysis + SSE push
-  Step1-Classify: InMemoryAlertClassifier（first-match）実装
+  Step1-Classify: KnownPatternRule（first-match）+ Policy/Sorter 実装
   Step1-Gemini:   GeminiAIInvestigationAdapter（Gemini API直接）実装
   Step1-Demo:     デモシナリオ1・2・3がE2Eで通る
   → ✅ コミットを切り「提出できる状態」をキープ
@@ -289,7 +289,7 @@ interface InfraEvidence {
 
 【フェーズ2：Elastic類似検索（シナジー完成）】
   Step3-Elastic-a: Elastic Cloud セットアップ（公式サイトから登録）
-  Step3-Elastic-b: ElasticAlertClassifier 実装（hybrid search）
+  Step3-Elastic-b: SimilarPatternRule 実装（hybrid search・Policy に追加）
   Step3-Elastic-c: インフラ証拠（InfraEvidence）をElastic検索クエリに統合
                    ← これがシナジーの本丸。証拠が太るほど照合精度が上がる
   → ✅ コミットを切る
@@ -426,58 +426,70 @@ reactive（事後対応）から **proactive（事前予防）** へのシフト
 
 > 詳細は `docs/step4-2-monitoring-context.md` を参照。以下は実装時に必ず守る制約のサマリー。
 
-### AlertClassifierのStrategyパターン
+### AlertClassifierの分類アーキテクチャ（Classifier / Policy / Rule の3層）
+
+分類は「IAM 的な階層構造」で表現する。強化は「Classifier 丸ごと差し替え」ではなく「**Policy に Rule を足す**」。
 
 ```
-AlertClassifier（インターフェース）← 抽象に依存
-  ├─ InMemoryAlertClassifier       ← Step1：ハッカソン本体（first-match、完全一致）
-  ├─ ElasticAlertClassifier        ← Step2：Elasticsearchスコアリング（類似検索）
-  └─ ScoringAlertClassifier        ← 将来差し替える具体（重み付けスコア合算）
+AlertClassifier（インターフェース）← AnalyzeAlertCommandHandler はこの抽象にのみ依存
+  └─ PolicyBasedAlertClassifier         ← category で担当 Policy にディスパッチ
+       └─ ApplicationClassificationPolicy ← ClassificationRuleSorter で Rule を優先度順に並べ first-match
+            ├─ KnownPatternRule      ← Step1：ハッカソン本体（kind=EXACT_MATCH・完全一致・confidence 1.0固定）
+            ├─ SimilarPatternRule    ← Step2：Elastic hybrid search（kind=SIMILARITY・類似スコアリング）
+            └─ AiInferenceRule       ← 将来：AI port 内包（kind=INFERENCE）
 ```
 
-- Classifierは「`KnownAlertClassification` を構築して返す」責務のみを持つ
-- スコアリングの計算ロジックはClassifier実装クラスの内部に閉じる
-- `AnalyzeAlertCommandHandler` はインターフェースにのみ依存し、実装切り替えでノータッチ
+- **分類対象は `MonitoringEvent`**（Alert ではない）。生成物が `AlertClassification` VO
+- **各 Rule が判定に必要な依存（repository / 外部検索 / AI port）を自分で内包する**。これにより InMemory 完全一致・Elastic スコアリング・AI 推論を同一 IF の裏で共存できる（`match(event, patterns[])` を強制する単一アルゴリズム抽象は Elastic/AI に噛み合わないため不採用）
+- スコアリングの計算ロジックは各 Rule 実装の内部に閉じる
+- `AnalyzeAlertCommandHandler` は `classify(monitoringEvent)` を呼ぶだけ。パターン取得・照合の内部実装を知らない（`KnownErrorPatternRepository` にも依存しない＝`KnownPatternRule` が内包）
+
+### ルール優先度（kind と Sorter の分離）
+
+- **`priority: number` を Rule に持たせない**。優先度は「ルール間の関係」。一方 `kind`（EXACT_MATCH / SIMILARITY / INFERENCE）は「その Rule がどんな証拠を出すか」という属性なので Rule が持つ
+- **`ClassificationRuleSorter`（ドメインサービス）** が kind 優先順位で Rule を並べ替える。配列順に依存せず確定的（「暗黙の配列順で優先度が決まる」事故を防ぐ）。具体実装を知らず kind しか見ないため domain に置ける（DIP を侵さない）
+- **分類器グラフの組み立て（依存注入）は composition root＝backoffice の DI** の責務。`AlertClassifier` IF も Handler もノータッチで Rule を追加できる
 
 ### AlertClassifierの実装段階戦略（v11）
 
-#### Step1：InMemory完全一致（ハッカソン本体スコープ）
+#### Step1：KnownPatternRule（完全一致・ハッカソン本体スコープ）
 
 | 項目         | 内容                                                                                 |
 | ------------ | ------------------------------------------------------------------------------------ |
-| 実装クラス   | `InMemoryAlertClassifier`                                                            |
+| 実装クラス   | `KnownPatternRule`（kind=EXACT_MATCH・`KnownErrorPatternRepository` を内包）         |
 | マッチ戦略   | first-match（先着優先の完全一致）                                                    |
 | confidence   | 1.0固定                                                                              |
-| インフラ依存 | なし（オンメモリ）                                                                   |
+| インフラ依存 | なし（オンメモリ。Mongo実装は backoffice DI で注入）                                  |
 | **完了条件** | デモシナリオ1・2・3がE2Eで通る。**この状態でコミットを切り、提出できる状態をキープ** |
 
-#### Step2：Elasticsearchスコアリング（シナジー完成フェーズ）
+#### Step2：SimilarPatternRule（Elastic類似検索・シナジー完成フェーズ）
 
 | 項目         | 内容                                                                                                 |
 | ------------ | ---------------------------------------------------------------------------------------------------- |
-| 実装クラス   | `ElasticAlertClassifier`                                                                             |
+| 実装クラス   | `SimilarPatternRule`（kind=SIMILARITY・Elastic client を内包）                                       |
 | マッチ戦略   | hybrid search（BM25 + ベクトル検索）による類似スコアリング                                           |
 | confidence   | Elasticsearchのスコアを正規化して返す                                                                |
 | クエリ入力   | `InfraEvidence`（アプリログ + Terraform差分 + GitHubコミット）を含む多次元コンテキスト               |
 | インフラ依存 | Elastic Cloud（公式サイトから直接登録で14日間無料トライアル）                                        |
-| **完了条件** | `ElasticAlertClassifier` がDI切り替えで差し替え可能。InfraEvidenceでクエリが強化されている状態       |
+| 追加方法     | `ApplicationClassificationPolicy` の Rule 配列に足すだけ（`ClassificationRuleSorter` が SIMILARITY を EXACT_MATCH の次に自動配置）。`AlertClassifier` IF も Handler もノータッチ |
+| **完了条件** | `SimilarPatternRule` を Policy に追加し DI で差し替え可能。InfraEvidenceでクエリが強化されている状態 |
 | 注意         | **Elastic CloudはGCPマーケットプレイス経由で登録すると無料トライアルがない。公式サイトから登録する** |
 
 **インフラ証拠とElasticのシナジー（v12追加）**:
 インフラ横断調査（フェーズ1）を先に完成させてからElastic（フェーズ2）に入ること。
 アプリログのみをクエリにするより、`InfraEvidence`（アプリログ + Terraform差分 + GitHubコミット）を合わせた多次元コンテキストでハイブリッド検索する方が類似障害パターンのマッチ精度が大幅に向上する。
 
-#### Step3：ScoringAlertClassifier（将来・stretch）
+#### Step3：AiInferenceRule（AI推論フォールバック・将来・stretch）
 
-> **注意**: Step3 はあくまで `AlertClassifier` の第3実装。`ADKAgentInvestigationAdapter` は `AIInvestigationPort` 側の進化であり、`AlertClassifier` の段階ではない（混在させない）。a2aは使用しない。
+> **注意**: Step3 はあくまで `ApplicationClassificationPolicy` に追加する第3の Rule。`ADKAgentInvestigationAdapter` は `AIInvestigationPort`（調査層）側の進化であり、`AlertClassifier`（分類層）の段階ではない（混在させない）。a2aは使用しない。
 
 | 項目           | 内容                                                                                                     |
 | -------------- | -------------------------------------------------------------------------------------------------------- |
-| 実装クラス     | `ScoringAlertClassifier`                                                                                 |
-| マッチ戦略     | 複数パターンへの重み付けスコア合算（部分一致の度合いを数値化して並列提示）                               |
-| confidence     | 重み付きスコアを正規化して返す（0.0〜1.0）                                                               |
-| インフラ依存   | なし（スコアリングロジックのみ。ElasticをQueryに使う場合はStep2ベース）                                   |
-| **完了条件**   | `ScoringAlertClassifier` がDI切り替えで差し替え可能。`AnalyzeAlertCommandHandler` ノータッチ             |
+| 実装クラス     | `AiInferenceRule`（kind=INFERENCE・AI port を内包）                                                       |
+| マッチ戦略     | EXACT_MATCH / SIMILARITY が棄権した場合のフォールバック推論（confidence を返す）                          |
+| confidence     | AI の確信度を正規化して返す（0.0〜1.0）                                                                  |
+| インフラ依存   | AI port（Gemini 等）。Elastic を併用する場合は Step2 ベース                                               |
+| **完了条件**   | `AiInferenceRule` を Policy に追加し DI で差し替え可能。`AnalyzeAlertCommandHandler` ノータッチ           |
 | 着手タイミング | Step2（Elastic）完了後。ハッカソン締切後のポートフォリオ強化フェーズ                                     |
 
 #### リスク管理方針
@@ -669,11 +681,13 @@ interface StructuredLog {
 - Domain・Application層はHTTPステータスコードを知らない。errorHandlerがHTTPへの変換責務を持つ
 - 外部サービスへのアウトバウンドポートは `XxxGateway` と命名する
 - ドメインサービスを作る場合は `XxxDomainService` と明示的にサフィックスをつける
-- `AlertClassifier` はインターフェースにのみ依存する。`InMemoryAlertClassifier` を直接importしない
+- `AlertClassifier` はインターフェースにのみ依存する。具体実装（`PolicyBasedAlertClassifier` 等）を直接importしない
+- 分類は Classifier / Policy / Rule の3層。Rule は依存を内包し `kind`（EXACT_MATCH/SIMILARITY/INFERENCE）を持つ。優先度は `ClassificationRuleSorter`（domain）が kind 順で確定し、Rule に `priority` 数値を持たせない
+- 分類器グラフの組み立て（依存注入）は composition root（backoffice DI）の責務。Sorter は組み立てない
 - `ClassificationConfidence` のみVOとしてクラス化する
 - **`AIInvestigationPort` はポートインターフェース名にプロダクト名を含めない**（v10）
-- **`ElasticAlertClassifier` はElastic Cloud公式サイトから直接登録したインスタンスに接続する**（v11）
-- **Step3（ScoringAlertClassifier）はStep2（Elastic）完了後に着手する。a2aは使わない**（v11/v14改訂）
+- **`SimilarPatternRule`（Elastic を内包する分類 Rule）はElastic Cloud公式サイトから直接登録したインスタンスに接続する**（v11/v16改訂）
+- **Step3（`AiInferenceRule`）はStep2（`SimilarPatternRule`・Elastic）完了後に着手する。a2aは使わない**（v11/v14/v16改訂）
 - **`TerraformGateway` / `GitHubGateway` / `CloudLoggingGateway` はすべて読み取り専用。書き込み操作のメソッドを定義しない**（v12）
 - **`InfraEvidence` はInfrastructure層の生レスポンスをドメイン型に正規化してから渡す。各Gatewayの生レスポンス型をMonitoringドメインに持ち込まない**（v12）
 
@@ -687,7 +701,7 @@ interface StructuredLog {
 - AlertClassifierはfirst-matchのみ実装。スコアリングはインターフェースのコメントに将来実装として明記
 - SSEAlertNotifierはEventEmitterオンメモリ
 - **AIはGemini API直接（フェーズ0）のみ実装。Vertex AI / ADKへの移行はAIInvestigationPortの差し替えで対応できる設計にし、実装はハッカソン後のフェーズに委ねる**（v10）
-- **AlertClassifierはStep1（InMemory）のみハッカソン提出必須。Step2（Elastic）・Step3（ScoringAlertClassifier）は工数が許す範囲で積み上げる。a2aは使わない**（v11/v14改訂）
+- **AlertClassifierはStep1（`KnownPatternRule`・完全一致）のみハッカソン提出必須。Step2（`SimilarPatternRule`・Elastic）・Step3（`AiInferenceRule`）は工数が許す範囲で Policy に Rule を足す形で積み上げる。a2aは使わない**（v11/v14/v16改訂）
 - **Cloud Monitoring / Cloud Trace ゲートウェイは設計・ADRのみ。実装は次フェーズ**（v12）
 
 ---
@@ -712,11 +726,12 @@ interface StructuredLog {
 1. デモコントロールドロワーを `/alerts` レイアウト層にのみ差し込む理由
 1. 構造化ログをOTel一括化しWinstonを使わない理由
 1. サンプリングをハッカソンスコープで実装しない理由と将来方針
-1. AlertClassifierをStrategyパターンで設計しハッカソンではfirst-matchのみ実装する理由
-1. AlertClassification VOに重み情報を持たせずClassifier実装クラスに閉じる理由
+1. AlertClassifierを Classifier/Policy/Rule の3層で設計しハッカソンでは `KnownPatternRule`（first-match）のみ実装する理由
+1. AlertClassification VOに重み情報を持たせず各 Rule 実装に閉じる理由
+1. **分類の優先度を Rule の `priority` 数値でなく `kind`（属性）＋ `ClassificationRuleSorter`（関係・domain）で表現する理由。組み立て（依存注入）を composition root に分離する理由**（v16追加）
 1. AIInvestigationPortをプロダクト名に依存しない抽象名にする理由と段階移行設計（v10）
 1. ハッカソン本体でGemini API直接を選択しVertex AI / ADK移行を後続フェーズとする理由（v10）
-1. **AlertClassifierをInMemory → Elastic → ScoringAlertClassifierの3ステップで段階強化する理由と各ステップの完了条件（a2aは使わない理由を含む）**（v11/v14改訂）
+1. **AlertClassifierを Classifier/Policy/Rule の3層にし、`KnownPatternRule` → `SimilarPatternRule`（Elastic）→ `AiInferenceRule` の3ステップで Policy に Rule を足して段階強化する理由と各ステップの完了条件（priority数値でなく kind+Sorter で優先度を持つ理由・a2aは使わない理由を含む）**（v11/v14/v16改訂）
 1. **インフラ横断調査をAlertClassifier（Elastic類似検索）と別レイヤーに分離し、証拠収集→事例照合→AI推定のパイプラインとして設計する理由**（v12追加）
 1. **TerraformGateway・GitHubGateway・CloudLoggingGatewayを読み取り専用に限定する理由**（v12追加）
 1. **Cloud Monitoring・Cloud Traceのゲートウェイ実装を次フェーズとしてADRに明記する理由と移行トリガー**（v12追加）
@@ -737,6 +752,18 @@ interface StructuredLog {
 ---
 
 ## 変更履歴
+
+### v16（AlertClassifier を Classifier/Policy/Rule 3層に再設計）
+
+- `AlertClassifier`（IF）→ `PolicyBasedAlertClassifier` → `ClassificationPolicy`（category単位）→ `ClassificationRule`（最小単位・依存を内包）の3層に再設計
+- 単一アルゴリズム抽象（`match(event, patterns[])`）を廃止。各 Rule が repository / 外部検索 / AI port を内包することで Elastic・AI も同一 IF に収まる
+- 段階強化を「Classifier 丸ごと差し替え」から「Policy に Rule を足す」へ：`KnownPatternRule`（EXACT_MATCH）→ `SimilarPatternRule`（SIMILARITY・Elastic）→ `AiInferenceRule`（INFERENCE）
+- ルール優先度を Rule の `priority` 数値でなく `kind`（属性）＋ `ClassificationRuleSorter`（関係・domain・配列順非依存）で表現
+- 分類対象が `MonitoringEvent`（Alertではない）であることを明記。`classify(monitoringEvent)` に署名変更し、`AnalyzeAlertCommandHandler` から `KnownErrorPatternRepository` 依存を除去（`KnownPatternRule` が内包）
+- 分類器グラフの組み立て（依存注入）は composition root（backoffice DI・step4-3）の責務に分離
+- Step 5 ADR項目に1件追加（kind+Sorter で優先度を表現する理由）
+- ヘッダーバージョンを v15 → v16 に更新
+- 詳細は `step4-2`「分類アーキテクチャ（Classifier / Policy / Rule の3層）」「ルール優先度の決定箇所」節
 
 ### v15（予兆ブリーフィング stretchⅡ追加）
 

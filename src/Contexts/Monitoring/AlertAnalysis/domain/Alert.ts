@@ -37,6 +37,7 @@ export type AlertPrimitives = {
   updatedAt: string;
 };
 
+// 「障害が起きた」という事実とその後の状態を追跡するエンティティ
 export class Alert {
   readonly id: AlertId;
   readonly createdAt: Date;
@@ -174,7 +175,8 @@ export class Alert {
       severity: this._severity,
       status: this._status,
       classification: this._classification,
-      investigationReport: this._investigationReport?.withReviewStatus(reviewStatus) ?? null,
+      investigationReport:
+        this._investigationReport?.withReviewStatus(reviewStatus) ?? null,
       feedback: {
         isCorrect: params.isCorrect,
         operatorNote: params.operatorNote,
@@ -205,10 +207,14 @@ export class Alert {
   static fromPrimitives(primitives: AlertPrimitives): Alert {
     return new Alert({
       id: new AlertId(primitives.id),
-      monitoringEvent: MonitoringEvent.fromPrimitives(primitives.monitoringEvent),
+      monitoringEvent: MonitoringEvent.fromPrimitives(
+        primitives.monitoringEvent,
+      ),
       severity: AlertSeverity.fromString(primitives.severity),
       status: AlertStatus.fromString(primitives.status),
-      classification: alertClassificationFromPrimitives(primitives.classification),
+      classification: alertClassificationFromPrimitives(
+        primitives.classification,
+      ),
       investigationReport: primitives.investigationReport
         ? InvestigationReport.fromPrimitives(primitives.investigationReport)
         : null,

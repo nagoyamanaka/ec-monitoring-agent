@@ -42,8 +42,9 @@
 | 障害レイヤーの表現方法                    | サブクラス分けではなく `MonitoringEvent.category`（APPLICATION / INFRASTRUCTURE / CAPACITY / SECURITY）の弁別子フィールドで表現                              | payload を均質に保つ原則を崩さない。`category` は InfraInvestigation の証拠源選択と、将来の調査担当ルーティング（in-process / a2a 委譲）の**ディスパッチキー**になり、a2aの有無に依存しない前方互換を持つ |
 | VO粒度の判断基準                          | `ClassificationConfidence` のみクラス化。`MatchedCondition` / `UnmatchedCondition` は `interface` のまま                                                    | VOにする価値はドメイン制約と振る舞いの有無で判断する。`Confidence` は範囲制約 + 将来の `isHighConfidence()` が明確。`MatchedCondition` は構造体でしかなく制約も振る舞いも薄い     |
 | AlertClassificationのOCP + Strategy適用   | `KnownAlertClassification` VOは「何が根拠か」の構造のみ定義。重み・スコア計算はClassifier実装クラスの内部ロジックとしてVOに露出しない                       | スコアリング戦略が変わるたびにVOスキーマが変わるとOCP違反。「どう計算したか」はClassifierが知り、「何が根拠か」だけをVOが永続記録する責務分離                                     |
-| AlertClassifierのマッチング戦略（今回）   | EVENT_NAME 完全一致 + payload 部分マッチ（first-match）。`KnownAlertClassification.confidence: 1.0` 固定                                                    | ハッカソンスコープとして十分。`AlertClassifier` インターフェースは維持し、将来スコアリング実装へ差し替え可能にする                                                                |
-| AlertClassifierのマッチング戦略（将来）   | スコアリングベース（複数パターンへの重み付けスコア合算）。`confidence` が閾値未満の場合は未知扱い                                                           | 「未知障害の推測精度向上」と「作業員の意思決定支援」が本来の目的。部分一致の度合いをスコアで表現することで、複数パターンへの可能性を並列提示できる                                |
+| 分類の構造（Classifier/Policy/Rule）      | `AlertClassifier`（トップIF）→ `ClassificationPolicy`（category単位）→ `ClassificationRule`（最小単位・依存を内包）の3層。強化は「Classifier丸ごと差し替え」でなく「Policyに Rule を足す」 | 各 Rule が repository / port / 外部検索を自分で持てるので、InMemory完全一致・Elasticスコアリング・AI推論を同一IFの裏で共存できる。`match(event, patterns[])` を強制する単一アルゴリズム抽象は Elastic/AI に噛み合わず廃止した |
+| AlertClassifierのマッチング戦略（今回）   | EVENT_NAME 完全一致 + payload 部分マッチ（first-match）。`KnownAlertClassification.confidence: 1.0` 固定。`KnownPatternRule` 1個を `ApplicationClassificationPolicy` に載せる              | ハッカソンスコープとして十分。`AlertClassifier` インターフェースは維持し、Rule追加で将来スコアリングへ拡張可能にする                                                              |
+| AlertClassifierのマッチング戦略（将来）   | スコアリングベース（複数パターンへの重み付けスコア合算）。`confidence` が閾値未満の場合は未知扱い。`SimilarPatternRule`(Elastic) を Policy に追加する形で実現                            | 「未知障害の推測精度向上」と「作業員の意思決定支援」が本来の目的。部分一致の度合いをスコアで表現することで、複数パターンへの可能性を並列提示できる                                |
 | AlertClassification への confidence 配置  | `AlertClassification` に `confidence: number \| null` を持たせる。既知一致は `1.0`、未知は `null`（AI分析後は `InvestigationReport.confidence` が別途存在） | 将来のスコアリング移行後も同一フィールドに `0.87` 等を格納できる。UIが `classification.confidence` を参照するだけで両世代のデータを扱える                                         |
 | 既知パターン昇格トリガー                  | 手動（Promoteボタン）+ 自動（correctフィードバックがN回到達で自動昇格）                                                                                     | デモシナリオ3の「次回同じ障害が1秒以内に既知分類される」を自動で示せる。手動はオペレーターの明示的な判断も残す                                                                    |
 | InvestigationReportの配置                 | Alert集約に直接埋め込む（別集約にしない）                                                                                                                   | Alert IDで常にセットで参照される。ライフサイクルも同一。分離のメリット（独立した集約操作）がない                                                                                  |
@@ -420,46 +421,105 @@ interface UnknownAlertClassification {
 
 UIは `classification.confidence` と `matchedConditions` / `unmatchedConditions` を参照するだけで、両世代のデータを同一コードで表示できる。
 
-### AlertClassifier インターフェース
+### 分類アーキテクチャ（Classifier / Policy / Rule の3層）
 
-**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/domain/AlertClassifier.ts`
+**ディレクトリ**: `src/Contexts/Monitoring/AlertAnalysis/domain/classification/`
+
+分類は「IAM 的な階層構造」で表現する。`AlertClassifier`（トップIF）→ `ClassificationPolicy`（監視領域＝category単位の束）→ `ClassificationRule`（最小分類単位）。**各 Rule が自分の判定に必要な依存（repository / port / 外部検索）を内包する**のが要点で、これにより InMemory 完全一致・Elastic スコアリング・AI 推論を同一 IF の裏で共存させられる（旧 `AlertClassificationAlgorithm` は `match(event, patterns[])` シグネチャが Elastic / AI に噛み合わず廃止）。
+
+> **何を分類するか**: 分類対象は `MonitoringEvent`（入ってきた観測）であり、Alert ではない。生成物が `AlertClassification` VO。`detect`（検知）ではなく `classify`（分類）と呼ぶのは、検知は上流（EC のドメインイベント発行 / CI の Trivy スキャン）で既に完了しており、本コンテキストの責務は「来た観測が既知パターンか」を分類することだから。生メトリクスから問題を見つける真の検知（窓集計）が要るようになった時点で、その上流ステップを別途設ける。
 
 ```typescript
+// domain/classification/AlertClassifier.ts
+// AnalyzeAlertCommandHandler はこの抽象にのみ依存する
 interface AlertClassifier {
-  classify(
-    monitoringEvent: MonitoringEvent,
-    knownPatterns: KnownErrorPattern[],
-  ): AlertClassificationResult;
+  classify(monitoringEvent: MonitoringEvent): Promise<AlertClassificationResult>;
 }
 
-// Classifierの戻り値はシンプルに保つ。根拠の詳細はVOが持つ責務
+// 戻り値はシンプルに保つ。根拠の詳細は KnownAlertClassification VO が持つ責務
 type AlertClassificationResult =
   | { matched: true; classification: KnownAlertClassification }
   | { matched: false };
+
+// domain/classification/ClassificationPolicy.ts
+// 監視領域（category）ごとの分類戦略。配下の Rule 群を束ねる
+interface ClassificationPolicy {
+  supports(monitoringEvent: MonitoringEvent): boolean; // 通常は category 一致
+  classify(monitoringEvent: MonitoringEvent): Promise<AlertClassificationResult>;
+}
+
+// domain/classification/ClassificationRule.ts
+// 最小分類単位。判定に必要な依存を自分で内包する。null = 棄権（発火しない）
+// kind は「証拠の性質」を表す属性。優先順位は ClassificationRuleSorter が kind を見て決める
+interface ClassificationRule {
+  readonly kind: ClassificationRuleKind; // EXACT_MATCH | SIMILARITY | INFERENCE
+  classify(monitoringEvent: MonitoringEvent): Promise<KnownAlertClassification | null>;
+}
+
+// domain/classification/ClassificationRuleSorter.ts
+// ルールを優先度順に並べ替えるドメインサービス。kind 優先順位（関係）を持つ。
+// 具体実装に依存せず kind しか見ないため domain に置ける（DIP を侵さない）
+class ClassificationRuleSorter {
+  // 降順: EXACT_MATCH > SIMILARITY > INFERENCE。安定ソートで同 kind は元順序維持
+  sort(rules: ClassificationRule[]): ClassificationRule[];
+}
 ```
 
-**設計ポイント**: `AlertClassificationResult` にはスコアや根拠を持たせない。`classification: KnownAlertClassification` をそのままAlertに渡すだけなので、`AnalyzeAlertCommandHandler` はClassifierの内部実装に依存しない。
+**設計ポイント**: `AlertClassificationResult` にはスコアや根拠を持たせない。`classification: KnownAlertClassification` をそのまま Alert に渡すだけなので、`AnalyzeAlertCommandHandler` は分類の内部実装に依存しない。`classify()` を全層 Promise にしているのは、Rule が repository / 外部検索 / AI port を内包しうるため。
 
-**段階強化ロードマップ（project-prompt v11 準拠）**:
+**構成クラス**:
+
+| ファイル | 役割 |
+| -------- | ---- |
+| `domain/classification/PolicyBasedAlertClassifier.ts` | `MonitoringEvent.category` で担当 Policy にディスパッチするドメインサービス（`AlertClassifier` 実装） |
+| `domain/classification/policies/ApplicationClassificationPolicy.ts` | APPLICATION 領域の Policy。`ClassificationRuleSorter` で Rule を優先度順に並べ、最初に発火した結果を採用（first-match） |
+| `domain/classification/ClassificationRuleSorter.ts` | Rule を kind 優先順位で並べ替えるドメインサービス（exact > similarity > inference） |
+| `domain/classification/ClassificationRuleKind.ts` | Rule の証拠の性質（`EXACT_MATCH` / `SIMILARITY` / `INFERENCE`） |
+| `domain/classification/rules/KnownPatternRule.ts` | 既知パターン完全一致 Rule（kind=`EXACT_MATCH`）。`KnownErrorPatternRepository` を内包・confidence 1.0 固定 |
+| `infrastructure/InMemoryKnownErrorPatternRepository.ts` | `KnownErrorPatternRepository` のオンメモリ実装。分類器グラフの組み立て（依存注入）は step4-3 の DI（composition root）が行う |
+
+### ルール優先度の決定箇所
+
+優先度には2軸あり、決定箇所を分離する：
+
+| 軸 | 決定箇所 | 仕組み |
+| --- | --- | --- |
+| **ルール間**（exact → similarity → inference のどの戦略が勝つか） | `ClassificationRuleSorter`（domain） | Rule の **kind 優先順位**で確定的に並べ替える（配列順に依存しない） |
+| **パターン間**（`KnownPatternRule` 内でどのパターンが先に当たるか） | `KnownErrorPatternRepository.findAll()` | **createdAt ASC**（seed順 / 昇格時刻） |
+
+**設計判断**:
+
+- **`priority: number` を Rule に持たせない**。優先度は「ルール単体の属性」ではなく「ルール間の関係」。一方 `kind`（EXACT_MATCH / SIMILARITY / INFERENCE）は「その Rule がどんな証拠を出すか」という正当な属性なので Rule が持つ。**属性（kind）は Rule・関係（kind間の優先順位）は Sorter** に分離する。
+- **`ClassificationRuleSorter` は domain に置く**。具体実装を一切知らず `kind` しか見ないため DIP を侵さない。「kind で並べ替える」のが Sorter の責務で、「並びに従って実行する」振る舞い（first-match カスケード・category ディスパッチ）は `ApplicationClassificationPolicy` / `PolicyBasedAlertClassifier`（ドメインサービス）が持つ。
+- **配列順に依存しない**のがポイント。DI でどの順に Rule を渡しても、Sorter が kind 優先順位で確定的に並べるため「暗黙の配列順で優先度が決まる」事故が起きない。
+- **組み立て（依存注入＋分類器グラフ生成）は Sorter ではなく composition root（step4-3 の DI）の責務**。そこで `new KnownPatternRule(repo)` / 将来の `new SimilarPatternRule(elasticClient)` を生成し、`ApplicationClassificationPolicy` に Sorter とともに渡す。`AlertClassifier` IF も Handler もノータッチで P1 拡張できる。
+
+**段階強化ロードマップ（project-prompt v11 準拠）**: 強化は「Classifier 丸ごと差し替え」ではなく「**Policy に Rule を足す / 差し替える**」で行う。
 
 ```
-AlertClassifier（インターフェース）← AnalyzeAlertCommandHandler はこの抽象にのみ依存
-  ├─ InMemoryAlertClassifier   ← Step1：ハッカソン本体（first-match・完全一致・confidence 1.0固定）
-  ├─ ElasticAlertClassifier    ← Step2：Elasticsearch hybrid search（BM25 + ベクトル）で類似スコアリング
-  └─ ScoringAlertClassifier    ← 将来：重み付けスコア合算（同等のスコアリング戦略の別実装）
+PolicyBasedAlertClassifier
+  ├─ ApplicationClassificationPolicy
+  │    ├─ KnownPatternRule     ← Step1：ハッカソン本体（first-match・完全一致・confidence 1.0固定）
+  │    ├─ SimilarPatternRule   ← Step2：Elasticsearch hybrid search（BM25 + ベクトル）で類似スコアリング
+  │    └─ AiInferenceRule      ← 将来：AI port を内包した推論 Rule
+  ├─ InfrastructureClassificationPolicy ← category 拡張点（将来）
+  └─ SecurityClassificationPolicy       ← category 拡張点（将来）
 ```
 
-**Step1の実装**: `InMemoryAlertClassifier`（first-match、confidence 固定 1.0）
+**Step1の実装**: `KnownPatternRule`（first-match、confidence 固定 1.0）
 
-**Step2の実装**: `ElasticAlertClassifier`
+**Step2の実装**: `SimilarPatternRule`（Elasticsearch を内包）
 
 - 既知パターンをElasticsearchにインデックスし、`MonitoringEvent`（+後述の `InfraEvidence`）をクエリにして hybrid search で照合する
 - Elasticsearchのスコアを正規化して `ClassificationConfidence` にマッピングする
 - `unmatchedConditions` に「スコアを下げた要因」が自然に入るため、作業員が「なぜ完全一致でないか」を確認できる
-- 閾値未満の場合は `{ matched: false }` を返す（未知扱いでGeminiへ）
+- 閾値未満の場合は `null`（棄権）を返し、後続 Rule / 未知扱い（Gemini）へ流す
 - インフラ証拠（InfraEvidence）でクエリを多次元化するほど照合精度が上がる（v12のシナジー。後述）
+- composition root（step4-3 DI）で `KnownPatternRule` と並べて `ApplicationClassificationPolicy` に渡すだけ。Sorter が kind=SIMILARITY を EXACT_MATCH の次に自動配置する。`AlertClassifier` IF も Handler もノータッチ
 
-**Step3（A2A）**: `ADKAgentInvestigationAdapter` 経由で Elastic Agent Builder → A2A → Gemini Enterprise（Step2完了・6/23 Bootcamp受講後に着手）
+**将来の実装**: `AiInferenceRule`（kind=`INFERENCE`・AI port を内包）。EXACT_MATCH / SIMILARITY が棄権した場合のフォールバックとして最後に評価される。
+
+> **注**: A2A / ADK は `AIInvestigationPort`（調査層）側の進化であり、`AlertClassifier`（分類層）の段階ではない（v14 で分離整理済み。混在させない）。
 
 **スコアリング/Elastic移行のトリガー条件**（ADR Step 5 に記載）:
 
@@ -510,18 +570,18 @@ interface PayloadCondition {
 
 ---
 
-## InMemoryAlertClassifier（Infrastructure実装）
+## KnownPatternRule（first-match 分類ロジック）
 
-**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/infrastructure/InMemoryAlertClassifier.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/domain/classification/rules/KnownPatternRule.ts`
 
-マッチングロジック（今回の first-match 実装）：
+`KnownErrorPatternRepository` を内包し、内部で `findAll()` してから完全一致を評価する Rule（今回の first-match 実装）：
 
 ```
-1. knownPatterns を順番に評価する（createdAt ASC 順がそのままマッチング優先度）
+1. patternRepository.findAll() で既知パターンを取得する（createdAt ASC 順がそのままマッチング優先度）
 2. 各パターンについて:
-   a. eventName の一致確認 → matched / unmatched に振り分ける
-   b. payloadConditions を全件評価 → matched / unmatched に振り分ける
-   c. eventName + 全payloadConditionsが一致した最初のパターンで KnownAlertClassification を構築する:
+   a. eventName の一致確認（不一致なら次のパターンへ）
+   b. payloadConditions を全件評価（一つでも外れたら次のパターンへ）
+   c. eventName + 全payloadConditionsが一致した最初のパターンで KnownAlertClassification を構築して返す:
       {
         type: 'known',
         patternId: pattern.id,
@@ -529,15 +589,16 @@ interface PayloadCondition {
         confidence: 1.0,
         matchedConditions: [
           { field: 'eventName', expectedValue: 'ec.payment.timeout', actualValue: 'ec.payment.timeout' },
-          { field: 'payload.reason', expectedValue: 'TIMEOUT', actualValue: 'TIMEOUT' },
+          { field: 'payload.reason', expectedValue: 'INSUFFICIENT_STOCK', actualValue: 'INSUFFICIENT_STOCK' },
         ],
         unmatchedConditions: []  // first-matchの完全一致なので空
       }
-      → { matched: true, classification }
-3. すべてのパターンが不一致 → { matched: false }
+3. すべてのパターンが不一致 → null（棄権）
 ```
 
-**設計ポイント**: first-matchの完全一致では `unmatchedConditions` は空になる。`confidence` は `ClassificationConfidence.certain()`（= 1.0）で構築する。将来の `ScoringAlertClassifier` では部分一致のパターンが選ばれた場合に `unmatchedConditions` に反証情報が入り、`ClassificationConfidence.of(0.87)` のように実スコアが入る。VOの構造もUIコードもDBスキーマも変更不要。
+**Policy 側の集約**: `ApplicationClassificationPolicy` が配下 Rule を順に `classify()` し、最初に非 null を返した Rule の結果を `{ matched: true, classification }` として返す。全 Rule が null なら `{ matched: false }`。`PolicyBasedAlertClassifier` は `event.category` で担当 Policy を選ぶ（APPLICATION 以外で対応 Policy が無ければ `{ matched: false }`）。
+
+**設計ポイント**: first-matchの完全一致では `unmatchedConditions` は空になる。`confidence` は `ClassificationConfidence.certain()`（= 1.0）で構築する。将来の `SimilarPatternRule`（Elastic）では部分一致のパターンが選ばれた場合に `unmatchedConditions` に反証情報が入り、`ClassificationConfidence.of(0.87)` のように実スコアが入る。VOの構造もUIコードもDBスキーマも変更不要。Rule が repository を内包するため、Elastic / AI など「アルゴリズムとデータソースが不可分」な実装も同じ `ClassificationRule` IF に収まる。
 
 ---
 
@@ -550,11 +611,12 @@ interface PayloadCondition {
 | 依存                          | 種別      | 理由                                  |
 | ----------------------------- | --------- | ------------------------------------- |
 | `AlertRepository`             | interface | Alert永続化                           |
-| `KnownErrorPatternRepository` | interface | 既知パターン取得                      |
 | `AlertClassifier`             | interface | 既知/未知分類                         |
 | `EventBus`                    | interface | InvestigateAlertCommand発行（未知時） |
 | `SSEAlertNotifier`            | interface | フロントへの即時push                  |
 | `Logger`                      | interface | 構造化ログ                            |
+
+> **注**: 既知パターンの取得（`KnownErrorPatternRepository.findAll()`）は `KnownPatternRule` が内包するため、Handler は `KnownErrorPatternRepository` に依存しない。Handler は `classify(monitoringEvent)` を呼ぶだけで、パターン取得・照合の内部実装を知らない。
 
 ### AnalyzeAlertCommand
 
@@ -577,8 +639,7 @@ interface AnalyzeAlertCommand {
 ### 処理フロー
 
 ```
-1. KnownErrorPatternRepository.findAll() で既知パターン一覧を取得する
-2. AlertClassifier.classify(monitoringEvent, patterns) を呼び出す
+1. AlertClassifier.classify(monitoringEvent) を呼び出す（パターン取得・照合は Classifier 内部の責務）
    → result: AlertClassificationResult
 
 【既知パターン一致の場合】（result.matched === true）
@@ -841,7 +902,7 @@ Alert発生
   ├─ TerraformGateway    → plan / git diff（IaC変更履歴・読み取り専用）
   └─ GitHubGateway       → 直近コミット・PR一覧
   ↓ 収集した「障害コンテキスト」がリッチになるほど
-【レイヤー2：事例照合】ElasticAlertClassifier / SimilarIncidentRepository
+【レイヤー2：事例照合】SimilarPatternRule（Elastic）/ SimilarIncidentRepository
   └─ ハイブリッド検索（BM25 + ベクトル）で過去パターンと突合
   ↓
 【レイヤー3：AI推定】AIInvestigationPort（GeminiAIInvestigationAdapter）
@@ -1384,7 +1445,7 @@ SubmitFeedbackCommandHandler
 | `SimilarIncidentRepository`            | InMemory + InMemoryCriteriaConverter                         | `ElasticSearchSimilarIncidentRepository`（大規模化時）。Criteria共通インターフェースは維持                                                                                                                                                                                     |
 | `AIInvestigationPort`                  | GeminiAIInvestigationAdapter（gemini-2.0-flash系・Gemini API直接） | `VertexAIInvestigationAdapter`（Vertex AI SDK経由・推奨） → `ADKAgentInvestigationAdapter`（ADK/A2A構成）への段階移行。DI差し替え1箇所のみでApplication層ノータッチ（project-prompt v10）                                                                                       |
 | `InfraInvestigationPort`               | CloudLogging/Terraform/GitHub の3Gateway（読み取り専用）     | `CloudMonitoringGateway` / `CloudTraceGateway` を追加（次フェーズ）。`InfraEvidence` の正規化スキーマは維持（project-prompt v12）                                                                                                                                              |
-| `AlertClassifier`                      | `InMemoryAlertClassifier`（first-match、confidence 1.0固定） | `ElasticAlertClassifier`（hybrid search）→ `ScoringAlertClassifier`（重み付けスコア合算、閾値判定）。`AlertClassificationResult` の型は変わらず、`KnownAlertClassification` VOに `unmatchedConditions` の反証情報が入るようになる。移行トリガー: 自動昇格パターンが10件超 or 誤分類率が計測可能になった時点（ADR Step 5） |
+| `AlertClassifier`                      | `PolicyBasedAlertClassifier`（`ApplicationClassificationPolicy` + `KnownPatternRule`、first-match・confidence 1.0固定）。組み立ては step4-3 の DI（composition root） | `ApplicationClassificationPolicy` に `SimilarPatternRule`（Elastic hybrid search・kind=SIMILARITY）→ `AiInferenceRule`（kind=INFERENCE）を追加。`ClassificationRuleSorter` が kind 優先順位で並べる。`AlertClassificationResult` の型は変わらず、`KnownAlertClassification` VOに `unmatchedConditions` の反証情報が入るようになる。移行トリガー: 自動昇格パターンが10件超 or 誤分類率が計測可能になった時点（ADR Step 5） |
 | `recentEvents` in InvestigationContext | 省略（将来拡張ポイント）                                     | AlertRepository.findByCriteria で直近30分のAlertを収集し追加                                                                                                                                                                                                                   |
 
 ---

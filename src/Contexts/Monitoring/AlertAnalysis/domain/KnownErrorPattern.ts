@@ -18,6 +18,7 @@ export type KnownErrorPatternPrimitives = {
   createdAt: string;
 };
 
+// AlertClassifierとAlert集約の間にあるVO
 export class KnownErrorPattern {
   readonly id: string;
   readonly name: string;

@@ -59,8 +59,13 @@ BackofficeApp.start():
   3. Repository実装を new
      - MongoAlertRepository / MongoKnownErrorPatternRepository
      - InMemorySimilarIncidentRepository（起動時 warmUp(mongo既存)）
-  4. Classifier / Port を new（★差し替えポイント）
-     - AlertClassifier:        InMemoryAlertClassifier（→将来 ElasticAlertClassifier）
+  4. Classifier / Port を new（★差し替えポイント・分類器の composition root）
+     - AlertClassifier:        PolicyBasedAlertClassifier([
+                                 ApplicationClassificationPolicy(
+                                   [ KnownPatternRule(MongoKnownErrorPatternRepository) ],  // 将来: + SimilarPatternRule(Elastic)
+                                   ClassificationRuleSorter,   // kind優先順位で並べ替え（配列順に依存しない）
+                                 ),
+                               ])
      - AIInvestigationPort:     GeminiAIInvestigationAdapter（→将来 Vertex/ADK）
      - InfraInvestigationPort:  DefaultInfraInvestigationAdapter（各Gateway注入）
      - RemediationPort:         GitHubPullRequestGateway（GITHUB_TOKEN/対象repo限定）

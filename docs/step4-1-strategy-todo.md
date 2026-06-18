@@ -42,7 +42,7 @@
 ## タスク 6: Elastic Cloud 登録 〔stretch〕
 
 - [ ] **公式サイトから**登録（GCPマーケットプレイス経由は無料トライアルなし）
-- [ ] フェーズ2（ElasticAlertClassifier）着手時のみ。P0/P1完了後
+- [ ] フェーズ2（`SimilarPatternRule`・Elastic 内包の分類 Rule）着手時のみ。P0/P1完了後
 
 ## タスク 7: 意思決定のロック（ADR Step5の種）〔P0・ドキュメント〕
 
