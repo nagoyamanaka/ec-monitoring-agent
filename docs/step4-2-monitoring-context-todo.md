@@ -50,16 +50,18 @@
 - 【完了】`domain/classification/policies/ApplicationClassificationPolicy.ts`（first-match で Rule を集約）
 - 【完了】`domain/classification/rules/KnownPatternRule.ts`（`KnownErrorPatternRepository` 内包・完全一致・confidence 1.0・unmatched空）
 - 【完了】`domain/classification/ClassificationRuleKind.ts`（EXACT_MATCH/SIMILARITY/INFERENCE）/ `ClassificationRuleSorter.ts`（kind優先順位で並べ替えるドメインサービス）
-- 【完了】`domain/KnownErrorPatternRepository.ts`（IF・`findAll`/`save`）/ `infrastructure/InMemoryKnownErrorPatternRepository.ts`
+- 【完了】`domain/KnownErrorPatternRepository.ts`（IF・`findAll`/`save`）/ `infrastructure/persistence/InMemoryKnownErrorPatternRepository.ts`
 - 設計判断: 分類対象は MonitoringEvent（Alertではない）。各 Rule が依存を内包するので Elastic/AI も同一 IF に収まる（旧 `AlertClassificationAlgorithm` は廃止）
 - 設計判断: ルール優先度は `ClassificationRuleSorter` が **kind 優先順位**で確定（配列順に依存しない）。`priority` 数値は持たせない（属性=kindはRule・関係=優先順位はSorter に分離）。Sorter は kind しか見ないので **domain**（DIP を侵さない）。実行時のカスケード/ディスパッチは Policy/Classifier（ドメインサービス）
 - 設計判断: 分類器グラフの組み立て（依存注入）は composition root＝**step4-3 の DI** の責務（P0 では専用 Factory を置かない）
 - 参考: 「分類アーキテクチャ（Classifier / Policy / Rule の3層）」「ルール優先度の決定箇所」「KnownPatternRule」節
 
-### タスク 6: Repository interface ＋ Mongo 実装 〔P0〕
+### タスク 6: Repository interface ＋ Mongo 実装 〔P0〕✅ 完了済み
 
-- 【新規】`domain/AlertRepository.ts` / `domain/KnownErrorPatternRepository.ts`
-- 【新規】`infrastructure/persistence/MongoAlertRepository.ts` / `MongoKnownErrorPatternRepository.ts`（`MongoRepository` 継承）
+- 【完了】`domain/AlertRepository.ts`（新規・`save`/`findById`/`findByCriteria`）
+- 【完了】`domain/KnownErrorPatternRepository.ts`（`findById` 追加）/ `infrastructure/persistence/InMemoryKnownErrorPatternRepository.ts`（`findById` 追加・`persistence/` へ移動）
+- 【完了】`infrastructure/persistence/MongoAlertRepository.ts` / `MongoKnownErrorPatternRepository.ts`（`MongoRepository` 継承）
+- 【完了】`Alert` / `KnownErrorPattern` を `AggregateRoot` 継承（`MongoRepository<T extends AggregateRoot>` 型制約を満たすため）
 - `findAll()` は createdAt ASC（マッチ優先度）。参考: 各Repository節
 
 ### タスク 7: AnalyzeAlertCommandHandler 〔P0〕

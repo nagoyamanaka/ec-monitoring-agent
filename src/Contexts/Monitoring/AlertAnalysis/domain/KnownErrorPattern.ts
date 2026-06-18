@@ -1,4 +1,5 @@
 import { AlertSeverity } from "./AlertSeverity.js";
+import { AggregateRoot } from "../../../Shared/domain/AggregateRoot.js";
 
 export type PayloadCondition = {
   readonly field: string;
@@ -18,8 +19,7 @@ export type KnownErrorPatternPrimitives = {
   createdAt: string;
 };
 
-// AlertClassifierとAlert集約の間にあるVO
-export class KnownErrorPattern {
+export class KnownErrorPattern extends AggregateRoot {
   readonly id: string;
   readonly name: string;
   readonly description: string;
@@ -43,6 +43,7 @@ export class KnownErrorPattern {
     promotedAt: Date | null;
     createdAt: Date;
   }) {
+    super();
     this.id = params.id;
     this.name = params.name;
     this.description = params.description;

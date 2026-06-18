@@ -476,7 +476,7 @@ class ClassificationRuleSorter {
 | `domain/classification/ClassificationRuleSorter.ts` | Rule を kind 優先順位で並べ替えるドメインサービス（exact > similarity > inference） |
 | `domain/classification/ClassificationRuleKind.ts` | Rule の証拠の性質（`EXACT_MATCH` / `SIMILARITY` / `INFERENCE`） |
 | `domain/classification/rules/KnownPatternRule.ts` | 既知パターン完全一致 Rule（kind=`EXACT_MATCH`）。`KnownErrorPatternRepository` を内包・confidence 1.0 固定 |
-| `infrastructure/InMemoryKnownErrorPatternRepository.ts` | `KnownErrorPatternRepository` のオンメモリ実装。分類器グラフの組み立て（依存注入）は step4-3 の DI（composition root）が行う |
+| `infrastructure/persistence/InMemoryKnownErrorPatternRepository.ts` | `KnownErrorPatternRepository` のオンメモリ実装。分類器グラフの組み立て（依存注入）は step4-3 の DI（composition root）が行う |
 
 ### ルール優先度の決定箇所
 

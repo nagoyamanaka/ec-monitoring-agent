@@ -1,5 +1,5 @@
-import { KnownErrorPattern } from "../domain/KnownErrorPattern.js";
-import { KnownErrorPatternRepository } from "../domain/KnownErrorPatternRepository.js";
+import { KnownErrorPattern } from "../../domain/KnownErrorPattern.js";
+import { KnownErrorPatternRepository } from "../../domain/KnownErrorPatternRepository.js";
 
 export class InMemoryKnownErrorPatternRepository implements KnownErrorPatternRepository {
   private patterns: KnownErrorPattern[];
@@ -10,6 +10,10 @@ export class InMemoryKnownErrorPatternRepository implements KnownErrorPatternRep
 
   async findAll(): Promise<KnownErrorPattern[]> {
     return [...this.patterns];
+  }
+
+  async findById(id: string): Promise<KnownErrorPattern | null> {
+    return this.patterns.find((p) => p.id === id) ?? null;
   }
 
   async save(pattern: KnownErrorPattern): Promise<void> {

@@ -7,7 +7,7 @@ import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 import { KnownErrorPattern } from "../KnownErrorPattern.js";
 import { AlertSeverity } from "../AlertSeverity.js";
-import { InMemoryKnownErrorPatternRepository } from "../../infrastructure/InMemoryKnownErrorPatternRepository.js";
+import { InMemoryKnownErrorPatternRepository } from "../../infrastructure/persistence/InMemoryKnownErrorPatternRepository.js";
 
 const paymentTimeoutPattern = KnownErrorPattern.create({
   id: "pattern-001",
@@ -21,10 +21,15 @@ const paymentTimeoutPattern = KnownErrorPattern.create({
 
 // 本番の composition root（step4-3 DI）が行う組み立てをテスト内で再現する。
 function buildClassifier(): PolicyBasedAlertClassifier {
-  const repository = new InMemoryKnownErrorPatternRepository([paymentTimeoutPattern]);
+  const repository = new InMemoryKnownErrorPatternRepository([
+    paymentTimeoutPattern,
+  ]);
   const sorter = new ClassificationRuleSorter();
   return new PolicyBasedAlertClassifier([
-    new ApplicationClassificationPolicy([new KnownPatternRule(repository)], sorter),
+    new ApplicationClassificationPolicy(
+      [new KnownPatternRule(repository)],
+      sorter,
+    ),
   ]);
 }
 
@@ -45,7 +50,9 @@ function makeEvent(params: {
 
 describe("PolicyBasedAlertClassifier", () => {
   it("APPLICATION イベントが既知パターンに一致したら matched:true を返す", async () => {
-    const result = await buildClassifier().classify(makeEvent({ eventName: "ec.payment.timeout" }));
+    const result = await buildClassifier().classify(
+      makeEvent({ eventName: "ec.payment.timeout" }),
+    );
 
     expect(result.matched).toBe(true);
     if (result.matched) {
@@ -54,7 +61,9 @@ describe("PolicyBasedAlertClassifier", () => {
   });
 
   it("既知パターンに一致しない場合は matched:false を返す", async () => {
-    const result = await buildClassifier().classify(makeEvent({ eventName: "ec.unknown.event" }));
+    const result = await buildClassifier().classify(
+      makeEvent({ eventName: "ec.unknown.event" }),
+    );
 
     expect(result.matched).toBe(false);
   });

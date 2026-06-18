@@ -18,6 +18,7 @@ import {
   InvestigationReportPrimitives,
 } from "../../AIInvestigation/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../AIInvestigation/domain/ReviewStatus.js";
+import { AggregateRoot } from "../../../Shared/domain/AggregateRoot.js";
 
 type AlertFeedback = {
   readonly isCorrect: boolean;
@@ -37,8 +38,8 @@ export type AlertPrimitives = {
   updatedAt: string;
 };
 
-// 「障害が起きた」という事実とその後の状態を追跡するエンティティ
-export class Alert {
+// 「障害が起きた」という事実とその後の状態を追跡する
+export class Alert extends AggregateRoot {
   readonly id: AlertId;
   readonly createdAt: Date;
   private readonly _monitoringEvent: MonitoringEvent;
@@ -62,6 +63,7 @@ export class Alert {
     createdAt: Date;
     updatedAt: Date;
   }) {
+    super();
     this.id = params.id;
     this._monitoringEvent = params.monitoringEvent;
     this._severity = params.severity;

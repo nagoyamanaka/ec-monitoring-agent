@@ -217,6 +217,7 @@ src/Contexts/Monitoring/
 │   │       └── SubmitFeedbackCommandHandler.ts # フィードバック受付・既知昇格トリガー・レポートレビュー結果の記録
 │   └── infrastructure/
 │       ├── persistence/
+│       │   ├── InMemoryKnownErrorPatternRepository.ts
 │       │   ├── MongoAlertRepository.ts
 │       │   └── MongoKnownErrorPatternRepository.ts
 │       └── subscribers/

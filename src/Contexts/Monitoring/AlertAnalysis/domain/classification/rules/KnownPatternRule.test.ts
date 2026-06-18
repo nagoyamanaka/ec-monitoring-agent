@@ -11,6 +11,9 @@ class StubKnownErrorPatternRepository implements KnownErrorPatternRepository {
   async findAll(): Promise<KnownErrorPattern[]> {
     return this.patterns;
   }
+  async findById(id: string): Promise<KnownErrorPattern | null> {
+    return this.patterns.find((p) => p.id === id) ?? null;
+  }
   async save(): Promise<void> {}
 }
 
