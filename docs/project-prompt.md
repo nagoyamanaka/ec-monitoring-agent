@@ -6,13 +6,13 @@
 > 実装TODOの優先順位フローを追記。
 > インフラ調査関連APIエンドポイントを追加。
 >
-> | Step                                       | 詳細設計ドキュメント                | ステータス      |
-> | ------------------------------------------ | ----------------------------------- | --------------- |
-> | Step 1: ディレクトリ構成                   | `docs/step1-directory-structure.md` | ✅ 確定         |
-> | Step 2: ドメインモデル設計（EC）           | `docs/step2-domain-model.md`        | ✅ 確定         |
-> | Step 3: アプリケーション層設計（EC）       | `docs/step3-application-layer.md`   | ✅ 確定         |
-> | Step 4: Monitoring（4分割）                | `docs/step4-1-strategy.md` 〜 `step4-4-backoffice-frontend.md`（各 `*-todo.md` 付き） | ✅ 確定         |
-> | Step 5: ADR                                | `docs/step5-adr.md`                 | 🔲 次のステップ |
+> | Step                                 | 詳細設計ドキュメント                                                                  | ステータス      |
+> | ------------------------------------ | ------------------------------------------------------------------------------------- | --------------- |
+> | Step 1: ディレクトリ構成             | `docs/step1-directory-structure.md`                                                   | ✅ 確定         |
+> | Step 2: ドメインモデル設計（EC）     | `docs/step2-domain-model.md`                                                          | ✅ 確定         |
+> | Step 3: アプリケーション層設計（EC） | `docs/step3-application-layer.md`                                                     | ✅ 確定         |
+> | Step 4: Monitoring（4分割）          | `docs/step4-1-strategy.md` 〜 `step4-4-backoffice-frontend.md`（各 `*-todo.md` 付き） | ✅ 確定         |
+> | Step 5: ADR                          | `docs/step5-adr.md`                                                                   | 🔲 次のステップ |
 
 ---
 
@@ -57,27 +57,27 @@ AIエージェントは「アプリログを見る」だけでなく、**Cloud L
 
 ## 技術スタック
 
-| カテゴリ       | 技術                                                                               | 備考                                                                                                             |
-| -------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Language       | TypeScript                                                                         | Strict mode                                                                                                      |
-| Framework      | Express.js                                                                         | バックエンドAPI                                                                                                  |
-| Frontend       | React（CSR）                                                                       | バックオフィスUI。SSR/ISR不使用                                                                                  |
-| Architecture   | DDD + CleanArchitecture + CQRS + EDA                                               | CodelyTVパターン準拠                                                                                             |
-| Message Broker | RabbitMQ                                                                           | DomainEvent配信                                                                                                  |
-| Database       | MongoDB                                                                            | 全コンテキスト統一（ハッカソンスコープ）                                                                         |
-| AI（現行）     | Gemini API                                                                         | `@google/generative-ai`。ハッカソン本体で使用                                                                    |
-| AI（将来P1）   | Vertex AI SDK                                                                      | `@google-cloud/vertexai`。フェーズ1で差し替え                                                                    |
-| AI（将来P2）   | ADK（Agents Development Kit）                                                      | フェーズ2でマルチエージェント構成                                                                                |
-| 検索（将来P1） | Elasticsearch（Elastic Cloud）                                                     | `SimilarPatternRule`（kind=SIMILARITY）として `ApplicationClassificationPolicy` に追加。a2aは不使用（ADK in-processで代替）                                    |
-| Observability  | Cloud Logging・Cloud Monitoring・Cloud Trace                                       | GCPネイティブ。OTel SDK（`@opentelemetry/sdk-node`）からGCPエクスポーター経由で直接送信。Collectorコンテナ不使用 |
-| Logging        | OTel Logs → Cloud Logging（`@google-cloud/opentelemetry-cloud-trace-exporter` 等） | Winston不使用。OTel一括化でtrace_id/span_idはSDKが自動付与。`StructuredLog`型には含めない                        |
-| インフラ調査   | Cloud Logging API・Terraform CLI（読み取り専用）・GitHub REST API                  | インフラ横断調査エージェントが証拠収集に使用。apply等の書き込み操作は一切行わない                                |
-| CI/CD          | GitHub Actions                                                                     | 「まわす」。Trivy / npm audit を実行し脆弱性を `MonitoringEvent(SECURITY)` として通知（v13）                     |
-| セキュリティ   | Trivy・npm audit                                                                   | CIでHIGH以上の脆弱性を検出。調査パイプラインのSECURITYカテゴリ入力（v13）                                        |
-| リメディエーション | GitHub Pull Request API（write）                                                | `RemediationPort` 経由でPR草案のみ起票。自動マージなし・人間承認ゲート（v13）                                    |
-| デプロイ（とどける） | Cloud Run（一部）＋ Compute Engine                                            | 「とどける」の見せ場をCloud Runに載せる。EDA常駐Subscriberとステートレス性のトレードオフはADRで整理（v13）       |
-| Test           | Vitest (BDD)                                                                       |                                                                                                                  |
-| Infra          | GCP Compute Engine (e2-medium × 1)                                                 |                                                                                                                  |
+| カテゴリ             | 技術                                                                               | 備考                                                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Language             | TypeScript                                                                         | Strict mode                                                                                                                 |
+| Framework            | Express.js                                                                         | バックエンドAPI                                                                                                             |
+| Frontend             | React（CSR）                                                                       | バックオフィスUI。SSR/ISR不使用                                                                                             |
+| Architecture         | DDD + CleanArchitecture + CQRS + EDA                                               | CodelyTVパターン準拠                                                                                                        |
+| Message Broker       | RabbitMQ                                                                           | DomainEvent配信                                                                                                             |
+| Database             | MongoDB                                                                            | 全コンテキスト統一（ハッカソンスコープ）                                                                                    |
+| AI（現行）           | Gemini API                                                                         | `@google/generative-ai`。ハッカソン本体で使用                                                                               |
+| AI（将来P1）         | Vertex AI SDK                                                                      | `@google-cloud/vertexai`。フェーズ1で差し替え                                                                               |
+| AI（将来P2）         | ADK（Agents Development Kit）                                                      | フェーズ2でマルチエージェント構成                                                                                           |
+| 検索（将来P1）       | Elasticsearch（Elastic Cloud）                                                     | `SimilarPatternRule`（kind=SIMILARITY）として `ApplicationClassificationPolicy` に追加。a2aは不使用（ADK in-processで代替） |
+| Observability        | Cloud Logging・Cloud Monitoring・Cloud Trace                                       | GCPネイティブ。OTel SDK（`@opentelemetry/sdk-node`）からGCPエクスポーター経由で直接送信。Collectorコンテナ不使用            |
+| Logging              | OTel Logs → Cloud Logging（`@google-cloud/opentelemetry-cloud-trace-exporter` 等） | Winston不使用。OTel一括化でtrace_id/span_idはSDKが自動付与。`StructuredLog`型には含めない                                   |
+| インフラ調査         | Cloud Logging API・Terraform CLI（読み取り専用）・GitHub REST API                  | インフラ横断調査エージェントが証拠収集に使用。apply等の書き込み操作は一切行わない                                           |
+| CI/CD                | GitHub Actions                                                                     | 「まわす」。Trivy / npm audit を実行し脆弱性を `MonitoringEvent(SECURITY)` として通知（v13）                                |
+| セキュリティ         | Trivy・npm audit                                                                   | CIでHIGH以上の脆弱性を検出。調査パイプラインのSECURITYカテゴリ入力（v13）                                                   |
+| リメディエーション   | GitHub Pull Request API（write）                                                   | `RemediationPort` 経由でPR草案のみ起票。自動マージなし・人間承認ゲート（v13）                                               |
+| デプロイ（とどける） | Cloud Run（一部）＋ Compute Engine                                                 | 「とどける」の見せ場をCloud Runに載せる。EDA常駐Subscriberとステートレス性のトレードオフはADRで整理（v13）                  |
+| Test                 | Vitest (BDD)                                                                       |                                                                                                                             |
+| Infra                | GCP Compute Engine (e2-medium × 1)                                                 |                                                                                                                             |
 
 ---
 
@@ -459,21 +459,21 @@ AlertClassifier（インターフェース）← AnalyzeAlertCommandHandler は�
 | 実装クラス   | `KnownPatternRule`（kind=EXACT_MATCH・`KnownErrorPatternRepository` を内包）         |
 | マッチ戦略   | first-match（先着優先の完全一致）                                                    |
 | confidence   | 1.0固定                                                                              |
-| インフラ依存 | なし（オンメモリ。Mongo実装は backoffice DI で注入）                                  |
+| インフラ依存 | なし（オンメモリ。Mongo実装は backoffice DI で注入）                                 |
 | **完了条件** | デモシナリオ1・2・3がE2Eで通る。**この状態でコミットを切り、提出できる状態をキープ** |
 
 #### Step2：SimilarPatternRule（Elastic類似検索・シナジー完成フェーズ）
 
-| 項目         | 内容                                                                                                 |
-| ------------ | ---------------------------------------------------------------------------------------------------- |
-| 実装クラス   | `SimilarPatternRule`（kind=SIMILARITY・Elastic client を内包）                                       |
-| マッチ戦略   | hybrid search（BM25 + ベクトル検索）による類似スコアリング                                           |
-| confidence   | Elasticsearchのスコアを正規化して返す                                                                |
-| クエリ入力   | `InfraEvidence`（アプリログ + Terraform差分 + GitHubコミット）を含む多次元コンテキスト               |
-| インフラ依存 | Elastic Cloud（公式サイトから直接登録で14日間無料トライアル）                                        |
+| 項目         | 内容                                                                                                                                                                             |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 実装クラス   | `SimilarPatternRule`（kind=SIMILARITY・Elastic client を内包）                                                                                                                   |
+| マッチ戦略   | hybrid search（BM25 + ベクトル検索）による類似スコアリング                                                                                                                       |
+| confidence   | Elasticsearchのスコアを正規化して返す                                                                                                                                            |
+| クエリ入力   | `InfraEvidence`（アプリログ + Terraform差分 + GitHubコミット）を含む多次元コンテキスト                                                                                           |
+| インフラ依存 | Elastic Cloud（公式サイトから直接登録で14日間無料トライアル）                                                                                                                    |
 | 追加方法     | `ApplicationClassificationPolicy` の Rule 配列に足すだけ（`ClassificationRuleSorter` が SIMILARITY を EXACT_MATCH の次に自動配置）。`AlertClassifier` IF も Handler もノータッチ |
-| **完了条件** | `SimilarPatternRule` を Policy に追加し DI で差し替え可能。InfraEvidenceでクエリが強化されている状態 |
-| 注意         | **Elastic CloudはGCPマーケットプレイス経由で登録すると無料トライアルがない。公式サイトから登録する** |
+| **完了条件** | `SimilarPatternRule` を Policy に追加し DI で差し替え可能。InfraEvidenceでクエリが強化されている状態                                                                             |
+| 注意         | **Elastic CloudはGCPマーケットプレイス経由で登録すると無料トライアルがない。公式サイトから登録する**                                                                             |
 
 **インフラ証拠とElasticのシナジー（v12追加）**:
 インフラ横断調査（フェーズ1）を先に完成させてからElastic（フェーズ2）に入ること。
@@ -483,14 +483,14 @@ AlertClassifier（インターフェース）← AnalyzeAlertCommandHandler は�
 
 > **注意**: Step3 はあくまで `ApplicationClassificationPolicy` に追加する第3の Rule。`ADKAgentInvestigationAdapter` は `AIInvestigationPort`（調査層）側の進化であり、`AlertClassifier`（分類層）の段階ではない（混在させない）。a2aは使用しない。
 
-| 項目           | 内容                                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------------------- |
-| 実装クラス     | `AiInferenceRule`（kind=INFERENCE・AI port を内包）                                                       |
-| マッチ戦略     | EXACT_MATCH / SIMILARITY が棄権した場合のフォールバック推論（confidence を返す）                          |
-| confidence     | AI の確信度を正規化して返す（0.0〜1.0）                                                                  |
-| インフラ依存   | AI port（Gemini 等）。Elastic を併用する場合は Step2 ベース                                               |
-| **完了条件**   | `AiInferenceRule` を Policy に追加し DI で差し替え可能。`AnalyzeAlertCommandHandler` ノータッチ           |
-| 着手タイミング | Step2（Elastic）完了後。ハッカソン締切後のポートフォリオ強化フェーズ                                     |
+| 項目           | 内容                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| 実装クラス     | `AiInferenceRule`（kind=INFERENCE・AI port を内包）                                             |
+| マッチ戦略     | EXACT_MATCH / SIMILARITY が棄権した場合のフォールバック推論（confidence を返す）                |
+| confidence     | AI の確信度を正規化して返す（0.0〜1.0）                                                         |
+| インフラ依存   | AI port（Gemini 等）。Elastic を併用する場合は Step2 ベース                                     |
+| **完了条件**   | `AiInferenceRule` を Policy に追加し DI で差し替え可能。`AnalyzeAlertCommandHandler` ノータッチ |
+| 着手タイミング | Step2（Elastic）完了後。ハッカソン締切後のポートフォリオ強化フェーズ                            |
 
 #### リスク管理方針
 
@@ -708,13 +708,13 @@ interface StructuredLog {
 
 ## 出力してほしいアウトプット
 
-| Step       | 詳細設計ドキュメント                | ステータス      |
-| ---------- | ----------------------------------- | --------------- |
-| **Step 1** | `docs/step1-directory-structure.md` | ✅ **確定済み** |
-| **Step 2** | `docs/step2-domain-model.md`        | ✅ **確定済み** |
-| **Step 3** | `docs/step3-application-layer.md`   | ✅ **確定済み** |
+| Step       | 詳細設計ドキュメント                                                                                                | ステータス      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------- | --------------- |
+| **Step 1** | `docs/step1-directory-structure.md`                                                                                 | ✅ **確定済み** |
+| **Step 2** | `docs/step2-domain-model.md`                                                                                        | ✅ **確定済み** |
+| **Step 3** | `docs/step3-application-layer.md`                                                                                   | ✅ **確定済み** |
 | **Step 4** | `docs/step4-{1-strategy,2-monitoring-context,3-backoffice-backend,4-backoffice-frontend}.md`（各 `*-todo.md` 付き） | ✅ **確定済み** |
-| **Step 5** | ADR                                 | 🔲 次のステップ |
+| **Step 5** | ADR                                                                                                                 | 🔲 次のステップ |
 
 ### Step 5で作成するADR
 
@@ -748,6 +748,7 @@ interface StructuredLog {
 1. **joinを自前ルールエンジンでなくLLMに委譲し、人間は正規化／引用縛り／引用検証の3点足場に限定する理由**（v15追加）
 1. **突合キーを(A)テキストjoin→(B)構造化タグへ段階移行する理由（精度と既存P0無傷のトレードオフ）**（v15追加）
 1. **予兆ブリーフィングをP0パイプライン無傷の追加レイヤー（read-onlyの調査の一種）として載せる設計判断**（v15追加）
+1. **なぜCloud Pub/Subでなく、Rabbit MQか？**-> ローカル開発(E2Eテスト)の開発サイクル短縮が狙い
 
 ---
 
