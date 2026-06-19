@@ -238,30 +238,40 @@ src/Contexts/Monitoring/
 │   │   # ※ InvestigationReport / ReviewStatus は Alert集約のサブエンティティなので AlertAnalysis/domain に置く（ここには置かない）。
 │   │   #   AIInvestigation は「Reportを生成する補助モジュール」なので AlertAnalysis/domain（InvestigationReport）へ依存する＝依存は一方向（AIInvestigation → AlertAnalysis）。
 │   │   ├── InvestigationContext.ts            # Geminiへ送るコンテキストの型（トークン上限3,500）
-│   │   └── AIInvestigationPort.ts             # AI調査呼び出しのポートインターフェース（DIP）
-│   │                                          # ※ プロダクト名を含まない抽象名にすることで
-│   │                                          #   Gemini直接 → Vertex AI SDK → ADK エージェント
-│   │                                          #   への段階移行でApplication層がノータッチになる
+│   │   ├── AIInvestigationPort.ts             # AI調査呼び出しのポートインターフェース（DIP）
+│   │   │                                      # ※ プロダクト名を含まない抽象名にすることで
+│   │   │                                      #   Gemini直接 → Vertex AI SDK → ADK エージェント
+│   │   │                                      #   への段階移行でApplication層がノータッチになる
+│   │   └── LLMTextClient.ts                   # LLMへの最小契約「text in → text out」（generate(systemInstruction, prompt)）
+│   │                                          # ※ LLMInvestigationAdapter が DI で受け取る部品。プロバイダ固有呼び出しとリトライのみを抽象化
 │   ├── application/
 │   │   └── InvestigateAlert/
 │   │       ├── InvestigateAlertCommand.ts
 │   │       └── InvestigateAlertCommandHandler.ts # 未知障害時にAIへ投げ、InvestigationReportを生成・保存
 │   │                                             # ※ AIInvestigationPort にのみ依存。実装切り替えでノータッチ
 │   └── infrastructure/
-│       ├── GeminiAIInvestigationAdapter.ts    # 【ハッカソン現行実装】AIInvestigationPort実装
-│       │                                      # @google/generative-ai（Gemini API直接）
-│       │                                      # プロンプト設計：JSON固定出力（summary/confidence/investigationSteps/suggestedActions/suggestedPatternName）
-│       │                                      # ガード：スキーマバリデーション（safeParse）・confidenceクランプ・タイムアウトリトライ1回
-│       │                                      # ハッカソン要件（Gemini）を確実に満たす
+│       ├── aiinvestigation/                   # 【ハッカソン現行実装】調査オーケストレーション＋LLMクライアント（コンポジション）
+│       │   ├── LLMInvestigationAdapter.ts      # AIInvestigationPort実装。薄いオーケストレーション
+│       │   │                                  #   プロンプト構築→LLM呼び出し（委譲）→パース→マッピングを組み合わせるだけ
+│       │   │                                  # ※ LLMTextClient を DI で受け取り委譲（継承ではなくコンポジション＝SRP遵守）
+│       │   ├── InvestigationPromptBuilder.ts   # プロンプト構築＋トークン3500予算管理（純関数・UT対象）
+│       │   ├── LLMOutputParser.ts             # LLM生テキスト→構造化スキーマ（フェンス抽出・検証・純関数・UT対象）
+│       │   ├── InvestigationReportMapper.ts    # 検証済み出力→InvestigationReport／fallback生成（confidenceクランプ・severityマッピング・UT対象）
+│       │   ├── GeminiLLMClient.ts             # LLMTextClient実装。@google/generative-ai（Gemini API直接）
+│       │   │                                  #   「text in → text out」＋呼び出しの信頼性（30sタイムアウト・1回リトライ）のみ担当
+│       │   └── *.test.ts                      # 各純関数モジュール＋Adapter（fake LLMTextClient注入）のユニットテスト
+│       │                                      # ※ infra実装でも疎通主体のリポジトリと違い、分岐ロジックが厚いのでE2Eでなくユニットテストで担保
 │       │
-│       ├── VertexAIInvestigationAdapter.ts    # 【将来実装・フェーズ1】AIInvestigationPort実装
+│       ├── VertexLLMClient.ts                 # 【将来実装・フェーズ1】LLMTextClient実装
 │       │                                      # @google-cloud/vertexai（Vertex AI SDK）経由
-│       │                                      # Gemini API直接からの差し替えのみ。Application層ノータッチ
+│       │                                      # LLMInvestigationAdapter に注入する部品の差し替えのみ。Application層もアダプタもノータッチ
 │       │                                      # 移行トリガー：ハッカソン審査後・ポートフォリオ強化フェーズ
 │       │                                      # 審査員評価：「推奨」項目（Vertex AI経由）を達成できる
 │       │
 │       └── adk/                              # 【将来実装・フェーズ2】ADKマルチエージェント（a2a不使用・1プロセス内）
 │           ├── ADKAgentInvestigationAdapter.ts # AIInvestigationPort実装。Coordinatorを起動するだけ
+│           │                                  # ※ 単純なtext-in/text-outでなく自前のオーケストレーションを持つため
+│           │                                  #   LLMInvestigationAdapter/LLMTextClient は経由せず Port を直接実装する
 │           │                                  # InvestigateAlertCommandHandler は完全にノータッチ
 │           │                                  # 審査員評価：「ADK」項目達成・マルチエージェントの必然性を提示
 │           ├── InvestigationCoordinator.ts    # オーケストレータ。category でサブエージェントをディスパッチ・統合
@@ -309,7 +319,7 @@ src/Contexts/Monitoring/
 │   │       └── ForecastRiskCommandHandler.ts   # 未来シグナル収集→正規化→Port→★引用検証（偽引用を落とす）→保存
 │   │                                           #   依存は全て read-only（write無し）
 │   └── infrastructure/
-│       ├── GeminiForecastAdapter.ts            # ForecastPort実装。GeminiAIInvestigationAdapter踏襲・citations: string[]固定
+│       ├── GeminiForecastAdapter.ts            # ForecastPort実装。GeminiLLMClient踏襲・citations: string[]固定
 │       ├── SeedScheduleSource.ts               # ScheduleSource実装（seed JSON/config。本番はカレンダー/負荷予測連携に差し替え）
 │       └── persistence/
 │           └── InMemoryForecastMemoryRepository.ts # 起動時にMongoのResolvedからsubject投影をウォームアップ
@@ -372,19 +382,20 @@ src/Contexts/Shared/infrastructure/persistence/elasticsearch/
 
 ```
 フェーズ0（ハッカソン本体）
-  GeminiAIInvestigationAdapter
-    @google/generative-ai 直接呼び出し
+  LLMInvestigationAdapter + GeminiLLMClient
+    LLMInvestigationAdapter が調査オーケストレーション（プロンプト/パース/マッピング/fallback）
+    GeminiLLMClient が @google/generative-ai 直接呼び出し（text in → text out・リトライ）
     要件：Gemini API ✅
 
 フェーズ1（ポートフォリオ強化・工数目安2〜3時間）
-  VertexAIInvestigationAdapter へ差し替え
+  LLMTextClient を VertexLLMClient へ差し替え
     @google-cloud/vertexai SDK 経由
-    InvestigateAlertCommandHandler ノータッチ
+    LLMInvestigationAdapter も InvestigateAlertCommandHandler もノータッチ（DI差し替え1箇所）
     要件：Gemini API（Vertex AI経由・推奨） ✅✅
 
 フェーズ2（マルチエージェント構成・工数目安1日）
-  ADKAgentInvestigationAdapter へ差し替え
-    Google ADK でエージェント構成
+  ADKAgentInvestigationAdapter へ差し替え（AIInvestigationPort を直接実装）
+    Google ADK でエージェント構成。自前オーケストレーションのため LLMInvestigationAdapter/LLMTextClient は経由しない
     InvestigateAlertCommandHandler ノータッチ
     要件：Gemini Enterprise Agent Platform + ADK ✅✅✅
 ```
@@ -558,7 +569,7 @@ SubmitFeedbackCommandHandler → InvestigationReport.reviewStatus の更新も�
                                （承認/却下とパターン昇格フィードバックを同一エンドポイントで処理）
 
 InvestigateAlertCommandHandler → AIInvestigationPort インターフェースのみ依存
-                                  GeminiAIInvestigationAdapter / VertexAIInvestigationAdapter /
+                                  LLMInvestigationAdapter（＋GeminiLLMClient/VertexLLMClient）/
                                   ADKAgentInvestigationAdapter を直接importしない
 
 ForecastRiskCommandHandler（stretchⅡ）→ ForecastPort / GitHubGateway / TerraformGateway /

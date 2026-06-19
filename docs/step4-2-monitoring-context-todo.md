@@ -92,13 +92,18 @@
 - 【完了】`AlertAnalysis/domain/ReviewStatus.ts` - EnumValueObjectクラスとして実装（PENDING_REVIEW/APPROVED/REJECTED）
 - 設計判断（配置）: `InvestigationReport`/`ReviewStatus` は **Alert集約のサブエンティティ＝AlertAnalysisの所有物**なので `AlertAnalysis/domain/` に置く（当初 `AIInvestigation/domain/` だったが、`Alert→InvestigationReport→AlertSeverity` のモジュール循環依存になるため移動）。依存は `AIInvestigation → AlertAnalysis` の一方向に統一
 
-### タスク 10: AIInvestigationPort ＋ Gemini Adapter 〔P0〕✅ 完了済み
+### タスク 10: AIInvestigationPort ＋ LLMInvestigationAdapter / GeminiLLMClient 〔P0〕✅ 完了済み
 
 - 【完了】`AIInvestigation/domain/AIInvestigationPort.ts` / `AIInvestigation/domain/InvestigationContext.ts`（`InfraEvidence` はタスク15まで `Record<string, unknown>` スタブ）
-- 【完了】`AIInvestigation/infrastructure/GeminiAIInvestigationAdapter.ts`（`@google/generative-ai`・`responseMimeType: application/json` でJSON固定出力・safeParse・confidenceクランプ[0,1]・30sタイムアウト1回リトライ・fallback・トークン3500超で similarIncidents を0件に削減）
+- 【完了】`AIInvestigation/domain/LLMTextClient.ts`（LLMへの最小契約 `generate(systemInstruction, prompt): Promise<string>`。プロバイダ抽象）
+- 【完了】`AIInvestigation/infrastructure/aiinvestigation/LLMInvestigationAdapter.ts`（`AIInvestigationPort`実装・薄いオーケストレーション：プロンプト構築→LLM呼び出し→パース→マッピングを組み合わせるだけ）。命名は `...Service` がドメインサービスを想起させ infra のACL実装と紛らわしいため `LLMInvestigationAdapter` に変更
+- 【完了】オーケストレーションの純関数を3モジュールに分離（SRP＋直接UT）: `InvestigationPromptBuilder.ts`（プロンプト構築・トークン3500予算・超過で similarIncidents 0件削減）／`LLMOutputParser.ts`（```json フェンス抽出＋スキーマ検証 `parseLLMOutput`）／`InvestigationReportMapper.ts`（confidenceクランプ[0,1]・severityマッピング・`InvestigationReport`生成・fallback）
+- 【完了】`AIInvestigation/infrastructure/aiinvestigation/GeminiLLMClient.ts`（`LLMTextClient`実装・`@google/generative-ai`・Gemini固有呼び出し・30sタイムアウト1回リトライ）
+- 【完了】ユニットテスト（`*.test.ts` コロケーション・計19ケース）: 3純関数モジュール直接＋`LLMInvestigationAdapter`（fake `LLMTextClient` 注入で 正常／例外→fallback／パース不能→fallback の全分岐）。**疎通主体のリポジトリ実装と違い分岐ロジックが厚いので E2E でなくユニットテストで担保**
 - 【完了】`@google/generative-ai ^0.24.1` を workspace root に追加
-- 設計判断（依存方向）: `AIInvestigationPort`/`GeminiAIInvestigationAdapter` は `InvestigationReport`/`ReviewStatus`/`AlertSeverity` を **`AlertAnalysis/domain/` から import**（タスク9の移動に伴う）。Port/Context 自体は `AIInvestigation/domain/` のまま。依存は `AIInvestigation → AlertAnalysis` の一方向で循環なし。InvestigateAlertCommandHandler（タスク11）も同方向で `AlertRepository`/`Alert` に依存するので情報取得に問題なし
-- 参考: 「AIInvestigationPort」「GeminiAIInvestigationAdapter」節
+- 設計判断（SRP・コンポジション）: 当初の単一 `GeminiAIInvestigationAdapter` がプロンプト整形・パース・マッピング・fallback・リトライ・SDK呼び出しを全部抱えSRP違反だったため、**プロバイダ非依存のオーケストレーション（`LLMInvestigationAdapter`）** と **プロバイダ固有の text-in/text-out（`LLMTextClient`/`GeminiLLMClient`）** に分割。継承（基底クラス）ではなく**コンポジション**（アダプタがLLMTextClientをDIで受け取る）を採用＝is-a不成立を回避・Geminiをモックせずフェイククライアントでアダプタ単体テスト可能・将来プロバイダ追加時の境界が固い。**リトライ／タイムアウトは `GeminiLLMClient` 側に寄せた**（呼び出しの信頼性はインフラの関心事）。これに伴いパース失敗時はリトライせず即fallback（旧実装はパース失敗でもリトライしていた点が挙動差分）
+- 設計判断（依存方向）: `LLMInvestigationAdapter` は `InvestigationReport`/`ReviewStatus`/`AlertSeverity` を **`AlertAnalysis/domain/` から import**（タスク9の移動に伴う）。Port/Context/LLMTextClient 自体は `AIInvestigation/domain/` のまま。依存は `AIInvestigation → AlertAnalysis` の一方向で循環なし。InvestigateAlertCommandHandler（タスク11）も同方向で `AlertRepository`/`Alert` に依存するので情報取得に問題なし
+- 参考: 「AIInvestigationPort」「LLMTextClient」「LLMInvestigationAdapter ＋ GeminiLLMClient」節
 
 ### タスク 11: InvestigateAlertCommandHandler 〔P0〕
 

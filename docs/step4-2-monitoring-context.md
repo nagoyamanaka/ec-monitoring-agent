@@ -814,6 +814,19 @@ interface AIInvestigationPort {
 }
 ```
 
+### LLMTextClient インターフェース（DIP・プロバイダ抽象）
+
+**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/domain/LLMTextClient.ts`
+
+```typescript
+interface LLMTextClient {
+  // 失敗時（タイムアウト/APIエラー）はリトライ後に例外を送出する
+  generate(systemInstruction: string, prompt: string): Promise<string>;
+}
+```
+
+調査オーケストレーション（プロンプト整形・出力パース・ドメインマッピング・fallback）を担う `LLMInvestigationAdapter` と、プロバイダ固有の呼び出し（Gemini SDK 等）を担う `LLMTextClient` 実装を**コンポジションで分離**する。`LLMInvestigationAdapter` が `LLMTextClient` をDIで受け取るため、Geminiをモックせずフェイクのテキストクライアントでオーケストレーションを単体テストできる。SRP遵守のための分割（継承ではない）。
+
 ### InvestigationContext
 
 **ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/domain/InvestigationContext.ts`
@@ -849,23 +862,42 @@ interface InvestigationContext {
 
 ```
 AIInvestigationPort（インターフェース）← Application層が依存する抽象
-  ├─ GeminiAIInvestigationAdapter   ← フェーズ0：ハッカソン本体（Gemini API直接 / @google/generative-ai）
-  ├─ VertexAIInvestigationAdapter   ← フェーズ1：Vertex AI SDK経由（@google-cloud/vertexai。推奨経路）
-  └─ ADKAgentInvestigationAdapter   ← フェーズ2：ADKエージェント構成（A2A統合）
+  ├─ LLMInvestigationAdapter           ← 調査オーケストレーション（プロバイダ非依存・全フェーズ共通）
+  │     └─ LLMTextClient（DI）         ← プロバイダ固有の text in → text out
+  │           ├─ GeminiLLMClient       ← フェーズ0：ハッカソン本体（Gemini API直接 / @google/generative-ai）
+  │           └─ VertexLLMClient       ← フェーズ1：Vertex AI SDK経由（@google-cloud/vertexai。推奨経路）
+  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADKエージェント構成（A2A統合・自前オーケストレーションのためPortを直接実装）
 ```
 
-切り替えは `EcBackendApp.ts` / backoffice 起動時のファクトリでの差し替え1箇所のみ。
+フェーズ0→1は `LLMInvestigationAdapter` に注入する `LLMTextClient` を差し替えるだけ（アダプタ自体もApplication層もノータッチ）。フェーズ2のADKは単純なtext-in/text-outに収まらない自前オーケストレーションを持つため、`LLMInvestigationAdapter` を経由せず `AIInvestigationPort` を直接実装する。切り替えは `EcBackendApp.ts` / backoffice 起動時のファクトリでの差し替え1箇所のみ。
 
-### GeminiAIInvestigationAdapter（Infrastructure実装・フェーズ0）
+### LLMInvestigationAdapter ＋ GeminiLLMClient（Infrastructure実装・フェーズ0）
 
-**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/infrastructure/GeminiAIInvestigationAdapter.ts`
+**ファイルパス**（すべて `infrastructure/aiinvestigation/`）:
+- `LLMInvestigationAdapter.ts`（`AIInvestigationPort` 実装。薄いオーケストレーション）
+- `InvestigationPromptBuilder.ts`（プロンプト構築＋トークン予算）
+- `LLMOutputParser.ts`（LLM生テキストのパース＆検証）
+- `InvestigationReportMapper.ts`（ドメインマッピング＋fallback生成）
+- `GeminiLLMClient.ts`（`LLMTextClient` 実装。Gemini固有呼び出し＋リトライ）
+
+**責務分割（SRP）**: オーケストレーションは3つの純関数モジュールに分離し、各モジュールを直接ユニットテストする。
+
+| 担当 | モジュール/クラス | 内容 |
+| --- | --- | --- |
+| プロバイダ非依存（統括） | `LLMInvestigationAdapter` | 下記3モジュール＋`LLMTextClient`を組み合わせる薄い`investigate()`のみ |
+| プロバイダ非依存（純関数） | `InvestigationPromptBuilder` | プロンプト構築（トークン3,500予算管理） |
+| プロバイダ非依存（純関数） | `LLMOutputParser` | ```json フェンス抽出＋スキーマ検証（`parseLLMOutput`） |
+| プロバイダ非依存（純関数） | `InvestigationReportMapper` | `confidence`クランプ・`severity`マッピング／`InvestigationReport`生成・fallback生成 |
+| プロバイダ固有 | `GeminiLLMClient` | `@google/generative-ai` のSDK初期化・`generateContent`呼び出し・本文抽出／30sタイムアウト・1回リトライ |
+
+> **テスト方針**: このアダプタ群は薄い疎通リポジトリと違い分岐ロジック（トークン超過削減・JSON抽出・severity丸め・confidenceクランプ・2種のfallback経路）が厚いため、E2Eでなく**ユニットテスト**で担保する。純関数3モジュールは直接、`LLMInvestigationAdapter` はfakeの`LLMTextClient`を注入して全分岐（正常／例外→fallback／パース不能→fallback）を検証する（Gemini不要）。
 
 ```typescript
-// 依存: @google/generative-ai
+// GeminiLLMClient の依存: @google/generative-ai
 // モデル: gemini-2.0-flash 系（環境変数 GEMINI_MODEL で切り替え可能。コスト/レイテンシ優先）
 
-// プロンプト構造（JSON返却を強制）
-const systemPrompt = `
+// systemInstruction（LLMInvestigationAdapter が保持。JSON返却を強制）
+const SYSTEM_INSTRUCTION = `
 あなたはECシステムの障害調査AIエージェントです。
 提供された障害イベント・既知パターン・類似インシデント・インフラ証拠（InfraEvidence）を分析し、
 必ずJSONフォーマットで回答してください。
@@ -880,9 +912,11 @@ const systemPrompt = `
 `;
 ```
 
-> `reviewStatus` / `investigatedAt` / `isFallback` はGeminiの出力ではなくAdapter/ドメイン側で付与する
+> `reviewStatus` / `investigatedAt` / `isFallback` はLLMの出力ではなくアダプタ/ドメイン側で付与する
 > （`reviewStatus` は `PENDING_REVIEW` 固定、`isFallback` は `false`）。
-> 出力は `safeParse` でスキーマ検証し、`confidence` は 0.0〜1.0 にクランプ、タイムアウト時は1回リトライする。
+> 出力は `LLMInvestigationAdapter` 側で `safeParse` によりスキーマ検証し、`confidence` は 0.0〜1.0 にクランプする。
+> リトライ（30sタイムアウト・1回）は `GeminiLLMClient` 側に寄せた（呼び出しの信頼性はインフラの関心事）。
+> タイムアウト/APIエラーはリトライ後に例外送出 → アダプタが catch して fallback。JSONパース不能時もアダプタが fallback を返す（パース失敗ではリトライしない）。
 
 **トークン管理**:
 
@@ -906,7 +940,7 @@ Alert発生
 【レイヤー2：事例照合】SimilarPatternRule（Elastic）/ SimilarIncidentRepository
   └─ ハイブリッド検索（BM25 + ベクトル）で過去パターンと突合
   ↓
-【レイヤー3：AI推定】AIInvestigationPort（GeminiAIInvestigationAdapter）
+【レイヤー3：AI推定】AIInvestigationPort（LLMInvestigationAdapter ＋ GeminiLLMClient）
   └─ 証拠 + 照合結果を統合してGeminiに渡し、原因候補を生成
 ```
 
@@ -1028,10 +1062,15 @@ InvestigationCoordinator（オーケストレータ）
 
 ```
 src/Contexts/Monitoring/AIInvestigation/infrastructure/
-├── GeminiAIInvestigationAdapter.ts        # フェーズ0：単一呼び出し
-├── VertexAIInvestigationAdapter.ts        # フェーズ1：Vertex AI SDK経由
+├── aiinvestigation/                       # フェーズ0：オーケストレーション＋LLMクライアント
+│   ├── LLMInvestigationAdapter.ts          #   AIInvestigationPort実装（薄い統括・プロバイダ非依存）
+│   ├── InvestigationPromptBuilder.ts       #   プロンプト構築＋トークン予算（純関数・UT）
+│   ├── LLMOutputParser.ts                  #   LLM出力パース＆検証（純関数・UT）
+│   ├── InvestigationReportMapper.ts        #   ドメインマッピング＋fallback（純関数・UT）
+│   └── GeminiLLMClient.ts                  #   LLMTextClient実装（Gemini固有・単一呼び出し＋リトライ）
+├── VertexLLMClient.ts                     # フェーズ1：LLMTextClient実装（Vertex AI SDK経由）
 └── adk/
-    ├── ADKAgentInvestigationAdapter.ts    # フェーズ2：AIInvestigationPort実装（Coordinatorを起動）
+    ├── ADKAgentInvestigationAdapter.ts    # フェーズ2：AIInvestigationPort直接実装（Coordinatorを起動）
     ├── InvestigationCoordinator.ts
     ├── EvidenceCollectorAgent.ts
     ├── RootCauseAnalystAgent.ts
@@ -1386,7 +1425,7 @@ interface KnownErrorPatternRepository {
 | エラークラス            | 継承元                | 発生箇所                                          | errorHandlerの応答                                     |
 | ----------------------- | --------------------- | ------------------------------------------------- | ------------------------------------------------------ |
 | `ResourceNotFoundError` | `ApplicationError`    | `SubmitFeedbackCommandHandler`（Alert未存在時）   | 404                                                    |
-| `AIInvestigationError`  | `InfrastructureError` | `GeminiAIInvestigationAdapter`（API呼び出し失敗） | ※ CommandHandlerでcatchしfallback使用（500を返さない） |
+| `AIInvestigationError`  | `InfrastructureError` | `GeminiLLMClient`（API呼び出し失敗・リトライ後に送出） | ※ LLMInvestigationAdapter がcatchしfallback生成。さらにCommandHandlerでもcatch（500を返さない） |
 
 `AIInvestigationError` はCommandHandler内でcatchしてfallbackレポートを生成するため、HTTP 500にはならない。障害分析AIの失敗がバックオフィスAPIの失敗に波及しない設計。
 
@@ -1444,7 +1483,7 @@ SubmitFeedbackCommandHandler
 | -------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `SSEAlertNotifier`                     | EventEmitterオンメモリ                                       | `RedisSSEAlertNotifier`（プロセス複数化時）。インターフェースは維持                                                                                                                                                                                                            |
 | `SimilarIncidentRepository`            | InMemory + InMemoryCriteriaConverter                         | `ElasticSearchSimilarIncidentRepository`（大規模化時）。Criteria共通インターフェースは維持                                                                                                                                                                                     |
-| `AIInvestigationPort`                  | GeminiAIInvestigationAdapter（gemini-2.0-flash系・Gemini API直接） | `VertexAIInvestigationAdapter`（Vertex AI SDK経由・推奨） → `ADKAgentInvestigationAdapter`（ADK/A2A構成）への段階移行。DI差し替え1箇所のみでApplication層ノータッチ（project-prompt v10）                                                                                       |
+| `AIInvestigationPort`                  | LLMInvestigationAdapter ＋ GeminiLLMClient（gemini-2.0-flash系・Gemini API直接） | `LLMTextClient` を `VertexLLMClient`（Vertex AI SDK経由・推奨）へ差し替え → `ADKAgentInvestigationAdapter`（ADK/A2A構成・Port直接実装）への段階移行。DI差し替え1箇所のみでApplication層・アダプタノータッチ（project-prompt v10）                                                                                       |
 | `InfraInvestigationPort`               | CloudLogging/Terraform/GitHub の3Gateway（読み取り専用）     | `CloudMonitoringGateway` / `CloudTraceGateway` を追加（次フェーズ）。`InfraEvidence` の正規化スキーマは維持（project-prompt v12）                                                                                                                                              |
 | `AlertClassifier`                      | `PolicyBasedAlertClassifier`（`ApplicationClassificationPolicy` + `KnownPatternRule`、first-match・confidence 1.0固定）。組み立ては step4-3 の DI（composition root） | `ApplicationClassificationPolicy` に `SimilarPatternRule`（Elastic hybrid search・kind=SIMILARITY）→ `AiInferenceRule`（kind=INFERENCE）を追加。`ClassificationRuleSorter` が kind 優先順位で並べる。`AlertClassificationResult` の型は変わらず、`KnownAlertClassification` VOに `unmatchedConditions` の反証情報が入るようになる。移行トリガー: 自動昇格パターンが10件超 or 誤分類率が計測可能になった時点（ADR Step 5） |
 | `recentEvents` in InvestigationContext | 省略（将来拡張ポイント）                                     | AlertRepository.findByCriteria で直近30分のAlertを収集し追加                                                                                                                                                                                                                   |
@@ -1569,7 +1608,7 @@ interface ForecastPort {
 }
 ```
 
-`GeminiForecastAdapter` は既存 `GeminiAIInvestigationAdapter` のパターンを踏襲（`@google/generative-ai`・JSON固定出力・safeParse・confidenceクランプ・タイムアウト1回リトライ・fallback）。**プロンプトで `citations` 必須を強制**し、出力スキーマに `citations: string[]` を固定。
+`GeminiForecastAdapter` は既存 `GeminiLLMClient` ＋ `LLMInvestigationAdapter` のパターンを踏襲（`@google/generative-ai`・JSON固定出力・safeParse・confidenceクランプ・タイムアウト1回リトライ・fallback）。**プロンプトで `citations` 必須を強制**し、出力スキーマに `citations: string[]` を固定。
 
 ### ForecastRiskCommandHandler（オーケストレーション）
 

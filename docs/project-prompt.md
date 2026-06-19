@@ -1,4 +1,4 @@
-# 設計エージェント向けプロンプト v16
+# 設計エージェント向けプロンプト v17
 
 > **変更履歴（v11→v12）**
 > インフラ横断調査パイプラインを設計に追加。
@@ -193,7 +193,7 @@ Alert発生
   └─ ハイブリッド検索（BM25 + ベクトル）で過去パターンと突合
 
   ↓
-【レイヤー3：AI推定】AIInvestigationPort（GeminiAIInvestigationAdapter）
+【レイヤー3：AI推定】AIInvestigationPort（LLMInvestigationAdapter ＋ GeminiLLMClient）
   └─ 収集した証拠 + 照合結果を統合してGeminiに渡し、原因候補ランキングを生成
 ```
 
@@ -274,7 +274,7 @@ interface InfraEvidence {
   Step1-EC:       ECドメイン（注文・在庫）の基本フロー実装
   Step1-Monitor:  MonitoringコンテキストのAlertAnalysis + SSE push
   Step1-Classify: KnownPatternRule（first-match）+ Policy/Sorter 実装
-  Step1-Gemini:   GeminiAIInvestigationAdapter（Gemini API直接）実装
+  Step1-Gemini:   LLMInvestigationAdapter ＋ GeminiLLMClient（Gemini API直接）実装
   Step1-Demo:     デモシナリオ1・2・3がE2Eで通る
   → ✅ コミットを切り「提出できる状態」をキープ
 
@@ -295,7 +295,7 @@ interface InfraEvidence {
   → ✅ コミットを切る
 
 【フェーズ3：Vertex AI / ADKマルチエージェント移行（ポートフォリオ強化）】
-  Step4-Vertex:   VertexAIInvestigationAdapter 実装（DI差し替えのみ）
+  Step4-Vertex:   VertexLLMClient 実装（LLMInvestigationAdapter への LLMTextClient 差し替えのみ）
   Step4-ADK-a:    ADKAgentInvestigationAdapter（Coordinator起動）実装
   Step4-ADK-b:    EvidenceCollector / RootCauseAnalyst / RemediationPlanner サブエージェント実装
   Step4-ADK-c:    自律的な証拠追加収集ループ（analystが収集対象を判断）を実装
@@ -512,9 +512,11 @@ AlertClassifier（インターフェース）← AnalyzeAlertCommandHandler は�
 
 ```
 AIInvestigationPort（インターフェース）← Application層が依存する抽象
-  ├─ GeminiAIInvestigationAdapter      ← フェーズ0：ハッカソン本体（Gemini API直接）
-  ├─ VertexAIInvestigationAdapter      ← フェーズ1：Vertex AI SDK経由（推奨経路）
-  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADKエージェント構成（in-process・a2a不使用）
+  ├─ LLMInvestigationAdapter            ← オーケストレーション（プロバイダ非依存・全フェーズ共通）
+  │     └─ LLMTextClient（DI）          ← text in → text out のプロバイダ抽象
+  │           ├─ GeminiLLMClient        ← フェーズ0：ハッカソン本体（Gemini API直接）
+  │           └─ VertexLLMClient        ← フェーズ1：Vertex AI SDK経由（推奨経路）
+  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADK構成（自前オーケストレーション・Portを直接実装・a2a不使用）
 ```
 
 ### AlertClassification VOの設計原則（OCP適用）
@@ -681,6 +683,7 @@ interface StructuredLog {
 - Domain・Application層はHTTPステータスコードを知らない。errorHandlerがHTTPへの変換責務を持つ
 - 外部サービスへのアウトバウンドポートは `XxxGateway` と命名する
 - ドメインサービスを作る場合は `XxxDomainService` と明示的にサフィックスをつける
+- 実装の再利用を目的に継承（基底クラス）を使わない。共通処理は**コンポジション（has-a・コンストラクタ注入）を優先**する。`is-a` が成立しない継承はSRP/OCPを崩す。詳細は「コンポジション優先（has-a / 継承よりコンポジション）」節
 - `AlertClassifier` はインターフェースにのみ依存する。具体実装（`PolicyBasedAlertClassifier` 等）を直接importしない
 - 分類は Classifier / Policy / Rule の3層。Rule は依存を内包し `kind`（EXACT_MATCH/SIMILARITY/INFERENCE）を持つ。優先度は `ClassificationRuleSorter`（domain）が kind 順で確定し、Rule に `priority` 数値を持たせない
 - 分類器グラフの組み立て（依存注入）は composition root（backoffice DI）の責務。Sorter は組み立てない
@@ -703,6 +706,77 @@ interface StructuredLog {
 - **AIはGemini API直接（フェーズ0）のみ実装。Vertex AI / ADKへの移行はAIInvestigationPortの差し替えで対応できる設計にし、実装はハッカソン後のフェーズに委ねる**（v10）
 - **AlertClassifierはStep1（`KnownPatternRule`・完全一致）のみハッカソン提出必須。Step2（`SimilarPatternRule`・Elastic）・Step3（`AiInferenceRule`）は工数が許す範囲で Policy に Rule を足す形で積み上げる。a2aは使わない**（v11/v14/v16改訂）
 - **Cloud Monitoring / Cloud Trace ゲートウェイは設計・ADRのみ。実装は次フェーズ**（v12）
+
+### コンポジション優先（has-a / 継承よりコンポジション）（v17追加）
+
+「共通処理を親クラスに寄せて継承させる」前に、**has-a（部品としてDI）で構成できないか**を必ず先に検討する。`extends` は「である（is-a）」、コンポジションは「持つ／使う（has-a）」を表す。**実装の再利用目的だけで継承を使わない**（実装継承は is-a を偽装し SRP/OCP を崩す）。
+
+判断基準:
+
+- サブクラスが親の「一種」と言えない（is-a が成立しない）なら継承しない
+- 振る舞いを差し替え／テストで注入したいなら、インターフェース＋コンストラクタ注入（Poor Man's DI）にする
+- 「ちょっとだけ親を上書き」したくなったら継承の誤用のサイン
+
+**具体例（AIInvestigation）**: 単一 `GeminiAIInvestigationAdapter` がプロンプト整形・パース・マッピング・fallback・リトライ・SDK呼び出しを全部抱え SRP違反だった。これを **プロバイダ非依存のオーケストレーション** と **プロバイダ固有の text-in/text-out** に分離。基底クラス（Template Method）でなくコンポジションを採用した。
+
+Before（継承・避ける）:
+
+```typescript
+abstract class AbstractAIInvestigationAdapter implements AIInvestigationPort {
+  async investigate(ctx: InvestigationContext): Promise<InvestigationReport> {
+    const prompt = this.buildPrompt(ctx);
+    const raw = await this.generate(prompt);     // ← 子に丸投げ
+    const out = this.safeParse(raw);
+    return out ? this.toReport(out) : this.fallback();
+  }
+  protected abstract generate(prompt: string): Promise<string>;
+}
+class GeminiAIInvestigationAdapter extends AbstractAIInvestigationAdapter {
+  protected generate(p: string) { /* Gemini SDK */ }
+}
+// 問題: Geminiアダプタは「調査オーケストレーションの一種」ではない（is-a不成立）。
+//       オーケストレーションのテストに毎回サブクラスが要る。子が親処理を上書きでき境界が緩い。
+```
+
+After（コンポジション・採用）:
+
+```typescript
+// domain: プロバイダ抽象（text in → text out のみ）
+interface LLMTextClient {
+  generate(systemInstruction: string, prompt: string): Promise<string>;
+}
+
+// オーケストレーション本体。LLMTextClient を「部品として注入」される（has-a）
+class LLMInvestigationAdapter implements AIInvestigationPort {
+  constructor(private readonly llm: LLMTextClient) {}
+  async investigate(ctx: InvestigationContext): Promise<InvestigationReport> {
+    const prompt = buildUserPrompt(ctx);
+    let raw: string;
+    try { raw = await this.llm.generate(SYSTEM_INSTRUCTION, prompt); }
+    catch { return buildFallback(); }            // API/timeout失敗 → fallback
+    const out = safeParse(raw);
+    return out ? toReport(out) : buildFallback(); // パース不能 → fallback
+  }
+}
+
+// infrastructure: プロバイダ固有実装 + 呼び出しの信頼性（リトライ/タイムアウト）
+class GeminiLLMClient implements LLMTextClient {
+  async generate(systemInstruction: string, prompt: string) { /* Gemini SDK + 30sタイムアウト1回リトライ */ }
+}
+
+// composition root（backoffice DI）で組み立てる
+const port: AIInvestigationPort = new LLMInvestigationAdapter(new GeminiLLMClient());
+```
+
+効果:
+
+- is-a の意味ズレを回避（アダプタは LLMClient を「使う」だけ）
+- フェイクの `LLMTextClient` を注入してオーケストレーションを単体テストできる（Gemini不要）
+- プロバイダ追加は `LLMTextClient` 実装を1つ足すだけ。契約が狭く境界が固い
+- リトライ／タイムアウトは**プロバイダ固有実装（インフラの関心事）側に寄せる**
+
+> 配置: `LLMInvestigationAdapter` は driven ポート `AIInvestigationPort` の実装＝腐敗防止層（プロンプト整形・LLM出力パース・マッピングという技術知識を持つ）なので **infrastructure** に置く。「プロバイダ非依存」＝「domain」ではない。ドメインに置くのは抽象（`AIInvestigationPort` / `LLMTextClient`）のみ。
+> 例外: ADK マルチエージェント（フェーズ2）は単純な text-in/text-out に収まらず自前オーケストレーションを持つため、`LLMInvestigationAdapter`/`LLMTextClient` を経由せず `AIInvestigationPort` を直接実装する。
 
 ---
 
@@ -749,10 +823,21 @@ interface StructuredLog {
 1. **突合キーを(A)テキストjoin→(B)構造化タグへ段階移行する理由（精度と既存P0無傷のトレードオフ）**（v15追加）
 1. **予兆ブリーフィングをP0パイプライン無傷の追加レイヤー（read-onlyの調査の一種）として載せる設計判断**（v15追加）
 1. **なぜCloud Pub/Subでなく、Rabbit MQか？**-> ローカル開発(E2Eテスト)の開発サイクル短縮が狙い
+1. **AIInvestigationの調査ロジックを基底クラス継承でなくコンポジション（`LLMInvestigationAdapter` + `LLMTextClient`）で分離する理由（has-a/is-a・SRP・テスト容易性・リトライをプロバイダ実装に寄せる判断・Port実装をinfrastructureに置く根拠）**（v17追加）
 
 ---
 
 ## 変更履歴
+
+### v17（コンポジション優先の設計指針を明文化）
+
+- 「必ず守ること」に「実装再利用目的の継承を避けコンポジション（has-a・コンストラクタ注入）を優先」を追加
+- 「コンポジション優先（has-a / 継承よりコンポジション）」節を新設。Before（継承・Template Method）/ After（コンポジション）の具体コード付き
+- 実例として AIInvestigation の SRP違反な単一 `GeminiAIInvestigationAdapter` を `LLMInvestigationAdapter`（オーケストレーション）＋ `LLMTextClient` / `GeminiLLMClient`（プロバイダ固有・リトライ内包）に分離した経緯を記載
+- 設計判断: 当該アダプタは driven ポート実装＝腐敗防止層なので **infrastructure** に置く（「プロバイダ非依存」≠「domain」）。ドメインに置くのは抽象（Port / LLMTextClient）のみ
+- Step 5 ADR項目に1件追加（コンポジション分離の理由）
+- ヘッダーバージョンを v16 → v17 に更新
+- 詳細は `step1`・`step4-2`「AIInvestigationPort」「LLMTextClient」「LLMInvestigationAdapter ＋ GeminiLLMClient」節
 
 ### v16（AlertClassifier を Classifier/Policy/Rule 3層に再設計）
 
