@@ -277,16 +277,19 @@ sequenceDiagram
 
 ---
 
-### 8.3 コンテキスト構造（論理型による整理：Bateson）
+### 8.3 Monitoring コンテキストのモジュール構造（論理型による整理：Bateson）
 
 > **論理型（Bateson / Russell）で整理する。** ベイトソンの「フレーム」は額縁の比喩で、**ある前提・言語が通用する境界を画定し、その機能は「論理型を画定する（delimit a logical type）」こと**（_A Theory of Play and Fantasy_, 1955）。DDD の bounded context は「あるユビキタス言語が通用する境界」なので、**bounded context ＝ ベイトソンのフレーム**として読める。
 >
-> ベイトソンの「**context of context ＝ メタコンテキスト**」（より高い論理型）に従い、`Monitoring` は**メタコンテキスト**、その**メンバが各コンテキスト**（AlertAnalysis / AIInvestigation / ReportGeneration）。クラスとメンバは異なる論理型なので「サブコンテキスト」とは呼ばない（メタの一段下のメンバであって、二段下の入れ子ではない）。
+> したがって **`Monitoring` がフレーム＝1つの bounded context**。その内側の `AlertAnalysis` / `AIInvestigation` / `ReportGeneration` は、**同じユビキタス言語（`MonitoringEvent`）を共有する Module** であって、それぞれが別個のフレーム（＝別コンテキスト）ではない。フレームが画定する論理型は **1つ（＝「観測」）** で、各モジュールはその内側に閉じる object レベルの分割。
+>
+> **訂正メモ**: 本節は当初 `Monitoring` を「メタコンテキスト」、子を「コンテキスト」と呼んでいたが、これは論理型の取り違えだった。`Monitoring → AlertAnalysis` の関係は **全体–部分（合成）** であって、ベイトソンの **context of context（メタコミュニケーション＝一段高い論理型）** ではない。Russell の型理論では「クラスはそれ自身のメンバになれない」ので、**同名の "context" を入れ子にする**のは型交差になる。メタの階に名前を与えたいなら別語＝DDD の **Subdomain / Domain** を使う（"メタコンテキスト" とは呼ばない）。
+> 経験的な裏づけ: `InvestigationReport` を **ACL も翻訳もなしの素の `import`** で `AIInvestigation → AlertAnalysis` へ移動できた。別コンテキストならこれはモデリング違反のはず。翻訳ゼロで通る＝両者は1つのユビキタス言語を共有する＝**同一コンテキストの Module**。
 
-**メタコンテキストが画定するフレーム＝「観測（observation）」**。EC専用ではない。EC ドメインイベント・CI の Trivy 脆弱性通知・インフラシグナルなど**異種の源**を、源固有の型を剥いで均質な観測に正規化する境界がフレームで、`category`（APPLICATION/INFRASTRUCTURE/SECURITY/CAPACITY）がその「EC専用でない」ことの証拠。
+**`Monitoring`（フレーム＝bounded context）が画定する論理型＝「観測（observation）」**。EC専用ではない。EC ドメインイベント・CI の Trivy 脆弱性通知・インフラシグナルなど**異種の源**を、源固有の型を剥いで均質な観測に正規化する境界がフレームで、`category`（APPLICATION/INFRASTRUCTURE/SECURITY/CAPACITY）がその「EC専用でない」ことの証拠。
 
 ```
-Monitoring（メタコンテキスト ＝ 観測フレームを画定する高位の論理型）
+Monitoring（Bounded Context ＝ 観測フレームを画定する。フレーム内は単一の論理型「観測」）
 │
 │  ［境界の変換点］各源固有の型に触れるのはここだけ
 │   ├─ CollectMonitoringEventSubscriber（EC DomainEvent → MonitoringEvent）
@@ -295,28 +298,28 @@ Monitoring（メタコンテキスト ＝ 観測フレームを画定する高�
 ├─ Shared/domain/MonitoringEvent  ← フレーム内で通用するユビキタス言語（共有カーネル）
 │    ※ フレームそのものではなく、フレームの内側で話される共通語
 │
-├─ AlertAnalysis（コンテキスト）
+├─ AlertAnalysis（Module）
 │    「MonitoringEvent は既知パターンか」を分類する
 │    集約: Alert / KnownErrorPattern
 │
-├─ AIInvestigation（コンテキスト）
+├─ AIInvestigation（Module）
 │    「未知の MonitoringEvent の原因は何か」を調査する
 │    InfraEvidence 収集 → Gemini推論 → InvestigationReport
 │
-└─ ReportGeneration（コンテキスト）
+└─ ReportGeneration（Module）
      「Alert の状態変化をフロントに届ける」
      SSEAlertNotifier
 ```
 
-| 論理型                             | 担当                                       | 画定するフレーム / 通用する前提                                              |
-| ---------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
-| **メタコンテキスト**（Monitoring） | 異種の源を均質な観測へ正規化する境界を画定 | 「ここから内側はすべて均質な観測として扱う」。源固有の型はメンバに漏らさない |
-| コンテキスト（AlertAnalysis）      | 既知パターンと照合する                     | `MonitoringEvent`・`KnownErrorPattern`                                       |
-| コンテキスト（AIInvestigation）    | 証拠を集めてAIに渡す                       | `MonitoringEvent`・`InfraEvidence`・Gemini                                   |
-| コンテキスト（ReportGeneration）   | フロントへ配信する                         | SSE / Alert のプリミティブ                                                   |
+| 単位                                      | 担当                                       | 画定するフレーム / 通用する前提                                                  |
+| ----------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------- |
+| **Bounded Context = フレーム**（Monitoring） | 異種の源を均質な観測へ正規化する境界を画定 | 「ここから内側はすべて均質な観測（単一の論理型）として扱う」。源固有の型はモジュールに漏らさない |
+| Module（AlertAnalysis）                   | 既知パターンと照合する                     | `MonitoringEvent`・`KnownErrorPattern`                                          |
+| Module（AIInvestigation）                 | 証拠を集めてAIに渡す                       | `MonitoringEvent`・`InfraEvidence`・Gemini                                      |
+| Module（ReportGeneration）                | フロントへ配信する                         | SSE / Alert のプリミティブ                                                      |
 
-> 各コンテキストは `MonitoringEvent` という共通語だけで仕事し、源固有の型（EC / CI / infra）を直接 import しない。  
-> これが「メタコンテキストが観測フレームを画定し、メンバのコンテキストはそのフレームの内側で閉じる」という論理型構造の実体。
+> 各モジュールは `MonitoringEvent` という共通語だけで仕事し、源固有の型（EC / CI / infra）を直接 import しない。  
+> これが「`Monitoring`（フレーム＝bounded context）が観測の論理型を画定し、各モジュールはそのフレームの内側で閉じる」という構造の実体。
 
 > **参考（一次ソース）**:
 >
