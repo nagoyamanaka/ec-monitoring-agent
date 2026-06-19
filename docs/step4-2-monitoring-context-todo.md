@@ -88,13 +88,16 @@
 
 ### タスク 9: InvestigationReport ＋ ReviewStatus 〔P0〕✅ 完了済み
 
-- 【完了】`AIInvestigation/domain/InvestigationReport.ts` - classとして実装、withReviewStatus/toPrimitives/fromPrimitives付き
-- 【完了】`AIInvestigation/domain/ReviewStatus.ts` - EnumValueObjectクラスとして実装（PENDING_REVIEW/APPROVED/REJECTED）
+- 【完了】`AlertAnalysis/domain/InvestigationReport.ts` - classとして実装、withReviewStatus/toPrimitives/fromPrimitives付き
+- 【完了】`AlertAnalysis/domain/ReviewStatus.ts` - EnumValueObjectクラスとして実装（PENDING_REVIEW/APPROVED/REJECTED）
+- 設計判断（配置）: `InvestigationReport`/`ReviewStatus` は **Alert集約のサブエンティティ＝AlertAnalysisの所有物**なので `AlertAnalysis/domain/` に置く（当初 `AIInvestigation/domain/` だったが、`Alert→InvestigationReport→AlertSeverity` のモジュール循環依存になるため移動）。依存は `AIInvestigation → AlertAnalysis` の一方向に統一
 
-### タスク 10: AIInvestigationPort ＋ Gemini Adapter 〔P0〕
+### タスク 10: AIInvestigationPort ＋ Gemini Adapter 〔P0〕✅ 完了済み
 
-- 【新規】`domain/AIInvestigationPort.ts` / `domain/InvestigationContext.ts`
-- 【新規】`infrastructure/GeminiAIInvestigationAdapter.ts`（`@google/generative-ai`・JSON固定出力・safeParse・confidenceクランプ・タイムアウト1回リトライ・fallback）
+- 【完了】`AIInvestigation/domain/AIInvestigationPort.ts` / `AIInvestigation/domain/InvestigationContext.ts`（`InfraEvidence` はタスク15まで `Record<string, unknown>` スタブ）
+- 【完了】`AIInvestigation/infrastructure/GeminiAIInvestigationAdapter.ts`（`@google/generative-ai`・`responseMimeType: application/json` でJSON固定出力・safeParse・confidenceクランプ[0,1]・30sタイムアウト1回リトライ・fallback・トークン3500超で similarIncidents を0件に削減）
+- 【完了】`@google/generative-ai ^0.24.1` を workspace root に追加
+- 設計判断（依存方向）: `AIInvestigationPort`/`GeminiAIInvestigationAdapter` は `InvestigationReport`/`ReviewStatus`/`AlertSeverity` を **`AlertAnalysis/domain/` から import**（タスク9の移動に伴う）。Port/Context 自体は `AIInvestigation/domain/` のまま。依存は `AIInvestigation → AlertAnalysis` の一方向で循環なし。InvestigateAlertCommandHandler（タスク11）も同方向で `AlertRepository`/`Alert` に依存するので情報取得に問題なし
 - 参考: 「AIInvestigationPort」「GeminiAIInvestigationAdapter」節
 
 ### タスク 11: InvestigateAlertCommandHandler 〔P0〕

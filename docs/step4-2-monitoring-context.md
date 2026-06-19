@@ -47,7 +47,7 @@
 | AlertClassifierのマッチング戦略（将来）   | スコアリングベース（複数パターンへの重み付けスコア合算）。`confidence` が閾値未満の場合は未知扱い。`SimilarPatternRule`(Elastic) を Policy に追加する形で実現                            | 「未知障害の推測精度向上」と「作業員の意思決定支援」が本来の目的。部分一致の度合いをスコアで表現することで、複数パターンへの可能性を並列提示できる                                |
 | AlertClassification への confidence 配置  | `AlertClassification` に `confidence: number \| null` を持たせる。既知一致は `1.0`、未知は `null`（AI分析後は `InvestigationReport.confidence` が別途存在） | 将来のスコアリング移行後も同一フィールドに `0.87` 等を格納できる。UIが `classification.confidence` を参照するだけで両世代のデータを扱える                                         |
 | 既知パターン昇格トリガー                  | 手動（Promoteボタン）+ 自動（correctフィードバックがN回到達で自動昇格）                                                                                     | デモシナリオ3の「次回同じ障害が1秒以内に既知分類される」を自動で示せる。手動はオペレーターの明示的な判断も残す                                                                    |
-| InvestigationReportの配置                 | Alert集約に直接埋め込む（別集約にしない）                                                                                                                   | Alert IDで常にセットで参照される。ライフサイクルも同一。分離のメリット（独立した集約操作）がない                                                                                  |
+| InvestigationReportの配置                 | Alert集約に直接埋め込む（別集約にしない）。**ファイルも `AlertAnalysis/domain/` に置く**（`AIInvestigation/domain/` ではない）                                                                                                                   | Alert IDで常にセットで参照される。ライフサイクルも同一。分離のメリット（独立した集約操作）がない。**集約の構成要素（サブエンティティ）は集約と同じモジュールが所有する**。`AIInvestigation` 側に置くと `Alert(AlertAnalysis)→InvestigationReport(AIInvestigation)→AlertSeverity(AlertAnalysis)` のモジュール循環依存が発生する。所有を `AlertAnalysis` に寄せると依存は `AIInvestigation → AlertAnalysis` の一方向となり、Reportを生成する補助モジュール（Port/Adapter）が集約の型に依存する自然な向きになる |
 | SSEAlertNotifierの実装                    | Node.js EventEmitterオンメモリ（シングルプロセス前提）                                                                                                      | e2-medium単一プロセス構成。Redis追加はインフラコストと複雑性を上げる。スケールアウトが必要になった時点でRedis Pub/Subに差し替える（SSEAlertNotifierインターフェースで抽象化済み） |
 | PaymentTimeoutDomainEvent受信時のorderId  | MonitoringEventに `orderId?: string` として保持し、Alertレベルで「注文未確定の決済障害」として分類する                                                      | OrderがDBに存在しない段階のイベント。Monitoringが無理にOrderを引きに行かない設計にする                                                                                            |
 | SimilarIncidentRepositoryのウォームアップ | 起動時にMongoDBから既存ResolvedIncidentを読み込んでインメモリ構築                                                                                           | ハッカソン規模では再起動頻度が低い。コールドスタート時の1〜2秒は許容範囲                                                                                                          |
@@ -750,7 +750,8 @@ interface InvestigateAlertCommand {
 
 ## InvestigationReport（Alert集約に埋め込むサブエンティティ）
 
-**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/domain/InvestigationReport.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/domain/InvestigationReport.ts`
+（Alert集約の構成要素なので所有者は `AlertAnalysis`。`ReviewStatus.ts` も同様に `AlertAnalysis/domain/` に置く）
 
 > step1 の設計判断に整合：「AIが調査して人間はレビューするだけ」という体験価値を実現するため、
 > `investigationSteps`（AIが何を調べたか）・`suggestedActions`（推奨対応）・`reviewStatus`（承認/却下）を持つ。

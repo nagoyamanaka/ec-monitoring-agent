@@ -205,6 +205,10 @@ src/Contexts/Monitoring/
 │   │   ├── AlertId.ts                         # Value Object
 │   │   ├── AlertSeverity.ts                   # Value Object（CRITICAL/WARNING/INFO）
 │   │   ├── AlertStatus.ts                     # Value Object（OPEN/ANALYZING/RESOLVED）
+│   │   ├── InvestigationReport.ts            # AI調査レポート（Alert集約のサブエンティティ＝集約の構成要素なのでここに置く）
+│   │   │                                      #   summary / confidence / investigationSteps / suggestedActions / suggestedPatternName / reviewStatus
+│   │   │                                      #   ※ Alert集約に埋め込まれる部品なので所有者は AlertAnalysis。生成元（AIInvestigation/Port）が逆にこちらへ依存する
+│   │   ├── ReviewStatus.ts                    # Value Object（PENDING_REVIEW / APPROVED / REJECTED）。reviewStatusはSubmitFeedbackCommandHandlerで更新
 │   │   ├── KnownErrorPattern.ts               # 既知障害パターンエンティティ
 │   │   ├── AlertRepository.ts                 # Repositoryインターフェース
 │   │   └── KnownErrorPatternRepository.ts     # Repositoryインターフェース
@@ -231,15 +235,8 @@ src/Contexts/Monitoring/
 │
 ├── AIInvestigation/
 │   ├── domain/
-│   │   ├── InvestigationReport.ts             # AI調査レポートエンティティ
-│   │   │                                      #   summary: string           原因仮説サマリー
-│   │   │                                      #   confidence: number        確信度（0.0〜1.0）
-│   │   │                                      #   investigationSteps: string[]  AIが実施した調査ステップ
-│   │   │                                      #   suggestedActions: string[]    推奨アクション一覧
-│   │   │                                      #   suggestedPatternName: string  自動昇格候補パターン名（Geminiが提案）
-│   │   │                                      #   reviewStatus: ReviewStatus    PENDING_REVIEW / APPROVED / REJECTED
-│   │   │                                      #   ※ reviewStatusはSubmitFeedbackCommandHandlerで更新
-│   │   ├── ReviewStatus.ts                    # Value Object（PENDING_REVIEW / APPROVED / REJECTED）
+│   │   # ※ InvestigationReport / ReviewStatus は Alert集約のサブエンティティなので AlertAnalysis/domain に置く（ここには置かない）。
+│   │   #   AIInvestigation は「Reportを生成する補助モジュール」なので AlertAnalysis/domain（InvestigationReport）へ依存する＝依存は一方向（AIInvestigation → AlertAnalysis）。
 │   │   ├── InvestigationContext.ts            # Geminiへ送るコンテキストの型（トークン上限3,500）
 │   │   └── AIInvestigationPort.ts             # AI調査呼び出しのポートインターフェース（DIP）
 │   │                                          # ※ プロダクト名を含まない抽象名にすることで
