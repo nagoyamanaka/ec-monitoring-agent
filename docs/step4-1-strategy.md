@@ -149,20 +149,20 @@
 
 突合キーをどこまで構造化するかが唯一の判断点。**本プロジェクトは (B) を採る**（将来移行込み・時間があれば実装）。
 
-| 段階 | 突合方式 | 既存データ構造への影響 | 精度 |
-| ---- | -------- | ---------------------- | ---- |
-| (A) | 既存 `InvestigationReport`/`InfraEvidence` を**テキストのまま**contextに流しLLMに意味joinさせる | 変更ゼロ | ブレやすい |
-| **(B)（採用）** | 過去インシデントに **`subject`/`component` 構造化タグ**を持たせて突合 | `InvestigationReport` に optional `subject` 追記 **or** `ForecastMemory` projection新設 | 安定・引用検証が効く |
+| 段階            | 突合方式                                                                                        | 既存データ構造への影響                                                                  | 精度                 |
+| --------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------- |
+| (A)             | 既存 `InvestigationReport`/`InfraEvidence` を**テキストのまま**contextに流しLLMに意味joinさせる | 変更ゼロ                                                                                | ブレやすい           |
+| **(B)（採用）** | 過去インシデントに **`subject`/`component` 構造化タグ**を持たせて突合                           | `InvestigationReport` に optional `subject` 追記 **or** `ForecastMemory` projection新設 | 安定・引用検証が効く |
 
 > 「最初テキストjoin(A)で動かし、精度のために部品タグ(B)を構造化した」という**進化自体がADRになる**。
 
 ### 7.5 データ構造への影響範囲（既存P0は無傷）
 
-| 階層 | 内容 | 既存step4項目 |
-| ---- | ---- | ------------- |
-| ① 完全新規型 | `RiskForecast`（集約/read-model）/ `ForecastSignal` / `Schedule`・`ScheduleSource` | 追加のみ（既存無傷） |
-| ② 既存への追記 | `GitHubGateway.listOpenPullRequests()` / `TerraformGateway.getPendingPlan()`（read-only維持） | メソッド追加 |
-| ③ 記憶の突合キー | (B採用)`InvestigationReport` に optional `subject` **or** `ForecastMemory` projection | optional追記 or 新規projection |
+| 階層             | 内容                                                                                          | 既存step4項目                  |
+| ---------------- | --------------------------------------------------------------------------------------------- | ------------------------------ |
+| ① 完全新規型     | `RiskForecast`（集約/read-model）/ `ForecastSignal` / `Schedule`・`ScheduleSource`            | 追加のみ（既存無傷）           |
+| ② 既存への追記   | `GitHubGateway.listOpenPullRequests()` / `TerraformGateway.getPendingPlan()`（read-only維持） | メソッド追加                   |
+| ③ 記憶の突合キー | (B採用)`InvestigationReport` に optional `subject` **or** `ForecastMemory` projection         | optional追記 or 新規projection |
 
 > **ランタイムの反応的パイプライン（AnalyzeAlert/InvestigateAlert）は無傷**。予兆は新規 `ForecastRiskCommandHandler` として横に生やす（write無し＝read-onlyの調査の一種）。
 
@@ -173,14 +173,14 @@
 
 ### 7.7 見積もり（P1完了を前提とした増分・(B)採用）
 
-| 工程 | 工数 |
-| ---- | ---- |
-| シグナル正規化（既存Gateway結果に subject/when ラベル付け＋②のメソッド追加） | 1d |
-| ForecastMemory projection＋ `subject` タグ付け（③・B採用分） | 0.5〜1d |
-| Forecast context builder＋引用縛りプロンプト＋JSONスキーマ＋**引用検証** | 1d |
-| API（POST/GET /forecast）＋最小表示（既存UI相乗り可） | 0.5d |
-| seed＋いい1テイク録る | 0.5d |
-| **合計（B採用・録画前提）** | **≈ 3.5〜4日** |
+| 工程                                                                         | 工数           |
+| ---------------------------------------------------------------------------- | -------------- |
+| シグナル正規化（既存Gateway結果に subject/when ラベル付け＋②のメソッド追加） | 1d             |
+| ForecastMemory projection＋ `subject` タグ付け（③・B採用分）                 | 0.5〜1d        |
+| Forecast context builder＋引用縛りプロンプト＋JSONスキーマ＋**引用検証**     | 1d             |
+| API（POST/GET /forecast）＋最小表示（既存UI相乗り可）                        | 0.5d           |
+| seed＋いい1テイク録る                                                        | 0.5d           |
+| **合計（B採用・録画前提）**                                                  | **≈ 3.5〜4日** |
 
 ### 7.8 ADR種（Step5）
 
@@ -188,5 +188,139 @@
 - joinを自前ルールエンジンでなく **LLMに委譲し、人間は正規化／引用縛り／引用検証の3点足場に限定**する理由
 - 突合キーを **(A)テキストjoin → (B)構造化タグ** へ段階移行する理由（精度と既存無傷のトレードオフ）
 - 予兆能力を **P0パイプライン無傷の追加レイヤー**（read-onlyの調査の一種）として載せる設計判断
+
+---
+
+## 8. フロー全体図（発表資料用）
+
+> **位置づけ**: ハッカソン発表・説明資料用のシーケンスと工程表。  
+> ランタイムの全フローを「イベント受信 → 分類 → 診断 → フィードバック昇格」の1ループで示す。
+
+---
+
+### 8.1 シーケンス図
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant EC   as EC Backend
+    participant MQ   as RabbitMQ
+    participant Sub  as CollectMonitoringEvent<br/>Subscriber
+    participant AA   as AnalyzeAlert<br/>CommandHandler
+    participant CL   as AlertClassifier<br/>(KnownPatternRule)
+    participant AR   as AlertRepository
+    participant SSE  as SSEAlertNotifier
+    participant EB   as EventBus
+    participant IA   as InvestigateAlert<br/>CommandHandler
+    participant IP   as InfraInvestigation<br/>Port
+    participant AI   as AIInvestigation<br/>Port (Gemini)
+    participant OP   as Operator<br/>(Backoffice UI)
+    participant FB   as SubmitFeedback<br/>CommandHandler
+    participant KP   as KnownErrorPattern<br/>Repository
+
+    EC->>MQ: publish DomainEvent<br/>(e.g. ec.payment.timeout)
+    MQ->>Sub: subscribe（専用キュー）
+    Sub->>Sub: ECDomainEvent → MonitoringEvent 変換
+    Sub->>AA: AnalyzeAlertCommand
+
+    AA->>CL: classify(monitoringEvent)
+
+    alt 既知パターン一致
+        CL-->>AA: matched: true, KnownAlertClassification
+        AA->>AA: Alert.createFromKnownPattern()
+        AA->>AR: save(alert)
+        AA->>SSE: notify → フロントへ即時 push [OPEN]
+    else 未知パターン
+        CL-->>AA: matched: false
+        AA->>AA: Alert.createAsUnknown()
+        AA->>AR: save(alert)
+        AA->>SSE: notify → フロントへ即時 push [ANALYZING]
+        AA->>EB: publish InvestigateAlertDomainEvent
+
+        EB->>IA: InvestigateAlertCommand（非同期）
+        IA->>IP: collect(monitoringEvent)
+        Note over IP: Cloud Logging / Terraform diff<br/>/ GitHub コミット・PR
+        IP-->>IA: InfraEvidence
+        IA->>AI: investigate(InvestigationContext)
+        Note over AI: Gemini API<br/>証拠 + 類似事例 → 原因推定
+        AI-->>IA: InvestigationReport（confidence付き）
+        IA->>IA: alert.attachInvestigationReport(report)
+        IA->>AR: save(updatedAlert)
+        IA->>SSE: notify → フロントへ分析結果 push [OPEN]
+    end
+
+    OP->>FB: POST /alerts/:id/feedback（isCorrect）
+    FB->>FB: alert.submitFeedback()
+    FB->>AR: save(alert)
+
+    alt correctFeedbackCount >= AUTO_PROMOTE_THRESHOLD
+        FB->>KP: save(promotedPattern)
+        Note over KP: 次回から1秒以内に<br/>既知分類（デモシナリオ3）
+    end
+```
+
+---
+
+### 8.2 工程表（ステップ別）
+
+| #   | ステップ                 | 担当コンポーネント                               | 入力                                     | 出力                                                           | 主要技術                                       |
+| --- | ------------------------ | ------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------- |
+| 1   | **イベント受信・変換**   | `CollectMonitoringEventSubscriber`               | EC DomainEvent（RabbitMQ）               | `MonitoringEvent`                                              | RabbitMQ / amqplib                             |
+| 2   | **分類**                 | `AnalyzeAlertCommandHandler` + `AlertClassifier` | `MonitoringEvent`                        | `AlertClassificationResult`                                    | `KnownPatternRule`（InMemory完全一致）         |
+| 3a  | **既知Alert生成・通知**  | `AnalyzeAlertCommandHandler`                     | `KnownAlertClassification`               | Alert（`OPEN`）+ SSE push                                      | MongoDB + Node.js EventEmitter                 |
+| 3b  | **未知Alert生成・通知**  | `AnalyzeAlertCommandHandler`                     | -                                        | Alert（`ANALYZING`）+ SSE push + `InvestigateAlertDomainEvent` | MongoDB + SSE + EventBus                       |
+| 4   | **インフラ証拠収集**     | `InfraInvestigationPort`                         | `MonitoringEvent`                        | `InfraEvidence`                                                | Cloud Logging API / Terraform CLI / GitHub API |
+| 5   | **AI調査**               | `AIInvestigationPort`（Gemini Adapter）          | `InvestigationContext`（証拠＋類似事例） | `InvestigationReport`（confidence付き）                        | Gemini API（gemini-2.0-flash）                 |
+| 6   | **Alert更新・通知**      | `InvestigateAlertCommandHandler`                 | `InvestigationReport`                    | Alert（`OPEN`）+ SSE push                                      | MongoDB + SSE                                  |
+| 7   | **オペレーターレビュー** | `SubmitFeedbackCommandHandler`                   | `isCorrect`フラグ + note                 | Alert更新（`reviewStatus` = APPROVED/REJECTED）                | MongoDB                                        |
+| 8   | **パターン自動昇格**     | `SubmitFeedbackCommandHandler`                   | `correctFeedbackCount >= N`              | `KnownErrorPattern` 新規登録                                   | MongoDB                                        |
+
+---
+
+### 8.3 コンテキスト構造（論理型による整理：Bateson）
+
+> **論理型（Bateson / Russell）で整理する。** ベイトソンの「フレーム」は額縁の比喩で、**ある前提・言語が通用する境界を画定し、その機能は「論理型を画定する（delimit a logical type）」こと**（_A Theory of Play and Fantasy_, 1955）。DDD の bounded context は「あるユビキタス言語が通用する境界」なので、**bounded context ＝ ベイトソンのフレーム**として読める。
+>
+> ベイトソンの「**context of context ＝ メタコンテキスト**」（より高い論理型）に従い、`Monitoring` は**メタコンテキスト**、その**メンバが各コンテキスト**（AlertAnalysis / AIInvestigation / ReportGeneration）。クラスとメンバは異なる論理型なので「サブコンテキスト」とは呼ばない（メタの一段下のメンバであって、二段下の入れ子ではない）。
+
+**メタコンテキストが画定するフレーム＝「観測（observation）」**。EC専用ではない。EC ドメインイベント・CI の Trivy 脆弱性通知・インフラシグナルなど**異種の源**を、源固有の型を剥いで均質な観測に正規化する境界がフレームで、`category`（APPLICATION/INFRASTRUCTURE/SECURITY/CAPACITY）がその「EC専用でない」ことの証拠。
+
+```
+Monitoring（メタコンテキスト ＝ 観測フレームを画定する高位の論理型）
+│
+│  ［境界の変換点］各源固有の型に触れるのはここだけ
+│   ├─ CollectMonitoringEventSubscriber（EC DomainEvent → MonitoringEvent）
+│   └─（将来）CI/infra ingest アダプタ（Trivy / インフラシグナル → MonitoringEvent）
+│
+├─ Shared/domain/MonitoringEvent  ← フレーム内で通用するユビキタス言語（共有カーネル）
+│    ※ フレームそのものではなく、フレームの内側で話される共通語
+│
+├─ AlertAnalysis（コンテキスト）
+│    「MonitoringEvent は既知パターンか」を分類する
+│    集約: Alert / KnownErrorPattern
+│
+├─ AIInvestigation（コンテキスト）
+│    「未知の MonitoringEvent の原因は何か」を調査する
+│    InfraEvidence 収集 → Gemini推論 → InvestigationReport
+│
+└─ ReportGeneration（コンテキスト）
+     「Alert の状態変化をフロントに届ける」
+     SSEAlertNotifier
+```
+
+| 論理型                             | 担当                                       | 画定するフレーム / 通用する前提                                              |
+| ---------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
+| **メタコンテキスト**（Monitoring） | 異種の源を均質な観測へ正規化する境界を画定 | 「ここから内側はすべて均質な観測として扱う」。源固有の型はメンバに漏らさない |
+| コンテキスト（AlertAnalysis）      | 既知パターンと照合する                     | `MonitoringEvent`・`KnownErrorPattern`                                       |
+| コンテキスト（AIInvestigation）    | 証拠を集めてAIに渡す                       | `MonitoringEvent`・`InfraEvidence`・Gemini                                   |
+| コンテキスト（ReportGeneration）   | フロントへ配信する                         | SSE / Alert のプリミティブ                                                   |
+
+> 各コンテキストは `MonitoringEvent` という共通語だけで仕事し、源固有の型（EC / CI / infra）を直接 import しない。  
+> これが「メタコンテキストが観測フレームを画定し、メンバのコンテキストはそのフレームの内側で閉じる」という論理型構造の実体。
+
+> **参考（一次ソース）**:
+>
+> - G. Bateson, _A Theory of Play and Fantasy_ (1955) — 心理的フレーム（inclusive/exclusive・メタコミュニケーション・論理型の画定）
+> - G. Bateson, _The Logical Categories of Learning and Communication_ — context / context of context（メタメッセージの階層＝論理型）
 
 ---
