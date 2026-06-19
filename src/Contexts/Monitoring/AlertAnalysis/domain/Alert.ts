@@ -16,8 +16,8 @@ import {
 import {
   InvestigationReport,
   InvestigationReportPrimitives,
-} from "../../AIInvestigation/domain/InvestigationReport.js";
-import { ReviewStatus } from "../../AIInvestigation/domain/ReviewStatus.js";
+} from "./InvestigationReport.js";
+import { ReviewStatus } from "./ReviewStatus.js";
 import { AggregateRoot } from "../../../Shared/domain/AggregateRoot.js";
 
 type AlertFeedback = {

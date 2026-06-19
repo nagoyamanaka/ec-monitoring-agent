@@ -5,8 +5,8 @@ import { AlertSeverity } from "./AlertSeverity.js";
 import { ClassificationConfidence, KnownAlertClassification } from "./AlertClassification.js";
 import { MonitoringEvent } from "../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../Shared/domain/MonitoringEventCategory.js";
-import { InvestigationReport } from "../../AIInvestigation/domain/InvestigationReport.js";
-import { ReviewStatus } from "../../AIInvestigation/domain/ReviewStatus.js";
+import { InvestigationReport } from "./InvestigationReport.js";
+import { ReviewStatus } from "./ReviewStatus.js";
 import { Uuid } from "../../../Shared/domain/value-object/Uuid.js";
 
 const testEvent = new MonitoringEvent({
