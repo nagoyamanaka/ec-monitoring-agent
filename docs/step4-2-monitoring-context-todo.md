@@ -131,10 +131,13 @@
 - `findSimilar` は criteria に eventName EQUAL フィルタ＋limit で最大5件。`index` は先頭に追加、100件超で末尾削除
 - 参考: 「SimilarIncidentRepository」節
 
-### タスク 13: SSEAlertNotifier interface ＋ EventEmitter 実装 〔P0〕
+### タスク 13: SSEAlertNotifier interface ＋ EventEmitter 実装 〔P0〕✅ 完了済み
 
-- 【新規】`ReportGeneration/infrastructure/SSEAlertNotifier.ts`（interface）/ `EventEmitterSSEAlertNotifier`
-- HTTP接続管理（addConnection/removeConnection/notify）。Express側の機構は step4-3
+- 【完了】interface はタスク7で `ReportGeneration/domain/SSEAlertNotifier.ts` に作成済み（IF はドメイン配置）。本タスクでは実装のみ追加
+- 【完了】`ReportGeneration/infrastructure/EventEmitterSSEAlertNotifier.ts`（`SSEAlertNotifier` 実装・オンメモリ Set<Response>・シングルプロセス前提）
+- HTTP接続管理（addConnection/removeConnection/notify）。`addConnection` で `res.on("close")` 時に自動 removeConnection（冪等）。`notify` は全接続へ `data: <json>\n\n` を broadcast、1接続の write 失敗時はその接続を除去して継続
+- 設計判断: 疎通主体の薄い infra アダプタのため UT はコロケーションせず E2E で担保（リポジトリ実装と同方針）。Express 側の routes/controller 配線は step4-3
+- 参考: 「SSEAlertNotifier」節（EventEmitterSSEAlertNotifier）
 
 ### タスク 14: SubmitFeedback ＋ 自動昇格 / 手動昇格 〔P0〕
 
