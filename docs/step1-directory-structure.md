@@ -213,17 +213,21 @@ src/Contexts/Monitoring/
 │   │   │   ├── AnalyzeAlertCommand.ts
 │   │   │   ├── AnalyzeAlertCommandHandler.ts  # VO変換のみ → UseCase委譲
 │   │   │   └── AnalyzeAlertUseCase.ts         # 既知/未知分類ロジック本体（テストはここに書く）
+│   │   ├── CollectMonitoringEvent/            # 観測イベント収集（ingest）ユースケース。AnalyzeAlertとは責務が別なので独立フォルダ
+│   │   │   ├── CollectMonitoringEventUseCase.ts            # 源非依存：MonitoringEvent → AnalyzeAlertCommand 生成 → ハンドラ委譲
+│   │   │   ├── CollectMonitoringEventSubscriber.ts         # 抽象基底（テンプレートメソッド）。源固有差分は subscribedTo()/toMonitoringEvent() のみ＝OCP
+│   │   │   └── CollectMonitoringEventOnECEventPublished.ts # EC源アダプタ：EC DomainEvent → MonitoringEvent 変換（橋渡し）
 │   │   └── SubmitFeedback/
 │   │       ├── SubmitFeedbackCommand.ts
 │   │       └── SubmitFeedbackCommandHandler.ts # フィードバック受付・既知昇格トリガー・レポートレビュー結果の記録
 │   └── infrastructure/
-│       ├── persistence/
-│       │   ├── InMemoryAlertRepository.ts
-│       │   ├── InMemoryKnownErrorPatternRepository.ts
-│       │   ├── MongoAlertRepository.ts
-│       │   └── MongoKnownErrorPatternRepository.ts
-│       └── subscribers/
-│           └── CollectMonitoringEventOnECDomainEvent.ts # ECイベント→MonitoringEvent変換（橋渡し）
+│       └── persistence/
+│           ├── InMemoryAlertRepository.ts
+│           ├── InMemoryKnownErrorPatternRepository.ts
+│           ├── MongoAlertRepository.ts
+│           └── MongoKnownErrorPatternRepository.ts
+│       # Subscriber本体は application/CollectMonitoringEvent/ に配置（CompensateOrderOnInventoryFailed と同じく application 層）。
+│       # DomainEventBus への配線は app の合成ルート src/apps/backoffice/backend/src/subscribers/ で行う
 │
 ├── AIInvestigation/
 │   ├── domain/
@@ -461,7 +465,7 @@ src/apps/backoffice/backend/
 │   │       ├── DemoResetPostController.ts   # 全体リセット + シードデータ投入
 │   │       └── DemoStatusGetController.ts
 │   └── subscribers/
-│       └── registerSubscribers.ts   # CollectMonitoringEventOnECDomainEvent 起動
+│       └── BackofficeSubscribers.ts   # 合成ルート：CollectMonitoringEventOnECEventPublished を DomainEventSubscribers に配線（EcSubscribers.ts と同形）
 └── package.json
 ```
 

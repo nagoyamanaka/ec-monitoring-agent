@@ -76,12 +76,15 @@
 - 設計判断: `SSEAlertNotifier` は interface なので `ReportGeneration/domain/` に配置（infrastructure には実装 `EventEmitterSSEAlertNotifier` を置く）
 - 参考: 「AnalyzeAlertCommandHandler」節（重複3a行は無し）
 
-### タスク 8: CollectMonitoringEventOnECDomainEvent 〔P0〕
+### タスク 8: CollectMonitoringEventOnECEventPublished 〔P0〕✅ 完了済み
 
-- 【新規】`application/AnalyzeAlert/CollectMonitoringEventOnECDomainEvent.ts`
-- eventNameで分岐デシリアライズ → MonitoringEvent変換（category=APPLICATION）→ AnalyzeAlertCommand
-- 変換規則: OrderPlaced=subtotalAmount / ReservationFailed=+reservedProductIds / PaymentTimeout=aggregateId=paymentAttemptId,payload{orderId,customerId,amount}
-- 参考: 「変換規則表」「CollectMonitoringEvent」節
+- 【完了】`application/CollectMonitoringEvent/CollectMonitoringEventSubscriber.ts`（抽象基底・テンプレートメソッド：`on()`＝`useCase.run(toMonitoringEvent(event))`。源固有差分は `subscribedTo()`/`toMonitoringEvent()` のみ。将来の CI/infra 源は継承で追加＝OCP）
+- 【完了】`application/CollectMonitoringEvent/CollectMonitoringEventOnECEventPublished.ts`（EC源アダプタ：基底を継承し EC DomainEvent → MonitoringEvent 変換のみ実装。`instanceof` 分岐で eventごとに変換）
+- 【完了】`application/CollectMonitoringEvent/CollectMonitoringEventUseCase.ts`（源非依存：AnalyzeAlertCommand 生成 → ハンドラ委譲 → DEBUGログ、失敗は ERRORログ＋re-throw）＋ `CollectMonitoringEventUseCase.test.ts`
+- 設計判断（フォルダ配置）: 収集（ingest）は AnalyzeAlert とは別責務のため `application/CollectMonitoringEvent/` に独立。UseCase は `AnalyzeAlert/AnalyzeAlertCommandHandler` に委譲するのみ（依存方向: CollectMonitoringEvent → AnalyzeAlert）
+- 変換規則: OrderPlaced=subtotalAmount / ReservationFailed=+reservedProductIds / PaymentTimeout=aggregateId=paymentAttemptId,payload{orderId,customerId,amount}（category=APPLICATION）
+- 設計判断: subscriber は薄く UseCase へ委譲（`CompensateOrderOnInventoryFailed` 準拠）。源境界は **source 単位**（EC=1アダプタ、strategy 8.3「各源固有の型に触れるのはここだけ」）。`SupportedECDomainEvent` union は型安全な源境界として保持（ファクトリ注入はせず、拡張は新サブクラスで吸収）
+- 参考: 「変換規則表」「CollectMonitoringEvent」節 / strategy 8.3「観測フレーム境界」
 
 ### タスク 9: InvestigationReport ＋ ReviewStatus 〔P0〕✅ 完了済み
 

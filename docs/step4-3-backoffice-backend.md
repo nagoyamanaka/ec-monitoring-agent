@@ -43,7 +43,7 @@ src/apps/backoffice/backend/src/
 ├── middleware/
 │   └── errorHandler.ts          # step3と同一マッピング（Monitoringのエラーも同基底3クラス）
 └── subscribers/
-    └── registerSubscribers.ts   # CollectMonitoringEventOnECDomainEvent（application層）を EventBus に登録
+    └── BackofficeSubscribers.ts # 合成ルート：CollectMonitoringEventOnECEventPublished（application層）を EventBus に配線（EcSubscribers.ts と同形）
 ```
 
 ---
@@ -74,7 +74,7 @@ BackofficeApp.start():
      - AnalyzeAlertCommandHandler / InvestigateAlertCommandHandler
      - SubmitFeedbackCommandHandler / PromotePatternCommandHandler
      - GetAlertReportQueryHandler 等
-  6. registerSubscribers()（RabbitMQ購読開始）
+  6. BackofficeSubscribers で Subscriber を配線（RabbitMQ購読開始）
   7. App.ts で Express ルート登録 → listen
 ```
 
@@ -142,7 +142,7 @@ GET /alerts/stream
 
 ---
 
-## Subscriber 登録（registerSubscribers.ts）
+## Subscriber 登録（BackofficeSubscribers.ts）
 
 backoffice プロセスが起動時に登録。EC backend とは別プロセス。
 
@@ -152,7 +152,7 @@ backoffice プロセスが起動時に登録。EC backend とは別プロセス�
   backoffice-backend.ec.inventory.reservation_failed.collect-monitoring-event
   backoffice-backend.ec.payment.timeout.collect-monitoring-event
 
-→ CollectMonitoringEventOnECDomainEvent（step4-2）が ECDomainEvent → MonitoringEvent 変換 → AnalyzeAlertCommand dispatch
+→ CollectMonitoringEventOnECEventPublished（step4-2）が ECDomainEvent → MonitoringEvent 変換 → AnalyzeAlertCommand dispatch
 ```
 
 `ec.inventory.reserved`（正常系）は購読しない。

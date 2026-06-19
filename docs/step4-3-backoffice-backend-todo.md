@@ -21,7 +21,7 @@
 ### タスク 3: BackofficeApp.ts（DI配線）〔P0〕
 
 - 【新規/修正】`BackofficeApp.ts` / `server.ts`（現状TODOコメントのみ）
-- Mongo/RabbitMQ初期化 → Repository/Classifier/Port/Notifier を new（★差し替えポイント）→ Handler を Bus 登録 → registerSubscribers → App.ts でルート登録 → listen
+- Mongo/RabbitMQ初期化 → Repository/Classifier/Port/Notifier を new（★差し替えポイント）→ Handler を Bus 登録 → BackofficeSubscribers で Subscriber 配線 → App.ts でルート登録 → listen
 - 設計の「DI配線」手順に従う
 
 ### タスク 4: App.ts ＋ routes/index.ts 〔P0〕
@@ -44,10 +44,10 @@
 - 【新規】`patternRoutes.ts`（GET /patterns, POST /patterns/:id/promote）/ `analyticsRoutes.ts`（GET /analytics）/ `demoRoutes.ts`（POST /demo/\*\*・DEMO_ENABLEDで本番無効化）＋各Controller
 - demo: payment-mode / scenario/:id/trigger / reset・reset/\* / status
 
-### タスク 8: registerSubscribers 〔P0〕
+### タスク 8: BackofficeSubscribers 〔P0〕
 
-- 【新規】`subscribers/registerSubscribers.ts`
-- `CollectMonitoringEventOnECDomainEvent`（step4-2）を3キュー購読登録（order.placed / inventory.reservation_failed / payment.timeout）
+- 【新規】`subscribers/BackofficeSubscribers.ts`（EcSubscribers.ts と同形の合成ルート）
+- `CollectMonitoringEventOnECEventPublished`（step4-2・application層）を3キュー購読登録（order.placed / inventory.reservation_failed / payment.timeout）
 
 > ✅ **ここまでで backoffice API ＋ SSE が動き、シナリオ1・2・3がUIまで通る。**
 

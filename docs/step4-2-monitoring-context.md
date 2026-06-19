@@ -64,7 +64,7 @@
     └─ ec.payment.timeout
 
 [Backoffice Backend]
-  CollectMonitoringEventOnECDomainEvent (Subscriber)
+  CollectMonitoringEventOnECEventPublished (Subscriber)
     │
     ↓ ECDomainEvent → MonitoringEvent 変換
     │
@@ -197,13 +197,13 @@ export class MonitoringEventCategory extends EnumValueObject<MonitoringEventCate
 > - `InventoryReservationFailedDomainEvent` は補償処理用に `reservedProductIds`（成功済み商品IDリスト）を payload に含む。
 > - `PaymentTimeoutDomainEvent` の `aggregateId` は `paymentAttemptId`。注文は未確定のため orderId は payload 側に持つ。`reason` フィールドは存在しない（決済タイムアウトは単一の事象として扱う）。
 
-変換責務は `CollectMonitoringEventOnECDomainEvent` Subscriber が持つ。
+変換責務は `CollectMonitoringEventOnECEventPublished` Subscriber が持つ。
 
 ---
 
-## CollectMonitoringEventOnECDomainEvent（詳細）
+## CollectMonitoringEventOnECEventPublished（詳細）
 
-**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/application/AnalyzeAlert/CollectMonitoringEventOnECDomainEvent.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventOnECEventPublished.ts`
 
 ### 購読キュー
 
@@ -1369,7 +1369,7 @@ interface KnownErrorPatternRepository {
 
 | 出力箇所                                           | severity | action                       | message                                                |
 | -------------------------------------------------- | -------- | ---------------------------- | ------------------------------------------------------ |
-| `CollectMonitoringEventOnECDomainEvent` 受信       | DEBUG    | `monitoring_event_collected` | ECイベントをMonitoringEventに変換：{eventName}         |
+| `CollectMonitoringEventOnECEventPublished` 受信       | DEBUG    | `monitoring_event_collected` | ECイベントをMonitoringEventに変換：{eventName}         |
 | `AnalyzeAlertCommandHandler` 既知分類              | INFO     | `alert_classified_known`     | 既知パターン一致：{alertId}, pattern={patternName}     |
 | `AnalyzeAlertCommandHandler` 未知分類              | WARN     | `alert_classified_unknown`   | 未知パターン：{alertId}, eventName={eventName}         |
 | `InvestigateAlertCommandHandler` 完了              | INFO     | `alert_investigated`         | AI分析完了：{alertId}, confidence={confidence}         |
@@ -1396,7 +1396,7 @@ interface KnownErrorPatternRepository {
 ```
 [EC Backend] ──RabbitMQ──▶ [Backoffice Backend]
 
-CollectMonitoringEventOnECDomainEvent
+CollectMonitoringEventOnECEventPublished
   │  ECDomainEvent → MonitoringEvent 変換
   ↓
 AnalyzeAlertCommandHandler
