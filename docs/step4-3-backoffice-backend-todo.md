@@ -3,6 +3,8 @@
 > 対応設計: `docs/step4-3-backoffice-backend.md`
 > 前提: `step4-2`（Monitoringコンテキスト）のP0が完了していること。優先度: **P0** / **P1** / **stretch**。
 > 参考実装: `src/apps/ec/backend/`（EcBackendApp.ts / config.ts / routes / controllers / middleware / subscribers）。
+>
+> **application 層の実装方針（共通・step4-2と同じ）**: handler / subscriber / controller は薄く保ち、ロジック本体は UseCase に移す。これらの責務は「入力（HTTPリクエスト/コマンド/ドメインイベント）→ コマンド/ドメイン型への変換」と「UseCase・Handler への委譲」だけ。分岐・永続化・publish・通知・ログ等は `XxxUseCase.run()` に置く（バス機構を介さず fake 注入で直接UTでき、源が変わっても本体を再利用できる）。テストは UseCase 側に書く。参考: `EC/Orders/.../PlaceOrderCommandHandler → PlaceOrderUseCase`。
 
 ---
 

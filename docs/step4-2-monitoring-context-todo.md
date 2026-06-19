@@ -7,6 +7,13 @@
 > **実装プロンプト雛形**（各タスクで使う）:
 > 「`/home/shigeyasu/Project/ec-monitoring-agent` の TypeScript DDD プロジェクトで、下記ファイルを新規作成。CodelyTV パターン準拠（AggregateRoot/DomainEvent/VO/CommandHandler）。参考: `docs/step4-2-monitoring-context.md` の該当節。テストは隣にコロケーション（`*.test.ts`）。」
 >
+> **application 層の実装方針（共通・全タスク適用）**:
+>
+> - **handler / subscriber は薄く保ち、ロジック本体は UseCase に移す**。`CommandHandler.handle()` / `DomainEventSubscriber.on()` の責務は「primitives → VO/ドメイン型への変換」と「UseCase への委譲」だけ。分岐・永続化・publish・通知・ログ等の実装は `XxxUseCase.run()` に置く
+> - 理由: handler はフレームワーク境界（コマンドバス/イベントバス）への適合層。ロジックを UseCase に集約すると、バス機構を介さず fake 注入で直接ユニットテストでき、源（コマンド/イベント/HTTP）が変わっても本体を再利用できる
+> - 参考実装: `EC/Orders/.../PlaceOrderCommandHandler`（→ `PlaceOrderUseCase`）/ `AnalyzeAlertCommandHandler`（→ `AnalyzeAlertUseCase`）/ `CollectMonitoringEventSubscriber`（→ `CollectMonitoringEventUseCase`）
+> - テストは UseCase 側に書く（handler/subscriber 自体は変換のみなので原則テスト不要）
+>
 > **テスト方針**:
 >
 > - `type` / `as const` 定義のみのファイルはテスト不要
@@ -105,17 +112,24 @@
 - 設計判断（依存方向）: `LLMInvestigationAdapter` は `InvestigationReport`/`ReviewStatus`/`AlertSeverity` を **`AlertAnalysis/domain/` から import**（タスク9の移動に伴う）。Port/Context/LLMTextClient 自体は `AIInvestigation/domain/` のまま。依存は `AIInvestigation → AlertAnalysis` の一方向で循環なし。InvestigateAlertCommandHandler（タスク11）も同方向で `AlertRepository`/`Alert` に依存するので情報取得に問題なし
 - 参考: 「AIInvestigationPort」「LLMTextClient」「LLMInvestigationAdapter ＋ GeminiLLMClient」節
 
-### タスク 11: InvestigateAlertCommandHandler 〔P0〕
+### タスク 11: InvestigateAlertCommandHandler 〔P0〕✅ 完了済み
 
-- 【新規】`application/InvestigateAlert/InvestigateAlertCommand.ts` / `InvestigateAlertCommandHandler.ts`
-- findById→（InfraInvestigation.collect: P1で結線、P0はskip）→SimilarIncident.findSimilar→Context構築→Port.investigate→attachReport→save→SSE notify
+- 【完了】`AIInvestigation/application/InvestigateAlert/InvestigateAlertCommand.ts`（`alertId` + `MonitoringEventPrimitives`）/ `InvestigateAlertCommandHandler.ts`（VO変換のみ → UseCase委譲。`AnalyzeAlertCommandHandler` 準拠）
+- 【完了】`AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.ts`（ロジック本体）＋ `InvestigateAlertUseCase.test.ts`（Alert不在で冪等skip／正常系→OPEN保存＋SSE＋類似インシデントがContext流入／例外→fallbackレポート の全分岐を fake注入でUT・5ケース）
+- フロー: findById（null→WARN→return＝冪等）→ SimilarIncident.findSimilar（eventName一致・最大5件）→（InfraInvestigation.collect: P1で結線、P0はskip）→ Context構築（knownPatterns/infraEvidenceはP0で空）→ Port.investigate（例外時はERRORログ＋fallbackレポート継続）→ attachReport → save → SSE notify → INFOログ
 - 依存: AlertRepository / SimilarIncidentRepository / (InfraInvestigationPort) / AIInvestigationPort / SSEAlertNotifier / Logger
+- 設計判断（配置）: 設計書どおり `AIInvestigation/application/InvestigateAlert/` に配置（依存方向 `AIInvestigation → AlertAnalysis` 一方向を維持。`Alert`/`AlertRepository`/`InvestigationReport` 等は `AlertAnalysis/domain` から import）
+- 設計判断（薄いhandler）: handler は VO変換のみでロジックは UseCase に集約（共通方針。下記「application 層の実装方針」参照）
+- 前提作成: タスク12の依存先のうち**ドメインIFのみ先行作成**＝`SimilarIncident/domain/SimilarIncident.ts`（型）/ `SimilarIncidentRepository.ts`（IF・`findSimilar`/`index`＋`ResolvedIncident`）。InMemory実装（`warmUp`/`InMemoryCriteriaConverter`）は**タスク12に残置**
+- 参考: 「InvestigateAlertCommandHandler」節
 
-### タスク 12: SimilarIncident（InMemory）〔P0〕
+### タスク 12: SimilarIncident（InMemory）〔P0〕✅ 完了済み
 
-- 【新規】`SimilarIncident/domain/SimilarIncident.ts` / `SimilarIncidentRepository.ts`
-- 【新規】`infrastructure/InMemorySimilarIncidentRepository.ts`（warmUp/findSimilar/index・上限100）/ `InMemoryCriteriaConverter.ts`
-- Shared/domain/criteria を流用。参考: 「SimilarIncidentRepository」節
+- 【完了】`SimilarIncident/domain/SimilarIncident.ts`（`type`。純粋データ構造はinterfaceでなくtype）/ `SimilarIncidentRepository.ts`（IF + `ResolvedIncident` type）←タスク11でドメインIFは先行作成済み、タスク12でtype修正
+- 【完了】`SimilarIncident/infrastructure/InMemorySimilarIncidentRepository.ts`（warmUp/findSimilar/index・上限100・最新先頭）
+- `InMemoryCriteriaConverter` は不要。`InMemoryCriteriaEvaluator`（Shared）を直接流用
+- `findSimilar` は criteria に eventName EQUAL フィルタ＋limit で最大5件。`index` は先頭に追加、100件超で末尾削除
+- 参考: 「SimilarIncidentRepository」節
 
 ### タスク 13: SSEAlertNotifier interface ＋ EventEmitter 実装 〔P0〕
 
