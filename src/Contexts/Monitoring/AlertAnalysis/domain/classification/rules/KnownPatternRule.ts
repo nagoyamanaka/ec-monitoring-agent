@@ -13,7 +13,9 @@ import { ClassificationRuleKind } from "../ClassificationRuleKind.js";
 export class KnownPatternRule implements ClassificationRule {
   readonly kind = ClassificationRuleKind.EXACT_MATCH;
 
-  constructor(private readonly patternRepository: KnownErrorPatternRepository) {}
+  constructor(
+    private readonly patternRepository: KnownErrorPatternRepository,
+  ) {}
 
   async classify(
     monitoringEvent: MonitoringEvent,
@@ -25,8 +27,12 @@ export class KnownPatternRule implements ClassificationRule {
         continue;
       }
 
+      // Array.prototype.everyはすべての条件が正の場合trueを返す
+      // 【参考】Array.prototype.someは一つでも条件が正の場合はtrueを返す
+      // このClassificationRuleは完全一致用途なのでeveryを採用
       const allPayloadConditionsMatch = pattern.payloadConditions.every(
-        (condition) => monitoringEvent.payload[condition.field] === condition.value,
+        (condition) =>
+          monitoringEvent.payload[condition.field] === condition.value,
       );
       if (!allPayloadConditionsMatch) {
         continue;

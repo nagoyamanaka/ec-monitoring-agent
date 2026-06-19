@@ -64,12 +64,16 @@
 - 【完了】`Alert` / `KnownErrorPattern` を `AggregateRoot` 継承（`MongoRepository<T extends AggregateRoot>` 型制約を満たすため）
 - `findAll()` は createdAt ASC（マッチ優先度）。参考: 各Repository節
 
-### タスク 7: AnalyzeAlertCommandHandler 〔P0〕
+### タスク 7: AnalyzeAlertCommandHandler 〔P0〕✅ 完了済み
 
-- 【新規】`application/AnalyzeAlert/AnalyzeAlertCommand.ts` / `AnalyzeAlertCommandHandler.ts`
-- 既知→`createFromKnownPattern`→save→SSE notify / 未知→`createAsUnknown`→save→SSE notify（分析中）→ `InvestigateAlertCommand` 発行
-- 依存: AlertRepository / AlertClassifier / EventBus / SSEAlertNotifier / Logger（※既知パターン取得は `KnownPatternRule` が内包するので Handler は `KnownErrorPatternRepository` に依存しない）
-- `classify(monitoringEvent)` を呼ぶだけ（パターン取得・照合は Classifier 内部の責務）
+- 【完了】`application/AnalyzeAlert/AnalyzeAlertCommand.ts` / `AnalyzeAlertCommandHandler.ts`（VO変換のみ → UseCase委譲）
+- 【完了】`application/AnalyzeAlert/AnalyzeAlertUseCase.ts`（ロジック本体。既知→`createFromKnownPattern`→save→SSE / 未知→`createAsUnknown`→save→SSE→`InvestigateAlertDomainEvent` publish）
+- 【完了】`application/AnalyzeAlert/AnalyzeAlertUseCase.test.ts`（既知/未知 各シナリオのユニットテスト）
+- 【完了】`domain/InvestigateAlertDomainEvent.ts`（EventBus 経由で InvestigateAlertCommandHandler をトリガー）
+- 【完了】`ReportGeneration/domain/SSEAlertNotifier.ts`（interface。実装はタスク13）
+- 【完了】`infrastructure/persistence/InMemoryAlertRepository.ts`（テスト用）
+- 依存: AlertRepository / AlertClassifier / EventBus / SSEAlertNotifier / Logger（※既知パターン取得は `KnownPatternRule` が内包するので UseCase は `KnownErrorPatternRepository` に依存しない）
+- 設計判断: `SSEAlertNotifier` は interface なので `ReportGeneration/domain/` に配置（infrastructure には実装 `EventEmitterSSEAlertNotifier` を置く）
 - 参考: 「AnalyzeAlertCommandHandler」節（重複3a行は無し）
 
 ### タスク 8: CollectMonitoringEventOnECDomainEvent 〔P0〕

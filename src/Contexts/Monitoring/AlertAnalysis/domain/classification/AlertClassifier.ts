@@ -6,7 +6,9 @@ export type AlertClassificationResult =
   | { matched: false };
 
 // 入ってきた MonitoringEvent（観測）を分類し、AlertClassification を生成する抽象。
-// AnalyzeAlertCommandHandler はこの IF にのみ依存する。
+// AnalyzeAlertUseCase はこの IF にのみ依存する。
 export interface AlertClassifier {
-  classify(monitoringEvent: MonitoringEvent): Promise<AlertClassificationResult>;
+  classify(
+    monitoringEvent: MonitoringEvent,
+  ): Promise<AlertClassificationResult>;
 }

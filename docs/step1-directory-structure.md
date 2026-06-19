@@ -211,12 +211,14 @@ src/Contexts/Monitoring/
 │   ├── application/
 │   │   ├── AnalyzeAlert/
 │   │   │   ├── AnalyzeAlertCommand.ts
-│   │   │   └── AnalyzeAlertCommandHandler.ts  # 既知/未知分類ロジック
+│   │   │   ├── AnalyzeAlertCommandHandler.ts  # VO変換のみ → UseCase委譲
+│   │   │   └── AnalyzeAlertUseCase.ts         # 既知/未知分類ロジック本体（テストはここに書く）
 │   │   └── SubmitFeedback/
 │   │       ├── SubmitFeedbackCommand.ts
 │   │       └── SubmitFeedbackCommandHandler.ts # フィードバック受付・既知昇格トリガー・レポートレビュー結果の記録
 │   └── infrastructure/
 │       ├── persistence/
+│       │   ├── InMemoryAlertRepository.ts
 │       │   ├── InMemoryKnownErrorPatternRepository.ts
 │       │   ├── MongoAlertRepository.ts
 │       │   └── MongoKnownErrorPatternRepository.ts
@@ -313,14 +315,15 @@ src/Contexts/Monitoring/
 │
 ├── ReportGeneration/
 │   ├── domain/
-│   │   └── AlertReport.ts                     # バックオフィス表示用レポートの読み取りモデル
-│   │                                          # InvestigationReportの内容をUIに渡す形に整形する責務
+│   │   ├── AlertReport.ts                     # バックオフィス表示用レポートの読み取りモデル
+│   │   │                                      # InvestigationReportの内容をUIに渡す形に整形する責務
+│   │   └── SSEAlertNotifier.ts                # SSE通知インターフェース（notify/addConnection/removeConnection）
 │   ├── application/
 │   │   └── GetAlertReport/
 │   │       ├── GetAlertReportQuery.ts
 │   │       └── GetAlertReportQueryHandler.ts
 │   └── infrastructure/
-│       └── SSEAlertNotifier.ts                # 新規アラート発生時のSSEプッシュ担当
+│       └── EventEmitterSSEAlertNotifier.ts    # SSEAlertNotifier実装（Node.js EventEmitter・タスク13）
 │
 └── SimilarIncident/
     ├── domain/
