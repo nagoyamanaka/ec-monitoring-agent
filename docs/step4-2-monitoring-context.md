@@ -1334,7 +1334,7 @@ class InMemoryCriteriaConverter {
 
 ### インターフェース
 
-**ファイルパス**: `src/Contexts/Monitoring/ReportGeneration/domain/SSEAlertNotifier.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AlertNotification/domain/SSEAlertNotifier.ts`
 
 ```typescript
 interface SSEAlertNotifier {

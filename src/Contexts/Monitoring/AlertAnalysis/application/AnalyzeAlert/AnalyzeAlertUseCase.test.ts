@@ -14,7 +14,7 @@ import { AlertId } from "../../domain/AlertId.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 import { InvestigateAlertDomainEvent } from "../../domain/InvestigateAlertDomainEvent.js";
-import { SSEAlertNotifier } from "../../../ReportGeneration/domain/SSEAlertNotifier.js";
+import { SSEAlertNotifier } from "../../../AlertNotification/domain/SSEAlertNotifier.js";
 import { AlertPrimitives } from "../../domain/Alert.js";
 
 const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";

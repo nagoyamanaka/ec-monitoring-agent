@@ -375,7 +375,7 @@
 
 > **論理型（Bateson / Russell）で整理する。** ベイトソンの「フレーム」は額縁の比喩で、**ある前提・言語が通用する境界を画定し、その機能は「論理型を画定する（delimit a logical type）」こと**（_A Theory of Play and Fantasy_, 1955）。DDD の bounded context は「あるユビキタス言語が通用する境界」なので、**bounded context ＝ ベイトソンのフレーム**として読める。
 >
-> したがって **`Monitoring` がフレーム＝1つの bounded context**。その内側の `AlertAnalysis` / `AIInvestigation` / `ReportGeneration` は、**同じユビキタス言語（`MonitoringEvent`）を共有する Module** であって、それぞれが別個のフレーム（＝別コンテキスト）ではない。フレームが画定する論理型は **1つ（＝「観測」）** で、各モジュールはその内側に閉じる object レベルの分割。
+> したがって **`Monitoring` がフレーム＝1つの bounded context**。その内側の `AlertAnalysis` / `AIInvestigation` / `AlertNotification` は、**同じユビキタス言語（`MonitoringEvent`）を共有する Module** であって、それぞれが別個のフレーム（＝別コンテキスト）ではない。フレームが画定する論理型は **1つ（＝「観測」）** で、各モジュールはその内側に閉じる object レベルの分割。
 >
 > **訂正メモ**: 本節は当初 `Monitoring` を「メタコンテキスト」、子を「コンテキスト」と呼んでいたが、これは論理型の取り違えだった。`Monitoring → AlertAnalysis` の関係は **全体–部分（合成）** であって、ベイトソンの **context of context（メタコミュニケーション＝一段高い論理型）** ではない。Russell の型理論では「クラスはそれ自身のメンバになれない」ので、**同名の "context" を入れ子にする**のは型交差になる。メタの階に名前を与えたいなら別語＝DDD の **Subdomain / Domain** を使う（"メタコンテキスト" とは呼ばない）。
 > 経験的な裏づけ: `InvestigationReport` を **ACL も翻訳もなしの素の `import`** で `AIInvestigation → AlertAnalysis` へ移動できた。別コンテキストならこれはモデリング違反のはず。翻訳ゼロで通る＝両者は1つのユビキタス言語を共有する＝**同一コンテキストの Module**。
@@ -400,7 +400,7 @@ Monitoring（Bounded Context ＝ 観測フレームを画定する。フレー�
 │    「未知の MonitoringEvent の原因は何か」を調査する
 │    InfraEvidence 収集 → Gemini推論 → InvestigationReport
 │
-└─ ReportGeneration（Module）
+└─ AlertNotification（Module）
      「Alert の状態変化をフロントに届ける」
      SSEAlertNotifier
 ```
@@ -410,7 +410,7 @@ Monitoring（Bounded Context ＝ 観測フレームを画定する。フレー�
 | **Bounded Context = フレーム**（Monitoring） | 異種の源を均質な観測へ正規化する境界を画定 | 「ここから内側はすべて均質な観測（単一の論理型）として扱う」。源固有の型はモジュールに漏らさない |
 | Module（AlertAnalysis）                   | 既知パターンと照合する                     | `MonitoringEvent`・`KnownErrorPattern`                                          |
 | Module（AIInvestigation）                 | 証拠を集めてAIに渡す                       | `MonitoringEvent`・`InfraEvidence`・Gemini                                      |
-| Module（ReportGeneration）                | フロントへ配信する                         | SSE / Alert のプリミティブ                                                      |
+| Module（AlertNotification）                | フロントへ配信する                         | SSE / Alert のプリミティブ                                                      |
 
 > 各モジュールは `MonitoringEvent` という共通語だけで仕事し、源固有の型（EC / CI / infra）を直接 import しない。  
 > これが「`Monitoring`（フレーム＝bounded context）が観測の論理型を画定し、各モジュールはそのフレームの内側で閉じる」という構造の実体。

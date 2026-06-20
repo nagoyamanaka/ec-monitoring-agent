@@ -323,15 +323,9 @@ src/Contexts/Monitoring/
 │       └── persistence/
 │           └── InMemoryForecastMemoryRepository.ts # 起動時にMongoのResolvedからsubject投影をウォームアップ
 │
-├── ReportGeneration/
+├── AlertNotification/
 │   ├── domain/
-│   │   ├── AlertReport.ts                     # バックオフィス表示用レポートの読み取りモデル
-│   │   │                                      # InvestigationReportの内容をUIに渡す形に整形する責務
 │   │   └── SSEAlertNotifier.ts                # SSE通知インターフェース（notify/addConnection/removeConnection）
-│   ├── application/
-│   │   └── GetAlertReport/
-│   │       ├── GetAlertReportQuery.ts
-│   │       └── GetAlertReportQueryHandler.ts
 │   └── infrastructure/
 │       └── EventEmitterSSEAlertNotifier.ts    # SSEAlertNotifier実装（Node.js EventEmitter・タスク13）
 │

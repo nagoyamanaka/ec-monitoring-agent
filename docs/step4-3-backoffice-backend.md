@@ -16,7 +16,7 @@
 | Controller（HTTPの入出力変換） | UseCase/CommandHandlerの中身（step4-2） |
 | 手動DI配線（Poor Man's DI） | React UI（step4-4） |
 | RabbitMQ Subscriber 登録 | EC backend（既存・step3） |
-| SSEエンドポイントのHTTP機構 | `SSEAlertNotifier` interface自体（step4-2のReportGeneration） |
+| SSEエンドポイントのHTTP機構 | `SSEAlertNotifier` interface自体（step4-2のAlertNotification） |
 | errorHandler / config / 環境変数 | |
 
 ---

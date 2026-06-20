@@ -77,10 +77,10 @@
 - 【完了】`application/AnalyzeAlert/AnalyzeAlertUseCase.ts`（ロジック本体。既知→`createFromKnownPattern`→save→SSE / 未知→`createAsUnknown`→save→SSE→`InvestigateAlertDomainEvent` publish）
 - 【完了】`application/AnalyzeAlert/AnalyzeAlertUseCase.test.ts`（既知/未知 各シナリオのユニットテスト）
 - 【完了】`domain/InvestigateAlertDomainEvent.ts`（EventBus 経由で InvestigateAlertOnAlertClassifiedUnknown をトリガー）
-- 【完了】`ReportGeneration/domain/SSEAlertNotifier.ts`（interface。実装はタスク13）
+- 【完了】`AlertNotification/domain/SSEAlertNotifier.ts`（interface。実装はタスク13）
 - 【完了】`infrastructure/persistence/InMemoryAlertRepository.ts`（テスト用）
 - 依存: AlertRepository / AlertClassifier / EventBus / SSEAlertNotifier / Logger（※既知パターン取得は `KnownPatternRule` が内包するので UseCase は `KnownErrorPatternRepository` に依存しない）
-- 設計判断: `SSEAlertNotifier` は interface なので `ReportGeneration/domain/` に配置（infrastructure には実装 `EventEmitterSSEAlertNotifier` を置く）
+- 設計判断: `SSEAlertNotifier` は interface なので `AlertNotification/domain/` に配置（infrastructure には実装 `EventEmitterSSEAlertNotifier` を置く）
 - 参考: 「AnalyzeAlertCommandHandler」節（重複3a行は無し）
 
 ### タスク 8: CollectMonitoringEventOnECEventPublished 〔P0〕✅ 完了済み
@@ -135,8 +135,8 @@
 
 ### タスク 13: SSEAlertNotifier interface ＋ EventEmitter 実装 〔P0〕✅ 完了済み
 
-- 【完了】interface はタスク7で `ReportGeneration/domain/SSEAlertNotifier.ts` に作成済み（IF はドメイン配置）。本タスクでは実装のみ追加
-- 【完了】`ReportGeneration/infrastructure/EventEmitterSSEAlertNotifier.ts`（`SSEAlertNotifier` 実装・オンメモリ Set<Response>・シングルプロセス前提）
+- 【完了】interface はタスク7で `AlertNotification/domain/SSEAlertNotifier.ts` に作成済み（IF はドメイン配置）。本タスクでは実装のみ追加
+- 【完了】`AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.ts`（`SSEAlertNotifier` 実装・オンメモリ Set<Response>・シングルプロセス前提）
 - HTTP接続管理（addConnection/removeConnection/notify）。`addConnection` で `res.on("close")` 時に自動 removeConnection（冪等）。`notify` は全接続へ `data: <json>\n\n` を broadcast、1接続の write 失敗時はその接続を除去して継続
 - 設計判断: 疎通主体の薄い infra アダプタのため UT はコロケーションせず E2E で担保（リポジトリ実装と同方針）。Express 側の routes/controller 配線は step4-3
 - 参考: 「SSEAlertNotifier」節（EventEmitterSSEAlertNotifier）
