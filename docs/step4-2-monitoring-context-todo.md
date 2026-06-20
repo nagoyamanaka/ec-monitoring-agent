@@ -165,7 +165,7 @@
 - 【新規】`AIInvestigation/InfraInvestigation/domain/`: `InfraInvestigationPort.ts` / `InfraEvidence.ts` / `CloudLoggingGateway.ts` / `TerraformGateway.ts` / `GitHubGateway.ts`（**全て読み取り専用**）
 - 【新規】`infrastructure/`: `DefaultInfraInvestigationAdapter.ts`（category別に証拠源出し分け）/ 各 `*Impl.ts`
 - タスク11の `InvestigateAlertUseCase` に `collect()` を結線、`InvestigationContext.infraEvidence` に統合
-- タスク25連携: 証拠を `InvestigationContext` 限りにせず、昇格判定で使えるよう `InvestigationReport` に軽量メトリクス（例 `evidenceSourceCount`）として永続化することを検討（タスク25の前提）
+- タスク25連携（任意）: 証拠を `InvestigationContext` 限りにせず `InvestigationReport` に軽量メトリクス（例 `evidenceSourceCount`）として永続化すると、昇格スコアの補助信号に使える（※タスク25の主信号は タスク17 の類似確度。証拠源数は任意の加点に降格）
 - 参考: 「インフラ横断調査パイプライン」節 → デモシナリオ4
 
 ### タスク 16: Remediation（PR起票・write隔離）〔P1〕
@@ -176,14 +176,18 @@
 
 ### タスク 17: SimilarPatternRule（Elastic 分類 Rule）〔P1/stretch〕
 
-- 【新規】`domain/classification/rules/SimilarPatternRule.ts`（`ClassificationRule` 実装・Elastic Gateway を内包・hybrid search・スコア正規化→confidence・閾値未満は null 棄権）
+> **位置づけ（重要）**: これが「**graded confidence 付き分類**」の本体。学習を 0/1（未知/既知）でなく **probability low〜high の連続スペクトル**にするのはこのルール。正解フィードバックで蓄積された `SimilarIncident` を**分類段階で読み**、完全一致でなくても「過去のDB枯渇に82%類似・確度 中」のような確度を返す。**確度をレポートに出す＝意思決定支援**が価値の核（差別化テーブル「評価（confidence付き）」の実体）。現状 `SimilarIncident` は AI 調査の文脈強化にしか使われておらず、分類には未接続 → それを繋ぐのが本タスク。背景は `step4-1` 2章「学習ループ ①連続的な確度」。
+
+- 【新規】`domain/classification/rules/SimilarPatternRule.ts`（`ClassificationRule` 実装・Elastic Gateway を内包・hybrid search・スコア正規化→`ClassificationConfidence`(0〜1)・閾値未満は null 棄権）
 - `Shared/infrastructure/persistence/elasticsearch/` を利用。InfraEvidenceでクエリ強化
 - `ApplicationClassificationPolicy` の Rule 配列に `KnownPatternRule` と並べて追加するだけ。`AlertClassifier` IF も AnalyzeAlertCommandHandler もノータッチ
+- UI/レポートで low/中/high バンド表示（`ClassificationConfidence.isHighConfidence()` 等）。`classification.confidence` フィールドは世代互換なので表示コードは不変
 
 ### タスク 24: PatternPromotionPolicy 抽象化（昇格判定の差し替え可能化）〔P1〕
 
 > 採番は末尾追加（既存タスクの相互参照を壊さないため番号据え置き）。位置づけは P1。タスク25の前提。
-> 背景: 現状の自動昇格は `SubmitFeedbackUseCase` 内の `correctFeedbackCount >= AUTO_PROMOTE_THRESHOLD(=3)` 直書き。**全 Alert を証拠ゼロとして等しく扱う固定回数判定**で、AI confidence・証拠の厚さ・fallback を無視している。まず判定ロジックを差し替え可能なドメインサービスに切り出す（式は次タスクで育てる）。分類側の `AlertClassifier`/`ClassificationPolicy`/`Rule` と**対称**の設計思想。
+> 背景: 現状の自動昇格は `SubmitFeedbackUseCase` 内の `correctFeedbackCount >= AUTO_PROMOTE_THRESHOLD(=3)` 直書き。**全 Alert を等しく扱う固定回数判定**。まず判定ロジックを差し替え可能なドメインサービスに切り出す（式は次タスクで育てる）。分類側の `AlertClassifier`/`ClassificationPolicy`/`Rule` と**対称**の設計思想。
+> 注: 「昇格＝学習」ではなく「頻出知識を完全一致の高速パスに焼き付ける結晶化」（`step4-1` 2章②）。連続的な確度は タスク17（SimilarPatternRule）が担う前提なので、本抽象化は**結晶化トリガーの差し替え口**という位置づけ。
 
 - 【新規】`AlertAnalysis/domain/promotion/PatternPromotionPolicy.ts`（IF・`shouldPromote(alert: Alert): boolean`）
 - 【新規】`AlertAnalysis/domain/promotion/FixedThresholdPromotionPolicy.ts`（現挙動を移植：`correctFeedbackCount >= N` かつ unknown かつ investigationReport 有・`!isFallback`。`N` は env `FEEDBACK_AUTO_PROMOTE_THRESHOLD` で注入）
@@ -191,21 +195,22 @@
 - 設計判断: 「いつ昇格するか（判定）」と「どう昇格するか（KnownErrorPattern 構築・save・ログ）」を分離。判定をドメインへ、構築は UseCase に残す。低コストで今でも入れられ、式の進化を吸収する受け皿になる
 - テスト: `FixedThresholdPromotionPolicy` の分岐（回数未満／到達／既知分類除外／fallback除外／report無除外）をユニットテスト
 
-### タスク 25: EvidenceWeightedPromotionPolicy（証拠加重の自動昇格）〔P1〕
+### タスク 25: EvidenceWeightedPromotionPolicy（結晶化ゲートの加重化）〔P1・低優先〕
 
-> 採番は末尾追加（位置づけ P1）。**タスク24（抽象化）＋タスク15（InfraInvestigation の証拠永続化）に依存**。
-> 狙い: 「証拠が厚ければ feedback 1 回でも昇格、薄ければ従来どおり複数回必要」を実現。固定回数 → 加重スコアへ。
+> 採番は末尾追加（位置づけ P1・**低優先**）。**タスク24（抽象化）に依存。主たる証拠信号は タスク17（類似確度）**（旧版はタスク15依存と書いていたが、下記の整理で主信号を類似確度に変更）。
+> **位置づけの再整理（重要）**: 昇格は「学習そのもの」ではなく、`step4-1` 2章 ②「**頻出が確定した知識を完全一致の高速パスに焼き付ける結晶化**」。連続的な確度は タスク17（SimilarPatternRule）が担うので、**昇格しきい値の微調整は correctness クリティカルではない**（未昇格でも類似確度で「準・既知」分類されるため、未知に取り残されない）。よって本タスクは「結晶化ゲートを賢くする最適化」＝**nice-to-have**。タスク17 実装後に効果を測ってから着手可。
+> 狙い: 「類似確度が高く頻出が確定したものは feedback 1 回でも焼き付け、確度が低ければ複数回要求」。固定回数 → 加重スコアへ。
 
-- 【前提・修正】`InvestigationReport` に証拠メトリクスを軽量追記（後方互換 optional）。例: `evidenceSourceCount?: number`（logs/terraformDiff/recentCommits の有効ソース数）を `InvestigateAlertUseCase` で `InfraEvidence` から導出して埋める（タスク15で証拠が永続化される前は 0）
+- 【前提】タスク17 の `SimilarPatternRule` が `classification.confidence`（0〜1）を返していること。これを昇格判定の主信号にする
 - 【新規】`AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.ts`（`PatternPromotionPolicy` 実装）
-  - スコア式: `score = humanWeight(correctFeedbackCount) + confidenceWeight(report.confidence) + evidenceWeight(evidenceSourceCount) − penalty`、`score >= 1.0` で昇格
-  - 重み案（現挙動と互換になるよう調整）: correct 1回=+0.4（3回単独で 1.2≥1.0＝従来と一致）／confidence≥0.9=+0.3・≥0.7=+0.1／独立証拠源1つ=+0.2（上限+0.4）／`isFallback`=ハード除外／却下=減点 or ブロック
-  - 例: confidence 0.9＋証拠2源（0.3+0.4=0.7）→ feedback 1回（+0.4）で 1.1≥1.0＝**1回で昇格**
-- 設計判断（重み付けの根拠）: **LLM の confidence は較正されておらず過信しがち**なので、重みは「人間の承認 > 証拠の多様性 > AI自己申告」の順。raw confidence を主役にしない。独立した複数源（logs＋terraform diff＋commit）が裏付け合っている方が信頼できる信号
-- 設計判断（却下の活用）: 現状 REJECTED は記録のみ。スコア式なら却下を減点／昇格ブロックに使える。あわせて `correctFeedbackCount` だけでなく却下回数も Alert に保持するか検討
-- 配線: composition root（step4-3 DI）で `PatternPromotionPolicy` の実装を `FixedThreshold` → `EvidenceWeighted` に差し替えるだけ。`SubmitFeedbackUseCase` はノータッチ
-- 設計判断（ADR種）: 「自動昇格を固定回数 → 証拠加重スコアへ移行する理由」「LLM confidence を較正前提で控えめに重み付けする理由」を Step5 ADR に残す
-- 注意: P0 提出は固定回数のままで成立（デモシナリオ3は固定でも通る）。本タスクは品質改善であり提出ラインではない
+  - スコア式: `score = humanWeight(correctFeedbackCount) + similarityWeight(classification.confidence) + evidenceWeight(任意・InfraEvidence源数) − penalty`、`score >= 1.0` で昇格
+  - 重み案（現挙動と互換）: correct 1回=+0.4（3回単独で 1.2≥1.0＝従来と一致）／類似確度≥0.8=+0.3・≥0.6=+0.1／（任意）独立証拠源1つ=+0.2（上限+0.4）／`isFallback`=ハード除外／却下=減点 or ブロック
+  - 例: 類似確度 0.85（+0.3）＋証拠1源（+0.2）→ feedback 1回（+0.4）で 0.9… もう1回で焼き付け、等。**「似ている度が高いほど少ない確認で結晶化」**
+- 設計判断（重み付けの根拠）: 信頼順は「**人間の承認 > 類似の積み上げ（SimilarIncident 母集団）> AI 自己申告 confidence**」。LLM の生 confidence は較正されておらず過信しがちなので主役にしない
+- 設計判断（却下の活用）: 現状 REJECTED は記録のみ。スコア式なら却下を減点／ブロックに使える。`correctFeedbackCount` だけでなく却下回数も Alert に持つか検討
+- 配線: composition root（step4-3 DI）で `PatternPromotionPolicy` 実装を `FixedThreshold` → `EvidenceWeighted` に差し替えるだけ。`SubmitFeedbackUseCase` はノータッチ
+- 設計判断（ADR種）: 「昇格を*学習*でなく*結晶化（高速パス焼き付け）*と位置づける理由」「結晶化ゲートを固定回数 → 類似確度加重へ上げる理由」を Step5 ADR に残す
+- 注意: P0 提出は固定回数のままで成立。**タスク17（連続確度）が入れば本タスクの必要性はさらに下がる**＝後回し可
 
 ---
 

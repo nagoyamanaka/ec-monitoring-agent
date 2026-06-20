@@ -533,6 +533,10 @@ const AUTO_PROMOTE_THRESHOLD = 3; // 正解フィードバック3回で自動昇
 // 環境変数 FEEDBACK_AUTO_PROMOTE_THRESHOLD でオーバーライド可能（デモ調整用）
 ```
 
+**位置づけ（学習は2段で進む）**: 学習の本体は **① 連続的な確度付き分類**（正解フィードバック → `SimilarIncident` 蓄積 → 将来 `SimilarPatternRule`(kind=SIMILARITY) が graded confidence で分類）。**昇格（KnownErrorPattern 生成）は ② 離散的な結晶化**で、頻出が確定したものを完全一致・confidence 1.0 の**高速パスに焼き付ける最適化**（速度・決定性。シナリオ3「次回1秒」の効果）。昇格＝学習そのものではなく、①で太った知識のキャッシュ化、と捉えるのが正確。手動昇格（`POST /patterns/:id/promote`）はその即時オーバーライド。
+
+**今の簡略化と将来**: 現状は分類が exact-match のみ＝**0/1 で粗い**。graded confidence の本体（`SimilarPatternRule`）は未実装で `SimilarIncident` はまだ AI 調査の文脈強化にしか使っていない → これを分類に引き込むのが `step4-2` タスク17。昇格ゲートの固定 N（全 Alert を証拠ゼロ扱いする粗い判定。`isFallback` 除外＋eventName 限定マッチで安全側）を、類似確度を取り込んだ加重に上げるのが タスク24/25。背景の差別化文脈は `step4-1` 2章「学習ループ」を参照。
+
 ### MonitoringEventの設計原則
 
 - 単一の `MonitoringEvent` 型にすべてのECイベントをマッピングする
@@ -824,6 +828,7 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(new GeminiLLMClien
 1. **予兆ブリーフィングをP0パイプライン無傷の追加レイヤー（read-onlyの調査の一種）として載せる設計判断**（v15追加）
 1. **なぜCloud Pub/Subでなく、Rabbit MQか？**-> ローカル開発(E2Eテスト)の開発サイクル短縮が狙い
 1. **AIInvestigationの調査ロジックを基底クラス継承でなくコンポジション（`LLMInvestigationAdapter` + `LLMTextClient`）で分離する理由（has-a/is-a・SRP・テスト容易性・リトライをプロバイダ実装に寄せる判断・Port実装をinfrastructureに置く根拠）**（v17追加）
+1. **学習を 0/1 の昇格でなく「①連続的な確度付き分類（SimilarIncident 蓄積 → SimilarPatternRule・graded confidence）＋②頻出知識を完全一致の高速パスに焼き付ける結晶化（昇格）」の2段で構成する理由。昇格は学習そのものでなく結晶化の最適化であり、結晶化ゲートを固定回数 → 類似確度加重へ上げる判断（LLM の生 confidence は較正前提で主役にしない・「人間 > 類似の積み上げ > AI自己申告」の重み付け）**（v18追加）
 
 ---
 
