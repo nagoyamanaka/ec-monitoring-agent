@@ -440,8 +440,9 @@ src/apps/ec/backend/
 ```
 src/apps/backoffice/backend/
 ├── src/
-│   ├── server.ts                    # Expressサーバーエントリポイント
-│   ├── App.ts                       # Express appセットアップ
+│   ├── start.ts                     # エントリーポイント（BackofficeApp.start()）
+│   ├── BackofficeApp.ts             # DIセットアップ・インフラ初期化・アプリ起動
+│   ├── server.ts                    # Expressサーバークラス（listen/stop）
 │   ├── routes/
 │   │   ├── alertRoutes.ts           # GET /alerts, GET /alerts/:id, PATCH /alerts/:id/feedback
 │   │   ├── evidenceRoutes.ts        # GET /alerts/:id/evidence, GET /alerts/:id/investigation/status（v12）

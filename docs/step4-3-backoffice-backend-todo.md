@@ -12,19 +12,19 @@
 
 > **EC backend との対応関係について**
 > タスク1〜8 は `src/apps/ec/backend/src/` の構成を基盤として設計されている。
-> 対応表: タスク1=config.ts、タスク2=middleware/errorHandler.ts、タスク3=EcBackendApp.ts+server.ts、
-> タスク4=routes/index.ts（App.tsはEC非存在・backoffice追加分離）、タスク5=orders.route.ts+Controllers、
+> 対応表: タスク1=config.ts、タスク2=middleware/errorHandler.ts、タスク3=EcBackendApp.ts+start.ts+server.ts、
+> タスク4=routes/index.ts（EC同様 App.ts は存在せず server.ts に統合）、タスク5=orders.route.ts+Controllers、
 > タスク6=EC非存在のSSE固有追加、タスク7=demo.route.tsがベース+pattern/analytics追加、タスク8=EcSubscribers.ts。
 
-### タスク 1: config.ts 〔P0〕
+### タスク 1: config.ts 〔P0〕　✅ 完了済み
 
 <!-- EC対応: src/apps/ec/backend/src/config.ts と1対1。EC側に倣い const config = { ... } as const の単一オブジェクトでフラットに集約する。 -->
 
 - 【新規】`src/apps/backoffice/backend/src/config.ts`
-- 環境変数集約: MONGO_URL / RABBITMQ_URL / GEMINI_API_KEY / GEMINI_MODEL / FEEDBACK_AUTO_PROMOTE_THRESHOLD / DEMO_ENABLED（+P1: GITHUB_TOKEN / GITHUB_TARGET_REPO / INGEST_TOKEN）
+- 環境変数集約: MONGO_URL / RABBITMQ_HOST / RABBITMQ_PORT / RABBITMQ_USER / RABBITMQ_PASS / RABBITMQ_VHOST / RABBITMQ_RETRY_TTL / EXCHANGE_NAME / GEMINI_API_KEY / GEMINI_MODEL / FEEDBACK_AUTO_PROMOTE_THRESHOLD / DEMO_ENABLED（+P1: GITHUB_TOKEN / GITHUB_TARGET_REPO / INGEST_TOKEN）
 - EC backend の config.ts に倣う
 
-### タスク 2: errorHandler 〔P0〕
+### タスク 2: errorHandler 〔P0〕✅ 完了済み
 
 <!-- EC対応: src/apps/ec/backend/src/middleware/errorHandler.ts と同形。DomainError→400 / ApplicationError→400or404 / InfrastructureError→500 のマッピングを踏襲。backoffice固有の差分は AIInvestigationError を 500 に波及させないフォールバック処理のみ。 -->
 
@@ -32,19 +32,19 @@
 - 参考ファイル
   - src/apps/ec/backend/src/middleware/errorHandler.ts
 
-### タスク 3: BackofficeApp.ts（DI配線）〔P0〕
+### タスク 3: BackofficeApp.ts（DI配線）〔P0〕　✅ 完了済み
 
 <!-- EC対応: EcBackendApp.ts と同形。EC側の start() の順序（MongoClient → RabbitMqConnection → EventBus → Repository/Port new → Handler/Bus登録 → Subscribers配線 → Server起動）をそのまま踏襲する。 -->
 
-- 【新規/修正】`BackofficeApp.ts` / `server.ts`（現状TODOコメントのみ）
-- Mongo/RabbitMQ初期化 → Repository/Classifier/Port/Notifier を new（★差し替えポイント）→ Handler を Bus 登録 → BackofficeSubscribers で Subscriber 配線 → App.ts でルート登録 → listen
+- 【新規/修正】`start.ts`（OTel + エントリ）/ `BackofficeApp.ts`（DI配線）/ `server.ts`（Express クラス）
+- Mongo/RabbitMQ初期化 → Repository/Classifier/Port/Notifier を new（★差し替えポイント）→ Handler を Bus 登録 → BackofficeSubscribers で Subscriber 配線 → server.ts でルート登録 → listen
 - 設計の「DI配線」手順に従う
 
-### タスク 4: App.ts ＋ routes/index.ts 〔P0〕
+### タスク 4: routes/index.ts 〔P0〕
 
-<!-- EC対応: ECでは Server クラス（server.ts）が Express セットアップ（cors/json/errorHandler 登録）を担い、App.ts は存在しない。backoffice は Server の責務を App.ts（Expressセットアップ）と server.ts（listen/stop）に分離する3ファイル構成。routes/index.ts の registerRoutes(router, ...deps) パターンは EC と同形。 -->
+<!-- EC対応: ECと同様、Server クラス（server.ts）が Express セットアップ（cors/json/errorHandler 登録）を担う。App.ts は存在しない。routes/index.ts の registerRoutes(router, ...deps) パターンは EC と同形。 -->
 
-- 【新規】`App.ts`（Express セットアップ）/ `routes/index.ts`（全ルート集約）
+- 【新規】`routes/index.ts`（全ルート集約）
 
 ### タスク 5: alert 系ルート・コントローラ 〔P0〕
 

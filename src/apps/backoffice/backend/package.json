@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "ts-node --esm src/server.ts",
+    "dev": "tsx src/start.ts",
+    "start": "NODE_ENV=production tsx src/start.ts",
     "build": "tsc"
   },
   "dependencies": {
