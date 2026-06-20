@@ -198,67 +198,88 @@
 
 ---
 
-### 8.1 シーケンス図
+### 8.1 全体フロー（テキスト図）
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant EC   as EC Backend
-    participant MQ   as RabbitMQ
-    participant Sub  as CollectMonitoringEvent<br/>Subscriber
-    participant AA   as AnalyzeAlert<br/>CommandHandler
-    participant CL   as AlertClassifier<br/>(KnownPatternRule)
-    participant AR   as AlertRepository
-    participant SSE  as SSEAlertNotifier
-    participant EB   as EventBus
-    participant IA   as InvestigateAlert<br/>OnInvestigateRequested<br/>(DomainEventSubscriber)
-    participant IP   as InfraInvestigation<br/>Port
-    participant AI   as AIInvestigation<br/>Port (Gemini)
-    participant OP   as Operator<br/>(Backoffice UI)
-    participant FB   as SubmitFeedback<br/>CommandHandler
-    participant KP   as KnownErrorPattern<br/>Repository
+ランタイムは **自動フェーズ（イベント駆動）** と **人間フェーズ（オペレーター操作駆動）** の2段で構成される。前半は障害発生をトリガーに「分類 → 診断（AI調査）」まで自律で走り、後半は人間がAI結果を評価・承認して「既知の知識」へ還元する（学習ループ）。
 
-    EC->>MQ: publish DomainEvent<br/>(e.g. ec.payment.timeout)
-    MQ->>Sub: subscribe（専用キュー）
-    Sub->>Sub: ECDomainEvent → MonitoringEvent 変換
-    Sub->>AA: AnalyzeAlertCommand
+- **自動フェーズの起点** = 障害イベントの発生（EC DomainEvent）。人手は介在しない。
+- **人間フェーズの起点** = オペレーターの UI 操作（フィードバック送信 / Promote ボタン）。
 
-    AA->>CL: classify(monitoringEvent)
-
-    alt 既知パターン一致
-        CL-->>AA: matched: true, KnownAlertClassification
-        AA->>AA: Alert.createFromKnownPattern()
-        AA->>AR: save(alert)
-        AA->>SSE: notify → フロントへ即時 push [OPEN]
-    else 未知パターン
-        CL-->>AA: matched: false
-        AA->>AA: Alert.createAsUnknown()
-        AA->>AR: save(alert)
-        AA->>SSE: notify → フロントへ即時 push [ANALYZING]
-        AA->>EB: publish InvestigateAlertDomainEvent
-
-        EB->>IA: on(InvestigateAlertDomainEvent)（非同期購読）
-        Note over IA: DomainEventSubscriber が直接購読<br/>（Command/CommandHandler を介さない）
-        IA->>IP: collect(monitoringEvent)
-        Note over IP: Cloud Logging / Terraform diff<br/>/ GitHub コミット・PR
-        IP-->>IA: InfraEvidence
-        IA->>AI: investigate(InvestigationContext)
-        Note over AI: Gemini API<br/>証拠 + 類似事例 → 原因推定
-        AI-->>IA: InvestigationReport（confidence付き）
-        IA->>IA: alert.attachInvestigationReport(report)
-        IA->>AR: save(updatedAlert)
-        IA->>SSE: notify → フロントへ分析結果 push [OPEN]
-    end
-
-    OP->>FB: POST /alerts/:id/feedback（isCorrect）
-    FB->>FB: alert.submitFeedback()
-    FB->>AR: save(alert)
-
-    alt correctFeedbackCount >= AUTO_PROMOTE_THRESHOLD
-        FB->>KP: save(promotedPattern)
-        Note over KP: 次回から1秒以内に<br/>既知分類（デモシナリオ3）
-    end
 ```
+【自動フェーズ：イベント駆動】  起点 = 障害イベントの発生
+══════════════════════════════════════════════════════════════
+  EC Backend で障害発生
+    │  EC DomainEvent（例: ec.payment.timeout）を RabbitMQ に publish
+    ▼
+  CollectMonitoringEventSubscriber        ［源固有の型に触れる唯一の境界］
+    │  EC DomainEvent → MonitoringEvent へ正規化
+    ▼
+  AnalyzeAlertUseCase                       （CommandBus 経由）
+    │  AlertClassifier.classify(monitoringEvent)
+    │
+    ├─【既知＝完全一致】──────────────────┐
+    │   Alert.createFromKnownPattern()     │
+    │   AlertRepository.save() [OPEN]      │
+    │   SSEAlertNotifier.notify()          │
+    │   ◇ ここで終了（AI調査しない）       │
+    │                                      │
+    └─【未知】                             │
+        Alert.createAsUnknown() [ANALYZING]│
+        AlertRepository.save()             │
+        SSEAlertNotifier.notify()          │
+        EventBus.publish(                  │
+          InvestigateAlertDomainEvent)     │
+            │  EventBus 経由・非同期       │
+            ▼                              │
+      InvestigateAlertOnAlertClassifiedUnknown（DomainEventSubscriber）
+            │  薄い変換 → 委譲            │
+            ▼                              │
+      InvestigateAlertUseCase              │
+        SimilarIncident.findSimilar()      │ ← 過去事例で文脈強化
+        (InfraInvestigationPort.collect)   │ ← P1: Cloud Logging/Terraform/GitHub
+        AIInvestigationPort.investigate()  │ ← Gemini で原因推定
+        alert.attachInvestigationReport()  │
+        AlertRepository.save() [OPEN]      │
+        SSEAlertNotifier.notify()          │
+            │                              │
+            ▼                              ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │ バックオフィス UI に Alert ＋（あれば）調査レポートを表示 │
+  └──────────────────────────────────────────────────────────┘
+            │
+            │   ★ここから先は「人間の判断」が起点★
+            ▼
+【人間フェーズ：オペレーター操作駆動】  起点 = UI 操作
+══════════════════════════════════════════════════════════════
+        ┌────────────────────────┴────────────────────────┐
+   (A) AI調査結果の正誤を評価              (B) パターンを即時確定
+   PATCH /alerts/:id/feedback           POST /patterns/:id/promote
+        │                                         │
+        ▼                                         ▼
+   SubmitFeedbackUseCase                   PromotePatternUseCase
+        │ alert.submitFeedback()                 │ findById(patternId)
+        │ AlertRepository.save()                 │ pattern.promote()
+        │ （reviewStatus=APPROVED/REJECTED）     │ save(isPromoted=true)
+        │                                        ▼
+        │【isCorrect=true のとき】           手動昇格 完了
+        │  SimilarIncident.index()
+        │   （解決事例として蓄積→次回のAI調査を強化）
+        │
+        │  correctFeedbackCount >= AUTO_PROMOTE_THRESHOLD(=3)
+        │  かつ unknown ＋ investigationReport 有
+        │   → KnownErrorPattern.create().promote() を save
+        │     （★自動昇格）
+        └──────────────────────────────────┐
+                                            ▼
+                              KnownErrorPattern が増える
+                                            │
+                                            ▼
+              次回の同型障害は AnalyzeAlert が即 known 分類
+              （AI調査をスキップ＝デモシナリオ3「次回は1秒で既知」）
+              ＝ 学習ループが閉じる（reactive → 既知化）
+```
+
+> **2つの昇格経路**: `SubmitFeedback`＝正解の積み上げによる **自動学習**、`PromotePattern`＝オペレーター判断による **即時学習**。どちらも出口は同じ `KnownErrorPattern`（次回分類の高速化）。
 
 **短絡設計のポイント**
 
@@ -317,9 +338,10 @@ sequenceDiagram
 | 3b  | **未知Alert生成・通知**  | `AnalyzeAlertCommandHandler`                     | -                                        | Alert（`ANALYZING`）+ SSE push + `InvestigateAlertDomainEvent` | MongoDB + SSE + EventBus                       |
 | 4   | **インフラ証拠収集**     | `InfraInvestigationPort`                         | `MonitoringEvent`                        | `InfraEvidence`                                                | Cloud Logging API / Terraform CLI / GitHub API |
 | 5   | **AI調査**               | `AIInvestigationPort`（Gemini Adapter）          | `InvestigationContext`（証拠＋類似事例） | `InvestigationReport`（confidence付き）                        | Gemini API（gemini-2.0-flash）                 |
-| 6   | **Alert更新・通知**      | `InvestigateAlertOnAlertClassifiedUnknown`         | `InvestigationReport`                    | Alert（`OPEN`）+ SSE push                                      | MongoDB + SSE                                  |
-| 7   | **オペレーターレビュー** | `SubmitFeedbackCommandHandler`                   | `isCorrect`フラグ + note                 | Alert更新（`reviewStatus` = APPROVED/REJECTED）                | MongoDB                                        |
-| 8   | **パターン自動昇格**     | `SubmitFeedbackCommandHandler`                   | `correctFeedbackCount >= N`              | `KnownErrorPattern` 新規登録                                   | MongoDB                                        |
+| 6   | **Alert更新・通知**      | `InvestigateAlertOnAlertClassifiedUnknown` → `InvestigateAlertUseCase` | `InvestigationReport`                    | Alert（`OPEN`）+ SSE push                                      | MongoDB + SSE                                  |
+| 7   | **オペレーターレビュー** | `SubmitFeedbackCommandHandler` → `SubmitFeedbackUseCase` | `isCorrect`フラグ + note                 | Alert更新（`reviewStatus` = APPROVED/REJECTED）／正解時 `SimilarIncident.index()` | MongoDB                                        |
+| 8   | **パターン自動昇格**     | `SubmitFeedbackUseCase`                          | `correctFeedbackCount >= N`（unknown＋report有） | `KnownErrorPattern` 新規登録（`isPromoted=true`）              | MongoDB                                        |
+| 9   | **パターン手動昇格**     | `PromotePatternCommandHandler` → `PromotePatternUseCase` | `patternId`（Promoteボタン）             | 既存 `KnownErrorPattern` を昇格（`isPromoted=true`）           | MongoDB                                        |
 
 ---
 
