@@ -211,7 +211,7 @@ sequenceDiagram
     participant AR   as AlertRepository
     participant SSE  as SSEAlertNotifier
     participant EB   as EventBus
-    participant IA   as InvestigateAlert<br/>CommandHandler
+    participant IA   as InvestigateAlert<br/>OnInvestigateRequested<br/>(DomainEventSubscriber)
     participant IP   as InfraInvestigation<br/>Port
     participant AI   as AIInvestigation<br/>Port (Gemini)
     participant OP   as Operator<br/>(Backoffice UI)
@@ -237,7 +237,8 @@ sequenceDiagram
         AA->>SSE: notify → フロントへ即時 push [ANALYZING]
         AA->>EB: publish InvestigateAlertDomainEvent
 
-        EB->>IA: InvestigateAlertCommand（非同期）
+        EB->>IA: on(InvestigateAlertDomainEvent)（非同期購読）
+        Note over IA: DomainEventSubscriber が直接購読<br/>（Command/CommandHandler を介さない）
         IA->>IP: collect(monitoringEvent)
         Note over IP: Cloud Logging / Terraform diff<br/>/ GitHub コミット・PR
         IP-->>IA: InfraEvidence
@@ -259,6 +260,51 @@ sequenceDiagram
     end
 ```
 
+**短絡設計のポイント**
+
+`AnalyzeAlertUseCase` が完全一致（`eventName` + `payloadConditions`）を先に試し、一致した場合は Alert を保存・SSE 通知して **そこで終了する**（`InvestigateAlertDomainEvent` を発行しない）。`InvestigateAlertUseCase` には **未知アラートのみ**が到達するため、類似インシデント検索 → AI 調査から即座に始まる。
+
+下図は分岐の流れ（左が既知＝短絡終了、右が未知＝AI調査へ）。
+
+```
+                     MonitoringEvent 受信
+                             │
+                             ▼
+        ┌────────────────────────────────────────────┐
+        │ AnalyzeAlertUseCase.run()                   │
+        │   AlertClassifier.classify(monitoringEvent) │
+        │   └ KnownPatternRule（eventName+payload 完全一致）│
+        └────────────────────────────────────────────┘
+                             │
+            matched: true    │    matched: false
+         ┌───────────────────┴────────────────────┐
+         ▼【既知＝完全一致】                        ▼【未知】
+  Alert.createFromKnownPattern()           Alert.createAsUnknown()
+         │                                        │
+  AlertRepository.save()                   AlertRepository.save()
+         │                                        │
+  SSEAlertNotifier.notify() [OPEN]         SSEAlertNotifier.notify() [ANALYZING]
+         │                                        │
+  ◇ ここで終了                              EventBus.publish(
+    DomainEvent を発行しない                   InvestigateAlertDomainEvent)
+    InvestigateAlert は起動しない                   │
+                                                  ▼  EventBus 経由・非同期
+                          ┌──────────────────────────────────────────────┐
+                          │ InvestigateAlertOnAlertClassifiedUnknown.on()   │
+                          │   （DomainEventSubscriber・薄い変換のみ）        │
+                          │        │                                       │
+                          │        ▼ 委譲                                  │
+                          │ InvestigateAlertUseCase.run()                  │
+                          │   SimilarIncident.findSimilar()  ← 類似検索     │
+                          │   → AIInvestigationPort.investigate()  ← AI調査 │
+                          │   → alert.attachInvestigationReport()          │
+                          │   → AlertRepository.save()                     │
+                          │   → SSEAlertNotifier.notify() [OPEN]           │
+                          └──────────────────────────────────────────────┘
+```
+
+> **要点**: 「完全一致 → 即終了」は決定論的に安く済む `AnalyzeAlert`（上流）で完結し、コストのかかる AI 調査は未知時のみ。両者は EventBus（`InvestigateAlertDomainEvent`）で疎結合。受け口は `InvestigateAlertOnAlertClassifiedUnknown`（`DomainEventSubscriber`）が直接担い、Command/CommandHandler の二段ホップは挟まない。
+
 ---
 
 ### 8.2 工程表（ステップ別）
@@ -271,7 +317,7 @@ sequenceDiagram
 | 3b  | **未知Alert生成・通知**  | `AnalyzeAlertCommandHandler`                     | -                                        | Alert（`ANALYZING`）+ SSE push + `InvestigateAlertDomainEvent` | MongoDB + SSE + EventBus                       |
 | 4   | **インフラ証拠収集**     | `InfraInvestigationPort`                         | `MonitoringEvent`                        | `InfraEvidence`                                                | Cloud Logging API / Terraform CLI / GitHub API |
 | 5   | **AI調査**               | `AIInvestigationPort`（Gemini Adapter）          | `InvestigationContext`（証拠＋類似事例） | `InvestigationReport`（confidence付き）                        | Gemini API（gemini-2.0-flash）                 |
-| 6   | **Alert更新・通知**      | `InvestigateAlertCommandHandler`                 | `InvestigationReport`                    | Alert（`OPEN`）+ SSE push                                      | MongoDB + SSE                                  |
+| 6   | **Alert更新・通知**      | `InvestigateAlertOnAlertClassifiedUnknown`         | `InvestigationReport`                    | Alert（`OPEN`）+ SSE push                                      | MongoDB + SSE                                  |
 | 7   | **オペレーターレビュー** | `SubmitFeedbackCommandHandler`                   | `isCorrect`フラグ + note                 | Alert更新（`reviewStatus` = APPROVED/REJECTED）                | MongoDB                                        |
 | 8   | **パターン自動昇格**     | `SubmitFeedbackCommandHandler`                   | `correctFeedbackCount >= N`              | `KnownErrorPattern` 新規登録                                   | MongoDB                                        |
 

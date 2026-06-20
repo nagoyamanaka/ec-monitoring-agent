@@ -81,7 +81,7 @@
          AlertRepository.save()
          SSEAlertNotifier.notify()  ← フロントに即時push（分析中ステータス）
          │
-         InvestigateAlertCommandHandler
+         InvestigateAlertOnAlertClassifiedUnknown
            │
            ├─ InfraInvestigationPort.collect()  ← Cloud Logging / Terraform / GitHub（証拠収集）
            ├─ SimilarIncidentRepository.findSimilar()
@@ -612,7 +612,7 @@ interface PayloadCondition {
 | ----------------------------- | --------- | ------------------------------------- |
 | `AlertRepository`             | interface | Alert永続化                           |
 | `AlertClassifier`             | interface | 既知/未知分類                         |
-| `EventBus`                    | interface | InvestigateAlertCommand発行（未知時） |
+| `EventBus`                    | interface | InvestigateAlertDomainEvent発行（未知時） |
 | `SSEAlertNotifier`            | interface | フロントへの即時push                  |
 | `Logger`                      | interface | 構造化ログ                            |
 
@@ -654,7 +654,7 @@ interface AnalyzeAlertCommand {
 4b. AlertRepository.save(alert) を呼び出す
 5b. SSEAlertNotifier.notify(alert.toPrimitives())  ← 「分析中」ステータスで即時push
 6b. EventBus.publish(new InvestigateAlertDomainEvent(alertId, monitoringEvent))
-    ← InvestigateAlertCommandHandler を非同期でトリガー
+    ← InvestigateAlertOnAlertClassifiedUnknown を非同期でトリガー
 7b. Logger.write(WARN, 'alert_classified_unknown', { alertId })
 ```
 
@@ -662,9 +662,13 @@ interface AnalyzeAlertCommand {
 
 ---
 
-## InvestigateAlertCommandHandler
+## InvestigateAlertOnAlertClassifiedUnknown
 
-**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertCommandHandler.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertOnAlertClassifiedUnknown.ts`
+
+`AnalyzeAlertUseCase` が未知アラートに対して publish する `InvestigateAlertDomainEvent` を EventBus 経由で購読する `DomainEventSubscriber`。`on()` は event→VO 変換のみを行い、ロジック本体は `InvestigateAlertUseCase` に委譲する（`CollectMonitoringEventOnECEventPublished` / `ReserveInventoryOnOrderPlaced` と同じ薄い subscriber）。
+
+> **設計判断（CommandHandler → DomainEventSubscriber）**: 当初は `InvestigateAlertCommand` + `InvestigateAlertCommandHandler` で「DomainEvent → Command → CommandHandler」の二段ホップを想定していたが、`AnalyzeAlert` の出力は **EventBus への DomainEvent publish** なので、受け口は DomainEvent を直接購読する `DomainEventSubscriber` が素直。`CommandHandler.subscribedTo(): Command` と `DomainEventSubscriber.subscribedTo(): Array<DomainEventClass>` は **シグネチャが衝突して両立不可**のため、購読側に一本化した（`InvestigateAlertCommand` は廃止）。
 
 ### 依存関係
 
@@ -677,11 +681,14 @@ interface AnalyzeAlertCommand {
 | `SSEAlertNotifier`          | interface | 分析結果のpush                                |
 | `Logger`                    | interface | 構造化ログ                                    |
 
-### InvestigateAlertCommand
+### 購読する DomainEvent（InvestigateAlertDomainEvent）
+
+`on(event)` は `event.aggregateId`（= alertId）と `event.monitoringEvent` を VO に変換して UseCase へ渡す。ペイロード形状は `AnalyzeAlert` が publish するものと同一。
 
 ```typescript
-interface InvestigateAlertCommand {
-  readonly alertId: string;
+class InvestigateAlertDomainEvent extends DomainEvent {
+  static readonly EVENT_NAME = "monitoring.alert.investigate_requested";
+  readonly aggregateId: string; // = alertId（DomainEvent 共通フィールド）
   readonly monitoringEvent: {
     // MonitoringEventPrimitives と対応
     eventId: string;
@@ -858,7 +865,7 @@ interface InvestigationContext {
 
 ### AIInvestigationPort の段階移行（project-prompt v10 準拠）
 
-ポート名にプロダクト名を含めないことで、Application層（`InvestigateAlertCommandHandler`）をノータッチにしたまま実装をDI差し替えできる。
+ポート名にプロダクト名を含めないことで、Application層（`InvestigateAlertOnAlertClassifiedUnknown`）をノータッチにしたまま実装をDI差し替えできる。
 
 ```
 AIInvestigationPort（インターフェース）← Application層が依存する抽象
@@ -1018,7 +1025,7 @@ GET /alerts/:id/investigation/status  ← 調査ステータス（collecting / a
 
 ## AIInvestigationPort のマルチエージェント実装（ADK・フェーズ2）
 
-`AIInvestigationPort` の裏側を、単一Gemini呼び出し（フェーズ0）から **ADK（Agents Development Kit）によるマルチエージェント構成**に差し替える。Application層（`InvestigateAlertCommandHandler`）はポートにのみ依存するため**ノータッチ**。a2a は使わず**1プロセス内**で完結する（a2aはStep3の異ベンダー相互運用用であり、本構成には不要）。
+`AIInvestigationPort` の裏側を、単一Gemini呼び出し（フェーズ0）から **ADK（Agents Development Kit）によるマルチエージェント構成**に差し替える。Application層（`InvestigateAlertOnAlertClassifiedUnknown`）はポートにのみ依存するため**ノータッチ**。a2a は使わず**1プロセス内**で完結する（a2aはStep3の異ベンダー相互運用用であり、本構成には不要）。
 
 ### マルチエージェントである必然性
 
@@ -1412,8 +1419,8 @@ interface KnownErrorPatternRepository {
 | `CollectMonitoringEventOnECEventPublished` 受信       | DEBUG    | `monitoring_event_collected` | ECイベントをMonitoringEventに変換：{eventName}         |
 | `AnalyzeAlertCommandHandler` 既知分類              | INFO     | `alert_classified_known`     | 既知パターン一致：{alertId}, pattern={patternName}     |
 | `AnalyzeAlertCommandHandler` 未知分類              | WARN     | `alert_classified_unknown`   | 未知パターン：{alertId}, eventName={eventName}         |
-| `InvestigateAlertCommandHandler` 完了              | INFO     | `alert_investigated`         | AI分析完了：{alertId}, confidence={confidence}         |
-| `InvestigateAlertCommandHandler` Geminiエラー      | ERROR    | `ai_investigation_failed`    | Gemini APIエラー（fallback使用）：{alertId}            |
+| `InvestigateAlertOnAlertClassifiedUnknown` 完了              | INFO     | `alert_investigated`         | AI分析完了：{alertId}, confidence={confidence}         |
+| `InvestigateAlertOnAlertClassifiedUnknown` Geminiエラー      | ERROR    | `ai_investigation_failed`    | Gemini APIエラー（fallback使用）：{alertId}            |
 | `SubmitFeedbackCommandHandler` 完了                | INFO     | `feedback_submitted`         | フィードバック受付：{alertId}, isCorrect={isCorrect}   |
 | `SubmitFeedbackCommandHandler` 自動昇格            | INFO     | `pattern_auto_promoted`      | 未知パターン自動昇格：{alertId}, pattern={patternName} |
 | `InMemorySimilarIncidentRepository` ウォームアップ | INFO     | `similar_incident_warmup`    | ウォームアップ完了：{count}件                          |
@@ -1453,7 +1460,7 @@ AnalyzeAlertCommandHandler
             SSEAlertNotifier.notify()  ──▶ フロント（「分析中」で即時push）
             │
             ↓（RabbitMQ経由 or 直接呼び出し）
-            InvestigateAlertCommandHandler
+            InvestigateAlertOnAlertClassifiedUnknown
               │
               ├─ InfraInvestigationPort.collect()  ──▶ Cloud Logging / Terraform / GitHub（証拠収集）
               ├─ SimilarIncidentRepository.findSimilar()
@@ -1577,7 +1584,7 @@ interface ForecastMemoryRepository {
 }
 ```
 
-> **既存への影響**: `InvestigationReport` に optional `subject?: string` を**追記**（後方互換）。`InvestigateAlertCommandHandler` で導出して埋める。これだけが既存P0設計への唯一の変更点。
+> **既存への影響**: `InvestigationReport` に optional `subject?: string` を**追記**（後方互換）。`InvestigateAlertOnAlertClassifiedUnknown` で導出して埋める。これだけが既存P0設計への唯一の変更点。
 
 ### Gateway 追記（既存に read-only メソッドを追加）
 

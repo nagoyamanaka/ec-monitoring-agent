@@ -51,7 +51,7 @@ AIエージェントは「アプリログを見る」だけでなく、**Cloud L
 | フェーズ2（ポートフォリオ） | ADKエージェント構成                           | ✅✅✅ Gemini Enterprise Agent Platform + ADK | 2項目達成                    |
 
 > **重要**: 各フェーズの切り替えは `AIInvestigationPort` 実装クラスのDI差し替えのみ。
-> `InvestigateAlertCommandHandler`（Application層）は完全にノータッチ。
+> `InvestigateAlertOnAlertClassifiedUnknown`（Application層）は完全にノータッチ。
 
 ---
 
@@ -300,7 +300,7 @@ interface InfraEvidence {
   Step4-ADK-b:    EvidenceCollector / RootCauseAnalyst / RemediationPlanner サブエージェント実装
   Step4-ADK-c:    自律的な証拠追加収集ループ（analystが収集対象を判断）を実装
                   ← a2aは使わない。1プロセス内のADKサブエージェント構成
-  → AIInvestigationPort のDI差し替えのみ。InvestigateAlertCommandHandler ノータッチ
+  → AIInvestigationPort のDI差し替えのみ。InvestigateAlertOnAlertClassifiedUnknown ノータッチ
 
 【フェーズ4：予兆ブリーフィング（stretchⅡ・reactive → proactive）】
   ← フェーズ0〜3 ＋ シナリオ5 ＋ GCP実機が全部着地してからのcapstone

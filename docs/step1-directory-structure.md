@@ -246,8 +246,9 @@ src/Contexts/Monitoring/
 │   │                                          # ※ LLMInvestigationAdapter が DI で受け取る部品。プロバイダ固有呼び出しとリトライのみを抽象化
 │   ├── application/
 │   │   └── InvestigateAlert/
-│   │       ├── InvestigateAlertCommand.ts
-│   │       └── InvestigateAlertCommandHandler.ts # 未知障害時にAIへ投げ、InvestigationReportを生成・保存
+│   │       ├── InvestigateAlertOnAlertClassifiedUnknown.ts # InvestigateAlertDomainEvent を EventBus 経由で購読（DomainEventSubscriber）
+│   │       │                                             #   on()＝event→VO変換 → UseCase委譲（薄い）。旧 InvestigateAlertCommand(Handler) を統合
+│   │       └── InvestigateAlertUseCase.ts        # 未知障害時にAIへ投げ、InvestigationReportを生成・保存（ロジック本体）
 │   │                                             # ※ AIInvestigationPort にのみ依存。実装切り替えでノータッチ
 │   └── infrastructure/
 │       ├── aiinvestigation/                   # 【ハッカソン現行実装】調査オーケストレーション＋LLMクライアント（コンポジション）
@@ -272,7 +273,7 @@ src/Contexts/Monitoring/
 │           ├── ADKAgentInvestigationAdapter.ts # AIInvestigationPort実装。Coordinatorを起動するだけ
 │           │                                  # ※ 単純なtext-in/text-outでなく自前のオーケストレーションを持つため
 │           │                                  #   LLMInvestigationAdapter/LLMTextClient は経由せず Port を直接実装する
-│           │                                  # InvestigateAlertCommandHandler は完全にノータッチ
+│           │                                  # InvestigateAlertOnAlertClassifiedUnknown は完全にノータッチ
 │           │                                  # 審査員評価：「ADK」項目達成・マルチエージェントの必然性を提示
 │           ├── InvestigationCoordinator.ts    # オーケストレータ。category でサブエージェントをディスパッチ・統合
 │           ├── EvidenceCollectorAgent.ts      # 証拠の横断収集（InfraInvestigationの各Gatewayをtoolとして保持）
@@ -390,20 +391,20 @@ src/Contexts/Shared/infrastructure/persistence/elasticsearch/
 フェーズ1（ポートフォリオ強化・工数目安2〜3時間）
   LLMTextClient を VertexLLMClient へ差し替え
     @google-cloud/vertexai SDK 経由
-    LLMInvestigationAdapter も InvestigateAlertCommandHandler もノータッチ（DI差し替え1箇所）
+    LLMInvestigationAdapter も InvestigateAlertOnAlertClassifiedUnknown もノータッチ（DI差し替え1箇所）
     要件：Gemini API（Vertex AI経由・推奨） ✅✅
 
 フェーズ2（マルチエージェント構成・工数目安1日）
   ADKAgentInvestigationAdapter へ差し替え（AIInvestigationPort を直接実装）
     Google ADK でエージェント構成。自前オーケストレーションのため LLMInvestigationAdapter/LLMTextClient は経由しない
-    InvestigateAlertCommandHandler ノータッチ
+    InvestigateAlertOnAlertClassifiedUnknown ノータッチ
     要件：Gemini Enterprise Agent Platform + ADK ✅✅✅
 ```
 
 **設計上の配慮（今すぐ実施済み）**
 
 - `AIInvestigationPort` のポート名にプロダクト名を含めない
-- `InvestigateAlertCommandHandler` はポートインターフェースにのみ依存
+- `InvestigateAlertOnAlertClassifiedUnknown` はポートインターフェースにのみ依存
 - Infrastructure層のファイルとして将来実装のプレースホルダー名を設計ドキュメントに明記
 - フェーズ移行時の変更箇所はDIの差し替え1箇所のみ（`EcBackendApp.ts` のファクトリ関数で差し替え）
 
@@ -568,7 +569,7 @@ EC コンテキスト → Monitoring コンテキストを直接importしない�
 SubmitFeedbackCommandHandler → InvestigationReport.reviewStatus の更新も担う
                                （承認/却下とパターン昇格フィードバックを同一エンドポイントで処理）
 
-InvestigateAlertCommandHandler → AIInvestigationPort インターフェースのみ依存
+InvestigateAlertOnAlertClassifiedUnknown → AIInvestigationPort インターフェースのみ依存
                                   LLMInvestigationAdapter（＋GeminiLLMClient/VertexLLMClient）/
                                   ADKAgentInvestigationAdapter を直接importしない
 
@@ -616,7 +617,7 @@ src/Contexts/EC/Orders/infrastructure/
 | `Uuid`, `criteria/`                                      | **直接テスト**                                                  | UUID バリデーション・フィルタ組み立て等、独立した振る舞いを持つ                                                                                                |
 | domain VO / Aggregate                                    | **ユースケース単位でテスト**                                    | `Order.place()` で DomainEvent 発行まで一気通貫でテストする                                                                                                    |
 | application UseCase                                      | **InMemory実装 + ConsoleLogger でユニットテスト**               | `InMemoryOrderRepository` / `InMemoryInventoryRepository` / `InMemoryAsyncEventBus` / `ConsoleLogger` / `PaymentMockOrderGateway` を注入して実依存でビジネスロジックを検証。EventBus は `vi.spyOn(bus, 'publish')` で publish 内容をアサート。楽観ロックリトライ等の非同期タイマーテストは `vi.useFakeTimers()` + `vi.runAllTimersAsync()` で対処 |
-| `InvestigateAlertCommandHandler`                         | **モック AIInvestigationPort でユニットテスト**                 | Gemini APIを差し替え。JSON返却 → InvestigationReport生成 → reviewStatus初期値の検証                                                                            |
+| `InvestigateAlertUseCase`                                | **モック AIInvestigationPort でユニットテスト**                 | Gemini APIを差し替え。JSON返却 → InvestigationReport生成 → reviewStatus初期値の検証                                                                            |
 | infrastructure Repository（MongoRepository等）           | **E2E テストで代替（統合テスト省略）**                          | ハッカソンスコープの判断。Domain + Application UT でビジネスロジックは保証済み。MongoDB・RabbitMQ の疎通は E2E（代表的なユースケースパスを数本）で確認する。環境依存の統合テストは ROI が低いため省略 |
 
 > **E2E カバレッジ目標**: `POST /orders → GET /orders/:id` の正常系、Payment TIMEOUT シナリオ、在庫引き当て失敗による補償処理の3パスを最低限カバーする。

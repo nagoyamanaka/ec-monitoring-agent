@@ -76,7 +76,7 @@
 - 【完了】`application/AnalyzeAlert/AnalyzeAlertCommand.ts` / `AnalyzeAlertCommandHandler.ts`（VO変換のみ → UseCase委譲）
 - 【完了】`application/AnalyzeAlert/AnalyzeAlertUseCase.ts`（ロジック本体。既知→`createFromKnownPattern`→save→SSE / 未知→`createAsUnknown`→save→SSE→`InvestigateAlertDomainEvent` publish）
 - 【完了】`application/AnalyzeAlert/AnalyzeAlertUseCase.test.ts`（既知/未知 各シナリオのユニットテスト）
-- 【完了】`domain/InvestigateAlertDomainEvent.ts`（EventBus 経由で InvestigateAlertCommandHandler をトリガー）
+- 【完了】`domain/InvestigateAlertDomainEvent.ts`（EventBus 経由で InvestigateAlertOnAlertClassifiedUnknown をトリガー）
 - 【完了】`ReportGeneration/domain/SSEAlertNotifier.ts`（interface。実装はタスク13）
 - 【完了】`infrastructure/persistence/InMemoryAlertRepository.ts`（テスト用）
 - 依存: AlertRepository / AlertClassifier / EventBus / SSEAlertNotifier / Logger（※既知パターン取得は `KnownPatternRule` が内包するので UseCase は `KnownErrorPatternRepository` に依存しない）
@@ -109,19 +109,21 @@
 - 【完了】ユニットテスト（`*.test.ts` コロケーション・計19ケース）: 3純関数モジュール直接＋`LLMInvestigationAdapter`（fake `LLMTextClient` 注入で 正常／例外→fallback／パース不能→fallback の全分岐）。**疎通主体のリポジトリ実装と違い分岐ロジックが厚いので E2E でなくユニットテストで担保**
 - 【完了】`@google/generative-ai ^0.24.1` を workspace root に追加
 - 設計判断（SRP・コンポジション）: 当初の単一 `GeminiAIInvestigationAdapter` がプロンプト整形・パース・マッピング・fallback・リトライ・SDK呼び出しを全部抱えSRP違反だったため、**プロバイダ非依存のオーケストレーション（`LLMInvestigationAdapter`）** と **プロバイダ固有の text-in/text-out（`LLMTextClient`/`GeminiLLMClient`）** に分割。継承（基底クラス）ではなく**コンポジション**（アダプタがLLMTextClientをDIで受け取る）を採用＝is-a不成立を回避・Geminiをモックせずフェイククライアントでアダプタ単体テスト可能・将来プロバイダ追加時の境界が固い。**リトライ／タイムアウトは `GeminiLLMClient` 側に寄せた**（呼び出しの信頼性はインフラの関心事）。これに伴いパース失敗時はリトライせず即fallback（旧実装はパース失敗でもリトライしていた点が挙動差分）
-- 設計判断（依存方向）: `LLMInvestigationAdapter` は `InvestigationReport`/`ReviewStatus`/`AlertSeverity` を **`AlertAnalysis/domain/` から import**（タスク9の移動に伴う）。Port/Context/LLMTextClient 自体は `AIInvestigation/domain/` のまま。依存は `AIInvestigation → AlertAnalysis` の一方向で循環なし。InvestigateAlertCommandHandler（タスク11）も同方向で `AlertRepository`/`Alert` に依存するので情報取得に問題なし
+- 設計判断（依存方向）: `LLMInvestigationAdapter` は `InvestigationReport`/`ReviewStatus`/`AlertSeverity` を **`AlertAnalysis/domain/` から import**（タスク9の移動に伴う）。Port/Context/LLMTextClient 自体は `AIInvestigation/domain/` のまま。依存は `AIInvestigation → AlertAnalysis` の一方向で循環なし。InvestigateAlertOnAlertClassifiedUnknown（タスク11）も同方向で `AlertRepository`/`Alert` に依存するので情報取得に問題なし
 - 参考: 「AIInvestigationPort」「LLMTextClient」「LLMInvestigationAdapter ＋ GeminiLLMClient」節
 
-### タスク 11: InvestigateAlertCommandHandler 〔P0〕✅ 完了済み
+### タスク 11: InvestigateAlertOnAlertClassifiedUnknown 〔P0〕✅ 完了済み
 
-- 【完了】`AIInvestigation/application/InvestigateAlert/InvestigateAlertCommand.ts`（`alertId` + `MonitoringEventPrimitives`）/ `InvestigateAlertCommandHandler.ts`（VO変換のみ → UseCase委譲。`AnalyzeAlertCommandHandler` 準拠）
+- 【完了】`AIInvestigation/application/InvestigateAlert/InvestigateAlertOnAlertClassifiedUnknown.ts`（`DomainEventSubscriber<InvestigateAlertDomainEvent>`。`subscribedTo()`＝`[InvestigateAlertDomainEvent]` / `on()`＝event→VO変換 → UseCase委譲。`CollectMonitoringEventOnECEventPublished` / `ReserveInventoryOnOrderPlaced` 準拠）
 - 【完了】`AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.ts`（ロジック本体）＋ `InvestigateAlertUseCase.test.ts`（Alert不在で冪等skip／正常系→OPEN保存＋SSE＋類似インシデントがContext流入／例外→fallbackレポート の全分岐を fake注入でUT・5ケース）
 - フロー: findById（null→WARN→return＝冪等）→ SimilarIncident.findSimilar（eventName一致・最大5件）→（InfraInvestigation.collect: P1で結線、P0はskip）→ Context構築（knownPatterns/infraEvidenceはP0で空）→ Port.investigate（例外時はERRORログ＋fallbackレポート継続）→ attachReport → save → SSE notify → INFOログ
 - 依存: AlertRepository / SimilarIncidentRepository / (InfraInvestigationPort) / AIInvestigationPort / SSEAlertNotifier / Logger
-- 設計判断（配置）: 設計書どおり `AIInvestigation/application/InvestigateAlert/` に配置（依存方向 `AIInvestigation → AlertAnalysis` 一方向を維持。`Alert`/`AlertRepository`/`InvestigationReport` 等は `AlertAnalysis/domain` から import）
-- 設計判断（薄いhandler）: handler は VO変換のみでロジックは UseCase に集約（共通方針。下記「application 層の実装方針」参照）
+- 設計判断（CommandHandler → DomainEventSubscriber に責務統合）: `AnalyzeAlertUseCase` は未知時に `InvestigateAlertDomainEvent` を **EventBus に publish** する。これを受ける口は本来「DomainEvent を購読する DomainEventSubscriber」であって CommandBus 経由の CommandHandler ではない。当初の `InvestigateAlertCommand` + `InvestigateAlertCommandHandler`（二段ホップ＝DomainEvent→Command→CommandHandler）を廃止し、**購読側に一本化**。`CommandHandler.subscribedTo(): Command` と `DomainEventSubscriber.subscribedTo(): Array<DomainEventClass>` は **シグネチャが衝突し両立できない**ため、別 Subscriber クラスを足すのでなく本タスクの責務を「DomainEvent を直接購読して UseCase へ委譲する」に拡張した。`InvestigateAlertCommand.ts` は削除
+- 設計判断（配置）: 設計書どおり `AIInvestigation/application/InvestigateAlert/` に配置（依存方向 `AIInvestigation → AlertAnalysis` 一方向を維持。`Alert`/`AlertRepository`/`InvestigationReport`/`InvestigateAlertDomainEvent` 等は `AlertAnalysis/domain` から import）
+- 設計判断（薄いsubscriber）: `on()` は VO変換のみでロジックは UseCase に集約（共通方針。下記「application 層の実装方針」参照）
+- 配線: composition root（step4-3 タスク8 `BackofficeSubscribers`）で `EventBus.addSubscribers()` に登録して結線する
 - 前提作成: タスク12の依存先のうち**ドメインIFのみ先行作成**＝`SimilarIncident/domain/SimilarIncident.ts`（型）/ `SimilarIncidentRepository.ts`（IF・`findSimilar`/`index`＋`ResolvedIncident`）。InMemory実装（`warmUp`/`InMemoryCriteriaConverter`）は**タスク12に残置**
-- 参考: 「InvestigateAlertCommandHandler」節
+- 参考: 「InvestigateAlertOnAlertClassifiedUnknown」節
 
 ### タスク 12: SimilarIncident（InMemory）〔P0〕✅ 完了済み
 
@@ -139,11 +141,16 @@
 - 設計判断: 疎通主体の薄い infra アダプタのため UT はコロケーションせず E2E で担保（リポジトリ実装と同方針）。Express 側の routes/controller 配線は step4-3
 - 参考: 「SSEAlertNotifier」節（EventEmitterSSEAlertNotifier）
 
-### タスク 14: SubmitFeedback ＋ 自動昇格 / 手動昇格 〔P0〕
+### タスク 14: SubmitFeedback ＋ 自動昇格 / 手動昇格 〔P0〕✅ 完了済み
 
-- 【新規】`AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommand.ts` / `SubmitFeedbackCommandHandler.ts`
-- isCorrect→SimilarIncident.index、correctFeedbackCount>=AUTO_PROMOTE_THRESHOLD→KnownErrorPattern自動昇格
-- 【新規】`PromotePatternCommandHandler`（手動 `POST /patterns/:id/promote`）
+- 【完了】`AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommand.ts` / `SubmitFeedbackCommandHandler.ts`（VO変換のみ → UseCase委譲）
+- 【完了】`AlertAnalysis/application/SubmitFeedback/SubmitFeedbackUseCase.ts`（ロジック本体）＋ `SubmitFeedbackUseCase.test.ts`（Alert不在→NotFound／不正解→index・昇格なし／正解→ResolvedIncident index／しきい値未満→昇格なし／しきい値到達＋未知＋レポート→自動昇格／既知分類→昇格なし／レポート無→昇格なし の全分岐 7ケース）
+- フロー: findById（null→`MonitoringResourceNotFoundError`）→ `alert.submitFeedback` → save →【isCorrect】SimilarIncident.index ＋ `correctFeedbackCount>=AUTO_PROMOTE_THRESHOLD` かつ unknown かつ investigationReport 有で `KnownErrorPattern.create(...).promote()` を save（自動昇格）→ INFOログ（feedback_submitted / pattern_auto_promoted）
+- しきい値: `AUTO_PROMOTE_THRESHOLD=3`、env `FEEDBACK_AUTO_PROMOTE_THRESHOLD` で上書き可（UseCase コンストラクタ引数の既定値として注入。テストは明示注入で env 非依存）
+- 【完了】`AlertAnalysis/application/PromotePattern/PromotePatternCommand.ts` / `PromotePatternCommandHandler.ts` / `PromotePatternUseCase.ts`（手動 `POST /patterns/:id/promote`：findById（null→NotFound）→ `pattern.promote()` → save → INFOログ pattern_promoted）＋ `PromotePatternUseCase.test.ts`（不在→NotFound／昇格→保存 2ケース）
+- 【完了】`AlertAnalysis/application/errors/MonitoringResourceNotFoundError.ts`（`ApplicationError` 継承・404相当・Alert/Pattern 両方で再利用）
+- 設計判断: 共通方針どおり handler は薄く（VO変換＋委譲のみ）、ロジックは UseCase に集約。SubmitFeedback と PromotePattern は責務独立のため別 UseCase/Handler。自動昇格は `KnownErrorPattern.create().promote()` で isPromoted=true・payloadConditions=[]（eventName のみマッチ＝安全側）
+- 配線: composition root（step4-3）で CommandBus に登録。API ルートは step4-3
 - 参考: 「フィードバックループの集約設計」節
 
 > ✅ **ここまででデモシナリオ1・2・3がE2Eで通る。コミットを切り提出可能状態をキープ。**
@@ -156,7 +163,7 @@
 
 - 【新規】`AIInvestigation/InfraInvestigation/domain/`: `InfraInvestigationPort.ts` / `InfraEvidence.ts` / `CloudLoggingGateway.ts` / `TerraformGateway.ts` / `GitHubGateway.ts`（**全て読み取り専用**）
 - 【新規】`infrastructure/`: `DefaultInfraInvestigationAdapter.ts`（category別に証拠源出し分け）/ 各 `*Impl.ts`
-- タスク11の `InvestigateAlertCommandHandler` に `collect()` を結線、`InvestigationContext.infraEvidence` に統合
+- タスク11の `InvestigateAlertUseCase` に `collect()` を結線、`InvestigationContext.infraEvidence` に統合
 - 参考: 「インフラ横断調査パイプライン」節 → デモシナリオ4
 
 ### タスク 16: Remediation（PR起票・write隔離）〔P1〕
@@ -197,7 +204,7 @@
 
 - 【新規】`Forecast/domain/ForecastMemory.ts`（`ForecastMemoryEntry`=incidentId/subject/trigger/outcome、`ForecastMemoryRepository`：warmUp/findBySubjects）
 - 【新規】`infrastructure/` 実装（Resolved から subject 投影）
-- 【修正】`InvestigationReport` に optional `subject?: string` 追記（後方互換）＋ `InvestigateAlertCommandHandler` で導出して埋める ← **唯一の既存P0変更点**
+- 【修正】`InvestigationReport` に optional `subject?: string` 追記（後方互換）＋ `InvestigateAlertUseCase` で導出して埋める ← **唯一の既存P0変更点**
 
 ### タスク 21: Gateway 未来シグナル取得メソッド追加 〔stretchⅡ〕
 

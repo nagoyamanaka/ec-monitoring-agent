@@ -71,10 +71,12 @@ BackofficeApp.start():
      - RemediationPort:         GitHubPullRequestGateway（GITHUB_TOKEN/対象repo限定）
      - SSEAlertNotifier:        EventEmitterSSEAlertNotifier
   5. CommandHandler / QueryHandler を組み立て InMemoryCommandBus/QueryBus に登録
-     - AnalyzeAlertCommandHandler / InvestigateAlertCommandHandler
+     - AnalyzeAlertCommandHandler
      - SubmitFeedbackCommandHandler / PromotePatternCommandHandler
      - GetAlertReportQueryHandler 等
-  6. BackofficeSubscribers で Subscriber を配線（RabbitMQ購読開始）
+  6. BackofficeSubscribers で DomainEventSubscriber を EventBus に配線（addSubscribers / RabbitMQ購読開始）
+     - CollectMonitoringEventOnECEventPublished（EC源 → AnalyzeAlert）
+     - InvestigateAlertOnAlertClassifiedUnknown（InvestigateAlertDomainEvent → AI調査）★内部イベント購読
   7. App.ts で Express ルート登録 → listen
 ```
 
