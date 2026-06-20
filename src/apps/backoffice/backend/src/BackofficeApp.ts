@@ -43,6 +43,10 @@ import { QueryHandlers } from "../../../../Contexts/Shared/infrastructure/QueryB
 import { Server } from "./server.js";
 import { registerRoutes } from "./routes/index.js";
 import { buildBackofficeSubscribers } from "./subscribers/BackofficeSubscribers.js";
+import { HttpEcDemoGateway } from "./demo/HttpEcDemoGateway.js";
+import { TriggerDemoScenarioUseCase } from "./demo/TriggerDemoScenarioUseCase.js";
+import { MongoDemoDataAdapter } from "./demo/MongoDemoDataAdapter.js";
+import { DemoResetUseCase } from "./demo/DemoResetUseCase.js";
 import { config } from "./config.js";
 
 export class BackofficeApp {
@@ -161,8 +165,19 @@ export class BackofficeApp {
       buildBackofficeSubscribers(collectMonitoringEventUseCase, investigateAlertUseCase),
     );
 
+    const ecDemoGateway = new HttpEcDemoGateway(config.demo.ecBackendUrl);
+    const triggerScenarioUseCase = new TriggerDemoScenarioUseCase(ecDemoGateway, config.demo.productId);
+    const demoResetUseCase = new DemoResetUseCase(
+      new MongoDemoDataAdapter(mongoClient),
+      knownErrorPatternRepository,
+    );
+
     this.server = new Server(config.port);
-    registerRoutes(this.server.router, commandBus, queryBus, sseNotifier);
+    registerRoutes(this.server.router, commandBus, queryBus, sseNotifier, {
+      ecDemoGateway,
+      triggerScenarioUseCase,
+      demoResetUseCase,
+    });
     await this.server.listen();
   }
 

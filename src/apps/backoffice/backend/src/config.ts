@@ -19,6 +19,9 @@ export const config = {
     feedbackAutoPromoteThreshold: parseInt(
       process.env.FEEDBACK_AUTO_PROMOTE_THRESHOLD ?? "3"
     ),
+    // demo シナリオ facade が EC backend を叩くための接続先と、注文投入に使う商品
+    ecBackendUrl: process.env.EC_BACKEND_URL ?? "http://localhost:3000",
+    productId: process.env.DEMO_PRODUCT_ID ?? "demo-product-1",
   },
   github: {
     token: process.env.GITHUB_TOKEN ?? "",
