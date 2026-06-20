@@ -40,13 +40,13 @@
 - Mongo/RabbitMQ初期化 → Repository/Classifier/Port/Notifier を new（★差し替えポイント）→ Handler を Bus 登録 → BackofficeSubscribers で Subscriber 配線 → server.ts でルート登録 → listen
 - 設計の「DI配線」手順に従う
 
-### タスク 4: routes/index.ts 〔P0〕
+### タスク 4: routes/index.ts 〔P0〕✅ 完了済み
 
 <!-- EC対応: ECと同様、Server クラス（server.ts）が Express セットアップ（cors/json/errorHandler 登録）を担う。App.ts は存在しない。routes/index.ts の registerRoutes(router, ...deps) パターンは EC と同形。 -->
 
 - 【新規】`routes/index.ts`（全ルート集約）
 
-### タスク 5: alert 系ルート・コントローラ 〔P0〕
+### タスク 5: alert 系ルート・コントローラ 〔P0〕✅ 完了済み
 
 <!-- EC対応: orders.route.ts + controllers/orders/ と同形。registerAlertRoutes(router, commandBus, queryBus) のシグネチャもEC準拠。コントローラはルート関数内でnewしてバインドするECパターンを踏襲する。 -->
 

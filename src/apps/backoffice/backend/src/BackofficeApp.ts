@@ -1,6 +1,10 @@
 import { AnalyzeAlertCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/AnalyzeAlert/AnalyzeAlertCommandHandler.js";
 import { AnalyzeAlertUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/AnalyzeAlert/AnalyzeAlertUseCase.js";
 import { CollectMonitoringEventUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventUseCase.js";
+import { GetAlertQueryHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlert/GetAlertQueryHandler.js";
+import { GetAlertUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlert/GetAlertUseCase.js";
+import { GetAlertReportQueryHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlertReport/GetAlertReportQueryHandler.js";
+import { GetAlertReportUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlertReport/GetAlertReportUseCase.js";
 import { PromotePatternCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromotePattern/PromotePatternCommandHandler.js";
 import { PromotePatternUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromotePattern/PromotePatternUseCase.js";
 import { SubmitFeedbackCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommandHandler.js";
@@ -114,6 +118,12 @@ export class BackofficeApp {
       infraInvestigationPort,
     );
 
+    const getAlertReportUseCase = new GetAlertReportUseCase(alertRepository);
+    const getAlertReportQueryHandler = new GetAlertReportQueryHandler(getAlertReportUseCase);
+
+    const getAlertUseCase = new GetAlertUseCase(alertRepository, logger);
+    const getAlertQueryHandler = new GetAlertQueryHandler(getAlertUseCase);
+
     const commandBus = new InMemoryCommandBus(
       new CommandHandlers([
         analyzeAlertCommandHandler,
@@ -121,7 +131,9 @@ export class BackofficeApp {
         promotePatternCommandHandler,
       ]),
     );
-    const queryBus = new InMemoryQueryBus(new QueryHandlers([]));
+    const queryBus = new InMemoryQueryBus(
+      new QueryHandlers([getAlertReportQueryHandler, getAlertQueryHandler]),
+    );
 
     const collectMonitoringEventUseCase = new CollectMonitoringEventUseCase(
       analyzeAlertCommandHandler,
