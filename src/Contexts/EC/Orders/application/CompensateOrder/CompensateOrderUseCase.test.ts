@@ -32,7 +32,7 @@ describe("CompensateOrderUseCase", () => {
   });
 
   describe("Order が存在しない場合", () => {
-    it("エラーなく処理を終了する（冪等性）", async () => {
+    it("エラーなく処理を終了する", async () => {
       await expect(useCase.run(ORDER_ID)).resolves.toBeUndefined();
     });
 
