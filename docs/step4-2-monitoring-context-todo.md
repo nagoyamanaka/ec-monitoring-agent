@@ -240,6 +240,7 @@
 - 【新規】`Forecast/domain/ForecastSignal.ts`（id/kind/subject/when/desc/source・kind=FUTURE_CHANGE|SCHEDULE|MEMORY）
 - 【新規】`RiskForecast.ts`（forecastId/generatedAt/horizon/risks[]/isFallback、`RiskItem`=window/subject/level/confidence/**citations**/reasoning）
 - 【新規】`Schedule.ts`（`ScheduleWindow`）/ `ScheduleSource.ts`（interface・read-only）
+- 【新規】`Forecast/domain/ForecastSignalSource.ts`（IF・`collect(horizon): Promise<ForecastSignal[]>`）★Ⅱ→Ⅲ の継ぎ目（`step4-1` §7.9）。主シグナル源を源非依存に抽象化し、Handler に Gateway を名指しさせない
 
 ### タスク 20: ForecastMemory projection（突合キーB）〔stretchⅡ〕
 
@@ -247,10 +248,15 @@
 - 【新規】`infrastructure/` 実装（Resolved から subject 投影）
 - 【修正】`InvestigationReport` に optional `subject?: string` 追記（後方互換）＋ `InvestigateAlertUseCase` で導出して埋める ← **唯一の既存P0変更点**
 
-### タスク 21: Gateway 未来シグナル取得メソッド追加 〔stretchⅡ〕
+### タスク 21: Gateway 未来シグナル取得メソッド ＋ ForecastSignalSource 実装 〔stretchⅡ〕
 
 - 【修正】`GitHubGateway` に `listOpenPullRequests()`（未マージ）/ `TerraformGateway` に `getPendingPlan()`（未適用）を追加（**read-only維持**）
 - 各 `*Impl.ts` に実装追加
+- 【新規】`ForecastSignalSource` の3実装（各 Gateway/Source を内包し `ForecastSignal` に正規化して返す）:
+  - `PullRequestSignalSource`（GitHub `listOpenPullRequests` → FUTURE_CHANGE）
+  - `PendingPlanSignalSource`（Terraform `getPendingPlan` → FUTURE_CHANGE）
+  - `ScheduleSignalSource`（`ScheduleSource.list` → SCHEDULE）
+- 設計判断: 正規化（subject/when/desc 付与）を各 Source 内に閉じることで、Handler は `ForecastSignalSource[]` を回すだけになり stretchⅢ の源追加が容易になる
 
 ### タスク 22: ForecastPort ＋ Gemini アダプタ 〔stretchⅡ〕
 
@@ -260,7 +266,37 @@
 ### タスク 23: ForecastRiskCommandHandler 〔stretchⅡ〕
 
 - 【新規】`Forecast/application/ForecastRisk/ForecastRiskCommand.ts` / `ForecastRiskCommandHandler.ts`
-- 未来シグナル収集（PR/plan/schedule）→ subject抽出→ ForecastMemory.findBySubjects → ForecastSignal[]正規化 → Context → Port.forecast → **引用検証（citations実在照合・偽引用は落とす）** → 保存（最小はメモリ最新）
-- 依存は全て read-only（write無し）。参考: 「ForecastRiskCommandHandler」節
+- フロー: `signalSources: ForecastSignalSource[]` を回して主シグナル収集（PR/plan/schedule）→ subject抽出→ ForecastMemory.findBySubjects（MEMORY）→ 全シグナル結合 → Context → Port.forecast → **引用検証（citations実在照合・偽引用は落とす）** → 保存（最小はメモリ最新）
+- 依存は `ForecastSignalSource[]` / ForecastMemoryRepository / ForecastPort / Logger（全て read-only・write無し）。**Gateway は名指ししない**（Source 経由）
+- 設計判断（継ぎ目）: 源を配列で受けることで、stretchⅢ は `EventLogPrecursorSource` を配列に足すだけ＝Handler ノータッチ（`step4-1` §7.9）。記憶（MEMORY）は subject 駆動なので配列反復と別ステップ
+- 参考: 「ForecastRiskCommandHandler」節
 
 > ✅ **デモシナリオ6（録画）: seed → `POST /forecast` → 引用付きリスク予報。** API は step4-3 の予兆タスク、UI は step4-4 の予兆タスクと結線。
+
+---
+
+## stretchⅢ: ログベース・イベントソーシング基盤＋予知ビュー（設計のみ・実装はハッカソン後）
+
+> **着手条件**: stretchⅡ 着地後。**前倒し実装はしない**（薄い／障害寄りの現行 DomainEvent では予兆の母集団が不足しデモ価値が出ない）。設計は `step4-1` §7.10 ＋ `step4-2`「stretchⅢ」節。**既存パイプライン・stretchⅡ の突合機構は無傷**で、追記 sink と Source を1個ずつ足すだけ。
+
+### タスク 26: EC ドメインイベント拡張（前提作業）〔stretchⅢ〕
+
+- 【新規/修正】EC コンテキストに正常系の業務 DomainEvent を増やす（予兆の母集団を太らせる＝moat の前提。`step4-1` §7.10 留意点）
+- 現状4イベント（order.placed / inventory.reserved / payment.timeout / inventory.reservation_failed）・半分が障害寄り。範囲は Step5 で判断
+
+### タスク 27: EventLog 追記 sink 〔stretchⅢ〕
+
+- 【新規】`EventLog/domain/EventLogEntry.ts`（type）/ `EventLogRepository.ts`（IF・`append`/`findRecent`・追記専用）
+- 【新規】`EventLog/infrastructure/MongoEventLogRepository.ts`（append-only コレクション）
+- 【新規】`EventLog/application/AppendEventLogOnDomainEvent.ts`（**全 DomainEvent** を購読 → `append()`。障害系3キューに絞る `CollectMonitoringEventOnECEventPublished` と違い正常系も貯める）
+
+### タスク 28: ForecastMemory 上流差し替え 〔stretchⅢ〕
+
+- 【修正】`ForecastMemoryRepository.warmUp()` の投影元を Mongo(Resolved) → `EventLogRepository` に差し替え。**consumer（`findBySubjects`）はノータッチ**（projection は再構築可能であるべき原則）
+
+### タスク 29: EventLogPrecursorSource（予知ビュー合流）〔stretchⅢ〕
+
+- 【修正】`Forecast/domain/ForecastSignalKind` に `PRECURSOR` を追加（後方互換の追記）
+- 【新規】`EventLogPrecursorSource implements ForecastSignalSource`（`EventLogRepository.findRecent` → 直近イベント列を `ForecastSignal`(PRECURSOR) に正規化）
+- 【配線】composition root（step4-3）で `signalSources` 配列に push するだけ。Handler / ForecastPort / 引用検証 / read-model / UI ノータッチ
+- 設計判断: 統計MLでなく LLM に event-log 文脈を渡す＝相関の検出。因果推論は研究フロンティアとして ADR（`step4-1` §7.10 ADR種）

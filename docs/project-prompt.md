@@ -1,4 +1,4 @@
-# 設計エージェント向けプロンプト v17
+# 設計エージェント向けプロンプト v18
 
 > **変更履歴（v11→v12）**
 > インフラ横断調査パイプラインを設計に追加。
@@ -142,7 +142,8 @@ src/Contexts/
 │   │   ├── InfraInvestigation/        ← インフラ横断調査（v12追加・read-only Gateway）
 │   │   ├── Remediation/               ← 自律リメディエーション（v13追加・PR起票のwrite隔離）
 │   │   └── infrastructure/adk/        ← ADKマルチエージェント（Coordinator + 専門agent。a2a不使用）
-│   ├── Forecast/                      ← 予兆ブリーフィング（v15追加・stretchⅡ・reactive→proactive）
+│   ├── Forecast/                      ← 予兆（stretchⅡ=現行シグナル×記憶 / stretchⅢ=イベントログ予知ビュー。v18整理）
+│   ├── EventLog/                      ← ログベース・イベントソーシング基盤（stretchⅢ・全DomainEvent追記の一次資料。v18追加・設計のみ）
 │   └── ReportGeneration/
 └── Shared/
 ```
@@ -308,10 +309,20 @@ interface InfraEvidence {
   Step5-Forecast-b: ForecastMemory projection（突合キーB）+ InvestigationReport に optional subject 追記
   Step5-Forecast-c: Gateway 未来シグナルメソッド追加（listOpenPullRequests / getPendingPlan・read-only維持）
   Step5-Forecast-d: ForecastPort + GeminiForecastAdapter（citations必須強制・引用検証）
-  Step5-Forecast-e: ForecastRiskCommandHandler（シグナル収集→正規化→LLM→引用検証・write無し）
+  Step5-Forecast-e: ForecastRiskCommandHandler（ForecastSignalSource[] でシグナル収集→正規化→LLM→引用検証・write無し）
+                    ★継ぎ目: 源は ForecastSignalSource IF 越し。stretchⅢで event-log 源を1個足すだけにする
   Step5-Forecast-f: POST /forecast・GET /forecast ＋ DI追記・ScheduleSource seed
   Step5-Forecast-g: ForecastPage + RiskCard + CitationList（引用チップ＝体験の肝）
   Step5-Demo:       デモシナリオ6（seed→予兆生成→引用付きリスク）を録画
+
+【フェーズ5：ログベース・イベントソーシング基盤（stretchⅢ・予知ビュー）】
+  ← フェーズ4（予兆＝既知シグナル×記憶）の上に、DDIA unbundling の event log 基盤を敷く。
+    実装はハッカソン後。設計・ADR は今固める（前倒し実装はしない＝薄い／障害寄りの現行DomainEventでは予兆の母集団が不足しデモ価値が出ないため）。
+  Step6-ES-a: EC ドメインイベント拡張（正常系の業務イベントを増やす＝予兆の母集団を太らせる）
+  Step6-ES-b: EventLog 追記 sink（全 DomainEvent を append-only に蓄積。障害専用でなく一次資料）
+  Step6-ES-c: ForecastMemory projection の上流を Mongo(Resolved) → event log に差し替え（consumer はノータッチ）
+  Step6-ES-d: EventLogPrecursorSource implements ForecastSignalSource（直近イベント列→予兆シグナル。源を1個足すだけ）
+  Step6-ES-e: 予知ビューを Forecast に合流（統計MLでなく LLM に event-log 文脈を渡す＝相関の検出。因果は研究フロンティアとして ADR）
 ```
 
 > **フェーズ1.5（DevOpsループ：CI/CDセキュリティ）— 差別化として優先度高**
@@ -829,10 +840,23 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(new GeminiLLMClien
 1. **なぜCloud Pub/Subでなく、Rabbit MQか？**-> ローカル開発(E2Eテスト)の開発サイクル短縮が狙い
 1. **AIInvestigationの調査ロジックを基底クラス継承でなくコンポジション（`LLMInvestigationAdapter` + `LLMTextClient`）で分離する理由（has-a/is-a・SRP・テスト容易性・リトライをプロバイダ実装に寄せる判断・Port実装をinfrastructureに置く根拠）**（v17追加）
 1. **学習を 0/1 の昇格でなく「①連続的な確度付き分類（SimilarIncident 蓄積 → SimilarPatternRule・graded confidence）＋②頻出知識を完全一致の高速パスに焼き付ける結晶化（昇格）」の2段で構成する理由。昇格は学習そのものでなく結晶化の最適化であり、結晶化ゲートを固定回数 → 類似確度加重へ上げる判断（LLM の生 confidence は較正前提で主役にしない・「人間 > 類似の積み上げ > AI自己申告」の重み付け）**（v18追加）
+1. **予兆の入力源を `ForecastSignalSource` で源非依存に抽象化し、stretchⅢで event-log 源を追加してもハンドラ・ポートをノータッチにする理由（stretchⅡ→Ⅲを再設計でなく追加で繋ぐ継ぎ目）**（v18追加）
+1. **ログベース・イベントソーシング基盤（全DomainEvent追記＋予知ビュー）を前倒しせず stretchⅢ に置く理由（薄い／障害寄りの現行DomainEventでは予兆の母集団が不足しデモ価値が出ない・DDIA unbundling は設計とADRで先に示す）**（v18追加）
+1. **予知の差別化を「予知機構」でなく「入力データの質（DDDの集約粒度の業務 DomainEvent）」に置く理由。OpenTelemetry 標準のインフラ指標は横展開でき汎用ベンダーが作れるが、ドメインイベントは会社ごとに異なり外部ベンダーが原理的に作れない内製の強み（ビジネスオブザーバビリティ）であること**（v18追加）
 
 ---
 
 ## 変更履歴
+
+### v18（予兆を stretchⅡ＝現行 / stretchⅢ＝イベントソーシング予知ビュー に再構成）
+
+- 予兆ブリーフィングの入力は2系統（記憶＝過去インシデント/Mongo ＋ 未来シグナル＝PR/plan/schedule のライブread）で**どちらも event log ではない**ことを明記。イベントソーシングは Mongo の移行でなく新基盤の追加
+- 予兆の入力源を `ForecastSignalSource` IF で源非依存に抽象化（`ForecastRiskCommandHandler` は `ForecastSignalSource[]` を回す）。stretchⅢ は `EventLogPrecursorSource` を1個足すだけ＝Ⅱ→Ⅲが再設計でなく追加に
+- stretchⅢ（ログベース・イベントソーシング基盤＋予知ビュー）を新設。EC ドメインイベント拡張・EventLog 追記 sink・ForecastMemory 上流差し替え・EventLogPrecursorSource を設計（実装はハッカソン後、ADR で先に示す）
+- 差別化の性質を「予知機構」→「入力データの質（業務 DomainEvent の粒度）」に転換。DDIA unbundling（event log ＋ 調査ビュー/予知ビューの2ビュー）を骨格として明記
+- コンテキスト構成に `EventLog/`（stretchⅢ・設計のみ）を追加
+- Step 5 ADR 項目に3件追加（ForecastSignalSource 継ぎ目 / イベントソーシングを前倒ししない / 入力データの質が moat）
+- 詳細は `step4-1` §7.9・§7.10、`step4-2` 予兆節、各 todo の stretchⅡ/Ⅲ
 
 ### v17（コンポジション優先の設計指針を明文化）
 

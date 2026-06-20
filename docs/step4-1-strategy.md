@@ -141,6 +141,10 @@
 
 > **位置づけ**: P0 ＋ P1 ＋ 既存stretch（ADK in-process）が**全部着地した後**にのみ着手する capstone。設計は本書で今固め、実装は最後。間に合わなければ設計書とADRで語る。
 
+> **2段階の予知（stretchⅡ→Ⅲ）**: 「予知」には粒度の違う2段がある。**stretchⅡ＝既知の未来シグナル × 蓄積記憶の LLM 突合**（本章の主題）、**stretchⅢ＝ログベース・イベントソーシング基盤の上に立つ予知ビュー**（§7.10）。Ⅱは小さく見せられ、Ⅲは moat を構造として獲得する。**Ⅱを Ⅲ の足掛かりになる形（§7.9 の `ForecastSignalSource` 継ぎ目）で作れば、Ⅱ→Ⅲ は再設計でなく「源を1個足す」追加**になる。だから**最初からイベントソーシングに倒さない**（薄い／障害寄りの現行 DomainEvent では予兆の母集団が足りずデモ価値が出ない）。
+>
+> **データソースの正確な理解**: 現行（Ⅱ）の予兆入力は2系統で、**どちらも event log ではない**。①記憶（過去インシデント＝SimilarIncident / KnownErrorPattern）は Mongo の**状態スナップショット**（障害専用ストア）、②未来シグナル（未マージPR / pending plan / schedule）は forecast 実行時に read-only API を叩く**揮発的ライブread**で保存しない。イベントソーシング（全イベントを追記ログに貯める）は**この Mongo の移行ではなく新基盤の追加**であり、stretchⅢ の主題（§7.10）。
+
 ### 7.1 何をする機能か
 
 既存はすべて**反応的**（インシデントが因果的に発生してから調査・評価・レビュー）。予兆ブリーフィングは**予防的**——「**既に分かっている未来シグナル**（未マージPR・未適用Terraform plan・業務/負荷スケジュール）」と「**蓄積した記憶**（SimilarIncident / KnownErrorPattern）」をエージェントが突き合わせ、**根拠（引用）付きのリスク予報**を出す。
@@ -182,6 +186,8 @@
 
 > 「最初テキストjoin(A)で動かし、精度のために部品タグ(B)を構造化した」という**進化自体がADRになる**。
 
+> **注意（A/B の取り違え防止）**: ここでの (A)/(B) は「**突合キーの構造化度**」の段階であって、§7（stretchⅡ）/§7.10（stretchⅢ）の**入力源の段階とは別軸**。本プロジェクトは stretchⅡ の中で突合キー (B) を採る。stretchⅢ は「入力源に event log を足す」話で、突合キー (B) はそのまま流用する。
+
 ### 7.5 データ構造への影響範囲（既存P0は無傷）
 
 | 階層             | 内容                                                                                          | 既存step4項目                  |
@@ -214,6 +220,62 @@
 - joinを自前ルールエンジンでなく **LLMに委譲し、人間は正規化／引用縛り／引用検証の3点足場に限定**する理由
 - 突合キーを **(A)テキストjoin → (B)構造化タグ** へ段階移行する理由（精度と既存無傷のトレードオフ）
 - 予兆能力を **P0パイプライン無傷の追加レイヤー**（read-onlyの調査の一種）として載せる設計判断
+
+---
+
+## 7.9 stretchⅡ→Ⅲ の継ぎ目（`ForecastSignalSource`）
+
+stretchⅡ を「捨て駒」にしないための**唯一の設計制約**。これさえ守れば Ⅱ→Ⅲ は再設計でなく追加で済む。
+
+- **`ForecastSignalSource`（domain interface）を切り、`ForecastRiskCommandHandler` は3つの Gateway を名指しで呼ばず `ForecastSignalSource[]` を回す**。
+  - stretchⅡ の実装＝ `PullRequestSignalSource`（GitHub `listOpenPullRequests`）/ `PendingPlanSignalSource`（Terraform `getPendingPlan`）/ `ScheduleSignalSource`（`ScheduleSource.list`）の3つ。
+  - **stretchⅢ ＝ `EventLogPrecursorSource implements ForecastSignalSource` を1個足すだけ**（§7.10）。Handler も `ForecastPort` も引用検証もノータッチ。
+- `ForecastSignal`（id/kind/subject/when/desc/source）は**源非依存の正規化型**に保つ（既に §7.5 で採用済み）。源が増えても突合機構は不変。
+- `ForecastMemory` は **projection のまま**にする。Ⅱでは上流が Mongo(Resolved)、Ⅲではそれを event log に差し替えるだけで、`findBySubjects()` 呼び出し側は不変（projection は再構築可能であるべき、という原則どおり）。
+- 記憶（MEMORY）シグナルは他シグナルの `subject` から引くため `ForecastSignalSource[]` の反復とは別ステップ（subject 抽出 → `findBySubjects`）に置く。源を足す継ぎ目はあくまで主シグナル側。
+
+> コストはほぼゼロ（DI で配列を渡すだけ）なのに Ⅲ の手戻りを消せる。これが「stretchⅡ で Ⅲ の足掛かりを作る」の具体物。
+
+## 7.10 stretchⅢ：ログベース・イベントソーシングと予知ビュー（DDIA unbundling）
+
+> **位置づけ**: stretchⅡ 着地後の発展。**実装はハッカソン後**。本節は設計と ADR を今固めるためのもの（「予知ができる」でなく「**予知ができる設計になっている**」を構造で示す）。
+
+### 何が変わるか（入力データの質）
+
+stretchⅡ の予兆は「既知の未来シグナル × 過去インシデント記憶」までしか見ない。stretchⅢ は **DDIA の "データベースの解体（unbundling）"** に沿って、**全 DomainEvent（正常系の業務イベントを含む）を追記専用の event log に貯め**、そこから2つの read view を派生させる。
+
+```
+各種 DomainEvent（障害だけでない・EC業務イベント / Security / infra）
+        ↓ すべてイベントとして
+   EventLog 基盤（一次資料・追記のみ）  ← DDIA: unbundled, log-centric
+        ↓
+   ├─→ [調査ビュー] 障害周辺の証拠を引く（＝既存パイプライン・AnalyzeAlert/InvestigateAlert）
+   └─→ [予知ビュー] 直近イベント列から予兆シグナルを抽出（EventLogPrecursorSource）
+        ↓ 予兆ビューの出力も ForecastSignal に正規化 → 既存の Forecast 突合へ合流
+   相関ベースの予兆（このイベント列の後に障害が頻発する）→ 引用付きリスク予報
+```
+
+### 設計原則
+
+- **統計ML ではなく LLM 推論**を維持（stretchⅡ と同じ機構）。event log の直近イベント列を LLM の**追加 context** として渡すだけ＝「相関の検出」。**因果推論は研究フロンティア**として ADR に切り出す（相関→因果のロードマップ）。
+- **予知の差別化は「予知機構」でなく「入力データの質」**。OpenTelemetry 標準のインフラ指標（CPU/レイテンシ/トレース）は汎用ベンダーが横展開できるが、**DDD の集約粒度の業務 DomainEvent は会社ごとに異なり外部ベンダーが原理的に作れない**＝内製の moat（ビジネスオブザーバビリティ）。
+- **留意点（moat の前提）**: この主張は DomainEvent が実際に業務的意味を持つ場合のみ成立する。現行は4イベント・半分が障害寄り＝薄い。よって **EC ドメインイベントの拡張（正常系の業務イベントを増やす）が stretchⅢ の前提作業**（`Step6-ES-a`）。
+
+### スコープ（前倒ししない理由つき）
+
+| 作業 | 内容 | なぜ Ⅲ（前倒し不可） |
+| ---- | ---- | -------------------- |
+| EC ドメインイベント拡張 | 正常系業務イベントを増やし予兆の母集団を太らせる | 薄い母集団では予兆が出ずデモ価値ゼロ |
+| EventLog 追記 sink | 全 DomainEvent を append-only に蓄積（障害専用でない一次資料） | 消費側（予知ビュー）が揃うまで貯めても使い道がない |
+| ForecastMemory 上流差し替え | Mongo(Resolved) → event log（consumer はノータッチ） | projection の上流変更。Ⅱの継ぎ目（§7.9）があれば追加作業 |
+| EventLogPrecursorSource | 直近イベント列→予兆 ForecastSignal（新 kind `PRECURSOR`） | §7.9 の継ぎ目に源を1個足す |
+
+### ADR種（Step5・追加）
+
+- 予知の差別化を「入力データの質（業務 DomainEvent 粒度）」に置く理由（汎用ベンダーが作れない内製 moat）
+- イベントソーシング基盤を前倒しせず stretchⅢ に置く理由（薄い母集団・デモ価値・DDIA は設計とADRで先に示す）
+- `ForecastSignalSource` でⅡ→Ⅲを追加接続にする継ぎ目設計
+- 相関ベースで止め因果推論を将来課題（研究フロンティア）として線引きする理由
 
 ---
 

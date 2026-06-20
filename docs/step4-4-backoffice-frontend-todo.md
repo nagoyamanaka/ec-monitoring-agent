@@ -81,3 +81,14 @@
 - 【修正】`App.tsx` に `/forecast` 追加（`FORECAST_ENABLED` off時はナビ非表示）
 - `shared/`（HttpClient/SeverityBadge/layouts）流用。`SeverityBadge` を RiskLevel に転用
 - デモシナリオ6（録画）: `/forecast` トリガー → 引用付きリスク降下演出
+
+---
+
+## stretchⅢ: イベントソーシング予知ビュー UI（設計のみ・実装はハッカソン後）
+
+> **着手条件**: stretchⅡ 着地後。設計は `step4-4`「stretchⅢ」節 ＋ `step4-1` §7.10。
+
+### タスク 14: PRECURSOR 引用チップの表示 〔stretchⅢ〕
+
+- **UI 追加はほぼ不要**。stretchⅢ は予知の入力源が1つ増えるだけで出力は同じ `RiskForecast`。`ForecastPage` / `RiskCard` / `CitationList` はそのまま使える
+- 強いて足すなら `CitationList` に `ForecastSignalKind=PRECURSOR`（event log 由来＝直近イベント列）の引用チップ種別を1つ追加（色分け）。既存 feature 無傷

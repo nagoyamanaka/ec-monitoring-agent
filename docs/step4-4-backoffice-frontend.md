@@ -189,3 +189,10 @@ features/forecast/
 
 - 既存 `features/alerts` / `features/demo` / `features/analytics` はノータッチ。
 - `shared/`（HttpClient/FetchHttpClient/SeverityBadge/layouts）を流用。`SeverityBadge` は RiskLevel にも転用可。
+
+### stretchⅢ（イベントソーシング予知ビュー）でのUI
+
+> 設計のみ。実装はハッカソン後（`step4-1` §7.10）。
+
+- **UI 追加はほぼ不要**。stretchⅢ は予知の**入力源**（event log 由来の `PRECURSOR` シグナル）が1つ増えるだけで、出力は同じ `RiskForecast`。`ForecastPage` / `RiskCard` / `CitationList` はそのまま使える。
+- 強いて足すなら `CitationList` の引用チップに「event log 由来（直近イベント列）」の種別表示を1つ増やす程度（`ForecastSignalKind=PRECURSOR` の色分け）。既存 feature 無傷の追加。
