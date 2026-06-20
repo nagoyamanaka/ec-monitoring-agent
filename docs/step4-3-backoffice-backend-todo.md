@@ -68,7 +68,7 @@
 - 【新規】`patternRoutes.ts`（GET /patterns, POST /patterns/:id/promote）/ `analyticsRoutes.ts`（GET /analytics）/ `demoRoutes.ts`（POST /demo/\*\*・DEMO_ENABLEDで本番無効化）＋各Controller
 - demo: payment-mode / scenario/:id/trigger / reset・reset/\* / status
 
-### タスク 8: BackofficeSubscribers 〔P0〕
+### タスク 8: BackofficeSubscribers 〔P0〕　✅ 完了済み
 
 <!-- EC対応: subscribers/EcSubscribers.ts と1対1。buildEcSubscribers(useCase1, useCase2) の関数形式・DomainEventSubscribers への集約パターンをそのまま踏襲する。 -->
 
