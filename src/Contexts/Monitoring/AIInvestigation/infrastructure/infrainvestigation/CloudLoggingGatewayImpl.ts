@@ -1,5 +1,5 @@
-import { AppLogEntry } from "../domain/InfraEvidence.js";
-import { CloudLoggingGateway } from "../domain/CloudLoggingGateway.js";
+import { AppLogEntry } from "../../domain/InfraEvidence.js";
+import { CloudLoggingGateway } from "./CloudLoggingGateway.js";
 
 // Google Cloud Logging API へのアダプタ。
 // 実環境では @google-cloud/logging を使用し GCP_PROJECT_ID で接続する。

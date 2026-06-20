@@ -1,5 +1,5 @@
-import { GitCommit } from "../domain/InfraEvidence.js";
-import { GitHubGateway } from "../domain/GitHubGateway.js";
+import { GitCommit } from "../../domain/InfraEvidence.js";
+import { GitHubGateway } from "./GitHubGateway.js";
 
 // GitHub REST API v3 でコミット履歴を収集する（読み取り専用）。
 // GITHUB_TOKEN / GITHUB_REPO（owner/repo 形式）が未設定の場合はスキップする。

@@ -1,10 +1,10 @@
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategories } from "../../../Shared/domain/MonitoringEventCategory.js";
-import { CloudLoggingGateway } from "../domain/CloudLoggingGateway.js";
-import { GitHubGateway } from "../domain/GitHubGateway.js";
-import { InfraEvidence } from "../domain/InfraEvidence.js";
-import { InfraInvestigationPort } from "../domain/InfraInvestigationPort.js";
-import { TerraformGateway } from "../domain/TerraformGateway.js";
+import { InfraEvidence } from "../../domain/InfraEvidence.js";
+import { InfraInvestigationPort } from "../../domain/InfraInvestigationPort.js";
+import { CloudLoggingGateway } from "./CloudLoggingGateway.js";
+import { GitHubGateway } from "./GitHubGateway.js";
+import { TerraformGateway } from "./TerraformGateway.js";
 
 // 証拠収集ウィンドウ（障害発生から遡る分数）
 const EVIDENCE_WINDOW_MINUTES = 30;

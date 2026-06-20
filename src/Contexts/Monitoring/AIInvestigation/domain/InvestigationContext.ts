@@ -1,4 +1,4 @@
-import { InfraEvidence } from "../InfraInvestigation/domain/InfraEvidence.js";
+import { InfraEvidence } from "./InfraEvidence.js";
 
 export type { InfraEvidence };
 

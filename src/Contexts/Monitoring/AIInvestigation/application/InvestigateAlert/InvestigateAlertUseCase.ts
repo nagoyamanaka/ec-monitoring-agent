@@ -17,8 +17,8 @@ import { SSEAlertNotifier } from "../../../ReportGeneration/domain/SSEAlertNotif
 import { SimilarIncidentRepository } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
-import { InfraInvestigationPort } from "../../InfraInvestigation/domain/InfraInvestigationPort.js";
-import { InfraEvidence } from "../../InfraInvestigation/domain/InfraEvidence.js";
+import { InfraInvestigationPort } from "../../domain/InfraInvestigationPort.js";
+import { InfraEvidence } from "../../domain/InfraEvidence.js";
 
 // 類似インシデントは文脈強化用なので件数を絞る（トークン上限 3,500 を意識）
 const SIMILAR_INCIDENT_LIMIT = 5;

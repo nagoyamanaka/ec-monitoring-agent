@@ -242,8 +242,10 @@ src/Contexts/Monitoring/
 │   │   │                                      # ※ プロダクト名を含まない抽象名にすることで
 │   │   │                                      #   Gemini直接 → Vertex AI SDK → ADK エージェント
 │   │   │                                      #   への段階移行でApplication層がノータッチになる
-│   │   └── LLMTextClient.ts                   # LLMへの最小契約「text in → text out」（generate(systemInstruction, prompt)）
-│   │                                          # ※ LLMInvestigationAdapter が DI で受け取る部品。プロバイダ固有呼び出しとリトライのみを抽象化
+│   │   ├── LLMTextClient.ts                   # LLMへの最小契約「text in → text out」（generate(systemInstruction, prompt)）
+│   │   │                                      # ※ LLMInvestigationAdapter が DI で受け取る部品。プロバイダ固有呼び出しとリトライのみを抽象化
+│   │   ├── InfraInvestigationPort.ts          # インフラ証拠収集の driven ポート（Application層が依存する抽象）
+│   │   └── InfraEvidence.ts                   # domain が消費する正規化済みDTO（appLogs / terraformDiff / recentCommits）
 │   ├── application/
 │   │   └── InvestigateAlert/
 │   │       ├── InvestigateAlertOnAlertClassifiedUnknown.ts # InvestigateAlertDomainEvent を EventBus 経由で購読（DomainEventSubscriber）
@@ -263,6 +265,17 @@ src/Contexts/Monitoring/
 │       │   └── *.test.ts                      # 各純関数モジュール＋Adapter（fake LLMTextClient注入）のユニットテスト
 │       │                                      # ※ infra実装でも疎通主体のリポジトリと違い、分岐ロジックが厚いのでE2Eでなくユニットテストで担保
 │       │
+│       ├── infrainvestigation/               # InfraInvestigationPort 実装 + ACL 内部 Gateway 群
+│       │   ├── CloudLoggingGateway.ts        #   Gateway IF（ACL 内部シーム。DefaultInfraInvestigationAdapter のみが依存）
+│       │   ├── CloudLoggingGatewayImpl.ts    #   Cloud Logging API（read-only）
+│       │   ├── GitHubGateway.ts              #   Gateway IF（ACL 内部シーム）
+│       │   │                                 #     ※ 予兆(stretchⅡ)で listOpenPullRequests()（未マージPR）を追加。read-only維持
+│       │   ├── GitHubGatewayImpl.ts          #   GitHub REST API（read-only）
+│       │   ├── TerraformGateway.ts           #   Gateway IF（ACL 内部シーム）
+│       │   │                                 #     ※ 予兆(stretchⅡ)で getPendingPlan()（未適用plan）を追加。read-only維持
+│       │   ├── TerraformGatewayImpl.ts       #   Terraform CLI / git diff（read-only）
+│       │   └── DefaultInfraInvestigationAdapter.ts  # InfraInvestigationPort 実装（category 別に証拠源を出し分け）
+│       │
 │       ├── VertexLLMClient.ts                 # 【将来実装・フェーズ1】LLMTextClient実装
 │       │                                      # @google-cloud/vertexai（Vertex AI SDK）経由
 │       │                                      # LLMInvestigationAdapter に注入する部品の差し替えのみ。Application層もアダプタもノータッチ
@@ -276,24 +289,9 @@ src/Contexts/Monitoring/
 │           │                                  # InvestigateAlertOnAlertClassifiedUnknown は完全にノータッチ
 │           │                                  # 審査員評価：「ADK」項目達成・マルチエージェントの必然性を提示
 │           ├── InvestigationCoordinator.ts    # オーケストレータ。category でサブエージェントをディスパッチ・統合
-│           ├── EvidenceCollectorAgent.ts      # 証拠の横断収集（InfraInvestigationの各Gatewayをtoolとして保持）
+│           ├── EvidenceCollectorAgent.ts      # 証拠の横断収集（infrainvestigation/ の各Gatewayをtoolとして保持）
 │           ├── RootCauseAnalystAgent.ts       # category別プロンプトで原因仮説・確信度・追加収集の判断（自律ループ）
 │           └── RemediationPlannerAgent.ts     # 推奨アクション・修正方針・PR草案（SECURITY時はRemediationPortへ）
-│
-├── InfraInvestigation/                        # インフラ横断調査（v12）。AIInvestigation配下のサブモジュール
-│   ├── domain/
-│   │   ├── InfraInvestigationPort.ts          # 証拠収集ポート（collect(monitoringEvent)）。Application層は抽象に依存
-│   │   ├── InfraEvidence.ts                   # 正規化済みドメイン型（appLogs / terraformDiff / recentCommits）
-│   │   ├── CloudLoggingGateway.ts             # インターフェース（読み取り専用）
-│   │   ├── TerraformGateway.ts                # インターフェース（plan/diff・読み取り専用）
-│   │   │                                      #   ※ 予兆(stretchⅡ)で getPendingPlan()（未適用plan）を追加。read-only維持
-│   │   └── GitHubGateway.ts                   # インターフェース（直近コミット・PR・読み取り専用）
-│   │                                          #   ※ 予兆(stretchⅡ)で listOpenPullRequests()（未マージPR）を追加。read-only維持
-│   └── infrastructure/
-│       ├── DefaultInfraInvestigationAdapter.ts # InfraInvestigationPort実装（category別に証拠源を出し分け）
-│       ├── CloudLoggingGatewayImpl.ts         # Cloud Logging API（read-only）
-│       ├── TerraformGatewayImpl.ts            # Terraform CLI / git diff（read-only）
-│       └── GitHubGatewayImpl.ts               # GitHub REST API（read-only）
 │
 ├── Remediation/                               # 自律リメディエーション（v13）。write操作を隔離
 │   ├── domain/

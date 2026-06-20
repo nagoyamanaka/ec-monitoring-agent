@@ -1,4 +1,4 @@
-import { AppLogEntry } from "./InfraEvidence.js";
+import { AppLogEntry } from "../../domain/InfraEvidence.js";
 
 export interface CloudLoggingGateway {
   getAppLogs(params: {

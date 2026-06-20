@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { TerraformDiff } from "../domain/InfraEvidence.js";
-import { TerraformGateway } from "../domain/TerraformGateway.js";
+import { TerraformDiff } from "../../domain/InfraEvidence.js";
+import { TerraformGateway } from "./TerraformGateway.js";
 
 const execFileAsync = promisify(execFile);
 

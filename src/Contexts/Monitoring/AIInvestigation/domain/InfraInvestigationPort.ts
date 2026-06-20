@@ -1,4 +1,4 @@
-import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
+import { MonitoringEvent } from "../../Shared/domain/MonitoringEvent.js";
 import { InfraEvidence } from "./InfraEvidence.js";
 
 export interface InfraInvestigationPort {

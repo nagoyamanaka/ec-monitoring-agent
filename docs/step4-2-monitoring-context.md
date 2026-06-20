@@ -953,7 +953,7 @@ Alert発生
 
 ### InfraInvestigationPort（インターフェース）
 
-**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/InfraInvestigation/domain/InfraInvestigationPort.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/domain/InfraInvestigationPort.ts`
 
 ```typescript
 interface InfraInvestigationPort {
@@ -974,7 +974,7 @@ interface InfraInvestigationPort {
 
 ### InfraEvidence（ドメイン型）
 
-**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/InfraInvestigation/domain/InfraEvidence.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/domain/InfraEvidence.ts`
 
 各Gatewayの生レスポンス型をMonitoringドメインに持ち込まず、正規化したドメイン型に変換してから渡す。
 
@@ -997,7 +997,7 @@ interface InfraEvidence {
 | `CloudMonitoringGateway` | CPU/メモリ等のメトリクス相関                 | 🔲 次フェーズ  |
 | `CloudTraceGateway`      | 分散トレース                                 | 🔲 次フェーズ  |
 
-- すべて Gatewayインターフェース経由でアクセスし、実装は Infrastructure層に閉じる（Domainは依存しない）
+- Gateway インターフェースは `InfraInvestigationPort` と異なり **application 層が直接依存しない**（`DefaultInfraInvestigationAdapter` 内部でのみ使用）。そのため ACL 内部のテスト用シームとして実装と同じ `infrastructure/infrainvestigation/` に配置する（domain に上げると依存ルールが崩れる）
 - **読み取り専用に徹する。`terraform apply` 等の書き込み操作メソッドは一切定義しない**
 - Cloud Monitoring / Cloud Trace は「設計済み・次フェーズ実装」としてADRに明記する
 
@@ -1075,6 +1075,14 @@ src/Contexts/Monitoring/AIInvestigation/infrastructure/
 │   ├── LLMOutputParser.ts                  #   LLM出力パース＆検証（純関数・UT）
 │   ├── InvestigationReportMapper.ts        #   ドメインマッピング＋fallback（純関数・UT）
 │   └── GeminiLLMClient.ts                  #   LLMTextClient実装（Gemini固有・単一呼び出し＋リトライ）
+├── infrainvestigation/                    # InfraInvestigationPort 実装 + ACL 内部 Gateway 群
+│   ├── CloudLoggingGateway.ts             #   Gateway IF（ACL 内部シーム）
+│   ├── CloudLoggingGatewayImpl.ts         #   Cloud Logging API（read-only）
+│   ├── GitHubGateway.ts                   #   Gateway IF（ACL 内部シーム）
+│   ├── GitHubGatewayImpl.ts               #   GitHub REST API（read-only）
+│   ├── TerraformGateway.ts                #   Gateway IF（ACL 内部シーム）
+│   ├── TerraformGatewayImpl.ts            #   Terraform CLI / git diff（read-only）
+│   └── DefaultInfraInvestigationAdapter.ts #   InfraInvestigationPort 実装（category 別証拠収集）
 ├── VertexLLMClient.ts                     # フェーズ1：LLMTextClient実装（Vertex AI SDK経由）
 └── adk/
     ├── ADKAgentInvestigationAdapter.ts    # フェーズ2：AIInvestigationPort直接実装（Coordinatorを起動）
