@@ -61,7 +61,7 @@
 - text/event-stream ヘッダ・heartbeat 30s・close時 removeConnection。`SSEAlertNotifier` 注入
 - **Cloud Run時**: request timeout延長・min-instances>=1（設計の注意参照）
 
-### タスク 7: patterns / analytics / demo ルート 〔P0〕
+### タスク 7: patterns / analytics / demo ルート 〔P0〕✅ 完了済み
 
 <!-- EC対応: demo部分は demo.route.ts + controllers/demo/PaymentModePostController.ts が対応物。pattern/analytics はbackoffice固有追加（EC非存在）。demoルートのDEMO_ENABLED guard も EC の DEMO_CONTROLS_ENABLED パターンを踏襲する。 -->
 
