@@ -160,12 +160,19 @@
 
 ## P1: 差別化（フェーズ1・1.5）
 
-### タスク 15: InfraInvestigation（証拠収集）〔P1〕
+### タスク 15: InfraInvestigation（証拠収集）〔P1〕✅ 完了済み
 
-- 【新規】`AIInvestigation/InfraInvestigation/domain/`: `InfraInvestigationPort.ts` / `InfraEvidence.ts` / `CloudLoggingGateway.ts` / `TerraformGateway.ts` / `GitHubGateway.ts`（**全て読み取り専用**）
-- 【新規】`infrastructure/`: `DefaultInfraInvestigationAdapter.ts`（category別に証拠源出し分け）/ 各 `*Impl.ts`
-- タスク11の `InvestigateAlertUseCase` に `collect()` を結線、`InvestigationContext.infraEvidence` に統合
-- タスク25連携（任意）: 証拠を `InvestigationContext` 限りにせず `InvestigationReport` に軽量メトリクス（例 `evidenceSourceCount`）として永続化すると、昇格スコアの補助信号に使える（※タスク25の主信号は タスク17 の類似確度。証拠源数は任意の加点に降格）
+- 【完了】`AIInvestigation/InfraInvestigation/domain/InfraEvidence.ts`（`AppLogEntry`/`TerraformDiff`/`GitCommit`/`InfraEvidence` を type で定義。旧 `InvestigationContext.ts` の `Record<string,unknown>` スタブを置換）
+- 【完了】`AIInvestigation/InfraInvestigation/domain/InfraInvestigationPort.ts`（IF・`collect(event): Promise<InfraEvidence>`）
+- 【完了】`domain/CloudLoggingGateway.ts` / `TerraformGateway.ts` / `GitHubGateway.ts`（各 Gateway interface・読み取り専用）
+- 【完了】`infrastructure/DefaultInfraInvestigationAdapter.ts`（`InfraInvestigationPort` 実装。category で証拠源を出し分け: APPLICATION=CloudLogging / INFRASTRUCTURE=+Terraform / SECURITY=+GitHub。各 Gateway 呼び出しはベストエフォート try/catch）
+- 【完了】`infrastructure/CloudLoggingGatewayImpl.ts`（スタブ・空配列返却。TODO: @google-cloud/logging 接続）
+- 【完了】`infrastructure/TerraformGatewayImpl.ts`（`git log --name-only *.tf` で IaC 変更履歴を実収集。`TERRAFORM_REPO_PATH` 未設定時は null）
+- 【完了】`infrastructure/GitHubGatewayImpl.ts`（GitHub REST API fetch。`GITHUB_TOKEN`/`GITHUB_REPO` 未設定時は空配列）
+- 【完了】`InvestigateAlertUseCase` に `infraInvestigationPort: InfraInvestigationPort | null = null` を追加（オプショナル）。`buildInvestigationContext` で `collectInfraEvidence()` を `findSimilarIncidents()` と並列実行。失敗は WARN ログ＋undefined（調査継続）
+- 【完了】`InvestigationContext.ts` を更新: `InfraEvidence` を `domain/InfraEvidence.ts` から re-export
+- 設計判断: `infraInvestigationPort` は省略可能（null）にしてテストの破壊なし。既存 5ケースは全てパス。P0 は null のまま提出可能で P1 結線は composition root（step4-3）で差し込む
+- タスク25連携（任意）: 証拠を `InvestigationReport` に `evidenceSourceCount` として永続化すると昇格スコア補助信号になる（主信号は タスク17 類似確度。証拠源数は任意加点）
 - 参考: 「インフラ横断調査パイプライン」節 → デモシナリオ4
 
 ### タスク 16: Remediation（PR起票・write隔離）〔P1〕

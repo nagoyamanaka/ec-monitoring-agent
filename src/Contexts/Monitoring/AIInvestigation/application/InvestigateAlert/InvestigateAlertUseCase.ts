@@ -17,6 +17,8 @@ import { SSEAlertNotifier } from "../../../ReportGeneration/domain/SSEAlertNotif
 import { SimilarIncidentRepository } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
+import { InfraInvestigationPort } from "../../InfraInvestigation/domain/InfraInvestigationPort.js";
+import { InfraEvidence } from "../../InfraInvestigation/domain/InfraEvidence.js";
 
 // 類似インシデントは文脈強化用なので件数を絞る（トークン上限 3,500 を意識）
 const SIMILAR_INCIDENT_LIMIT = 5;
@@ -28,6 +30,7 @@ export class InvestigateAlertUseCase {
     private readonly aiInvestigationPort: AIInvestigationPort,
     private readonly sseNotifier: SSEAlertNotifier,
     private readonly logger: Logger,
+    private readonly infraInvestigationPort: InfraInvestigationPort | null = null,
   ) {}
 
   async run(params: {
@@ -46,12 +49,14 @@ export class InvestigateAlertUseCase {
     await this.logInvestigated(alertId, report);
   }
 
-  // 類似インシデントで文脈を強化した調査コンテキストを組み立てる
+  // 類似インシデントとインフラ証拠で文脈を強化した調査コンテキストを組み立てる
   private async buildInvestigationContext(
     monitoringEvent: MonitoringEvent,
   ): Promise<InvestigationContext> {
-    // InfraInvestigationPort.collect() は P1（タスク15）で結線。P0 は infraEvidence 未収集。
-    const similarIncidents = await this.findSimilarIncidents(monitoringEvent);
+    const [similarIncidents, infraEvidence] = await Promise.all([
+      this.findSimilarIncidents(monitoringEvent),
+      this.collectInfraEvidence(monitoringEvent),
+    ]);
 
     return {
       errorEvent: {
@@ -59,13 +64,31 @@ export class InvestigateAlertUseCase {
         occurredOn: monitoringEvent.occurredOn.toISOString(),
         payload: monitoringEvent.payload,
       },
-      knownPatterns: [], // P0 では未取得（将来 KnownErrorPatternRepository から）
+      knownPatterns: [],
       similarIncidents: similarIncidents.map((incident) => ({
         eventName: incident.eventName,
         occurredOn: incident.occurredOn.toISOString(),
         resolvedNote: incident.resolvedNote,
       })),
+      ...(infraEvidence ? { infraEvidence } : {}),
     };
+  }
+
+  // インフラ証拠をベストエフォートで収集する（失敗時は undefined で調査継続）
+  private async collectInfraEvidence(
+    monitoringEvent: MonitoringEvent,
+  ): Promise<InfraEvidence | undefined> {
+    if (this.infraInvestigationPort === null) return undefined;
+    try {
+      return await this.infraInvestigationPort.collect(monitoringEvent);
+    } catch (error) {
+      await this.logger.warn({
+        service: "backoffice-backend",
+        action: "infra_evidence_collect_failed",
+        message: `インフラ証拠収集に失敗しました（調査継続）：${(error as Error).message}`,
+      });
+      return undefined;
+    }
   }
 
   // eventName 一致・最大5件で過去の類似インシデントを検索する

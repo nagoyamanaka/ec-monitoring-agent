@@ -1,5 +1,6 @@
-// Expanded in Task 15 (InfraInvestigation)
-export type InfraEvidence = Record<string, unknown>;
+import { InfraEvidence } from "../InfraInvestigation/domain/InfraEvidence.js";
+
+export type { InfraEvidence };
 
 export interface InvestigationContext {
   readonly errorEvent: {
