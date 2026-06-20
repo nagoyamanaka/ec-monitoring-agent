@@ -53,7 +53,7 @@
 - 【新規】`routes/alertRoutes.ts` ＋ `AlertsGetController` / `AlertGetController` / `AlertFeedbackPatchController`（承認/却下＝reviewStatus更新）
 - 委譲先は step4-2 の Query/CommandHandler
 
-### タスク 6: SSE ストリーム 〔P0〕
+### タスク 6: SSE ストリーム 〔P0〕✅ 完了済み
 
 <!-- EC非存在・backoffice固有追加。EC側に対応物なし。SSEAlertNotifier（Notifierポート実装）をDI注入するため、BackofficeApp.ts のDI配線にのみ影響する。ルート・コントローラ自体はEC流儀で薄く保つ。 -->
 

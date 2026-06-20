@@ -14,8 +14,9 @@ export function registerRoutes(
   queryBus: QueryBus,
   sseNotifier: SSEAlertNotifier,
 ): void {
-  registerAlertRoutes(router, commandBus, queryBus);
+  // /alerts/stream を /alerts/:id より先に登録する（後者が "stream" を id として捕捉するのを防ぐ）
   registerStreamRoutes(router, sseNotifier);
+  registerAlertRoutes(router, commandBus, queryBus);
   registerPatternRoutes(router, commandBus, queryBus);
   registerAnalyticsRoutes(router, queryBus);
   registerDemoRoutes(router, commandBus);
