@@ -5,6 +5,10 @@ import { GetAlertQueryHandler } from "../../../../Contexts/Monitoring/AlertAnaly
 import { GetAlertUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlert/GetAlertUseCase.js";
 import { GetAlertReportQueryHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlertReport/GetAlertReportQueryHandler.js";
 import { GetAlertReportUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlertReport/GetAlertReportUseCase.js";
+import { GetAnalyticsQueryHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAnalytics/GetAnalyticsQueryHandler.js";
+import { GetAnalyticsUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAnalytics/GetAnalyticsUseCase.js";
+import { GetKnownErrorPatternsQueryHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetKnownErrorPatterns/GetKnownErrorPatternsQueryHandler.js";
+import { GetKnownErrorPatternsUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetKnownErrorPatterns/GetKnownErrorPatternsUseCase.js";
 import { PromotePatternCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromotePattern/PromotePatternCommandHandler.js";
 import { PromotePatternUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromotePattern/PromotePatternUseCase.js";
 import { SubmitFeedbackCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommandHandler.js";
@@ -124,6 +128,12 @@ export class BackofficeApp {
     const getAlertUseCase = new GetAlertUseCase(alertRepository, logger);
     const getAlertQueryHandler = new GetAlertQueryHandler(getAlertUseCase);
 
+    const getKnownErrorPatternsUseCase = new GetKnownErrorPatternsUseCase(knownErrorPatternRepository);
+    const getKnownErrorPatternsQueryHandler = new GetKnownErrorPatternsQueryHandler(getKnownErrorPatternsUseCase);
+
+    const getAnalyticsUseCase = new GetAnalyticsUseCase(alertRepository);
+    const getAnalyticsQueryHandler = new GetAnalyticsQueryHandler(getAnalyticsUseCase);
+
     const commandBus = new InMemoryCommandBus(
       new CommandHandlers([
         analyzeAlertCommandHandler,
@@ -132,7 +142,12 @@ export class BackofficeApp {
       ]),
     );
     const queryBus = new InMemoryQueryBus(
-      new QueryHandlers([getAlertReportQueryHandler, getAlertQueryHandler]),
+      new QueryHandlers([
+        getAlertReportQueryHandler,
+        getAlertQueryHandler,
+        getKnownErrorPatternsQueryHandler,
+        getAnalyticsQueryHandler,
+      ]),
     );
 
     const collectMonitoringEventUseCase = new CollectMonitoringEventUseCase(
