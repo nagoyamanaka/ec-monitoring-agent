@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { CommandBus } from "../../../../../Contexts/Shared/domain/CommandBus.js";
 import { QueryBus } from "../../../../../Contexts/Shared/domain/QueryBus.js";
+import { PatternsGetController } from "../controllers/patterns/PatternsGetController.js";
+import { PatternPromotePostController } from "../controllers/patterns/PatternPromotePostController.js";
 
-// TODO(task7): GET /patterns・POST /patterns/:id/promote コントローラを実装する
-export function registerPatternRoutes(
-  _router: Router,
-  _commandBus: CommandBus,
-  _queryBus: QueryBus,
-): void {}
+export function registerPatternRoutes(router: Router, commandBus: CommandBus, queryBus: QueryBus): void {
+  const patternsGetController = new PatternsGetController(queryBus);
+  const patternPromotePostController = new PatternPromotePostController(commandBus);
+
+  router.get("/patterns", patternsGetController.run.bind(patternsGetController));
+  router.post("/patterns/:id/promote", patternPromotePostController.run.bind(patternPromotePostController));
+}
