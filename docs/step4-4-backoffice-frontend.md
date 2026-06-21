@@ -8,6 +8,44 @@
 
 ---
 
+## デザインテーマ（タスク0で確定）
+
+**方針: 「ダーク観測コンソール × Tremor」をベース、デモ演出のみネオン系アニメを部分採用（タスク12）。**
+
+監視・アラート＋AI調査レビューという題材と、デモの体験価値（①リアルタイムに動く過程の可視化 ②危険度のランク別表示 ③レポートの割合/ゲージ表示 ④予兆のグラフ表示）すべてに最も相性が良いため。
+
+### 選定理由（要件 → 効くタスク）
+
+| 体験要件 | 関係タスク | テーマでの担保 |
+| -------- | ---------- | -------------- |
+| 動く過程をリアルタイムに見やすく | タスク4 `useAlertStream`（ANALYZING→OPEN）/ タスク8 `EvidencePanel`（証拠の積み上げ） | ダーク基調はストリーム/ログの逐次更新が最も読みやすく緊張感が出る |
+| 危険度をランク別で | タスク2 `severity.ts` / `SeverityBadge` / タスク13 `RiskLevel`(HIGH/MEDIUM/LOW) | オブザーバビリティ標準配色（赤/橙/青）をランク色に採用 |
+| レポートを割合・視覚的に | confidence→% / confidenceゲージ（タスク6/12）/ タスク11 analytics | **Tremor** のゲージ/ドーナツ/チャートで実装コスト最小化 |
+| 予兆をグラフで | タスク13 `ForecastPage` / `RiskCard` / シナリオ6の降下演出 | グラフは Tremor、降ってくる演出は③ネオン系アニメを部分採用 |
+
+### 採用ライブラリ
+
+- **可視化: [Tremor](https://www.tremor.so/)** — ゲージ/ドーナツ/エリアチャート/カテゴリ色（ランク色）が標準装備・ダーク対応。`confidenceゲージ`・`analytics`・`forecastグラフ` をほぼ実装ゼロで賄う。`shared/ui/` に薄くラップして features から参照。
+- **演出（タスク12のみ）: [Aceternity UI](https://ui.aceternity.com/)** 的なフェード/グロー — 証拠積み上げ・シナリオ6のリスク降下に部分採用。プロダクションUIには持ち込まない（デモ演出に限定）。
+
+### デザイントークン（暫定・実装時に調整可）
+
+```
+背景      bg      #0B0E14   surface #151A23   border #232A36
+テキスト  text    #E5E7EB   muted   #94A3B8
+アクセント accent  cyan #22D3EE（リンク/フォーカス/アクティブ）
+ランク色  CRITICAL/HIGH #F43F5E   WARNING/MEDIUM #F59E0B   INFO/LOW #38BDF8
+confidence ゲージ  低→高で #F43F5E → #F59E0B → #22C55E のグラデーション
+```
+
+### 参考にした方向性（比較検討）
+
+- **採用①: ダーク観測コンソール** — [Datadog](https://www.datadoghq.com/dashboards/) / [Grafana(play)](https://play.grafana.org/) / [Sentry](https://sentry.io/welcome/) / [shadcn/ui dashboard(dark)](https://ui.shadcn.com/examples/dashboard)
+- 不採用②: ライト・エンタープライズ — [Linear](https://linear.app/) / [Vercel](https://vercel.com/) / [shadcn/ui tasks](https://ui.shadcn.com/examples/tasks)（緊張感・没入感で①に劣る）
+- 部分採用③: ダーク＋ネオン — [Tremor](https://www.tremor.so/) / [Aceternity UI](https://ui.aceternity.com/)（録画映えは最強だが情報密度の高いP1/stretchⅢで可読性が不利。演出のみ採用）
+
+---
+
 ## アーキテクチャ判断：feature-sliced DDD（校正版）
 
 レイヤーを feature 配下に切るが、**各レイヤーの粒度を校正する**（過剰設計回避）。
