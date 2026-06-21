@@ -32,6 +32,8 @@ export default defineConfig({
     },
   },
   server: {
+    // コンテナ外（docker）からアクセスできるよう 0.0.0.0 で待ち受ける
+    host: true,
     proxy: {
       // SPA ルートと衝突するため bypass 付き（/alerts/stream の SSE も text/html 以外なので転送される）
       "/alerts": spaAwareApi(),

@@ -50,6 +50,23 @@ services:
       ec-backend:
         condition: service_healthy
 
+  backoffice-frontend:
+    build:
+      context: .
+      dockerfile: src/apps/backoffice/frontend/Dockerfile
+      target: dev
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      # vite dev server のプロキシ転送先（/alerts, /analytics などをバックエンドへ）
+      BACKOFFICE_API: http://backoffice-backend:3001
+    depends_on:
+      backoffice-backend:
+        condition: service_healthy
+
   swagger-ui:
     image: swaggerapi/swagger-ui
     ports:
