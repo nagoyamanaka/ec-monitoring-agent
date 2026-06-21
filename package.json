@@ -7,6 +7,7 @@
     "dev:ec": "pnpm --filter @ec-monitoring-agent/ec-backend run dev",
     "start:ec": "pnpm --filter @ec-monitoring-agent/ec-backend run start",
     "dev:backoffice": "pnpm --filter @ec-monitoring-agent/backoffice-backend run dev",
+    "start:backoffice": "pnpm --filter @ec-monitoring-agent/backoffice-backend run start",
     "dev:frontend": "pnpm --filter @ec-monitoring-agent/backoffice-frontend run dev",
     "test": "vitest run",
     "test:watch": "vitest",

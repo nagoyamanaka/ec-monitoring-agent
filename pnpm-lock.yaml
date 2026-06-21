@@ -63,10 +63,16 @@ importers:
 
   src/apps/backoffice/backend:
     dependencies:
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
       express:
         specifier: ^4.19.0
         version: 4.22.2
     devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25

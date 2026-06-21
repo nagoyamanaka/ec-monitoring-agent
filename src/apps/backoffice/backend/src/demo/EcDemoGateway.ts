@@ -12,5 +12,9 @@ export type DemoOrderItem = {
 export interface EcDemoGateway {
   setPaymentMode(mode: PaymentMode): Promise<void>;
   setInventoryMode(mode: InventoryMode): Promise<void>;
-  placeOrder(params: { customerId: string; items: DemoOrderItem[] }): Promise<{ orderId: string }>;
+  placeOrder(params: {
+    orderId: string;
+    customerId: string;
+    items: DemoOrderItem[];
+  }): Promise<{ orderId: string }>;
 }

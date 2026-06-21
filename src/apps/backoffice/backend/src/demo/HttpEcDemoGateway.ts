@@ -19,14 +19,22 @@ export class HttpEcDemoGateway implements EcDemoGateway {
   }
 
   async placeOrder(params: {
+    orderId: string;
     customerId: string;
     items: DemoOrderItem[];
   }): Promise<{ orderId: string }> {
-    const body = await this.post("/orders", params);
-    return { orderId: (body as { orderId: string }).orderId };
+    // 障害シナリオでは EC が業務的失敗で非2xx（例: 決済TIMEOUT→400）を返すが、
+    // 「障害を発火させる」のがデモの目的なので失敗扱いにしない。orderId はクライアント側で
+    // 確定済みなので、EC のレスポンス本文に依存せずそのまま返す。
+    await fetch(`${this.ecBackendUrl}/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    return { orderId: params.orderId };
   }
 
-  private async post(path: string, payload: unknown): Promise<unknown> {
+  private async post(path: string, payload: unknown): Promise<void> {
     const res = await fetch(`${this.ecBackendUrl}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -35,7 +43,5 @@ export class HttpEcDemoGateway implements EcDemoGateway {
     if (!res.ok) {
       throw new Error(`EC backend ${path} responded ${res.status}`);
     }
-    // payment-mode / inventory-mode は本文を使わないが、orders は orderId を返す
-    return res.status === 204 ? null : await res.json();
   }
 }

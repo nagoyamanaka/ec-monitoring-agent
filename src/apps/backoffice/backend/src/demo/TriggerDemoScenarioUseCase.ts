@@ -44,8 +44,11 @@ export class TriggerDemoScenarioUseCase {
     await this.ecDemoGateway.setPaymentMode(recipe.paymentMode);
     await this.ecDemoGateway.setInventoryMode(recipe.inventoryMode);
 
+    // EC の CustomerId/OrderId は UUID 必須。orderId はクライアント側で確定し、
+    // 障害で EC が非2xx を返しても相関できるようにする。
     const { orderId } = await this.ecDemoGateway.placeOrder({
-      customerId: `demo-${resolvedId}`,
+      orderId: crypto.randomUUID(),
+      customerId: crypto.randomUUID(),
       items: [{ productId: this.productId, quantity: 1, unitPrice: 1000 }],
     });
 

@@ -22,6 +22,8 @@ import { MongoKnownErrorPatternRepository } from "../../../../Contexts/Monitorin
 import { InvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.js";
 import { LLMInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/LLMInvestigationAdapter.js";
 import { GeminiLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/GeminiLLMClient.js";
+import { StubLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/StubLLMClient.js";
+import { LLMTextClient } from "../../../../Contexts/Monitoring/AIInvestigation/domain/LLMTextClient.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
 import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/TerraformGatewayImpl.js";
@@ -89,7 +91,11 @@ export class BackofficeApp {
       ),
     ]);
 
-    const aiInvestigationPort = new LLMInvestigationAdapter(new GeminiLLMClient());
+    // ★差し替えポイント: ローカルE2E では Stub に切替え（Gemini課金・非決定性を排除）
+    const llmClient: LLMTextClient = config.ai.useStubInvestigation
+      ? new StubLLMClient()
+      : new GeminiLLMClient();
+    const aiInvestigationPort = new LLMInvestigationAdapter(llmClient);
     const infraInvestigationPort = new DefaultInfraInvestigationAdapter(
       new CloudLoggingGatewayImpl(),
       new TerraformGatewayImpl(),

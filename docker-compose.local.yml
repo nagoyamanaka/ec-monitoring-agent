@@ -26,6 +26,30 @@ services:
       FEEDBACK_AUTO_PROMOTE_THRESHOLD: "3"
       GCP_PROJECT_ID: local
 
+  backoffice-backend:
+    build:
+      context: .
+      dockerfile: src/apps/backoffice/backend/Dockerfile
+      target: dev
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      DEMO_ENABLED: "true"
+      # ローカルE2E: AI調査の LLM を Stub に差し替え（Gemini課金・非決定性なし）
+      AI_INVESTIGATION_STUB: "true"
+      # demo シナリオ facade が EC backend を叩く接続先
+      EC_BACKEND_URL: http://ec-backend:3000
+      # payment-timeout シナリオで在庫予約を通すため有効な UUID 商品を使う（global-setup が seed）
+      DEMO_PRODUCT_ID: "11111111-1111-4111-8111-111111111111"
+      GCP_PROJECT_ID: local
+    depends_on:
+      ec-backend:
+        condition: service_healthy
+
   swagger-ui:
     image: swaggerapi/swagger-ui
     ports:
@@ -42,6 +66,11 @@ services:
     depends_on:
       ec-backend:
         condition: service_healthy
+      backoffice-backend:
+        condition: service_healthy
     environment:
       EC_BASE_URL: http://ec-backend:3000
       MONGO_URL: mongodb://mongo:27017/ec
+      # backoffice E2E 用（別プロセス・別DB）
+      BACKOFFICE_BASE_URL: http://backoffice-backend:3001
+      MONITORING_MONGO_URL: mongodb://mongo:27017/monitoring
