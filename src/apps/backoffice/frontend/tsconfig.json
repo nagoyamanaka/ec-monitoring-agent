@@ -20,7 +20,8 @@
     "noEmit": true,
     "paths": {
       "@shared/*": ["./src/shared/*"],
-      "@features/*": ["./src/features/*"]
+      "@features/*": ["./src/features/*"],
+      "@monitoring/*": ["../../../Contexts/Monitoring/*"]
     }
   },
   "include": ["src"]

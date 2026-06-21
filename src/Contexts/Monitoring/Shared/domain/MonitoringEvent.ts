@@ -1,14 +1,8 @@
 import { MonitoringEventCategory } from "./MonitoringEventCategory.js";
+import type { MonitoringEventPrimitives } from "./contracts/MonitoringEventContract.js";
 
-export type MonitoringEventPrimitives = {
-  readonly eventId: string;
-  readonly eventName: string;
-  readonly aggregateId: string;
-  readonly occurredOn: string;
-  readonly payload: Record<string, unknown>;
-  readonly category: string;
-  readonly source: string;
-};
+// シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
+export type { MonitoringEventPrimitives };
 
 export class MonitoringEvent {
   readonly eventId: string;

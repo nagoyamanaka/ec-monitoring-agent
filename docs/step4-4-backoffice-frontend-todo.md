@@ -24,9 +24,12 @@
 - [x] 検証：`tsc --noEmit` 緑・`tailwindcss` ビルド成功
 - 残（タスク7）：`vite.config.ts` / `index.html` / `main.tsx`（index.css読込・`<html class="dark">`）/ `App.tsx`
 
-### タスク 2: alerts/domain（型＋純関数）〔P0〕
+### タスク 2: alerts/domain（型＋純関数）〔P0〕 ✅
 
-- 【新規】`features/alerts/domain/AlertView.ts` / `InvestigationReportView.ts`（investigationSteps/suggestedActions/reviewStatus）/ `severity.ts`（severity→色, confidence→%）
+- [x] 【新規】`features/alerts/domain/AlertView.ts`（AlertView/Status/Severity/Category 型・分類/フィードバック view 型・ワイヤ DTO `AlertDto` ＋ `toAlertView` 純関数・`isAnalyzing`/`primaryConfidence`）
+- [x] 【新規】`InvestigationReportView.ts`（investigationSteps/suggestedActions/reviewStatus・ReviewStatus 型・`InvestigationReportDto`＋`toInvestigationReportView`・`isReviewed`）
+- [x] 【新規】`severity.ts`（severity→バッジランク橋渡し・重大度ソート・confidence→%。配色そのものは shared/ui に一元化し二重管理を回避）
+- [x] 検証：`tsc --noEmit` 緑
 
 ### タスク 3: alerts/infrastructure（API＋SSE）〔P0〕
 
