@@ -91,8 +91,9 @@ src/apps/backoffice/frontend/src/
 │   │       │   └── AlertDetailPage.tsx   # /alerts/:id（フル詳細・調査プロセス全表示）
 │   │       ├── components/
 │   │       │   ├── AlertList.tsx
-│   │       │   ├── AlertCard.tsx
-│   │       │   ├── AlertCardExpanded.tsx # AI分析結果＋調査ステップ＋[✓承認][✗却下]
+│   │       │   ├── AlertCard.tsx          # 一覧の1行（severityストライプ・summary・確信度横バー）。クリックで選択
+│   │       │   ├── AlertDetailDrawer.tsx  # 右オーバーレイ詳細ドロワー（confidenceゲージ＋AlertCardExpanded）
+│   │       │   ├── AlertCardExpanded.tsx # AI分析結果＋調査ステップ＋[✓承認][✗却下]（ドロワー本体／詳細ページで共用）
 │   │       │   ├── EvidencePanel.tsx     # Cloud Logging/Terraform/GitHub 証拠の積み上げ可視化
 │   │       │   └── RemediationPanel.tsx  # CVEレポート＋PRリンク＋承認ボタン（SECURITY）
 │   │       └── hooks/
@@ -170,9 +171,17 @@ useAlertStream():
 
 | パス | 役割 | DemoDrawer |
 | ---- | ---- | ---------- |
-| `/alerts` | 一覧＋カード展開（AI分析・証拠パネル・承認をインライン） | **常時表示**（デモ舞台） |
-| `/alerts/:id` | フル詳細（調査プロセス全表示・PR詳細） | 非表示 |
+| `/alerts` | 一覧（マスター）＋クリックで**右オーバーレイ・詳細ドロワー** | **常時表示**（デモ舞台） |
+| `/alerts/:id` | フル詳細（調査プロセス全表示・PR詳細・ディープリンク） | 非表示 |
 | `/analytics` | AI精度トラッキング | 非表示 |
+
+### 閲覧モデル：マスター詳細（右ドロワー）〔当初のインライン展開から改訂〕
+
+> **改訂理由**: 当初は「カードのインライン展開（アコーディオン）」を正としていたが、(1) 展開で下のカードが押し下げられ**一覧の文脈（トリアージ性）を失う**、(2) confidenceゲージ・証拠パネルがカード内で窮屈、(3) Datadog/Sentry/Grafana など観測コンソールの定石（master-detail）と乖離、という3点から **「一覧＋右オーバーレイ・ドロワー」に改める**。
+
+- **一覧行（`AlertCard`）** はコンパクトに保つ。左に severity カラーストライプ／severity・category バッジ・status（分析中インジケータ）・相対時刻／eventName（主題）／source ＋ `summary` 1行省略／**確信度は横バー＋%**（ドーナツゲージは情報密度の高い一覧では浮くため、詳細ドロワーに格上げ）。行クリックで選択し詳細ドロワーを開く。
+- **詳細ドロワー（`AlertDetailDrawer`）** は `fixed` の右オーバーレイ（背景 dim ＋ Esc/バックドロップ/✕ で閉）。**大きい confidence ゲージはここに置く**（本来の意味を持つ場所）。本体は `AlertCardExpanded` を再利用（summary・調査ステップ・推奨アクション・[✓承認][✗却下]）し、証拠パネル（タスク8）・リメディエーション（タスク9）を差し込む。フッタに `/alerts/:id` へのリンク（ディープリンク用）。
+- **オーバーレイにする理由**: AlertsLayout の demo aside（右 20rem・タスク10）と物理的に重ねられる＝3カラム化で横が窒息しない。SSE 更新は `alerts.find(id)` 経由で**ドロワーにもライブ反映**される（選択中の alert が ANALYZING→OPEN で更新されると詳細も追従）。
 
 `AlertCardExpanded` の表示要素:
 - 原因仮説サマリー・確信度（confidence）・category バッジ

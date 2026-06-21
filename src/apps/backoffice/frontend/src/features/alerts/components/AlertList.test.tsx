@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AlertList } from "./AlertList";
 import { makeAlert } from "../test-support/alertFixture";
 
@@ -39,5 +40,19 @@ describe("AlertList", () => {
     );
     expect(screen.getByText("latency.spike")).toBeInTheDocument();
     expect(screen.getByText("cpu.high")).toBeInTheDocument();
+  });
+
+  it("行クリックで onSelect を呼ぶ", async () => {
+    const onSelect = vi.fn();
+    render(
+      <AlertList
+        status="ready"
+        error={null}
+        onSelect={onSelect}
+        alerts={[makeAlert({ id: "a", eventName: "latency.spike" })]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button"));
+    expect(onSelect).toHaveBeenCalledWith("a");
   });
 });

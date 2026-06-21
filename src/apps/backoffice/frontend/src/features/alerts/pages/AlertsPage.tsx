@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FetchHttpClient } from "@shared/api/FetchHttpClient";
 import { AlertsLayout } from "@shared/layouts/AlertsLayout";
 import { createAlertsApi } from "../infrastructure/alertsApi";
@@ -9,16 +9,25 @@ import {
   type FeedbackDecision,
 } from "../application/submitFeedback";
 import { AlertList } from "../components/AlertList";
+import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
 
 /**
  * アラート一覧ページ（デモの舞台＝AlertsLayout）。
  * api/stream は composition root としてここで生成し、useMemo で安定参照にする
  * （毎レンダー再生成すると useAlerts/useAlertStream が再購読してしまうため）。
+ * 一覧（マスター）＋ 行クリックで右オーバーレイ詳細ドロワー（detail）の master-detail。
+ * 選択中 alert は alerts から都度引く＝SSE 更新がドロワーにもライブ反映される。
  */
 export function AlertsPage() {
   const api = useMemo(() => createAlertsApi(new FetchHttpClient()), []);
   const stream = useMemo(() => new SSEAlertStream(), []);
   const { alerts, status, error } = useAlerts(api, stream);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = useMemo(
+    () => alerts.find((a) => a.id === selectedId) ?? null,
+    [alerts, selectedId],
+  );
 
   const handleDecision = useCallback(
     (alertId: string, decision: FeedbackDecision) =>
@@ -29,13 +38,21 @@ export function AlertsPage() {
   );
 
   return (
-    <AlertsLayout>
-      <AlertList
-        alerts={alerts}
-        status={status}
-        error={error}
+    <>
+      <AlertsLayout>
+        <AlertList
+          alerts={alerts}
+          status={status}
+          error={error}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
+      </AlertsLayout>
+      <AlertDetailDrawer
+        alert={selected}
+        onClose={() => setSelectedId(null)}
         onDecision={handleDecision}
       />
-    </AlertsLayout>
+    </>
   );
 }

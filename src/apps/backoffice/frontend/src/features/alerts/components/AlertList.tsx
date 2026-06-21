@@ -1,23 +1,29 @@
 import type { AlertView } from "../domain/AlertView";
 import type { AlertsStatus } from "../presentation/hooks/useAlerts";
-import type { FeedbackDecision } from "../application/submitFeedback";
 import { AlertCard } from "./AlertCard";
 
 export interface AlertListProps {
   alerts: AlertView[];
   status: AlertsStatus;
   error: Error | null;
-  onDecision?: (
-    alertId: string,
-    decision: FeedbackDecision,
-  ) => void | Promise<void>;
+  /** 選択中の alert id（詳細ドロワーで開いている行）。 */
+  selectedId?: string | null;
+  /** 行クリック。親が詳細ドロワーを開く。 */
+  onSelect?: (alertId: string) => void;
 }
 
 /**
- * アラート一覧。loading/error/empty/一覧 の 4 状態を描き分ける。
+ * アラート一覧（マスター）。loading/error/empty/一覧 の 4 状態を描き分ける。
  * 並びは useAlerts のマージ順（最新が先頭）をそのまま尊重する。
+ * 詳細は行クリックで親の詳細ドロワー（AlertDetailDrawer）が担う。
  */
-export function AlertList({ alerts, status, error, onDecision }: AlertListProps) {
+export function AlertList({
+  alerts,
+  status,
+  error,
+  selectedId,
+  onSelect,
+}: AlertListProps) {
   if (status === "loading") {
     return (
       <div className="space-y-3" aria-busy>
@@ -50,7 +56,12 @@ export function AlertList({ alerts, status, error, onDecision }: AlertListProps)
   return (
     <div className="space-y-3">
       {alerts.map((alert) => (
-        <AlertCard key={alert.id} alert={alert} onDecision={onDecision} />
+        <AlertCard
+          key={alert.id}
+          alert={alert}
+          selected={alert.id === selectedId}
+          onSelect={onSelect}
+        />
       ))}
     </div>
   );
