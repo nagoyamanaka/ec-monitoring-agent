@@ -20,7 +20,7 @@
 - [x] 【新規】`shared/ui/SeverityBadge.tsx`（CRITICAL/WARNING/INFO＋RiskLevel HIGH/MEDIUM/LOW 転用・素のTailwindランク色）＋ `shared/ui/cn.ts`（clsx+tailwind-merge）
 - [x] 【新規】`shared/ui/tremor/`（Tremor薄ラッパ：`index.ts` 再エクスポート窓口 / `colors.ts` rankColor・confidenceColor / `ConfidenceGauge.tsx`）。features は @tremor/react を直接importせず本窓口経由
 - [x] 【新規】`shared/layouts/AlertsLayout.tsx`（DemoDrawer差し込み口は本レイアウトのみ・slot方式でタスク10連携）/ `DefaultLayout.tsx`
-- [x] 【基盤】`tsconfig.json`（bundler/DOM/react-jsx・@shared/@features paths）/ `tailwind.config.js`（Tremor tremor-*/dark-tremor-* トークン・safelist・darkMode class）/ `postcss.config.js` / `src/index.css`（ダーク基調）。依存追加：@tremor/react・tailwindcss・postcss・autoprefixer・clsx・tailwind-merge
+- [x] 【基盤】`tsconfig.json`（bundler/DOM/react-jsx・@shared/@features paths）/ `tailwind.config.js`（Tremor tremor-_/dark-tremor-_ トークン・safelist・darkMode class）/ `postcss.config.js` / `src/index.css`（ダーク基調）。依存追加：@tremor/react・tailwindcss・postcss・autoprefixer・clsx・tailwind-merge
 - [x] 検証：`tsc --noEmit` 緑・`tailwindcss` ビルド成功
 - 残（タスク7）：`vite.config.ts` / `index.html` / `main.tsx`（index.css読込・`<html class="dark">`）/ `App.tsx`
 
@@ -37,20 +37,20 @@
 - [x] 【新規】`AlertStream.ts`（interface・push port）/ `SSEAlertStream.ts`（EventSource('/alerts/stream')・CLOSED時のみ手動再接続・heartbeatコメント行は自動無視・壊れた行は握り潰し）/ `MockAlertStream.ts`（emit/listenerCount でテスト・デモ駆動）
 - [x] 検証：`tsc --noEmit` 緑
 
-### タスク 4: alerts/presentation hooks 〔P0〕
+### タスク 4: alerts/presentation hooks 〔P0〕 ✅
 
 - 【新規】`hooks/useAlertStream.ts`（subscribe→state マージ・同一ID置換・ANALYZING→OPEN遷移）/ `hooks/useAlerts.ts`（一覧取得＋ストリームマージ）
 
-### タスク 5: alerts/application 〔P0〕
+### タスク 5: alerts/application 〔P0〕 ✅
 
 - 【新規】`application/submitFeedback.ts`（承認/却下→PATCH feedback）
 
-### タスク 6: alerts ページ・コンポーネント 〔P0〕
+### タスク 6: alerts ページ・コンポーネント 〔P0〕 ✅
 
 - 【新規】`pages/AlertsPage.tsx`（AlertsLayout）/ `pages/AlertDetailPage.tsx`（DefaultLayout）
 - 【新規】`components/AlertList.tsx` / `AlertCard.tsx` / `AlertCardExpanded.tsx`（サマリ・confidence・categoryバッジ・調査ステップ・推奨アクション・[✓承認][✗却下]）
 
-### タスク 7: App.tsx ルーティング 〔P0〕
+### タスク 7: App.tsx ルーティング 〔P0〕 ✅
 
 - 【新規】`App.tsx`（/alerts, /alerts/:id, /analytics）/ `main.tsx`
 

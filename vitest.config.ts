@@ -5,7 +5,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    exclude: ["e2e/**", "node_modules/**"],
+    // frontend は jsdom + 独自 alias の別プロジェクト（vitest.workspace.ts）で実行する
+    exclude: ["e2e/**", "node_modules/**", "src/apps/backoffice/frontend/**"],
   },
   resolve: {
     alias: {
