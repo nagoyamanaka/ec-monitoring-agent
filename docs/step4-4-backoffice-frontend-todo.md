@@ -31,10 +31,11 @@
 - [x] 【新規】`severity.ts`（severity→バッジランク橋渡し・重大度ソート・confidence→%。配色そのものは shared/ui に一元化し二重管理を回避）
 - [x] 検証：`tsc --noEmit` 緑
 
-### タスク 3: alerts/infrastructure（API＋SSE）〔P0〕
+### タスク 3: alerts/infrastructure（API＋SSE）〔P0〕 ✅
 
-- 【新規】`alertsApi.ts`（GET /alerts, GET /alerts/:id, PATCH feedback）
-- 【新規】`AlertStream.ts`（interface）/ `SSEAlertStream.ts`（EventSource('/alerts/stream')・再接続・heartbeat無視）/ `MockAlertStream.ts`
+- [x] 【新規】`alertsApi.ts`（`createAlertsApi(http)` ＋ `AlertsApi` interface・GET /alerts→`{alerts}` / GET /alerts/:id / PATCH /alerts/:id/feedback。受信 AlertPrimitives を `toAlertView` で写像・`SubmitFeedbackInput` 型・id encode）
+- [x] 【新規】`AlertStream.ts`（interface・push port）/ `SSEAlertStream.ts`（EventSource('/alerts/stream')・CLOSED時のみ手動再接続・heartbeatコメント行は自動無視・壊れた行は握り潰し）/ `MockAlertStream.ts`（emit/listenerCount でテスト・デモ駆動）
+- [x] 検証：`tsc --noEmit` 緑
 
 ### タスク 4: alerts/presentation hooks 〔P0〕
 
