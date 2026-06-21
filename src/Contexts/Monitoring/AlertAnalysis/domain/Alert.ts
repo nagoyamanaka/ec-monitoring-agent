@@ -124,7 +124,7 @@ export class Alert extends AggregateRoot {
     return new Alert({
       id: params.id,
       monitoringEvent: params.monitoringEvent,
-      severity: AlertSeverity.warning(),
+      severity: AlertSeverity.pending(),
       status: AlertStatus.analyzing(),
       classification,
       investigationReport: null,

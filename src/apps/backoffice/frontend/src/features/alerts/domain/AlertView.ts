@@ -14,7 +14,7 @@ import {
  */
 
 export type AlertStatus = "OPEN" | "ANALYZING" | "RESOLVED";
-export type AlertSeverity = "CRITICAL" | "WARNING" | "INFO";
+export type AlertSeverity = "CRITICAL" | "WARNING" | "INFO" | "PENDING";
 export type AlertCategory =
   | "APPLICATION"
   | "INFRASTRUCTURE"
