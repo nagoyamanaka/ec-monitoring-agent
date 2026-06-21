@@ -9,7 +9,7 @@ import {
 } from "../../AlertClassification.js";
 import { MonitoringEvent } from "../../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../../Shared/domain/MonitoringEventCategory.js";
-import { AlertSeverity } from "../../AlertSeverity.js";
+import { AlertSeverity } from "../../../../Shared/domain/AlertSeverity.js";
 
 class StubRule implements ClassificationRule {
   constructor(
@@ -41,6 +41,7 @@ function appEvent(): MonitoringEvent {
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: {},
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.warning(),
     source: "test",
   });
 }
@@ -63,6 +64,7 @@ describe("ApplicationClassificationPolicy", () => {
         occurredOn: new Date("2026-01-01T00:00:00.000Z"),
         payload: {},
         category: MonitoringEventCategory.security(),
+        severity: AlertSeverity.critical(),
         source: "test",
       });
       expect(policy.supports(securityEvent)).toBe(false);

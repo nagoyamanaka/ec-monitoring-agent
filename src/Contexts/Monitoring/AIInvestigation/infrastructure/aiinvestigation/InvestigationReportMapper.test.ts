@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { toInvestigationReport, buildFallbackReport } from "./InvestigationReportMapper.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
-import { AlertSeverities } from "../../../AlertAnalysis/domain/AlertSeverity.js";
+import { AlertSeverities } from "../../../Shared/domain/AlertSeverity.js";
 import { ReviewStatuses } from "../../../AlertAnalysis/domain/ReviewStatus.js";
 
 function output(overrides: Partial<LLMInvestigationOutput> = {}): LLMInvestigationOutput {

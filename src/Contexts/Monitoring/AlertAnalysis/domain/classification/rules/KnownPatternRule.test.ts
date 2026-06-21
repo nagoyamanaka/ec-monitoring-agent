@@ -4,7 +4,7 @@ import { MonitoringEvent } from "../../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../../Shared/domain/MonitoringEventCategory.js";
 import { KnownErrorPattern } from "../../KnownErrorPattern.js";
 import { KnownErrorPatternRepository } from "../../KnownErrorPatternRepository.js";
-import { AlertSeverity } from "../../AlertSeverity.js";
+import { AlertSeverity } from "../../../../Shared/domain/AlertSeverity.js";
 
 class StubKnownErrorPatternRepository implements KnownErrorPatternRepository {
   constructor(private readonly patterns: KnownErrorPattern[]) {}
@@ -32,6 +32,7 @@ function makeEvent(params: {
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: params.payload ?? {},
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.warning(),
     source: "test",
   });
 }

@@ -1,5 +1,5 @@
 import { KnownErrorPattern } from "../AlertAnalysis/domain/KnownErrorPattern.js";
-import { AlertSeverity } from "../AlertAnalysis/domain/AlertSeverity.js";
+import { AlertSeverity } from "../Shared/domain/AlertSeverity.js";
 
 export const KNOWN_ERROR_PATTERN_SEEDS: KnownErrorPattern[] = [
   KnownErrorPattern.create({

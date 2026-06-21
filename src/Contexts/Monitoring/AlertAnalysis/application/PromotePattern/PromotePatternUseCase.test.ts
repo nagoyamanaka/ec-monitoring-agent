@@ -3,7 +3,7 @@ import { PromotePatternUseCase } from "./PromotePatternUseCase.js";
 import { InMemoryKnownErrorPatternRepository } from "../../infrastructure/persistence/InMemoryKnownErrorPatternRepository.js";
 import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/ConsoleLogger.js";
 import { KnownErrorPattern } from "../../domain/KnownErrorPattern.js";
-import { AlertSeverity } from "../../domain/AlertSeverity.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { MonitoringResourceNotFoundError } from "../errors/MonitoringResourceNotFoundError.js";
 
 const PATTERN_ID = "pattern-1";

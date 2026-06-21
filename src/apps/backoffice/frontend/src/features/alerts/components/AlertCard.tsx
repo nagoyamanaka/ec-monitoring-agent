@@ -26,6 +26,8 @@ const STRIPE_COLOR: Record<AlertSeverity, string> = {
   CRITICAL: "bg-rose-500",
   WARNING: "bg-amber-500",
   INFO: "bg-sky-500",
+  // 未確定（AI調査前 / ソース判断不能）。確定済み severity と視覚的に区別する。
+  PENDING: "bg-slate-500",
 };
 
 function formatRelativeTime(iso: string): string {

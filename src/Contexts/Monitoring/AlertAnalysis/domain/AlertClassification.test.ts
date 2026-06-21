@@ -6,7 +6,7 @@ import {
   ClassificationConfidence,
   InvalidClassificationConfidenceError,
 } from "./AlertClassification.js";
-import { AlertSeverity } from "./AlertSeverity.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 
 describe("ClassificationConfidence", () => {
   describe("of()", () => {

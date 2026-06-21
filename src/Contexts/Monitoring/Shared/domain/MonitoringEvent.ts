@@ -1,3 +1,4 @@
+import { AlertSeverity } from "./AlertSeverity.js";
 import { MonitoringEventCategory } from "./MonitoringEventCategory.js";
 import type { MonitoringEventPrimitives } from "./contracts/MonitoringEventContract.js";
 
@@ -11,6 +12,9 @@ export class MonitoringEvent {
   readonly occurredOn: Date;
   readonly payload: Record<string, unknown>;
   readonly category: MonitoringEventCategory;
+  // 観測時点でソース（ingest 境界）が付与する重大度。category と並ぶ観測属性。
+  // ソース固有イベント型 → severity の対応は変換境界（toMonitoringEvent）が知る。
+  readonly severity: AlertSeverity;
   readonly source: string;
 
   constructor(params: {
@@ -20,6 +24,7 @@ export class MonitoringEvent {
     occurredOn: Date;
     payload: Record<string, unknown>;
     category: MonitoringEventCategory;
+    severity: AlertSeverity;
     source: string;
   }) {
     this.eventId = params.eventId;
@@ -28,6 +33,7 @@ export class MonitoringEvent {
     this.occurredOn = params.occurredOn;
     this.payload = params.payload;
     this.category = params.category;
+    this.severity = params.severity;
     this.source = params.source;
   }
 
@@ -39,6 +45,7 @@ export class MonitoringEvent {
       occurredOn: this.occurredOn.toISOString(),
       payload: this.payload,
       category: this.category.value,
+      severity: this.severity.value,
       source: this.source,
     };
   }
@@ -51,6 +58,7 @@ export class MonitoringEvent {
       occurredOn: new Date(primitives.occurredOn),
       payload: primitives.payload,
       category: MonitoringEventCategory.fromString(primitives.category),
+      severity: AlertSeverity.fromString(primitives.severity),
       source: primitives.source,
     });
   }

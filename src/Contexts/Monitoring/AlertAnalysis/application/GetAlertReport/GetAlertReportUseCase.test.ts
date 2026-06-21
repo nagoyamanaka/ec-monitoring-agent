@@ -3,6 +3,7 @@ import { GetAlertReportUseCase } from "./GetAlertReportUseCase.js";
 import { InMemoryAlertRepository } from "../../infrastructure/persistence/InMemoryAlertRepository.js";
 import { Alert } from "../../domain/Alert.js";
 import { AlertId } from "../../domain/AlertId.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 
@@ -14,6 +15,7 @@ const makeEvent = () =>
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: {},
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.pending(),
     source: "unknown",
   });
 

@@ -9,6 +9,8 @@ import { InvestigationContext } from "../../domain/InvestigationContext.js";
 export const SYSTEM_INSTRUCTION = `あなたはECシステムの障害調査AIエージェントです。
 提供された障害イベント・既知パターン・類似インシデント・インフラ証拠（InfraEvidence）を分析し、
 必ずJSONフォーマットで回答してください。
+errorEvent.severity はソースが観測時点で付与した事前重大度です。これを出発点（prior）とし、
+証拠から見直す根拠がある場合のみ severity を変更してください。
 {
   "summary": "障害の説明（日本語・1〜2文）",
   "confidence": 0.87,

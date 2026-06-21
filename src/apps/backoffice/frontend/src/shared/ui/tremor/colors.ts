@@ -16,6 +16,8 @@ export function rankColor(level: SeverityLevel): Color {
     case "INFO":
     case "LOW":
       return "sky";
+    case "PENDING":
+      return "slate";
   }
 }
 

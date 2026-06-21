@@ -1,6 +1,6 @@
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
-import { AlertSeverity, AlertSeverities } from "../../../AlertAnalysis/domain/AlertSeverity.js";
+import { AlertSeverity, AlertSeverities } from "../../../Shared/domain/AlertSeverity.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
 /**

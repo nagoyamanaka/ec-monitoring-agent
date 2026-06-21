@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { InvestigationReport } from "./InvestigationReport.js";
-import { AlertSeverity } from "./AlertSeverity.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { ReviewStatus } from "./ReviewStatus.js";
 
 const baseParams = {

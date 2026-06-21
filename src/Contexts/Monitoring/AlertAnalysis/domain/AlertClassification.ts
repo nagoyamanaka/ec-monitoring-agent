@@ -1,5 +1,5 @@
 import { DomainError } from "../../../Shared/domain/errors/DomainError.js";
-import { AlertSeverity } from "./AlertSeverity.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import type {
   MatchedCondition,
   UnmatchedCondition,

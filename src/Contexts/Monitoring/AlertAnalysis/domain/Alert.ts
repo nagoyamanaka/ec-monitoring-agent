@@ -6,7 +6,7 @@ import {
   UnknownAlertClassification,
 } from "./AlertClassification.js";
 import { AlertId } from "./AlertId.js";
-import { AlertSeverity } from "./AlertSeverity.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { AlertStatus } from "./AlertStatus.js";
 import { MonitoringEvent } from "../../Shared/domain/MonitoringEvent.js";
 import { InvestigationReport } from "./InvestigationReport.js";
@@ -124,7 +124,9 @@ export class Alert extends AggregateRoot {
     return new Alert({
       id: params.id,
       monitoringEvent: params.monitoringEvent,
-      severity: AlertSeverity.pending(),
+      // ソースが観測時点で付与した重大度を初期値に使う（AI調査が後で精緻化）。
+      // ソースが判断できない場合は monitoringEvent.severity が PENDING になりうる。
+      severity: params.monitoringEvent.severity,
       status: AlertStatus.analyzing(),
       classification,
       investigationReport: null,

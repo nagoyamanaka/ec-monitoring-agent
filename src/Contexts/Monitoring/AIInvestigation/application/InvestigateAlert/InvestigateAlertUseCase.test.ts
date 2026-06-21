@@ -3,7 +3,7 @@ import { InvestigateAlertUseCase } from "./InvestigateAlertUseCase.js";
 import { InMemoryAlertRepository } from "../../../AlertAnalysis/infrastructure/persistence/InMemoryAlertRepository.js";
 import { Alert, AlertPrimitives } from "../../../AlertAnalysis/domain/Alert.js";
 import { AlertId } from "../../../AlertAnalysis/domain/AlertId.js";
-import { AlertSeverity } from "../../../AlertAnalysis/domain/AlertSeverity.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
@@ -25,6 +25,7 @@ const makeUnknownEvent = () =>
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: { foo: "bar" },
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.pending(),
     source: "unknown",
   });
 

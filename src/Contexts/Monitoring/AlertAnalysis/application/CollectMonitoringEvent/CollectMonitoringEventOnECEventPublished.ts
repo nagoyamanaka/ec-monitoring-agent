@@ -2,6 +2,7 @@ import { DomainEventClass } from "../../../../Shared/domain/DomainEvent.js";
 import { InventoryReservationFailedDomainEvent } from "../../../../EC/Inventory/domain/InventoryReservationFailedDomainEvent.js";
 import { OrderPlacedDomainEvent } from "../../../../EC/Orders/domain/OrderPlacedDomainEvent.js";
 import { PaymentTimeoutDomainEvent } from "../../../../EC/Payment/domain/PaymentTimeoutDomainEvent.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 import { CollectMonitoringEventSubscriber } from "./CollectMonitoringEventSubscriber.js";
@@ -34,6 +35,8 @@ export class CollectMonitoringEventOnECEventPublished extends CollectMonitoringE
         aggregateId: event.aggregateId,
         occurredOn: event.occurredOn,
         category,
+        // 正常系の業務イベント。観測上の緊急度は低い。
+        severity: AlertSeverity.info(),
         source: "order",
         payload: {
           customerId: event.customerId,
@@ -50,6 +53,8 @@ export class CollectMonitoringEventOnECEventPublished extends CollectMonitoringE
         aggregateId: event.aggregateId,
         occurredOn: event.occurredOn,
         category,
+        // 在庫引当の失敗。回復可能だが要注意。
+        severity: AlertSeverity.warning(),
         source: "inventory",
         payload: {
           orderId: event.orderId,
@@ -69,6 +74,8 @@ export class CollectMonitoringEventOnECEventPublished extends CollectMonitoringE
         aggregateId: event.aggregateId,
         occurredOn: event.occurredOn,
         category,
+        // 決済タイムアウト。売上に直結する致命的事象。
+        severity: AlertSeverity.critical(),
         source: "payment",
         payload: {
           orderId: event.orderId,

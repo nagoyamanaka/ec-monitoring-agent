@@ -6,7 +6,7 @@ import { InMemorySimilarIncidentRepository } from "../../../SimilarIncident/infr
 import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/ConsoleLogger.js";
 import { Alert } from "../../domain/Alert.js";
 import { AlertId } from "../../domain/AlertId.js";
-import { AlertSeverity } from "../../domain/AlertSeverity.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { InvestigationReport } from "../../domain/InvestigationReport.js";
 import { ReviewStatus } from "../../domain/ReviewStatus.js";
 import {
@@ -31,6 +31,7 @@ const makeEvent = () =>
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: {},
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.pending(),
     source: "unknown",
   });
 

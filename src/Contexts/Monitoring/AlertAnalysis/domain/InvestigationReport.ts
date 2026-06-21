@@ -1,4 +1,4 @@
-import { AlertSeverity } from "./AlertSeverity.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { ReviewStatus } from "./ReviewStatus.js";
 import type { InvestigationReportPrimitives } from "./contracts/AlertContract.js";
 

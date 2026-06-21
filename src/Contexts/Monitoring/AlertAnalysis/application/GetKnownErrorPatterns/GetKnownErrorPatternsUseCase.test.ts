@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { GetKnownErrorPatternsUseCase } from "./GetKnownErrorPatternsUseCase.js";
 import { InMemoryKnownErrorPatternRepository } from "../../infrastructure/persistence/InMemoryKnownErrorPatternRepository.js";
 import { KnownErrorPattern } from "../../domain/KnownErrorPattern.js";
-import { AlertSeverity } from "../../domain/AlertSeverity.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 
 const makePattern = (id: string, name: string) =>
   KnownErrorPattern.create({

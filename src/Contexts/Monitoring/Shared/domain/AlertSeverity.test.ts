@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { AlertSeverity, AlertSeverities } from "./AlertSeverity.js";
+import { AlertSeverity, AlertSeverities } from "../../Shared/domain/AlertSeverity.js";
 import { InvalidArgumentError } from "../../../Shared/domain/errors/InvalidArgumentError.js";
 
 describe("AlertSeverity", () => {
