@@ -4,11 +4,9 @@ import { AlertsHeader } from "./AlertsHeader";
 import { makeAlert, makeReport } from "../test-support/alertFixture";
 
 describe("AlertsHeader", () => {
-  it("画面の説明文と凡例を常に出す", () => {
+  it("画面の説明文を常に出す", () => {
     render(<AlertsHeader alerts={[]} status="loading" />);
     expect(screen.getByText(/レビュー一覧/)).toBeInTheDocument();
-    expect(screen.getByText("CRITICAL")).toBeInTheDocument();
-    expect(screen.getByText(/AI 分類の確信度/)).toBeInTheDocument();
   });
 
   it("loading 中は件数サマリを出さない", () => {
@@ -34,8 +32,8 @@ describe("AlertsHeader", () => {
         ]}
       />,
     );
-    expect(screen.getByText("CRITICAL 1")).toBeInTheDocument();
-    expect(screen.getByText("レビュー待ち 1")).toBeInTheDocument();
+    expect(screen.getByText("CRITICAL 1件")).toBeInTheDocument();
+    expect(screen.getByText("レビュー待ち 1件")).toBeInTheDocument();
     // 総件数チップ（例: "2 件"）は出さない
     expect(screen.queryByText(/^\d+ 件$/)).not.toBeInTheDocument();
   });
@@ -47,6 +45,6 @@ describe("AlertsHeader", () => {
         alerts={[makeAlert({ id: "a", status: "ANALYZING", report: null })]}
       />,
     );
-    expect(screen.getByText("分析中 1")).toBeInTheDocument();
+    expect(screen.getByText("分析中 1件")).toBeInTheDocument();
   });
 });

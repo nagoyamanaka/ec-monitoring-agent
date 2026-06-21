@@ -2,16 +2,14 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ConfidenceGauge } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
-import {
-  type AlertView,
-  primaryConfidence,
-  isAnalyzing,
-} from "../domain/AlertView";
+import { type AlertView, isAnalyzing } from "../domain/AlertView";
+import { alertConfidence } from "../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../domain/eventCatalog";
 import { categoryInfo } from "../domain/alertCategory";
 import type { FeedbackDecision } from "../application/submitFeedback";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertStatusBadge } from "./AlertStatusBadge";
+import { ExactMatchBadge } from "./ExactMatchBadge";
 
 export interface AlertDetailDrawerProps {
   /** 表示対象。null なら閉（何も描画しない）。 */
@@ -50,8 +48,10 @@ export function AlertDetailDrawer({
 
   if (!alert) return null;
 
-  const confidence = primaryConfidence(alert);
+  const confidence = alertConfidence(alert);
   const analyzing = isAnalyzing(alert);
+  // AI 調査が失敗した fallback レポートは confidence が当てにならない＝ゲージを出さず警告だけ出す。
+  const aiFallback = confidence.kind === "ai" && alert.report?.isFallback;
   const info = eventInfo(alert.eventName);
   const title = eventTitle(alert.eventName);
   const category = categoryInfo(alert.category);
@@ -113,11 +113,37 @@ export function AlertDetailDrawer({
         </header>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          {confidence !== null && (
-            <div className="flex justify-center">
-              <ConfidenceGauge confidence={confidence} size="lg" label="AI 確信度" />
+          {confidence.kind === "exact-match" ? (
+            <ExactMatchBadge variant="panel" />
+          ) : confidence.kind === "ai" && aiFallback ? (
+            <div className="rounded-tremor-default bg-amber-500/10 px-4 py-3 text-amber-200 ring-1 ring-inset ring-amber-500/25">
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <span aria-hidden>⚠</span>
+                AI 調査に失敗・暫定表示
+              </p>
+              <p className="mt-1 text-xs text-amber-200/80">
+                確信度は参考値です（再調査をおすすめします）
+              </p>
             </div>
-          )}
+          ) : confidence.kind === "ai" ? (
+            <div className="flex justify-center">
+              <ConfidenceGauge
+                confidence={confidence.value}
+                size="lg"
+                label="AI 確信度"
+                color="cyan"
+              />
+            </div>
+          ) : confidence.kind === "known" ? (
+            <div className="flex justify-center">
+              <ConfidenceGauge
+                confidence={confidence.value}
+                size="lg"
+                label="パターン一致度"
+                color="emerald"
+              />
+            </div>
+          ) : null}
           <AlertCardExpanded alert={alert} onDecision={onDecision} />
         </div>
 

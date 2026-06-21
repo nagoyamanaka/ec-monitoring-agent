@@ -20,7 +20,9 @@ export class StubLLMClient implements LLMTextClient {
       "[STUB] 関連ログを照会",
     ],
     suggestedActions: ["[STUB] 一次対応を実施し、根本原因を継続調査する"],
-    suggestedPatternName: "stub-investigated-pattern",
+    // 表示用の人間語ラベル（本番 LLM も日本語の読めるパターン名を返す前提）。
+    // 機械スラッグだと UI に "stub-investigated-pattern" がそのまま出てしまうため。
+    suggestedPatternName: "[STUB] 未知の障害パターン（推定）",
   });
 
   async generate(_systemInstruction: string, _prompt: string): Promise<string> {

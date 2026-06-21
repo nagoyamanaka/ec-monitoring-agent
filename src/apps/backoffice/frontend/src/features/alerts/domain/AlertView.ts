@@ -105,12 +105,3 @@ export function toAlertView(dto: AlertPrimitives): AlertView {
 export function isAnalyzing(alert: AlertView): boolean {
   return alert.status === "ANALYZING";
 }
-
-/**
- * カードに出す代表 confidence(0..1)。調査レポートがあれば AI 確信度、
- * なければ既知パターンの分類確信度。未知・未分析は null。
- */
-export function primaryConfidence(alert: AlertView): number | null {
-  if (alert.report) return alert.report.confidence;
-  return alert.classification.confidence;
-}

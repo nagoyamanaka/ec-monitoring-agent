@@ -7,21 +7,35 @@ import { makeAlert } from "../test-support/alertFixture";
 describe("AlertList", () => {
   it("loading 時はスケルトン（aria-busy）を出す", () => {
     const { container } = render(
-      <AlertList alerts={[]} status="loading" error={null} />,
+      <AlertList
+        alerts={[]}
+        status="loading"
+        error={null}
+      />,
     );
     expect(container.querySelector("[aria-busy]")).toBeInTheDocument();
   });
 
   it("error 時は失敗メッセージとエラー内容を出す", () => {
     render(
-      <AlertList alerts={[]} status="error" error={new Error("boom")} />,
+      <AlertList
+        alerts={[]}
+        status="error"
+        error={new Error("boom")}
+      />,
     );
     expect(screen.getByText(/取得に失敗/)).toBeInTheDocument();
     expect(screen.getByText(/boom/)).toBeInTheDocument();
   });
 
   it("ready かつ空なら空表示を出す", () => {
-    render(<AlertList alerts={[]} status="ready" error={null} />);
+    render(
+      <AlertList
+        alerts={[]}
+        status="ready"
+        error={null}
+      />,
+    );
     expect(
       screen.getByText(/アクティブなアラートはありません/),
     ).toBeInTheDocument();

@@ -8,6 +8,11 @@ export interface ConfidenceGaugeProps {
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   /** ゲージ下にラベルを出すか。 */
   label?: string;
+  /**
+   * リングの色（Tremor の color 名）。指定時はしきい値色（confidenceColor）より優先。
+   * 確定（既知）= emerald / AI 推定 = cyan のようにトーンで由来を区別する用途。
+   */
+  color?: string;
   className?: string;
 }
 
@@ -19,6 +24,7 @@ export function ConfidenceGauge({
   confidence,
   size = "md",
   label,
+  color,
   className,
 }: ConfidenceGaugeProps) {
   const clamped = Math.min(1, Math.max(0, confidence));
@@ -32,7 +38,7 @@ export function ConfidenceGauge({
       <ProgressCircle
         value={percent}
         size={size}
-        color={confidenceColor(clamped)}
+        color={color ?? confidenceColor(clamped)}
       >
         <Text className="text-xs">
           <Bold>{percent}%</Bold>
