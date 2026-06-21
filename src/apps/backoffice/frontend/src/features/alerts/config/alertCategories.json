@@ -1,0 +1,18 @@
+{
+  "APPLICATION": {
+    "label": "アプリ層",
+    "description": "アプリケーション層の異常（注文・決済など業務処理のエラー）。"
+  },
+  "INFRASTRUCTURE": {
+    "label": "インフラ層",
+    "description": "サーバ・ネットワーク・基盤の異常。"
+  },
+  "CAPACITY": {
+    "label": "キャパシティ",
+    "description": "リソース逼迫（CPU・メモリ・接続数など）。"
+  },
+  "SECURITY": {
+    "label": "セキュリティ",
+    "description": "脆弱性・不正アクセスなどの脅威。"
+  }
+}

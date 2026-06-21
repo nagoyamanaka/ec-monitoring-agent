@@ -1,0 +1,38 @@
+import { confidenceColor } from "./colors";
+import { cn } from "../cn";
+
+export interface ConfidenceChipProps {
+  /** 0..1 の確信度。範囲外はクランプする。 */
+  confidence: number;
+  className?: string;
+}
+
+/** confidenceColor（rose/amber/emerald）→ チップの数値テキスト色。 */
+const TEXT_BY_COLOR: Record<string, string> = {
+  rose: "text-rose-300",
+  amber: "text-amber-300",
+  emerald: "text-emerald-300",
+};
+
+/**
+ * 一覧行向けのコンパクトな確信度表示（「確信度 90%」）。
+ * 全幅バー（ConfidenceBar）やドーナツ（ConfidenceGauge）に対し、行内で控えめに添える用途。
+ * 視覚階層上は副次情報なので主役（eventName）より弱く見せる。
+ */
+export function ConfidenceChip({ confidence, className }: ConfidenceChipProps) {
+  const clamped = Math.min(1, Math.max(0, confidence));
+  const percent = Math.round(clamped * 100);
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-sm", className)}>
+      <span className="text-slate-400">確信度</span>
+      <span
+        className={cn(
+          "font-semibold tabular-nums",
+          TEXT_BY_COLOR[confidenceColor(clamped)],
+        )}
+      >
+        {percent}%
+      </span>
+    </span>
+  );
+}

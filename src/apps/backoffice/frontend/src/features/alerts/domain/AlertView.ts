@@ -21,6 +21,13 @@ export type AlertCategory =
   | "CAPACITY"
   | "SECURITY";
 
+/** 一致した分類条件（既知パターンの根拠）。 */
+export type MatchedConditionView = {
+  readonly field: string;
+  readonly expectedValue: unknown;
+  readonly actualValue: unknown;
+};
+
 /** 分類結果の表示用型。未知障害（unknown）は confidence が null。 */
 export type AlertClassificationView =
   | {
@@ -28,6 +35,8 @@ export type AlertClassificationView =
       readonly patternId: string;
       readonly patternName: string;
       readonly confidence: number;
+      /** 既知パターン一致の根拠（どの条件が一致したか）。ドロワーで「なぜ」を見せる。 */
+      readonly matchedConditions: MatchedConditionView[];
     }
   | { readonly type: "unknown"; readonly confidence: null };
 
@@ -62,6 +71,11 @@ function toClassificationView(
       patternId: dto.patternId,
       patternName: dto.patternName,
       confidence: dto.confidence,
+      matchedConditions: dto.matchedConditions.map((c) => ({
+        field: c.field,
+        expectedValue: c.expectedValue,
+        actualValue: c.actualValue,
+      })),
     };
   }
   return { type: "unknown", confidence: null };

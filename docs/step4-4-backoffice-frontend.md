@@ -179,14 +179,45 @@ useAlertStream():
 
 > **改訂理由**: 当初は「カードのインライン展開（アコーディオン）」を正としていたが、(1) 展開で下のカードが押し下げられ**一覧の文脈（トリアージ性）を失う**、(2) confidenceゲージ・証拠パネルがカード内で窮屈、(3) Datadog/Sentry/Grafana など観測コンソールの定石（master-detail）と乖離、という3点から **「一覧＋右オーバーレイ・ドロワー」に改める**。
 
-- **一覧行（`AlertCard`）** はコンパクトに保つ。左に severity カラーストライプ／severity・category バッジ・status（分析中インジケータ）・相対時刻／eventName（主題）／source ＋ `summary` 1行省略／**確信度は横バー＋%**（ドーナツゲージは情報密度の高い一覧では浮くため、詳細ドロワーに格上げ）。行クリックで選択し詳細ドロワーを開く。
+- **一覧行（`AlertCard`）** は**2ゾーン構成**で、視覚階層を主役→従属→副次に固定する（初見可読性の核）。
+  - **左ゾーン（内容）**: ① **主役 = 人間語タイトル（`eventTitle`／`config/eventCatalog.json`）**（`text-lg`・最も明るい `slate-50`）。機械イベント名（`ec.payment.timeout`）は作業者に伝わらないため、eventName→人間語（「決済タイムアウト」）に写像して主役にし、**eventName は技術ID として小さく併記**（カタログ未登録時のみ eventName を主役にフォールバック）。② **従属メタ**: severity・**category（人間語：`categoryInfo`／`config/alertCategories.json`。APPLICATION→「アプリ層」等。hover で説明）**・相対時刻（hover で絶対時刻）。左に severity カラーストライプ。**分析中は severity が未確定（backend が WARNING 固定）なので、バッジ・ストライプとも「重要度 判定中」(neutral) で出す**（即対応ニーズに対し誤った重大度で誘導しない）。③ **副次 = 推定原因（`alertReason`）**: known は「該当: 〈patternName〉」、unknown は「AI推定: 〈suggestedPatternName〉」、分析中は「調査中…」。**確信度はこの推定対象に対する値**として右レールの確信度チップと対で意味を持つ（「確信度だけ出して対象不明」を避ける）。
+  - **右ゾーン（固定幅レール）**: **対応状態バッジ（`AlertStatusBadge`）＋確信度チップ（`ConfidenceChip`）を集約**。状態と確信度を右端に分散させず1つのレール（区切り線付き）にまとめることで、ワイド画面でも**間延びしない**。確信度は当初の全幅バーから階層逆転回避のためチップへ降格（バー `ConfidenceBar` は analytics 用に残置、ドーナツ `ConfidenceGauge` は詳細ドロワー専用）。
+  - **幅制約**: 一覧は `max-w-4xl` に収め、行が横に伸びすぎて視線が散るのを防ぐ。
+- **トリアージ・ソート（`sortForTriage`）**: 一覧は時系列ではなく**「上から潰せばよい」並び**にする。① 未処理を上 / 処理済み（承認・却下）を下、② 重大度降順、③ 発生時刻降順。安定ソートで同点は元順を保つ。
+- **オリエンテーション・ヘッダ（`AlertsHeader`）** を一覧上部に常設し、初見でも「何の画面か」を伝える: (a) 一文説明（AI が検知・分類・調査→人が承認/却下でレビュー）、(b) **作業指標になる件数のみ**（レビュー待ち・分析中・CRITICAL。総件数は出さない＝文脈なしの数字を避ける。ready 時のみ）、(c) 凡例（重大度色・確信度の意味）。
 - **詳細ドロワー（`AlertDetailDrawer`）** は `fixed` の右オーバーレイ（背景 dim ＋ Esc/バックドロップ/✕ で閉）。**大きい confidence ゲージはここに置く**（本来の意味を持つ場所）。本体は `AlertCardExpanded` を再利用（summary・調査ステップ・推奨アクション・[✓承認][✗却下]）し、証拠パネル（タスク8）・リメディエーション（タスク9）を差し込む。フッタに `/alerts/:id` へのリンク（ディープリンク用）。
 - **オーバーレイにする理由**: AlertsLayout の demo aside（右 20rem・タスク10）と物理的に重ねられる＝3カラム化で横が窒息しない。SSE 更新は `alerts.find(id)` 経由で**ドロワーにもライブ反映**される（選択中の alert が ANALYZING→OPEN で更新されると詳細も追従）。
 
-`AlertCardExpanded` の表示要素:
-- 原因仮説サマリー・確信度（confidence）・category バッジ
-- 調査ステップ（AIが何を調べたか＝自律性の可視化）
-- 推奨アクション
+### インタラクション・フィードバック原則〔全コンポーネント共通の前提〕
+
+> **前提**: 操作に対する**即時の視覚フィードバック**と、**操作結果の state 反映**を必須要件とする。観測コンソールはオペレータが「自分の操作が効いたか」を確信できることが信頼の土台になるため。
+
+- **ホバー / フォーカス / 押下の視覚反応**: クリック可能要素は hover（背景・ring）、focus-visible（リング）、active（`scale-95` 等の押し込み）を必ず持つ。キーボード操作可能にする（`focus-visible`）。
+- **非同期操作の3状態を出す**: 送信前 / 送信中（`disabled`＋「送信中…」等のラベル）/ 完了（結果表示へ差し替え）。**ラベル差し替えでレイアウトシフトを起こさない**（`min-w` 等で幅を固定）。
+- **mutation 後は必ず state に反映する**: PATCH/POST は `{ok:true}` しか返さず SSE push も無いケースがある（例: `PATCH /alerts/:id/feedback`）。**送信成功後に該当リソースを再取得してマージ**し、画面（一覧ドロワー・詳細）へ即時反映する。「サーバは更新されたのに画面が変わらない」を作らない（`useAlerts.refreshAlert` / `useAlert.refresh`）。
+- **reduced-motion 尊重**: 演出系トランジションは `prefers-reduced-motion` を尊重する。
+
+### アラートの2種別と「何が・なぜ」の提示〔重要・データ仕様〕
+
+> backend（`AnalyzeAlertUseCase`）は全アラートを必ず次のどちらかにする。フロントは**両方の説明データを必ず提示する**（当初は classification を捨て known アラートで「何が・なぜ」が空だった）。
+
+| 種別 | status | 説明データ | confidence |
+| ---- | ------ | ---------- | ---------- |
+| **既知パターン一致**（known） | `OPEN` | `classification.patternName` ＋ **`matchedConditions`（一致根拠）** | classification.confidence |
+| **未知**（unknown） | `ANALYZING`→調査後 `OPEN` | `investigationReport`（summary・調査ステップ・推奨アクション） | report.confidence |
+
+- **「未調査」状態は実在しない**（分類器は必ず known/unknown を返し、unknown は即 ANALYZING）。OPEN かつ report 無しは**既知パターン一致**であって未調査ではない。状態バッジ（`AlertStatusBadge`）はこれを「未調査」と誤表示しない。
+- **レビュー状態は `feedback` ベース（`alertReviewState`）**で既知・未知を統一（known は `investigationReport` を持たず `reviewStatus` で判定できないため）。これにより**既知アラートも承認/却下できる**。
+- **人間語マッピングは presentation 側の static JSON に外出し**（本決定前の差し替え・将来のデータ移行が容易）。機械語をそのまま出さず必ず写像を通すことで作業者の認知コストを下げる:
+  - `config/eventCatalog.json`: eventName → タイトル＋説明（行の主役・ドロワー説明）。未登録は eventName にフォールバック。
+  - `config/alertCategories.json`: category → ラベル＋説明（人間語チップ・tooltip）。
+  - （旧 `eventDomains.json` は eventCatalog に統合・廃止＝より具体的な per-event タイトルが上位互換のため。）
+
+`AlertCardExpanded`（ドロワー本体／詳細ページ共用）の表示要素:
+- **推定原因**: known=該当パターン名、unknown=AI推定パターン名
+- **一致根拠**（known のみ）: `matchedConditions` を**テーブル表示**（項目／期待値／実値の3列）＝「なぜそう判断したか」を整列して読ませる（一覧はカード維持、ドロワー内のこの根拠のみ表形式）
+- 原因仮説サマリー・調査ステップ・推奨アクション（unknown の `investigationReport`）
+- 確信度（confidence）・category バッジ
 - 証拠パネル（`EvidencePanel`）: Cloud Logging / Terraform / GitHub の3ソース
 - SECURITY時は `RemediationPanel`: CVE概要＋修正PRリンク＋[✓承認][✗却下]
 - 操作: `PATCH /alerts/:id/feedback` に reviewStatus 送信

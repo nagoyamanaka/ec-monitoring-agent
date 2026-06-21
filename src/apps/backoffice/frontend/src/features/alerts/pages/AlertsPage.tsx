@@ -21,7 +21,7 @@ import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
 export function AlertsPage() {
   const api = useMemo(() => createAlertsApi(new FetchHttpClient()), []);
   const stream = useMemo(() => new SSEAlertStream(), []);
-  const { alerts, status, error } = useAlerts(api, stream);
+  const { alerts, status, error, refreshAlert } = useAlerts(api, stream);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(
@@ -30,11 +30,16 @@ export function AlertsPage() {
   );
 
   const handleDecision = useCallback(
-    (alertId: string, decision: FeedbackDecision) =>
-      submitFeedback(api, { alertId, decision }).catch((e) => {
+    async (alertId: string, decision: FeedbackDecision) => {
+      try {
+        await submitFeedback(api, { alertId, decision });
+        // PATCH は ok のみ返し SSE push も無いため、自前で再取得して reviewStatus を反映する
+        await refreshAlert(alertId);
+      } catch (e) {
         console.error("feedback submission failed", e);
-      }),
-    [api],
+      }
+    },
+    [api, refreshAlert],
   );
 
   return (

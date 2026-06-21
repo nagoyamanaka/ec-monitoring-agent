@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AlertView } from "../../domain/AlertView";
 import { mergeAlert, mergeAlerts } from "../../domain/alertMerge";
 import type { AlertsApi } from "../../infrastructure/alertsApi";
@@ -11,6 +11,8 @@ export type UseAlertsResult = {
   readonly alerts: AlertView[];
   readonly status: AlertsStatus;
   readonly error: Error | null;
+  /** 1 件を再取得して一覧へマージする。フィードバック送信後の即時反映に使う（SSE push が無いため）。 */
+  readonly refreshAlert: (id: string) => Promise<void>;
 };
 
 /**
@@ -55,5 +57,13 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
     setAlerts((prev) => mergeAlert(prev, incoming));
   });
 
-  return { alerts, status, error };
+  const refreshAlert = useCallback(
+    async (id: string) => {
+      const fresh = await api.getAlert(id);
+      setAlerts((prev) => mergeAlert(prev, fresh));
+    },
+    [api],
+  );
+
+  return { alerts, status, error, refreshAlert };
 }

@@ -2,9 +2,16 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ConfidenceGauge } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
-import { type AlertView, primaryConfidence } from "../domain/AlertView";
+import {
+  type AlertView,
+  primaryConfidence,
+  isAnalyzing,
+} from "../domain/AlertView";
+import { eventInfo, eventTitle } from "../domain/eventCatalog";
+import { categoryInfo } from "../domain/alertCategory";
 import type { FeedbackDecision } from "../application/submitFeedback";
 import { AlertCardExpanded } from "./AlertCardExpanded";
+import { AlertStatusBadge } from "./AlertStatusBadge";
 
 export interface AlertDetailDrawerProps {
   /** 表示対象。null なら閉（何も描画しない）。 */
@@ -44,6 +51,10 @@ export function AlertDetailDrawer({
   if (!alert) return null;
 
   const confidence = primaryConfidence(alert);
+  const analyzing = isAnalyzing(alert);
+  const info = eventInfo(alert.eventName);
+  const title = eventTitle(alert.eventName);
+  const category = categoryInfo(alert.category);
 
   return (
     <div
@@ -60,16 +71,34 @@ export function AlertDetailDrawer({
       <aside className="absolute inset-y-0 right-0 flex w-[clamp(360px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
         <header className="flex items-start gap-3 border-b border-slate-700/60 px-5 py-4">
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex items-center gap-2">
-              <SeverityBadge level={alert.severity} />
-              <span className="rounded bg-slate-700/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300">
-                {alert.category}
+            <div className="flex flex-wrap items-center gap-2">
+              {analyzing ? (
+                <span className="inline-flex items-center rounded-full bg-slate-600/20 px-2.5 py-0.5 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-500/30">
+                  重要度 判定中
+                </span>
+              ) : (
+                <SeverityBadge level={alert.severity} />
+              )}
+              <span
+                className="rounded bg-slate-700/40 px-2 py-0.5 text-xs font-medium text-slate-300"
+                title={category.description}
+              >
+                {category.label}
               </span>
+              <AlertStatusBadge alert={alert} />
             </div>
-            <h2 className="truncate text-base font-semibold text-slate-100">
-              {alert.eventName}
-            </h2>
-            <p className="text-xs text-slate-500">
+            <h2 className="truncate text-lg font-semibold text-slate-50">{title}</h2>
+            {info && (
+              <p className="text-sm leading-relaxed text-slate-300">
+                {info.description}
+              </p>
+            )}
+            <p className="text-sm text-slate-400">
+              {info && (
+                <>
+                  <code className="text-slate-400">{alert.eventName}</code> ·{" "}
+                </>
+              )}
               {alert.source} · {formatAbsoluteTime(alert.occurredOn)}
             </p>
           </div>

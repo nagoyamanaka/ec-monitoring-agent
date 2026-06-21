@@ -5,12 +5,30 @@ import { AlertCard } from "./AlertCard";
 import { makeAlert } from "../test-support/alertFixture";
 
 describe("AlertCard", () => {
-  it("eventName・source・summary を一覧行に表示する", () => {
+  it("カタログ未登録の eventName は主役にそのまま出す（フォールバック）", () => {
     render(<AlertCard alert={makeAlert()} />);
     expect(screen.getByText("latency.spike")).toBeInTheDocument();
-    expect(screen.getByText("ec-backend")).toBeInTheDocument();
-    // summary は source と同じ行に省略表示される
-    expect(screen.getByText(/未知のレイテンシ急増を検知/)).toBeInTheDocument();
+    // 未知（report あり）は AI 推定パターン名を出す（summary ではなく patternName）
+    expect(screen.getByText(/AI推定/)).toBeInTheDocument();
+    expect(screen.getByText(/latency-spike/)).toBeInTheDocument();
+  });
+
+  it("カタログ登録済みの eventName は人間語タイトルを主役に出す", () => {
+    render(<AlertCard alert={makeAlert({ eventName: "ec.payment.timeout" })} />);
+    expect(screen.getByText("決済タイムアウト")).toBeInTheDocument();
+  });
+
+  it("category は人間語ラベルに変換して出す", () => {
+    render(<AlertCard alert={makeAlert({ category: "APPLICATION" })} />);
+    expect(screen.getByText("アプリ層")).toBeInTheDocument();
+    expect(screen.queryByText("APPLICATION")).not.toBeInTheDocument();
+  });
+
+  it("分析中は重要度を判定中と出す", () => {
+    render(
+      <AlertCard alert={makeAlert({ status: "ANALYZING", report: null })} />,
+    );
+    expect(screen.getByText("重要度 判定中")).toBeInTheDocument();
   });
 
   it("クリックで onSelect を alert id 付きで呼ぶ", async () => {
@@ -30,7 +48,7 @@ describe("AlertCard", () => {
       <AlertCard alert={makeAlert({ status: "ANALYZING", report: null })} />,
     );
     expect(screen.getByText("分析中")).toBeInTheDocument();
-    expect(screen.getByText(/確信度を算出中/)).toBeInTheDocument();
+    expect(screen.getByText(/算出中/)).toBeInTheDocument();
   });
 
   it("確信度がある alert は % を表示する", () => {

@@ -18,14 +18,18 @@ import { AlertCardExpanded } from "../components/AlertCardExpanded";
 export function AlertDetailPage() {
   const { id } = useParams<{ id: string }>();
   const api = useMemo(() => createAlertsApi(new FetchHttpClient()), []);
-  const { alert, status, error } = useAlert(api, id);
+  const { alert, status, error, refresh } = useAlert(api, id);
 
   const handleDecision = useCallback(
-    (alertId: string, decision: FeedbackDecision) =>
-      submitFeedback(api, { alertId, decision }).catch((e) => {
+    async (alertId: string, decision: FeedbackDecision) => {
+      try {
+        await submitFeedback(api, { alertId, decision });
+        await refresh();
+      } catch (e) {
         console.error("feedback submission failed", e);
-      }),
-    [api],
+      }
+    },
+    [api, refresh],
   );
 
   return (

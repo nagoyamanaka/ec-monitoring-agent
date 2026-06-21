@@ -4,6 +4,7 @@
 > 前提: `step4-3` のAPI/SSEが利用可能。優先度: **P0** / **P1** / **stretch**。
 > 構成は feature-sliced（`features/<feature>/{domain,application,infrastructure,presentation}` ＋ `shared/`）。domainは型＋純関数のみ。
 > **デザインテーマ（タスク0で確定）**: 「**ダーク観測コンソール × Tremor**」をベース、デモ演出のみネオン系アニメを部分採用（タスク12）。配色トークン・参考URL・採用理由は `step4-4-backoffice-frontend.md`「デザインテーマ」節を正とする。可視化は Tremor（ゲージ/ドーナツ/チャート＝危険度ランク色・confidence割合・予兆グラフ）を `shared/ui/` に薄くラップして使う。
+> **インタラクション・フィードバック前提（全タスク共通）**: クリック可能要素は hover/focus-visible/active の視覚反応を持ち、非同期操作は送信前→送信中（disabled・幅固定でシフト無し）→完了の3状態を出す。**mutation 成功後は必ずリソースを再取得して state へ反映**（PATCH/POST が `{ok}` のみ返し SSE push が無いケースがあるため）。詳細は `step4-4-backoffice-frontend.md`「インタラクション・フィードバック原則」節を正とする。
 
 ---
 
@@ -59,6 +60,57 @@
 - [x] 【新規】`AlertDetailDrawer.tsx`：右オーバーレイ詳細（背景 dim・Esc/バックドロップ/✕ で閉・大きい `ConfidenceGauge`・本体は `AlertCardExpanded` 再利用・`/alerts/:id` リンク）
 - [x] 【改修】`AlertList.tsx`（`selectedId`/`onSelect`）/ `AlertsPage.tsx`（選択 state・`alerts.find(id)` で SSE をドロワーへライブ反映）
 - [x] 検証：`tsc --noEmit` 緑 / 対象テスト 20 件緑（`AlertCard`/`AlertList`/`AlertDetailDrawer`）
+
+#### 6c: フィードバック反映バグ修正＋操作フィードバック 〔P0・bugfix〕 ✅
+
+> **不具合**: 承認/却下を押しても画面が揺れるだけで「承認済み/却下済み」にならない。原因はバックエンドは reviewStatus を更新済みだが、フロントが PATCH 後に state を更新していなかった（PATCH は `{ok:true}` のみ返し SSE push も無い）。
+
+- [x] 【改修】`useAlerts.refreshAlert(id)` / `useAlert.refresh()` を追加し、`AlertsPage`/`AlertDetailPage` の `handleDecision` で**送信成功後に再取得→マージ**（ドロワー・詳細へ即時反映）
+- [x] 【改修】`AlertCardExpanded` の承認/却下ボタンに hover/focus-visible/active(scale) を付与し、`min-w` でラベル差し替え時のレイアウトシフト（“揺れ”）を解消
+- [x] 検証：`tsc --noEmit` 緑 / alerts feature テスト 34 件緑
+
+#### 6d: 初見可読性（視覚階層＋オリエンテーション）〔P0・UX改善〕 ✅
+
+> **背景**: 「初見でどういう画面か分からない／詰め詰めで内容が入ってこない」。根因は密度より (1) 視覚階層の逆転（副次の確信度バーが主役より目立つ）、(2) 文脈不在（画面の説明・件数・状態・凡例が無い）。
+
+- [x] 【新規】`shared/ui/tremor/ConfidenceChip.tsx`（「確信度 90%」のコンパクト表示。一覧行はバーからチップへ降格）
+- [x] 【新規】`components/AlertStatusBadge.tsx`（分析中／レビュー待ち／承認済み／却下済み／未調査を reviewStatus から導出。一覧行・ドロワー header で共用）
+- [x] 【新規】`components/AlertsHeader.tsx`（説明文＋件数サマリ〔total・CRITICAL・レビュー待ち、ready時のみ〕＋凡例）。`AlertList` 上部に常設
+- [x] 【改修】`AlertCard.tsx`：階層を ①eventName主役＋状態バッジ ②従属メタ（severity/category/source/時刻）③副次（summary＋確信度チップ）へ再配分
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 40 件緑（`AlertStatusBadge`/`AlertsHeader` テスト追加）
+
+#### 6e: 業務文脈・トリアージ順・空間配置 〔P0・UX改善〕 ✅
+
+> **背景**: 「①総件数(8件)が指標にならない ②時系列だと未処理が埋もれる ③eventName が機械名で業務的に分からない ④右に散って間延び・要素が小さい」。
+
+- [x] 【新規】`domain/eventDomain.ts`（`eventDomainLabel`: eventName 接頭辞→注文/在庫/決済… 日本語化。未知は null）＋ UT
+- [x] 【新規】`domain/alertSort.ts`（`sortForTriage`/`compareForTriage`: 未処理↑→重大度降順→時刻降順の純関数・安定ソート）＋ UT。`AlertList` で表示時に適用
+- [x] 【改修】`AlertCard.tsx`：2ゾーン化（左=ドメインラベル＋eventName主役/メタ/summary、右=固定幅レールに状態＋確信度を集約）・タイトル `text-base` へ拡大。`AlertList` を `max-w-4xl` に幅制約
+- [x] 【改修】`AlertsHeader.tsx`：総件数チップを廃し actionable（レビュー待ち・分析中>0・CRITICAL）のみに
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 48 件緑（`eventDomain`/`alertSort` UT 追加）
+
+#### 6f: 「何が・なぜ」提示＋既知アラート対応＋視認性 〔P0・UX改善〕 ✅
+
+> **背景**: 「①対象サービスの説明が無い ②グレー文字が読みづらい ③要素が小さい ④確信度だけで対象/理由が分からない ⑤未調査って実在する？」。調査の結果、**全アラートは known/unknown の2種別**で、フロントは known の `classification`（patternName・matchedConditions）を丸ごと捨てていた＝「何が・なぜ」が空。「未調査」状態は実在せず、それは既知パターン一致の誤ラベルだった。
+
+- [x] 【視認性】#2/#3: 本文を `text-base/lg`＋明色（slate-50/200/300、アクセント cyan）に。状態バッジ・確信度チップも拡大
+- [x] 【新規】`config/eventDomains.json`（label＋description）＋ `domain/eventDomain.ts` を JSON 駆動に（`eventDomain`/`eventDomainLabel`）。行は hover ツールチップ、ドロワーに説明文
+- [x] 【新規】`domain/alertReason.ts`（known→patternName / unknown→suggestedPatternName / analyzing）＋ UT。行③に「該当/AI推定: パターン名」を表示し確信度の対象を明示
+- [x] 【新規】`domain/alertReview.ts`（feedback ベースの `alertReviewState`/`isAlertReviewed`）＋ UT。`AlertStatusBadge` を feedback ベースに（「未調査」廃止・既知/未知統一）
+- [x] 【改修】`AlertView`: `classification.matchedConditions` を View へ追加（従来は欠落）
+- [x] 【改修】`AlertCardExpanded`: 既知=該当パターン名＋一致根拠、未知=summary/steps/actions を提示。**既知アラートも承認/却下可能**に（feedback ベース）。`AlertDetailDrawer` ヘッダにドメイン説明
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 55 件緑（`alertReason`/`alertReview` UT・既知パターン UT 追加）
+
+#### 6g: 人間語マッピング＋分析中の重要度判定中＋タイトル主役化 〔P0・UX改善〕 ✅
+
+> **背景**: 「①即対応ニーズ→分析中は重要度未確定と出すべき ②eventName だけでは分からない ③表のほうが分かりやすい？ ④category(APPLICATION 等) や payment/order が機械語で『これ何？』」。障害ツールとして作業者の認知コストを下げる。
+
+- [x] 【新規】`config/eventCatalog.json`＋`domain/eventCatalog.ts`（eventName→人間語タイトル＋説明）。`AlertCard` の主役を人間語タイトルに、eventName は技術IDとして併記/未登録はフォールバック。旧 `eventDomains.*` は統合・削除
+- [x] 【新規】`config/alertCategories.json`＋`domain/alertCategory.ts`（APPLICATION→「アプリ層」等の人間語＋説明）。行・ドロワーの category を人間語チップ＋tooltip に
+- [x] 【改修】#1: 分析中は severity 未確定（backend が WARNING 固定）のため、バッジ・ストライプを「重要度 判定中」(neutral) に
+- [x] 【改修】`AlertDetailDrawer` ヘッダも人間語タイトル＋説明＋人間語 category に
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 58 件緑（`eventCatalog`/`alertCategory` UT 追加）
+- [x] #3: 一覧は**カード維持**で決定。代わりにドロワーの「一致した根拠」を**テーブル（項目/期待値/実値）**に変更（field・期待・実値が整列して読みやすい）
 
 ### タスク 7: App.tsx ルーティング 〔P0〕 ✅
 

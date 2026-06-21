@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AlertView } from "../../domain/AlertView";
 import type { AlertsApi } from "../../infrastructure/alertsApi";
 import type { AlertsStatus } from "./useAlerts";
@@ -7,6 +7,8 @@ export type UseAlertResult = {
   readonly alert: AlertView | null;
   readonly status: AlertsStatus;
   readonly error: Error | null;
+  /** 再取得して反映する。フィードバック送信後の reviewStatus 即時反映に使う。 */
+  readonly refresh: () => Promise<void>;
 };
 
 /**
@@ -51,5 +53,11 @@ export function useAlert(
     };
   }, [api, id]);
 
-  return { alert, status, error };
+  const refresh = useCallback(async () => {
+    if (!id) return;
+    const fresh = await api.getAlert(id);
+    setAlert(fresh);
+  }, [api, id]);
+
+  return { alert, status, error, refresh };
 }

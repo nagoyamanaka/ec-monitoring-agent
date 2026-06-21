@@ -1,4 +1,4 @@
-import { ConfidenceBar } from "@shared/ui/tremor";
+import { ConfidenceChip } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { cn } from "@shared/ui/cn";
 import {
@@ -7,6 +7,10 @@ import {
   isAnalyzing,
   primaryConfidence,
 } from "../domain/AlertView";
+import { eventInfo, eventTitle } from "../domain/eventCatalog";
+import { categoryInfo } from "../domain/alertCategory";
+import { alertReason } from "../domain/alertReason";
+import { AlertStatusBadge } from "./AlertStatusBadge";
 
 export interface AlertCardProps {
   alert: AlertView;
@@ -42,13 +46,16 @@ function formatAbsoluteTime(iso: string): string {
 
 /**
  * 一覧の 1 行（マスター）。クリックで詳細ドロワー（AlertDetailDrawer）を開く。
- * severity ストライプ・バッジ・相対時刻・eventName・source＋summary・確信度横バーを
- * コンパクトに並べ、トリアージしやすい密度に保つ。展開は持たない（詳細はドロワー）。
+ * レイアウトは2ゾーン: 左=内容（①ドメイン日本語ラベル＋eventName主役 ②従属メタ ③原因サマリ）、
+ * 右=固定幅レール（対応状態＋確信度を集約）。右端の情報が散らず間延びしない。
  */
 export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps) {
   const analyzing = isAnalyzing(alert);
   const confidence = primaryConfidence(alert);
-  const summary = alert.report?.summary;
+  const info = eventInfo(alert.eventName);
+  const title = eventTitle(alert.eventName);
+  const category = categoryInfo(alert.category);
+  const reason = alertReason(alert);
 
   return (
     <button
@@ -56,50 +63,85 @@ export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps)
       aria-pressed={selected}
       onClick={() => onSelect?.(alert.id)}
       className={cn(
-        "relative w-full overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition",
+        "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition",
         selected
           ? "bg-slate-800/50 ring-cyan-500/50"
           : "bg-slate-900/30 ring-slate-700/60 hover:bg-slate-800/30 hover:ring-slate-600",
       )}
     >
       <span
-        className={cn("absolute inset-y-0 left-0 w-1", STRIPE_COLOR[alert.severity])}
+        className={cn(
+          "absolute inset-y-0 left-0 w-1",
+          analyzing ? "bg-slate-500" : STRIPE_COLOR[alert.severity],
+        )}
         aria-hidden
       />
-      <div className="flex flex-col gap-1.5 py-3 pl-5 pr-4">
-        <div className="flex items-center gap-2">
-          <SeverityBadge level={alert.severity} />
-          <span className="rounded bg-slate-700/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300">
-            {alert.category}
+
+      {/* 左ゾーン: 内容 */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 py-4 pl-5 pr-4">
+        {/* ① 主役: 人間語タイトル（未登録は eventName にフォールバック） */}
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-lg font-semibold text-slate-50">
+            {title}
           </span>
-          {analyzing && (
-            <span className="inline-flex items-center gap-1 text-xs text-cyan-300">
-              <span className="size-1.5 animate-pulse rounded-full bg-cyan-400 shadow-[0_0_6px] shadow-cyan-400/60" />
-              分析中
+          {info && (
+            <code className="shrink-0 text-xs text-slate-500" title={alert.eventName}>
+              {alert.eventName}
+            </code>
+          )}
+        </div>
+
+        {/* ② 従属メタ: 重要度（分析中は判定中）・category（人間語）・時刻 */}
+        <div className="flex min-w-0 items-center gap-2 text-sm text-slate-400">
+          {analyzing ? (
+            <span className="inline-flex items-center rounded-full bg-slate-600/20 px-2.5 py-0.5 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-500/30">
+              重要度 判定中
             </span>
+          ) : (
+            <SeverityBadge level={alert.severity} />
           )}
           <span
-            className="ml-auto shrink-0 text-xs text-slate-500"
-            title={formatAbsoluteTime(alert.occurredOn)}
+            className="rounded bg-slate-700/50 px-1.5 py-0.5 text-xs font-medium text-slate-300"
+            title={category.description}
           >
+            {category.label}
+          </span>
+          <span className="shrink-0" title={formatAbsoluteTime(alert.occurredOn)}>
             {formatRelativeTime(alert.occurredOn)}
           </span>
         </div>
 
-        <div className="truncate text-sm font-semibold text-slate-100">
-          {alert.eventName}
-        </div>
+        {/* ③ 副次: 推定原因（該当パターン／AI推定パターン） */}
+        <p className="truncate text-sm leading-relaxed text-slate-300">
+          {reason.kind === "analyzing" ? (
+            "AI が未知障害を調査中…"
+          ) : (
+            <>
+              <span className="text-slate-500">
+                {reason.kind === "known" ? "該当: " : "AI推定: "}
+              </span>
+              {reason.patternName}
+            </>
+          )}
+        </p>
+      </div>
 
-        <div className="truncate text-xs text-slate-500">
-          <span className="text-slate-400">{alert.source}</span>
-          {summary ? <span> · {summary}</span> : null}
-        </div>
-
+      {/* 右ゾーン: 状態＋確信度レール */}
+      <div className="flex w-32 shrink-0 flex-col items-end justify-center gap-2 border-l border-slate-700/50 px-3 py-4">
+        <AlertStatusBadge alert={alert} />
         {confidence !== null ? (
-          <ConfidenceBar confidence={confidence} className="mt-1" />
+          <ConfidenceChip confidence={confidence} />
         ) : analyzing ? (
-          <div className="mt-1 text-xs text-cyan-300/70">AI が確信度を算出中…</div>
+          <span className="text-sm text-cyan-300/80">算出中…</span>
         ) : null}
+      </div>
+
+      {/* クリック誘導 */}
+      <div
+        className="flex shrink-0 items-center pr-3 text-lg text-slate-600"
+        aria-hidden
+      >
+        ›
       </div>
     </button>
   );

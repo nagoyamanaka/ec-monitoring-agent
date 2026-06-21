@@ -1,6 +1,8 @@
 import type { AlertView } from "../domain/AlertView";
 import type { AlertsStatus } from "../presentation/hooks/useAlerts";
+import { sortForTriage } from "../domain/alertSort";
 import { AlertCard } from "./AlertCard";
+import { AlertsHeader } from "./AlertsHeader";
 
 export interface AlertListProps {
   alerts: AlertView[];
@@ -13,11 +15,33 @@ export interface AlertListProps {
 }
 
 /**
- * アラート一覧（マスター）。loading/error/empty/一覧 の 4 状態を描き分ける。
+ * アラート一覧（マスター）。オリエンテーション・ヘッダ（AlertsHeader）を常に出し、
+ * その下に loading/error/empty/一覧 の 4 状態を描き分ける。
  * 並びは useAlerts のマージ順（最新が先頭）をそのまま尊重する。
  * 詳細は行クリックで親の詳細ドロワー（AlertDetailDrawer）が担う。
  */
 export function AlertList({
+  alerts,
+  status,
+  error,
+  selectedId,
+  onSelect,
+}: AlertListProps) {
+  return (
+    <div className="w-full max-w-4xl space-y-4">
+      <AlertsHeader alerts={alerts} status={status} />
+      <AlertListBody
+        alerts={alerts}
+        status={status}
+        error={error}
+        selectedId={selectedId}
+        onSelect={onSelect}
+      />
+    </div>
+  );
+}
+
+function AlertListBody({
   alerts,
   status,
   error,
@@ -55,7 +79,7 @@ export function AlertList({
 
   return (
     <div className="space-y-3">
-      {alerts.map((alert) => (
+      {sortForTriage(alerts).map((alert) => (
         <AlertCard
           key={alert.id}
           alert={alert}
