@@ -1,0 +1,22 @@
+{
+  "ec.order.placed": {
+    "title": "注文の受付",
+    "description": "注文が登録された。在庫引当・決済など下流処理の起点となるイベント。"
+  },
+  "ec.payment.timeout": {
+    "title": "決済タイムアウト",
+    "description": "決済 API の応答が制限時間内に返らなかった。注文が確定できない恐れがある。"
+  },
+  "ec.inventory.reservation_failed": {
+    "title": "在庫引当の失敗",
+    "description": "注文に対する在庫の予約に失敗した。在庫不足や競合が原因のことが多い。"
+  },
+  "ec.inventory.reserved": {
+    "title": "在庫引当の完了",
+    "description": "注文に対する在庫の予約が成立した。"
+  },
+  "security.vulnerability_detected": {
+    "title": "脆弱性の検知",
+    "description": "依存パッケージ等にセキュリティ脆弱性が検出された。"
+  }
+}

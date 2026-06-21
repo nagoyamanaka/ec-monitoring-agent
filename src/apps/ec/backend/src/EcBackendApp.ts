@@ -7,6 +7,7 @@ import { MongoOrderRepository } from "../../../../Contexts/EC/Orders/infrastruct
 import { PaymentMockOrderGateway } from "../../../../Contexts/EC/Orders/infrastructure/PaymentMockOrderGateway.js";
 import { ReserveInventoryUseCase } from "../../../../Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryUseCase.js";
 import { MongoInventoryRepository } from "../../../../Contexts/EC/Inventory/infrastructure/persistence/MongoInventoryRepository.js";
+import { DemoInventoryRepository } from "../../../../Contexts/EC/Inventory/infrastructure/DemoInventoryRepository.js";
 import { CommandHandlers } from "../../../../Contexts/Shared/infrastructure/CommandBus/CommandHandlers.js";
 import { InMemoryCommandBus } from "../../../../Contexts/Shared/infrastructure/CommandBus/InMemoryCommandBus.js";
 import { DomainEventFailoverPublisher } from "../../../../Contexts/Shared/infrastructure/EventBus/DomainEventFailoverPublisher/DomainEventFailoverPublisher.js";
@@ -53,7 +54,8 @@ export class EcBackendApp {
     });
 
     const orderRepository = new MongoOrderRepository(mongoClient);
-    const inventoryRepository = new MongoInventoryRepository(mongoClient);
+    // デモ用の障害強制 decorator で本物の repo をラップ（既定 SUCCESS=素通しなので本番経路に影響なし）
+    const inventoryRepository = new DemoInventoryRepository(new MongoInventoryRepository(mongoClient));
     const paymentGateway = new PaymentMockOrderGateway();
 
     const placeOrderUseCase = new PlaceOrderUseCase(orderRepository, eventBus, paymentGateway, logger);
@@ -75,7 +77,7 @@ export class EcBackendApp {
     );
 
     this.server = new Server(config.port);
-    registerRoutes(this.server.router, commandBus, queryBus, paymentGateway);
+    registerRoutes(this.server.router, commandBus, queryBus, paymentGateway, inventoryRepository);
     await this.server.listen();
   }
 

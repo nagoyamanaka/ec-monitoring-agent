@@ -13,7 +13,7 @@ import { AlertSeverity } from "../../../AlertAnalysis/domain/AlertSeverity.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
-import { SSEAlertNotifier } from "../../../ReportGeneration/domain/SSEAlertNotifier.js";
+import { SSEAlertNotifier } from "../../../AlertNotification/domain/SSEAlertNotifier.js";
 import { SimilarIncidentRepository } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";

@@ -1,6 +1,5 @@
 import {
   AlertClassification,
-  AlertClassificationPrimitives,
   alertClassificationFromPrimitives,
   alertClassificationToPrimitives,
   KnownAlertClassification,
@@ -9,33 +8,18 @@ import {
 import { AlertId } from "./AlertId.js";
 import { AlertSeverity } from "./AlertSeverity.js";
 import { AlertStatus } from "./AlertStatus.js";
-import {
-  MonitoringEvent,
-  MonitoringEventPrimitives,
-} from "../../Shared/domain/MonitoringEvent.js";
-import {
-  InvestigationReport,
-  InvestigationReportPrimitives,
-} from "./InvestigationReport.js";
+import { MonitoringEvent } from "../../Shared/domain/MonitoringEvent.js";
+import { InvestigationReport } from "./InvestigationReport.js";
 import { ReviewStatus } from "./ReviewStatus.js";
 import { AggregateRoot } from "../../../Shared/domain/AggregateRoot.js";
+import type { AlertPrimitives } from "./contracts/AlertContract.js";
+
+// シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
+export type { AlertPrimitives };
 
 type AlertFeedback = {
   readonly isCorrect: boolean;
   readonly operatorNote?: string;
-};
-
-export type AlertPrimitives = {
-  id: string;
-  monitoringEvent: MonitoringEventPrimitives;
-  severity: string;
-  status: string;
-  classification: AlertClassificationPrimitives;
-  investigationReport: InvestigationReportPrimitives | null;
-  feedback: { isCorrect: boolean; operatorNote?: string } | null;
-  correctFeedbackCount: number;
-  createdAt: string;
-  updatedAt: string;
 };
 
 // 「障害が起きた」という事実とその後の状態を追跡する

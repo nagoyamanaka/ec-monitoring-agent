@@ -11,7 +11,7 @@
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | アプリのプロセス分割                      | `ec/backend` と `backoffice/backend` を別プロセスに分離                                                                                                                                                                                         | 将来のスケーリング時にプロセス単位でコンテナスケールアウトできる。コンテキスト分離を構成で体現できる                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | RabbitMQ Subscriberの配置                 | 各バックエンドプロセス内に内包                                                                                                                                                                                                                  | Subscriberは「そのイベントを使いたいコンテキストが自分で持つ」のがEDAの自然な形。中央集権化するメリット（共通処理の集約）がない                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| フロントエンドのディレクトリ構成          | レイヤー優先アプローチ（pages / components / hooks / infrastructure）                                                                                                                                                                           | バックエンドのClean Architectureと対称性があり面接で説明しやすい。3画面規模に対してFeature-Sliced Designはオーバースペック                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| フロントエンドのディレクトリ構成          | **feature-sliced（校正版）**：`features/<feature>/{domain,application,infrastructure,presentation}` ＋ `shared/`。domain は「型＋純関数」のみ（バックエンドの集約は複製しない）。**正準は `step4-4-backoffice-frontend.md`**                       | 当初は layer-first（pages/components/hooks/infrastructure）を採用したが、予兆ブリーフィングUI（`features/forecast/`）等の機能追加で feature 境界が増えるため、feature 単位で凝集させる feature-sliced に変更。既存 feature を無傷で新 feature を足せる（OCP）。各レイヤーの粒度は校正し過剰設計を回避（`domain` は型＋view-logic、`application` は薄いユースケース、`infrastructure` の SSE/HttpClient 抽象が最も価値）。詳細・正準構成は `step4-4-backoffice-frontend.md` を正とする |
 | SSE通信の抽象化                           | `AlertStream` interfaceで抽象化                                                                                                                                                                                                                 | SSEとMockの切り替えに実際の意味がある。REST APIは抽象化しない（プロトコル変更シナリオが現実的にない）                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | HTTPクライアント                          | fetchベースの薄いラッパーを自前実装（axiosを使わない）                                                                                                                                                                                          | サプライチェーンインシデントリスク回避。標準APIで主要機能（エラーハンドリング・タイムアウト・ヘッダー）を賄える。実装はAIに委譲                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | HTTPクライアントの抽象化                  | `HttpClient` interfaceを定義し `FetchHttpClient` が実装                                                                                                                                                                                         | `alertsApi.ts` 等はinterfaceに依存することでテスト時のモック差し替えが可能になる                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -323,15 +323,9 @@ src/Contexts/Monitoring/
 │       └── persistence/
 │           └── InMemoryForecastMemoryRepository.ts # 起動時にMongoのResolvedからsubject投影をウォームアップ
 │
-├── ReportGeneration/
+├── AlertNotification/
 │   ├── domain/
-│   │   ├── AlertReport.ts                     # バックオフィス表示用レポートの読み取りモデル
-│   │   │                                      # InvestigationReportの内容をUIに渡す形に整形する責務
 │   │   └── SSEAlertNotifier.ts                # SSE通知インターフェース（notify/addConnection/removeConnection）
-│   ├── application/
-│   │   └── GetAlertReport/
-│   │       ├── GetAlertReportQuery.ts
-│   │       └── GetAlertReportQueryHandler.ts
 │   └── infrastructure/
 │       └── EventEmitterSSEAlertNotifier.ts    # SSEAlertNotifier実装（Node.js EventEmitter・タスク13）
 │
@@ -479,88 +473,102 @@ src/apps/backoffice/backend/
 
 ### `backoffice/frontend/`
 
+> **正準は `step4-4-backoffice-frontend.md`（feature-sliced・校正版）。** 本書はその要約。
+> 構成は `features/<feature>/{domain,application,infrastructure,presentation}` ＋ `shared/`。
+> `domain` は「型＋純関数（view-logic）」のみ（バックエンドの集約は複製しない）。
+
 ```
-src/apps/backoffice/frontend/
-├── src/
-│   ├── main.tsx                     # Reactエントリポイント
-│   ├── App.tsx                      # ルーティング定義（React Router）
+src/apps/backoffice/frontend/src/
+├── main.tsx                         # Reactエントリポイント
+├── App.tsx                          # ルーティング定義（React Router）/alerts, /alerts/:id, /analytics, /forecast
+│
+├── features/
+│   ├── alerts/                      # メイン機能
+│   │   ├── domain/                  # 型＋純関数のみ
+│   │   │   ├── AlertView.ts             # 表示用型（classification.confidence / category 等）
+│   │   │   ├── InvestigationReportView.ts # investigationSteps / suggestedActions / reviewStatus
+│   │   │   ├── EvidenceView.ts          # InfraEvidence の表示型（appLogs/terraformDiff/recentCommits・P1）
+│   │   │   ├── RemediationView.ts       # PR URL / ステータス（P1・SECURITY）
+│   │   │   └── severity.ts              # 純関数：severity→バッジ色、confidence→%表記
+│   │   ├── application/             # 薄いユースケース
+│   │   │   ├── submitFeedback.ts        # 承認/却下 → PATCH /alerts/:id/feedback
+│   │   │   └── approveRemediation.ts    # 承認 → POST /alerts/:id/remediation/draft-pr（P1）
+│   │   ├── infrastructure/         # APIクライアント＋SSE（最も価値ある抽象）
+│   │   │   ├── alertsApi.ts             # GET /alerts, GET /alerts/:id, PATCH feedback（HttpClient依存）
+│   │   │   ├── evidenceApi.ts           # GET /alerts/:id/evidence, /investigation/status（P1）
+│   │   │   ├── remediationApi.ts        # POST draft-pr, GET remediation（P1）
+│   │   │   ├── AlertStream.ts           # SSEストリーム interface（Mock差し替え可能）
+│   │   │   ├── SSEAlertStream.ts        # AlertStream の SSE実装（/alerts/stream・再接続・heartbeat無視）
+│   │   │   └── MockAlertStream.ts       # テスト/デモ用 AlertStream 実装
+│   │   └── presentation/
+│   │       ├── pages/
+│   │       │   ├── AlertsPage.tsx       # /alerts（デモのメイン舞台・AlertsLayout）
+│   │       │   └── AlertDetailPage.tsx  # /alerts/:id（フル詳細・調査プロセス全表示・DefaultLayout）
+│   │       ├── components/
+│   │       │   ├── AlertList.tsx
+│   │       │   ├── AlertCard.tsx        # アコーディオン展開カード
+│   │       │   ├── AlertCardExpanded.tsx # AI分析結果＋調査ステップ＋推奨アクション＋[✓承認][✗却下]
+│   │       │   ├── EvidencePanel.tsx    # Cloud Logging/Terraform/GitHub 証拠の積み上げ可視化（P1）
+│   │       │   └── RemediationPanel.tsx # CVE概要＋修正PRリンク＋承認ボタン（P1・SECURITY）
+│   │       └── hooks/
+│   │           ├── useAlertStream.ts    # SSE接続（AlertStream interfaceを利用・同一ID置換・ANALYZING→OPEN）
+│   │           └── useAlerts.ts         # 一覧取得＋ストリームのマージ
 │   │
-│   ├── layouts/
-│   │   ├── AlertsLayout.tsx         # /alerts 専用レイアウト（DemoDrawerをここだけで参照）
-│   │   └── DefaultLayout.tsx        # /alerts/:id, /analytics 用（DemoDrawer非表示）
+│   ├── analytics/
+│   │   ├── infrastructure/analyticsApi.ts   # GET /analytics
+│   │   └── presentation/pages/AnalyticsPage.tsx # /analytics（AI精度トラッキング）
 │   │
-│   ├── pages/
-│   │   ├── AlertsPage.tsx           # /alerts（デモのメイン舞台）
-│   │   ├── AlertDetailPage.tsx      # /alerts/:id（運用想定フル詳細・デモドロワー非表示）
-│   │   ├── AnalyticsPage.tsx        # /analytics（AI精度トラッキング）
-│   │   └── ForecastPage.tsx         # /forecast（予兆リスク一覧・level降順・stretchⅡ。FORECAST_ENABLED off時はナビ非表示）
+│   ├── demo/                        # デモ系を完全に閉じ込める（プロダクションUI非侵食）
+│   │   ├── infrastructure/demoApi.ts    # POST /demo/**
+│   │   └── presentation/
+│   │       ├── DemoDrawer.tsx           # デモコントロールドロワー本体（AlertsLayoutのみで参照）
+│   │       ├── ScenarioControls.tsx     # シナリオ1〜5実行ボタン
+│   │       ├── PaymentModeToggle.tsx    # 決済モード切り替え（OK/RD/TM）
+│   │       ├── SystemStatus.tsx         # RabbitMQ接続・SSE接続数・インシデント数
+│   │       └── hooks/useDemoControls.ts # デモAPIへのfetchフック
 │   │
-│   ├── components/
-│   │   ├── alerts/
-│   │   │   ├── AlertList.tsx        # アラート一覧
-│   │   │   ├── AlertCard.tsx        # アコーディオン展開カード
-│   │   │   └── AlertCardExpanded.tsx # 展開時のAI調査レポート表示
-│   │   │                            #   表示内容：
-│   │   │                            #     原因仮説サマリー・確信度
-│   │   │                            #     調査ステップ（AIが何を調査したか）
-│   │   │                            #     推奨アクション一覧
-│   │   │                            #   操作：[✓ 承認] [✗ 却下] ボタン
-│   │   │                            #     → PATCH /alerts/:id/feedback に reviewStatus を送信
-│   │   ├── demo/                    # デモ系コンポーネントをここに完全に閉じ込める
-│   │   │   ├── DemoDrawer.tsx       # デモコントロールドロワー本体（AlertsLayoutのみで参照）
-│   │   │   ├── ScenarioControls.tsx # シナリオ実行ボタン群
-│   │   │   ├── PaymentModeToggle.tsx # 決済モード切り替え（OK/RD/TM）
-│   │   │   └── SystemStatus.tsx     # RabbitMQ接続・SSE接続数・インシデント数
-│   │   ├── forecast/                # 予兆リスク表示（stretchⅡ）
-│   │   │   ├── RiskCard.tsx         # window・subject・levelバッジ・confidenceゲージ・reasoning
-│   │   │   └── CitationList.tsx     # ★引用チップ（PR#123/schedule/incident#7）＝根拠の明示・ハルシネーション否定の可視化
-│   │   └── shared/
-│   │       └── SeverityBadge.tsx    # CRITICAL/WARNING/INFO バッジ（RiskLevelにも転用可）
-│   │
-│   ├── hooks/
-│   │   ├── alerts/
-│   │   │   └── useAlertStream.ts    # SSE接続フック（AlertStream interfaceを利用）
-│   │   ├── forecast/
-│   │   │   └── useForecast.ts       # POST /forecast トリガー ＋ GET /forecast 取得（stretchⅡ）
-│   │   └── demo/
-│   │       └── useDemoControls.ts   # デモAPIへのfetchフック
-│   │
-│   ├── infrastructure/
-│   │   └── api/
-│   │       ├── HttpClient.ts            # HTTPクライアントインターフェース（プロトコル非依存）
-│   │       ├── FetchHttpClient.ts       # fetch実装（baseURL・エラーハンドリング・タイムアウト）
-│   │       ├── AlertStream.ts           # SSEストリームインターフェース（Mock差し替え可能）
-│   │       ├── SSEAlertStream.ts        # AlertStream のSSE実装
-│   │       ├── alertsApi.ts             # GET /alerts, PATCH /alerts/:id/feedback（HttpClientに依存）
-│   │       ├── analyticsApi.ts          # GET /analytics（HttpClientに依存）
-│   │       ├── forecastApi.ts           # POST /forecast, GET /forecast（HttpClientに依存・stretchⅡ）
-│   │       └── demoApi.ts               # POST /demo/**（HttpClientに依存）
-│   │
-│   └── types/
-│       ├── alert.ts                 # フロントエンド用型定義
-│       │                            # InvestigationReport の表示型を含む
-│       │                            #   investigationSteps: string[]
-│       │                            #   suggestedActions: string[]
-│       │                            #   reviewStatus: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED'
-│       └── forecast.ts              # RiskForecast / RiskItem / RiskLevel / Citation の表示型（stretchⅡ）
+│   └── forecast/                    # 予兆ブリーフィング（stretchⅡ）。既存 feature 無傷で新設するだけ
+│       ├── domain/
+│       │   ├── ForecastView.ts          # RiskItem→level色・confidence→%（純関数）
+│       │   └── RiskLevel.ts             # HIGH/MEDIUM/LOW（純関数のみ）
+│       ├── application/triggerForecast.ts # POST /forecast 生成トリガー
+│       ├── infrastructure/forecastApi.ts  # POST /forecast, GET /forecast（HttpClient依存）
+│       └── presentation/
+│           ├── pages/ForecastPage.tsx   # /forecast（リスク一覧・level降順）
+│           └── components/
+│               ├── RiskCard.tsx         # window・subject・levelバッジ・confidenceゲージ・reasoning
+│               └── CitationList.tsx     # ★引用チップ（PR#123/schedule/incident#7）＝根拠の明示・ハルシネーション否定の可視化
+│
+├── shared/                          # features/* から参照可（逆は不可）
+│   ├── api/
+│   │   ├── HttpClient.ts                # interface（プロトコル非依存）
+│   │   └── FetchHttpClient.ts           # fetch実装（baseURL・エラー・タイムアウト）。axios不使用
+│   ├── ui/
+│   │   └── SeverityBadge.tsx            # CRITICAL/WARNING/INFO バッジ（RiskLevel にも転用可）
+│   └── layouts/
+│       ├── AlertsLayout.tsx             # /alerts 専用（DemoDrawer をここだけで参照）
+│       └── DefaultLayout.tsx            # /alerts/:id, /analytics（DemoDrawer非表示）
 │
 ├── index.html
 ├── vite.config.ts
 └── package.json
 ```
 
+> **依存ルール**: `presentation → application, domain, infrastructure(interface)` / `application → infrastructure(interface), domain` / `infrastructure → shared/api(HttpClient), domain` / `domain` は依存なし（純粋）。`features/* → shared/*`（逆不可）、features 間の直接依存禁止（共有は shared に上げる）。`AlertsLayout → features/demo/DemoDrawer`（ここだけ）。
+
 ---
 
 ## 依存関係サマリー
 
 ```
-pages        → components, hooks
-components   → hooks, types
-hooks        → infrastructure/api（interfaceのみ参照）
-infrastructure/api → types
+# フロント（feature-sliced・正準は step4-4）
+presentation → application, domain, infrastructure(interface)
+application  → infrastructure(interface), domain
+infrastructure → shared/api(HttpClient), domain
+domain        → 依存なし（型＋純関数のみ）
 
-AlertsLayout → components/demo/DemoDrawer（ここだけ）
-DefaultLayout → DemoDrawerを参照しない
+features/* → shared/*（逆は不可）。features 間の直接依存は禁止（共有は shared に上げる）
+AlertsLayout → features/demo/DemoDrawer（ここだけ）。DefaultLayout は参照しない
 
 ApplicationService / CommandHandler → Logger interface のみ（FileLogger/OTelLogger を直接importしない）
 EC コンテキスト → Monitoring コンテキストを直接importしない（RabbitMQ経由）
@@ -577,7 +585,7 @@ ForecastRiskCommandHandler（stretchⅡ）→ ForecastPort / GitHubGateway / Ter
                                   既存の AnalyzeAlert / InvestigateAlert パイプラインに一切依存・干渉しない（横付けの追加レイヤー）
 ```
 
-> **フロント構成の正準**: 予兆UI（`features/forecast/`）を含むバックオフィスフロントの正準構成は `step4-4-backoffice-frontend.md`（feature-sliced）。本書（step1）は既存のレイヤー優先構成に合わせて予兆ファイルを記載しているため、両者は表現が異なる。実装時は **step4-4 を正**とする。
+> **フロント構成の正準**: バックオフィスフロントの正準構成は `step4-4-backoffice-frontend.md`（feature-sliced・校正版）。本書（step1）のフロント節は step4-4 に合わせて feature-sliced に更新済み（要約として記載）。差分が生じた場合は実装時に **step4-4 を正**とする。
 
 ---
 

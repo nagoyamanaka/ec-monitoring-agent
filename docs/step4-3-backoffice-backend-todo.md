@@ -40,20 +40,20 @@
 - Mongo/RabbitMQ初期化 → Repository/Classifier/Port/Notifier を new（★差し替えポイント）→ Handler を Bus 登録 → BackofficeSubscribers で Subscriber 配線 → server.ts でルート登録 → listen
 - 設計の「DI配線」手順に従う
 
-### タスク 4: routes/index.ts 〔P0〕
+### タスク 4: routes/index.ts 〔P0〕✅ 完了済み
 
 <!-- EC対応: ECと同様、Server クラス（server.ts）が Express セットアップ（cors/json/errorHandler 登録）を担う。App.ts は存在しない。routes/index.ts の registerRoutes(router, ...deps) パターンは EC と同形。 -->
 
 - 【新規】`routes/index.ts`（全ルート集約）
 
-### タスク 5: alert 系ルート・コントローラ 〔P0〕
+### タスク 5: alert 系ルート・コントローラ 〔P0〕✅ 完了済み
 
 <!-- EC対応: orders.route.ts + controllers/orders/ と同形。registerAlertRoutes(router, commandBus, queryBus) のシグネチャもEC準拠。コントローラはルート関数内でnewしてバインドするECパターンを踏襲する。 -->
 
 - 【新規】`routes/alertRoutes.ts` ＋ `AlertsGetController` / `AlertGetController` / `AlertFeedbackPatchController`（承認/却下＝reviewStatus更新）
 - 委譲先は step4-2 の Query/CommandHandler
 
-### タスク 6: SSE ストリーム 〔P0〕
+### タスク 6: SSE ストリーム 〔P0〕✅ 完了済み
 
 <!-- EC非存在・backoffice固有追加。EC側に対応物なし。SSEAlertNotifier（Notifierポート実装）をDI注入するため、BackofficeApp.ts のDI配線にのみ影響する。ルート・コントローラ自体はEC流儀で薄く保つ。 -->
 
@@ -61,14 +61,14 @@
 - text/event-stream ヘッダ・heartbeat 30s・close時 removeConnection。`SSEAlertNotifier` 注入
 - **Cloud Run時**: request timeout延長・min-instances>=1（設計の注意参照）
 
-### タスク 7: patterns / analytics / demo ルート 〔P0〕
+### タスク 7: patterns / analytics / demo ルート 〔P0〕✅ 完了済み
 
 <!-- EC対応: demo部分は demo.route.ts + controllers/demo/PaymentModePostController.ts が対応物。pattern/analytics はbackoffice固有追加（EC非存在）。demoルートのDEMO_ENABLED guard も EC の DEMO_CONTROLS_ENABLED パターンを踏襲する。 -->
 
 - 【新規】`patternRoutes.ts`（GET /patterns, POST /patterns/:id/promote）/ `analyticsRoutes.ts`（GET /analytics）/ `demoRoutes.ts`（POST /demo/\*\*・DEMO_ENABLEDで本番無効化）＋各Controller
 - demo: payment-mode / scenario/:id/trigger / reset・reset/\* / status
 
-### タスク 8: BackofficeSubscribers 〔P0〕
+### タスク 8: BackofficeSubscribers 〔P0〕　✅ 完了済み
 
 <!-- EC対応: subscribers/EcSubscribers.ts と1対1。buildEcSubscribers(useCase1, useCase2) の関数形式・DomainEventSubscribers への集約パターンをそのまま踏襲する。 -->
 
@@ -119,8 +119,23 @@
 
 ### タスク 14: DI 追記 ＋ Schedule seed 〔stretchⅡ〕
 
-- 【修正】`BackofficeApp.ts`：read-only依存を new して `ForecastRiskCommandHandler` を Bus 登録（GitHub/Terraform Gateway〔メソッド追加済〕/ ScheduleSource / ForecastMemoryRepository / **ForecastPort=GeminiForecastAdapter★差し替え点**）
+- 【修正】`BackofficeApp.ts`：read-only依存を new して `ForecastRiskCommandHandler` を Bus 登録
+  - **★継ぎ目**: `signalSources: ForecastSignalSource[]` を組み立てて渡す（Gateway を名指ししない）。`PullRequestSignalSource`（GitHub）/ `PendingPlanSignalSource`（Terraform〔メソッド追加済〕）/ `ScheduleSignalSource`（ScheduleSource）の3つ
+  - `ForecastMemoryRepository` / **ForecastPort=GeminiForecastAdapter★差し替え点**
 - 起動時 `ForecastMemoryRepository.warmUp()` を `SimilarIncidentRepository.warmUp()` と並べる
 - 【新規】`ScheduleSource` の seed 実装（JSON/config）。`DEMO_ENABLED` 配下で投入
 - 【修正】`config.ts`：`FORECAST_ENABLED`（既定off）/ `FORECAST_HORIZON`（既定 "今週末"）追加
 - **write は発生しない**（全Gateway read-only）。リメディエーション要時のみ既存 `RemediationPort` 再利用
+
+---
+
+## stretchⅢ: イベントソーシング基盤 配線（設計のみ・実装はハッカソン後）
+
+> **着手条件**: stretchⅡ 着地後。設計は `step4-3`「ログベース・イベントソーシング基盤 配線」節 ＋ `step4-1` §7.10。既存配線は無傷。
+
+### タスク 15: EventLog sink ＋ 予知ビュー合流 配線 〔stretchⅢ〕
+
+- 【修正】`BackofficeSubscribers.ts`：`AppendEventLogOnDomainEvent`（全 DomainEvent 購読 → `EventLogRepository.append()`）を追加（正常系も貯める）
+- 【修正】`BackofficeApp.ts`：`EventLogRepository`（Mongo append-only）を new。`EventLogPrecursorSource` を組み立て、タスク14 の `signalSources` 配列に push（**Handler/Controller/ルートはノータッチ**）
+- 【修正】`ForecastMemoryRepository.warmUp()` の投影元を Mongo(Resolved) → `EventLogRepository` に差し替え
+- 新規ルート不要（予知ビューは既存 `POST /forecast` に合流）。**write は発生しない**

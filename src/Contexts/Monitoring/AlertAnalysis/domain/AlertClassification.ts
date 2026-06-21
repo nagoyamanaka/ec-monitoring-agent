@@ -1,5 +1,21 @@
 import { DomainError } from "../../../Shared/domain/errors/DomainError.js";
 import { AlertSeverity } from "./AlertSeverity.js";
+import type {
+  MatchedCondition,
+  UnmatchedCondition,
+  KnownAlertClassificationPrimitives,
+  UnknownAlertClassificationPrimitives,
+  AlertClassificationPrimitives,
+} from "./contracts/AlertContract.js";
+
+// シリアライズ契約・条件マッチ型は contracts に一元化（backend/frontend 共通の単一ソース）。
+export type {
+  MatchedCondition,
+  UnmatchedCondition,
+  KnownAlertClassificationPrimitives,
+  UnknownAlertClassificationPrimitives,
+  AlertClassificationPrimitives,
+};
 
 export class InvalidClassificationConfidenceError extends DomainError {
   readonly errorCode = "INVALID_CLASSIFICATION_CONFIDENCE";
@@ -34,18 +50,6 @@ export class ClassificationConfidence {
   }
 }
 
-export type MatchedCondition = {
-  readonly field: string;
-  readonly expectedValue: unknown;
-  readonly actualValue: unknown;
-};
-
-export type UnmatchedCondition = {
-  readonly field: string;
-  readonly expectedValue: unknown;
-  readonly actualValue: unknown;
-};
-
 export type KnownAlertClassification = {
   readonly type: "known";
   readonly patternId: string;
@@ -65,25 +69,6 @@ export type UnknownAlertClassification = {
 export type AlertClassification =
   | KnownAlertClassification
   | UnknownAlertClassification;
-
-export type KnownAlertClassificationPrimitives = {
-  readonly type: "known";
-  readonly patternId: string;
-  readonly patternName: string;
-  readonly severity: string;
-  readonly confidence: number;
-  readonly matchedConditions: MatchedCondition[];
-  readonly unmatchedConditions: UnmatchedCondition[];
-};
-
-export type UnknownAlertClassificationPrimitives = {
-  readonly type: "unknown";
-  readonly confidence: null;
-};
-
-export type AlertClassificationPrimitives =
-  | KnownAlertClassificationPrimitives
-  | UnknownAlertClassificationPrimitives;
 
 export function alertClassificationToPrimitives(
   classification: AlertClassification,

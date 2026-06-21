@@ -6,7 +6,7 @@ import { AlertRepository } from "../../domain/AlertRepository.js";
 import { AlertClassifier } from "../../domain/classification/AlertClassifier.js";
 import { InvestigateAlertDomainEvent } from "../../domain/InvestigateAlertDomainEvent.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
-import { SSEAlertNotifier } from "../../../ReportGeneration/domain/SSEAlertNotifier.js";
+import { SSEAlertNotifier } from "../../../AlertNotification/domain/SSEAlertNotifier.js";
 
 export class AnalyzeAlertUseCase {
   constructor(

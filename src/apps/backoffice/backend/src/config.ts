@@ -14,11 +14,18 @@ export const config = {
     apiKey: process.env.GEMINI_API_KEY ?? "",
     model: process.env.GEMINI_MODEL ?? "gemini-1.5-flash",
   },
+  ai: {
+    // true で AI調査の LLM を StubLLMClient に差し替える（ローカルE2E用・Gemini課金なし）
+    useStubInvestigation: process.env.AI_INVESTIGATION_STUB === "true",
+  },
   demo: {
     enabled: process.env.DEMO_ENABLED === "true",
     feedbackAutoPromoteThreshold: parseInt(
       process.env.FEEDBACK_AUTO_PROMOTE_THRESHOLD ?? "3"
     ),
+    // demo シナリオ facade が EC backend を叩くための接続先と、注文投入に使う商品
+    ecBackendUrl: process.env.EC_BACKEND_URL ?? "http://localhost:3000",
+    productId: process.env.DEMO_PRODUCT_ID ?? "demo-product-1",
   },
   github: {
     token: process.env.GITHUB_TOKEN ?? "",

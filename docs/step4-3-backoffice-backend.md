@@ -16,7 +16,7 @@
 | Controller（HTTPの入出力変換） | UseCase/CommandHandlerの中身（step4-2） |
 | 手動DI配線（Poor Man's DI） | React UI（step4-4） |
 | RabbitMQ Subscriber 登録 | EC backend（既存・step3） |
-| SSEエンドポイントのHTTP機構 | `SSEAlertNotifier` interface自体（step4-2のReportGeneration） |
+| SSEエンドポイントのHTTP機構 | `SSEAlertNotifier` interface自体（step4-2のAlertNotification） |
 | errorHandler / config / 環境変数 | |
 
 ---
@@ -185,9 +185,24 @@ backoffice プロセスが起動時に登録。EC backend とは別プロセス�
 ### DI 追記（BackofficeApp.ts）
 
 - read-only 依存を new して `ForecastRiskCommandHandler` を Bus 登録:
-  `GitHubGateway`（`listOpenPullRequests` 追加済み）/ `TerraformGateway`（`getPendingPlan` 追加済み）/ `ScheduleSource` / `ForecastMemoryRepository` / `ForecastPort`（★差し替えポイント＝ `GeminiForecastAdapter`）。
+  - **★継ぎ目**: `signalSources: ForecastSignalSource[]` を組み立てて渡す（Handler に Gateway を名指しさせない。`step4-1` §7.9）。
+    `PullRequestSignalSource`（`GitHubGateway.listOpenPullRequests` 追加済み）/ `PendingPlanSignalSource`（`TerraformGateway.getPendingPlan` 追加済み）/ `ScheduleSignalSource`（`ScheduleSource`）の3つ。
+  - `ForecastMemoryRepository` / `ForecastPort`（★差し替えポイント＝ `GeminiForecastAdapter`）。
 - 起動時に `ForecastMemoryRepository.warmUp()`（Resolved から subject 投影）。`SimilarIncidentRepository.warmUp()` と同じ起動フックに並べる。
 - **write は発生しない**（全Gateway read-only）。リメディエーションが要る場合のみ既存 `RemediationPort`（人間承認ゲート）を再利用。
+
+> **stretchⅢ への伸びしろ**: `signalSources` 配列に `EventLogPrecursorSource` を1個 push するだけで予知ビューが合流する（Handler・Controller・ルートはノータッチ）。`step4-1` §7.10 参照。
+
+---
+
+## ログベース・イベントソーシング基盤 配線（stretchⅢ・設計のみ）
+
+> **位置づけ**: stretchⅡ 着地後の発展。実装はハッカソン後。設計全体は `step4-1` §7.10、ドメインは `step4-2`「stretchⅢ」節。本節は **Express/DI 配線**に限定。既存配線は無傷。
+
+- **追記 sink**: `BackofficeSubscribers` に `AppendEventLogOnDomainEvent`（全 DomainEvent 購読 → `EventLogRepository.append()`）を追加。障害系3キューに絞る既存購読と違い、正常系を含めて貯める。
+- **DI**: `EventLogRepository`（Mongo append-only 実装）を new。`EventLogPrecursorSource` を組み立て、上記 `signalSources` 配列に追加する。
+- **ForecastMemory 上流差し替え**: `ForecastMemoryRepository.warmUp()` の投影元を Mongo(Resolved) → `EventLogRepository` に差し替え（consumer ノータッチ）。
+- 新規ルートは不要（予知ビューは既存 `POST /forecast` に合流）。**write は発生しない**。
 
 ### Schedule ソース（seed）
 

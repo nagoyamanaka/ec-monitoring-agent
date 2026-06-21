@@ -9,7 +9,7 @@ import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/ConsoleLogger.js";
-import { SSEAlertNotifier } from "../../../ReportGeneration/domain/SSEAlertNotifier.js";
+import { SSEAlertNotifier } from "../../../AlertNotification/domain/SSEAlertNotifier.js";
 import { SimilarIncident } from "../../../SimilarIncident/domain/SimilarIncident.js";
 import { SimilarIncidentRepository } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";

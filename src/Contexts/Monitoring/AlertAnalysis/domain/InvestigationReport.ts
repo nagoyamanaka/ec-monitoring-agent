@@ -1,17 +1,9 @@
 import { AlertSeverity } from "./AlertSeverity.js";
 import { ReviewStatus } from "./ReviewStatus.js";
+import type { InvestigationReportPrimitives } from "./contracts/AlertContract.js";
 
-export type InvestigationReportPrimitives = {
-  readonly summary: string;
-  readonly confidence: number;
-  readonly severity: string;
-  readonly investigationSteps: string[];
-  readonly suggestedActions: string[];
-  readonly suggestedPatternName: string;
-  readonly reviewStatus: string;
-  readonly investigatedAt: string;
-  readonly isFallback: boolean;
-};
+// シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
+export type { InvestigationReportPrimitives };
 
 export class InvestigationReport {
   readonly summary: string;

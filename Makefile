@@ -1,5 +1,7 @@
 .PHONY: infra-up infra-down \
         ec-up ec-down ec-restart ec-logs ec-build \
+        bo-up bo-down bo-restart bo-logs bo-build \
+        front-up front-down front-restart front-logs front-build \
         up down rebuild test e2e swagger \
         prune prune-all
 
@@ -33,8 +35,42 @@ ec-logs:
 ec-build:
 	$(DC) build ec-backend
 
+# ── Backoffice backend ────────────────────────────────────────
+bo-up: infra-up
+	$(DC) up -d backoffice-backend
+
+bo-down:
+	$(DC) stop backoffice-backend
+
+bo-restart:
+	$(DC) restart backoffice-backend
+
+bo-logs:
+	$(DC) logs -f backoffice-backend
+
+bo-build:
+	$(DC) build backoffice-backend
+
+# ── Backoffice frontend ───────────────────────────────────────
+# depends_on で ec-backend → backoffice-backend まで連鎖起動する
+front-up:
+	$(DC) up -d backoffice-frontend
+	@echo "Backoffice UI: http://localhost:5173"
+
+front-down:
+	$(DC) stop backoffice-frontend
+
+front-restart:
+	$(DC) restart backoffice-frontend
+
+front-logs:
+	$(DC) logs -f backoffice-frontend
+
+front-build:
+	$(DC) build backoffice-frontend
+
 # ── All ───────────────────────────────────────────────────────
-up: ec-up
+up: ec-up bo-up front-up
 
 down:
 	$(DC) down

@@ -1,6 +1,14 @@
 import { AnalyzeAlertCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/AnalyzeAlert/AnalyzeAlertCommandHandler.js";
 import { AnalyzeAlertUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/AnalyzeAlert/AnalyzeAlertUseCase.js";
 import { CollectMonitoringEventUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventUseCase.js";
+import { GetAlertQueryHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlert/GetAlertQueryHandler.js";
+import { GetAlertUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlert/GetAlertUseCase.js";
+import { GetAlertReportQueryHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlertReport/GetAlertReportQueryHandler.js";
+import { GetAlertReportUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAlertReport/GetAlertReportUseCase.js";
+import { GetAnalyticsQueryHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAnalytics/GetAnalyticsQueryHandler.js";
+import { GetAnalyticsUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetAnalytics/GetAnalyticsUseCase.js";
+import { GetKnownErrorPatternsQueryHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetKnownErrorPatterns/GetKnownErrorPatternsQueryHandler.js";
+import { GetKnownErrorPatternsUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetKnownErrorPatterns/GetKnownErrorPatternsUseCase.js";
 import { PromotePatternCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromotePattern/PromotePatternCommandHandler.js";
 import { PromotePatternUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromotePattern/PromotePatternUseCase.js";
 import { SubmitFeedbackCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommandHandler.js";
@@ -14,11 +22,13 @@ import { MongoKnownErrorPatternRepository } from "../../../../Contexts/Monitorin
 import { InvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.js";
 import { LLMInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/LLMInvestigationAdapter.js";
 import { GeminiLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/GeminiLLMClient.js";
+import { StubLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/StubLLMClient.js";
+import { LLMTextClient } from "../../../../Contexts/Monitoring/AIInvestigation/domain/LLMTextClient.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
 import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/TerraformGatewayImpl.js";
 import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/GitHubGatewayImpl.js";
-import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/ReportGeneration/infrastructure/EventEmitterSSEAlertNotifier.js";
+import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
 import { InMemorySimilarIncidentRepository } from "../../../../Contexts/Monitoring/SimilarIncident/infrastructure/InMemorySimilarIncidentRepository.js";
 import { CommandHandlers } from "../../../../Contexts/Shared/infrastructure/CommandBus/CommandHandlers.js";
 import { InMemoryCommandBus } from "../../../../Contexts/Shared/infrastructure/CommandBus/InMemoryCommandBus.js";
@@ -35,6 +45,10 @@ import { QueryHandlers } from "../../../../Contexts/Shared/infrastructure/QueryB
 import { Server } from "./server.js";
 import { registerRoutes } from "./routes/index.js";
 import { buildBackofficeSubscribers } from "./subscribers/BackofficeSubscribers.js";
+import { HttpEcDemoGateway } from "./demo/HttpEcDemoGateway.js";
+import { TriggerDemoScenarioUseCase } from "./demo/TriggerDemoScenarioUseCase.js";
+import { MongoDemoDataAdapter } from "./demo/MongoDemoDataAdapter.js";
+import { DemoResetUseCase } from "./demo/DemoResetUseCase.js";
 import { config } from "./config.js";
 
 export class BackofficeApp {
@@ -77,7 +91,11 @@ export class BackofficeApp {
       ),
     ]);
 
-    const aiInvestigationPort = new LLMInvestigationAdapter(new GeminiLLMClient());
+    // ★差し替えポイント: ローカルE2E では Stub に切替え（Gemini課金・非決定性を排除）
+    const llmClient: LLMTextClient = config.ai.useStubInvestigation
+      ? new StubLLMClient()
+      : new GeminiLLMClient();
+    const aiInvestigationPort = new LLMInvestigationAdapter(llmClient);
     const infraInvestigationPort = new DefaultInfraInvestigationAdapter(
       new CloudLoggingGatewayImpl(),
       new TerraformGatewayImpl(),
@@ -114,6 +132,18 @@ export class BackofficeApp {
       infraInvestigationPort,
     );
 
+    const getAlertReportUseCase = new GetAlertReportUseCase(alertRepository);
+    const getAlertReportQueryHandler = new GetAlertReportQueryHandler(getAlertReportUseCase);
+
+    const getAlertUseCase = new GetAlertUseCase(alertRepository, logger);
+    const getAlertQueryHandler = new GetAlertQueryHandler(getAlertUseCase);
+
+    const getKnownErrorPatternsUseCase = new GetKnownErrorPatternsUseCase(knownErrorPatternRepository);
+    const getKnownErrorPatternsQueryHandler = new GetKnownErrorPatternsQueryHandler(getKnownErrorPatternsUseCase);
+
+    const getAnalyticsUseCase = new GetAnalyticsUseCase(alertRepository);
+    const getAnalyticsQueryHandler = new GetAnalyticsQueryHandler(getAnalyticsUseCase);
+
     const commandBus = new InMemoryCommandBus(
       new CommandHandlers([
         analyzeAlertCommandHandler,
@@ -121,7 +151,14 @@ export class BackofficeApp {
         promotePatternCommandHandler,
       ]),
     );
-    const queryBus = new InMemoryQueryBus(new QueryHandlers([]));
+    const queryBus = new InMemoryQueryBus(
+      new QueryHandlers([
+        getAlertReportQueryHandler,
+        getAlertQueryHandler,
+        getKnownErrorPatternsQueryHandler,
+        getAnalyticsQueryHandler,
+      ]),
+    );
 
     const collectMonitoringEventUseCase = new CollectMonitoringEventUseCase(
       analyzeAlertCommandHandler,
@@ -134,8 +171,19 @@ export class BackofficeApp {
       buildBackofficeSubscribers(collectMonitoringEventUseCase, investigateAlertUseCase),
     );
 
+    const ecDemoGateway = new HttpEcDemoGateway(config.demo.ecBackendUrl);
+    const triggerScenarioUseCase = new TriggerDemoScenarioUseCase(ecDemoGateway, config.demo.productId);
+    const demoResetUseCase = new DemoResetUseCase(
+      new MongoDemoDataAdapter(mongoClient),
+      knownErrorPatternRepository,
+    );
+
     this.server = new Server(config.port);
-    registerRoutes(this.server.router, commandBus, queryBus, sseNotifier);
+    registerRoutes(this.server.router, commandBus, queryBus, sseNotifier, {
+      ecDemoGateway,
+      triggerScenarioUseCase,
+      demoResetUseCase,
+    });
     await this.server.listen();
   }
 

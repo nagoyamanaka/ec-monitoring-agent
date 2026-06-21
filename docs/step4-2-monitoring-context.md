@@ -1334,7 +1334,7 @@ class InMemoryCriteriaConverter {
 
 ### インターフェース
 
-**ファイルパス**: `src/Contexts/Monitoring/ReportGeneration/domain/SSEAlertNotifier.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AlertNotification/domain/SSEAlertNotifier.ts`
 
 ```typescript
 interface SSEAlertNotifier {
@@ -1509,6 +1509,8 @@ SubmitFeedbackCommandHandler
 
 > **位置づけ**: P0 ＋ P1 ＋ 既存stretch（ADK）着地後の capstone。戦略・差別化・段階設計の全体像は `step4-1-strategy.md` 7章。本節は **Monitoringコンテキストの domain / application / infrastructure** の設計に限定する。
 > **大原則**: 既存の反応的パイプライン（AnalyzeAlert/InvestigateAlert）は**一切変更しない**。予兆は新規 `ForecastRiskCommandHandler` として横に生やす（write無し＝read-onlyの調査の一種）。突合キーは **(B) 構造化タグ方式**を採用（`step4-1` 7.4）。
+> **2段階（Ⅱ/Ⅲ）**: 本節は **stretchⅡ＝既知シグナル × 記憶の LLM 突合**。**stretchⅢ＝ログベース・イベントソーシング基盤＋予知ビュー**は §「stretchⅢ」（末尾）で設計のみ示す。Ⅱは入力源を `ForecastSignalSource` IF 越しに集めることで、Ⅲ で `EventLogPrecursorSource` を1個足すだけの追加接続にする（`step4-1` §7.9）。
+> **データソースの正確な理解**: 予兆入力は2系統で**どちらも event log ではない**。①記憶（SimilarIncident / KnownErrorPattern）＝ Mongo の状態スナップショット、②未来シグナル（PR/plan/schedule）＝ forecast 実行時の read-only ライブread（保存しない）。イベントソーシングは Mongo の移行でなく**新基盤の追加**（stretchⅢ）。
 
 ### 設計判断メモ（予兆）
 
@@ -1517,6 +1519,7 @@ SubmitFeedbackCommandHandler
 | Alertに相乗りさせない | `RiskForecast` を独立した read-model にする | 予報は起点MonitoringEventが無く・未発生で・reviewStatusの意味も違う。Alert集約に混ぜると不変条件が壊れる |
 | 突合（join）の実装場所 | 自前ルールエンジンを作らず **LLMに委譲**。人間は「正規化／引用縛り／引用検証」の3点足場のみ | コンポーネント分類体系＋相関ロジックはブリットル。joinはモデルの得意領域 |
 | 突合キーの構造化 | (B) 過去インシデントに `subject`（コンポーネントラベル）を構造化付与（`ForecastMemory` projection） | テキストjoin(A)より引用検証が安定。将来移行の物語もADR化できる |
+| 入力源の抽象化（Ⅱ→Ⅲ継ぎ目） | `ForecastSignalSource` IF を切り、Handler は `ForecastSignalSource[]` を回す（3 Gateway を名指ししない） | stretchⅢで `EventLogPrecursorSource` を1個足すだけにする。Ⅱ→Ⅲが再設計でなく追加（`step4-1` §7.9） |
 | 予測の構成 | 統計MLでなく **既知未来シグナル × 記憶 のLLM推論** | データ大量を要さず、デモ規模で成立。レッドオーシャン回避 |
 | write境界 | 予兆も read-only。リメディエーションが要る場合は既存 `RemediationPort`（人間承認ゲート）を再利用 | 「AIが調査・人間が承認」の構造を予兆でも崩さない |
 
@@ -1571,6 +1574,18 @@ interface ScheduleWindow {
 interface ScheduleSource {
   list(horizon: string): Promise<ScheduleWindow[]>;
 }
+```
+
+```typescript
+// ForecastSignalSource.ts ── ★Ⅱ→Ⅲ の継ぎ目（`step4-1` §7.9）
+// 主シグナル源を源非依存に抽象化する。Handler はこの配列を回すだけ。
+interface ForecastSignalSource {
+  collect(horizon: string): Promise<ForecastSignal[]>; // read-only・正規化済みを返す
+}
+// stretchⅡ 実装: PullRequestSignalSource（GitHub listOpenPullRequests → FUTURE_CHANGE）
+//               PendingPlanSignalSource（Terraform getPendingPlan → FUTURE_CHANGE）
+//               ScheduleSignalSource（ScheduleSource.list → SCHEDULE）
+// stretchⅢ 追加: EventLogPrecursorSource（event log の直近イベント列 → kind=PRECURSOR）を1個足すだけ
 ```
 
 ### 記憶の突合キー（(B) ForecastMemory projection）
@@ -1630,17 +1645,71 @@ interface ForecastPort {
 **ファイルパス**: `Forecast/application/ForecastRisk/ForecastRiskCommand.ts` / `ForecastRiskCommandHandler.ts`
 
 ```
-1. 未来シグナル収集:
-     GitHubGateway.listOpenPullRequests() / TerraformGateway.getPendingPlan()
-     ScheduleSource.list(horizon)
-2. subject 抽出 → ForecastMemoryRepository.findBySubjects(subjects)
-3. 全て ForecastSignal[] に正規化（FUTURE_CHANGE / SCHEDULE / MEMORY）
-4. ForecastContext 構築 → ForecastPort.forecast()
+1. 主シグナル収集（★継ぎ目）:
+     signals = (await Promise.all(signalSources.map(s => s.collect(horizon)))).flat()
+     // signalSources: ForecastSignalSource[]
+     //   = [PullRequestSignalSource, PendingPlanSignalSource, ScheduleSignalSource]
+     //   stretchⅢ: + EventLogPrecursorSource（配列に1個足すだけ・Handler はノータッチ）
+     // 各 Source が ForecastSignal（FUTURE_CHANGE / SCHEDULE / 〔Ⅲ〕PRECURSOR）に正規化済みで返す
+2. subject 抽出 → ForecastMemoryRepository.findBySubjects(subjects) → MEMORY シグナル
+3. allSignals = [...signals, ...memorySignals]
+4. ForecastContext 構築（horizon + allSignals）→ ForecastPort.forecast()
 5. ★引用検証: 各 RiskItem.citations が手順3のシグナルidに実在するか照合。
      実在しない引用 → そのリスクを落とす or isFallback フラグ（ハルシネーション・ガード）
 6. RiskForecast を保存（最小実装はメモリ最新保持）→ SSEAlertNotifier.notify()（任意）
 ```
 
-依存: GitHubGateway / TerraformGateway / ScheduleSource / ForecastMemoryRepository / ForecastPort / Logger（全て read-only。write無し）。
+依存: `ForecastSignalSource[]` / ForecastMemoryRepository / ForecastPort / Logger（全て read-only。write無し）。
+各 `ForecastSignalSource` 実装が内部で GitHubGateway / TerraformGateway / ScheduleSource を持つ（Handler は Gateway を名指ししない＝Ⅱ→Ⅲの継ぎ目。`step4-1` §7.9）。
+記憶（MEMORY）は他シグナルの subject から引くため `ForecastSignalSource[]` の反復とは別ステップ（手順2）に置く。
 
 > デモシナリオ6: seed（過去2-3件＋ステージ未マージPR＋スケジュール）→ `POST /forecast` → 引用付きリスク予報をライブ生成（録画）。`step4-3` の API、`step4-4` の ForecastPanel と結線。
+
+---
+
+## stretchⅢ：ログベース・イベントソーシング基盤＋予知ビュー（設計のみ・実装はハッカソン後）
+
+> **位置づけ**: stretchⅡ 着地後の発展。戦略・差別化・DDIA unbundling の全体像は `step4-1` §7.10。本節は **Monitoring コンテキストへの落とし込み**に限定する。**既存の調査パイプライン・stretchⅡ の Forecast 突合機構は無傷**で、(1) EventLog 追記 sink、(2) `EventLogPrecursorSource`（`ForecastSignalSource` 実装）を**追加**するだけ。
+
+### 設計判断メモ（stretchⅢ）
+
+| 判断項目 | 決定内容 | 理由 |
+| -------- | -------- | ---- |
+| 基盤の性質 | 全 DomainEvent を **append-only** に貯める一次資料（障害専用でない）。新規 `EventLog/` コンテキスト | DDIA「データベースの解体」。状態スナップショットでは予兆につながる経緯が失われる |
+| 予知の入力 | event log の直近イベント列を **LLM の追加 context** にする（統計MLでない） | stretchⅡ と同機構＝相関の検出。因果推論は研究フロンティアとして ADR に切り出す |
+| 既存への接続 | `EventLogPrecursorSource implements ForecastSignalSource` を1個足す（§7.9 継ぎ目） | Handler / ForecastPort / 引用検証ノータッチ＝再設計でなく追加 |
+| ForecastMemory 上流 | Mongo(Resolved) → event log に差し替え。consumer（`findBySubjects`）は不変 | projection は再構築可能であるべき。上流差し替えは追加作業 |
+| 前提作業 | EC ドメインイベント拡張（正常系業務イベントを増やす） | 現行4イベント・半分障害寄りでは予兆の母集団が薄く moat が崩れる（`step4-1` §7.10 留意点） |
+
+### ドメイン型（追加・既存無傷）
+
+```typescript
+// EventLog/domain/EventLogEntry.ts ── 全 DomainEvent の追記レコード（正規化）
+interface EventLogEntry {
+  readonly eventId: string;
+  readonly eventName: string;     // 'ec.order.placed' / 'ec.cart.item_added' 等（拡張後）
+  readonly aggregateId: string;
+  readonly occurredOn: Date;
+  readonly payload: Record<string, unknown>;
+}
+// EventLog/domain/EventLogRepository.ts（追記専用 read/append。更新・削除なし）
+interface EventLogRepository {
+  append(entry: EventLogEntry): Promise<void>;
+  findRecent(horizon: string): Promise<EventLogEntry[]>; // 予知ビューが読む
+}
+
+// Forecast/domain/ForecastSignalKind に PRECURSOR を追加（後方互換の追記）
+//   PRECURSOR: "PRECURSOR"  // event log の直近イベント列から抽出した予兆
+```
+
+### 追記 sink（DomainEventSubscriber）
+
+- **全 DomainEvent を購読**して `EventLogRepository.append()` する薄い Subscriber（`AppendEventLogOnDomainEvent`）。障害系だけを購読する `CollectMonitoringEventOnECEventPublished` と違い、正常系を含めて貯めるのが要点。
+- 実装は Mongo の append-only コレクション（最小）。将来は専用ログストアに差し替え（IF 維持）。
+
+### EventLogPrecursorSource（`ForecastSignalSource` 実装）
+
+- `EventLogRepository.findRecent(horizon)` で直近イベント列を取り、**「最近こういう業務イベント列が出ている」を `ForecastSignal`(kind=PRECURSOR) に正規化**して返す。
+- stretchⅡ の `ForecastRiskCommandHandler` の `signalSources` 配列に**追加するだけ**。突合・引用検証・read-model はそのまま流用。
+
+> **実装はしない（設計のみ）**: 薄い／障害寄りの現行 DomainEvent では予兆の母集団が不足しデモ価値が出ないため、本節は ADR と設計で「予知ができる設計になっている」ことを示すに留める（`step4-1` §7.10）。
