@@ -5,6 +5,7 @@ import { SSEAlertNotifier } from "../../../../../Contexts/Monitoring/AlertNotifi
 import { CollectMonitoringEventUseCase } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventUseCase.js";
 import { DemoDependencies } from "../demo/DemoDependencies.js";
 import { registerAlertRoutes } from "./alertRoutes.js";
+import { registerEvidenceRoutes } from "./evidenceRoutes.js";
 import { registerStreamRoutes } from "./streamRoutes.js";
 import { registerPatternRoutes } from "./patternRoutes.js";
 import { registerAnalyticsRoutes } from "./analyticsRoutes.js";
@@ -27,6 +28,7 @@ export function registerRoutes(
   // /alerts/stream を /alerts/:id より先に登録する（後者が "stream" を id として捕捉するのを防ぐ）
   registerStreamRoutes(router, sseNotifier);
   registerAlertRoutes(router, commandBus, queryBus);
+  registerEvidenceRoutes(router, queryBus);
   registerPatternRoutes(router, commandBus, queryBus);
   registerAnalyticsRoutes(router, queryBus);
   registerDemoRoutes(router, queryBus, demoDeps);

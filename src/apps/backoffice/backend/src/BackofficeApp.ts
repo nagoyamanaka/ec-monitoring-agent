@@ -22,6 +22,10 @@ import { ClassificationRule } from "../../../../Contexts/Monitoring/AlertAnalysi
 import { MongoAlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoAlertRepository.js";
 import { MongoKnownErrorPatternRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoKnownErrorPatternRepository.js";
 import { InvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.js";
+import { GetInfraEvidenceUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceUseCase.js";
+import { GetInfraEvidenceQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceQueryHandler.js";
+import { GetInvestigationStatusUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInvestigationStatus/GetInvestigationStatusUseCase.js";
+import { GetInvestigationStatusQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInvestigationStatus/GetInvestigationStatusQueryHandler.js";
 import { LLMInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/LLMInvestigationAdapter.js";
 import { GeminiLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/GeminiLLMClient.js";
 import { StubLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/StubLLMClient.js";
@@ -154,6 +158,19 @@ export class BackofficeApp {
     const getAnalyticsUseCase = new GetAnalyticsUseCase(alertRepository);
     const getAnalyticsQueryHandler = new GetAnalyticsQueryHandler(getAnalyticsUseCase);
 
+    // 証拠は調査時に永続化していないため、表示要求時に infraInvestigationPort で再収集する（read-only）。
+    const getInfraEvidenceUseCase = new GetInfraEvidenceUseCase(
+      alertRepository,
+      infraInvestigationPort,
+      logger,
+    );
+    const getInfraEvidenceQueryHandler = new GetInfraEvidenceQueryHandler(getInfraEvidenceUseCase);
+
+    const getInvestigationStatusUseCase = new GetInvestigationStatusUseCase(alertRepository, logger);
+    const getInvestigationStatusQueryHandler = new GetInvestigationStatusQueryHandler(
+      getInvestigationStatusUseCase,
+    );
+
     const commandBus = new InMemoryCommandBus(
       new CommandHandlers([
         analyzeAlertCommandHandler,
@@ -167,6 +184,8 @@ export class BackofficeApp {
         getAlertQueryHandler,
         getKnownErrorPatternsQueryHandler,
         getAnalyticsQueryHandler,
+        getInfraEvidenceQueryHandler,
+        getInvestigationStatusQueryHandler,
       ]),
     );
 

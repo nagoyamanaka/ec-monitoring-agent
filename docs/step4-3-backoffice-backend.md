@@ -93,7 +93,7 @@ Controller は **HTTPの入出力変換のみ**（薄いルーター）。VO変�
 | `AlertsGetController` | GET /alerts | `GetAlertReportQuery`（全件 `Criteria([])`、将来 createdAt DESC/ページング） |
 | `AlertGetController` | GET /alerts/:id | findById |
 | `AlertFeedbackPatchController` | PATCH /alerts/:id/feedback | `SubmitFeedbackCommand`（承認/却下＝reviewStatus更新も同時） |
-| `AlertEvidenceGetController` | GET /alerts/:id/evidence, /investigation/status | InfraEvidence / 調査ステータス取得 |
+| `AlertEvidenceGetController` | GET /alerts/:id/evidence, /investigation/status | InfraEvidence（`GetInfraEvidenceQuery`）/ 調査ステータス取得（`GetInvestigationStatusQuery`） |
 | `RemediationDraftPrPostController` | POST /alerts/:id/remediation/draft-pr | `RemediationPort.draftPullRequest()`（承認後のwrite） |
 | `RemediationGetController` | GET /alerts/:id/remediation | 起票済みPRのURL/ステータス |
 | `CloudMonitoringAlertIngestController` | POST /ingest/cloud-monitoring | `CloudMonitoringAlertTranslator` → `CollectMonitoringEventUseCase`（後述・実装済み） |
