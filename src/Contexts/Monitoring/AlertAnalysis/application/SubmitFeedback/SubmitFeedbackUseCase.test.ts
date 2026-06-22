@@ -20,6 +20,7 @@ import { Criteria } from "../../../../Shared/domain/criteria/Criteria.js";
 import { Filters } from "../../../../Shared/domain/criteria/Filters.js";
 import { Order } from "../../../../Shared/domain/criteria/Order.js";
 import { MonitoringResourceNotFoundError } from "../errors/MonitoringResourceNotFoundError.js";
+import { FixedThresholdPromotionPolicy } from "../../domain/promotion/FixedThresholdPromotionPolicy.js";
 
 const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";
 const AUTO_PROMOTE_THRESHOLD = 3;
@@ -87,7 +88,7 @@ describe("SubmitFeedbackUseCase", () => {
       patternRepo,
       similarRepo,
       logger,
-      AUTO_PROMOTE_THRESHOLD,
+      new FixedThresholdPromotionPolicy(AUTO_PROMOTE_THRESHOLD),
     );
   });
 

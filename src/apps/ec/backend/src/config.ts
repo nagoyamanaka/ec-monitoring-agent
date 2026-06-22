@@ -13,6 +13,5 @@ export const config = {
   demo: {
     paymentMode: process.env.PAYMENT_MODE ?? "success",
     controlsEnabled: process.env.DEMO_CONTROLS_ENABLED === "true",
-    feedbackAutoPromoteThreshold: parseInt(process.env.FEEDBACK_AUTO_PROMOTE_THRESHOLD ?? "3"),
   },
 } as const;
