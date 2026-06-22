@@ -96,6 +96,9 @@
 - 【新規】`routes/ingestRoutes.ts` ＋ `SecurityScanIngestPostController`
 - X-Ingest-Token検証 → HIGH未満は204 → MonitoringEvent(SECURITY)構築 → AnalyzeAlartCommand dispatch → 202
 - CI（step4-1 タスク4）と結線。シナリオ5の起点
+- [ ] Trivy / `npm audit`（pnpm audit）ステップ追加（HIGH以上で検出）
+- [ ] 検出結果を `POST /ingest/security-scan` に送る step（`INGEST_TOKEN` ヘッダ）
+      デプロイはどうする？普通にアラートだけか？
 
 ### タスク 11: remediation ルート 〔P1〕
 
