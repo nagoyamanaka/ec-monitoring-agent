@@ -28,12 +28,33 @@ export type AlertPrimitives = {
   id: string;
   monitoringEvent: { eventName: string; payload: Record<string, unknown> };
   status: string;
-  classification: { type: "known" | "unknown" };
+  classification: { type: "known" | "unknown"; source?: string };
   investigationReport: { isFallback: boolean; summary: string } | null;
 };
 
 export function connectMonitoringDb(): MongoClient {
   return new MongoClient(MONITORING_MONGO_URL);
+}
+
+// backoffice の demo データを seed 初期状態へ戻す（make reset と同じ経路）。
+// 返り値はリセット結果のサマリ（seed された件数）。
+export async function resetDemo(): Promise<{
+  alertsSeeded: number;
+  patternsSeeded: number;
+}> {
+  const res = await fetch(`${BACKOFFICE_BASE_URL}/demo/reset`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(`demo reset failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()) as { alertsSeeded: number; patternsSeeded: number };
+}
+
+// GET /alerts の現在のスナップショットを取得する（ポーリングなし・即時）。
+export async function fetchAlerts(): Promise<AlertPrimitives[]> {
+  const res = await fetch(`${BACKOFFICE_BASE_URL}/alerts`);
+  if (!res.ok) throw new Error(`get alerts failed: ${res.status}`);
+  const body = (await res.json()) as { alerts: AlertPrimitives[] };
+  return body.alerts;
 }
 
 export async function setPaymentMode(

@@ -66,6 +66,8 @@ export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps)
     <button
       type="button"
       aria-pressed={selected}
+      data-testid="alert-card"
+      data-alert-id={alert.id}
       onClick={() => onSelect?.(alert.id)}
       className={cn(
         "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition",

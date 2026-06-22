@@ -186,6 +186,7 @@ export class BackofficeApp {
     const demoResetUseCase = new DemoResetUseCase(
       new MongoDemoDataAdapter(mongoClient),
       knownErrorPatternRepository,
+      alertRepository,
     );
 
     this.server = new Server(config.port);
