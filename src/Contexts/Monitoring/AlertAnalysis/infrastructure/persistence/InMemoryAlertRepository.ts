@@ -23,6 +23,17 @@ export class InMemoryAlertRepository implements AlertRepository {
     );
   }
 
+  async findOpenByDedupKey(dedupKey: string): Promise<Alert | null> {
+    const open = Array.from(this.store.values())
+      .filter(
+        (alert) =>
+          alert.dedupKey === dedupKey &&
+          (alert.status.isOpen() || alert.status.isAnalyzing()),
+      )
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    return open[0] ?? null;
+  }
+
   clear(): void {
     this.store.clear();
   }

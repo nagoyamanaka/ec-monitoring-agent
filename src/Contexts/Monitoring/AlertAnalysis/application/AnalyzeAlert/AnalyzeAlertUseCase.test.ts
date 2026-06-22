@@ -183,4 +183,33 @@ describe("AnalyzeAlertUseCase", () => {
       expect(event.aggregateId).toBe(ALERT_ID);
     });
   });
+
+  describe("重複観測の畳み込み（dedup）", () => {
+    const SECOND_ALERT_ID = "660e8400-e29b-41d4-a716-446655440111";
+
+    it("同一 dedupKey の2件目は新規 Alert を作らず occurrenceCount を加算する", async () => {
+      const { notifier } = makeSpyNotifier();
+      const useCase = makeUseCase([PAYMENT_TIMEOUT_PATTERN], notifier);
+
+      await useCase.run({ alertId: new AlertId(ALERT_ID), monitoringEvent: makePaymentTimeoutEvent() });
+      await useCase.run({ alertId: new AlertId(SECOND_ALERT_ID), monitoringEvent: makePaymentTimeoutEvent() });
+
+      // 2件目は畳み込まれるので新規 Alert は作られない
+      expect(await alertRepo.findById(new AlertId(SECOND_ALERT_ID))).toBeNull();
+      const first = await alertRepo.findById(new AlertId(ALERT_ID));
+      expect(first?.occurrenceCount).toBe(2);
+    });
+
+    it("2件目では InvestigateAlertDomainEvent を再発行しない（未知でも再調査しない）", async () => {
+      const { notifier } = makeSpyNotifier();
+      const useCase = makeUseCase([], notifier);
+
+      await useCase.run({ alertId: new AlertId(ALERT_ID), monitoringEvent: makeUnknownEvent() });
+      const publishSpy = vi.spyOn(bus, "publish");
+      await useCase.run({ alertId: new AlertId(SECOND_ALERT_ID), monitoringEvent: makeUnknownEvent() });
+
+      const events = publishSpy.mock.calls.flat(2);
+      expect(events.find((e) => e instanceof InvestigateAlertDomainEvent)).toBeUndefined();
+    });
+  });
 });

@@ -34,7 +34,7 @@ src/apps/backoffice/backend/src/
 │   ├── alertRoutes.ts           # GET /alerts, GET /alerts/:id, PATCH /alerts/:id/feedback
 │   ├── evidenceRoutes.ts        # GET /alerts/:id/evidence, GET /alerts/:id/investigation/status
 │   ├── remediationRoutes.ts     # POST /alerts/:id/remediation/draft-pr, GET /alerts/:id/remediation
-│   ├── ingestRoutes.ts          # POST /ingest/security-scan
+│   ├── ingestRoutes.ts          # POST /ingest/cloud-monitoring（実装済み）, POST /ingest/security-scan（設計）
 │   ├── patternRoutes.ts         # GET /patterns, POST /patterns/:id/promote
 │   ├── analyticsRoutes.ts       # GET /analytics
 │   ├── streamRoutes.ts          # GET /alerts/stream（SSE）
@@ -96,11 +96,34 @@ Controller は **HTTPの入出力変換のみ**（薄いルーター）。VO変�
 | `AlertEvidenceGetController` | GET /alerts/:id/evidence, /investigation/status | InfraEvidence / 調査ステータス取得 |
 | `RemediationDraftPrPostController` | POST /alerts/:id/remediation/draft-pr | `RemediationPort.draftPullRequest()`（承認後のwrite） |
 | `RemediationGetController` | GET /alerts/:id/remediation | 起票済みPRのURL/ステータス |
-| `SecurityScanIngestPostController` | POST /ingest/security-scan | 後述 |
+| `CloudMonitoringAlertIngestController` | POST /ingest/cloud-monitoring | `CloudMonitoringAlertTranslator` → `CollectMonitoringEventUseCase`（後述・実装済み） |
+| `SecurityScanIngestPostController` | POST /ingest/security-scan | 後述（設計） |
 | `AlertsStreamController` | GET /alerts/stream | SSE接続管理（後述） |
 | `PatternsGetController` / `PatternPromotePostController` | GET /patterns, POST /patterns/:id/promote | パターン取得・手動昇格 |
 | `AnalyticsGetController` | GET /analytics | AI精度トラッキング |
 | demo/* | POST /demo/** | デモ制御（環境変数で本番無効化） |
+
+---
+
+## CloudMonitoringAlertIngestController（Cloud Monitoring → MonitoringEvent・実装済み）
+
+`POST /ingest/cloud-monitoring`。Cloud Monitoring の Alerting Policy 発火（Webhook 通知 / Pub/Sub push）を受け、**Datadog を使わず GCP・無料枠の検知の上に乗る**物語の実体。EC 由来と同じ観測パイプラインに合流する peer な検知ソース。
+
+```
+1. リクエストボディ（Cloud Monitoring incident payload）を受ける
+   - 認証: INGEST_TOKEN 設定時は x-ingest-token 一致を要求（空なら認証なし＝ローカル/デモ）
+2. CloudMonitoringAlertTranslator.toMonitoringEvent(req.body) で防御的に正規化:
+   - eventName: condition_name をスラグ化 → 'gcp.monitoring.<slug>'（dedup 粒度）
+   - category: CPU/接続数等の飽和系は CAPACITY、それ以外は INFRASTRUCTURE
+   - severity: payload severity（Critical/Warning）、欠落は WARNING 既定。closed/回復通知は info（観測のみ）
+   - source: 'cloud-monitoring'、aggregateId: incident_id
+3. CollectMonitoringEventUseCase.run(monitoringEvent) に委譲
+   - isAlertable() で info（closed 等）は観測のみで打ち切り
+   - alertable は AnalyzeAlertCommand へ → dedup（dedupKey）→ classify の既存フロー
+4. 202 Accepted を返す（調査は非同期、結果はSSEで配信）
+```
+
+> **被り対策**: category オーナーシップ（INFRA/CAPACITY は Cloud Monitoring が権威）＋ `dedupKey` で同一 condition の連発を1件（×N）に畳む。詳細は `step4-1` §2.5・`step4-2` 検知ソース節。`CollectMonitoringEventUseCase` 経由なので EC 経路と triage/ログが一貫する。
 
 ---
 

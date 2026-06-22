@@ -107,8 +107,10 @@
 
 **ファイルパス**: `src/Contexts/Monitoring/Shared/domain/MonitoringEvent.ts`
 
-ECコンテキストのDomainEventをMonitoringコンテキスト固有の型に変換したもの。
-Monitoringは「何が起きたか」を均質なデータとして扱い、ECの型構造に依存しない。
+各検知ソース（EC 自前 DomainEvent / Cloud Monitoring / CI）の固有イベントを Monitoring 固有の均質型へ変換したもの。
+Monitoringは「何が起きたか」を均質なデータとして扱い、源の型構造に依存しない（源固有の型に触れるのは ingest 境界だけ）。
+
+**重複観測の畳み込み**: `dedupKey()`（＝`source::category::eventName`）を持つ。検知ソースが複数になりどの単一上流も横断 dedup できないため、この決定的キーが境界の最小の冪等点になる。同一 dedupKey の未解決 Alert があれば `AnalyzeAlert` は新規 Alert を作らず `occurrenceCount` を加算（§AnalyzeAlertCommandHandler 参照）。aggregateId は含めない＝同型障害の連発を1件（×N）に集約。
 
 ```typescript
 export type MonitoringEventPrimitives = {
@@ -130,8 +132,12 @@ export class MonitoringEvent {
   readonly category: MonitoringEventCategory; // 障害レイヤーの粗い弁別子（ルーティングキー）
   readonly source: string; // 発生元の細粒度ラベル（'order' / 'inventory' / 'payment' / 'rabbitmq' など。拡張に開く）
 
+  readonly severity: AlertSeverity; // 観測時点でソース（ingest 境界）が付与する重大度
+
   constructor(params: { ... }) { ... }
 
+  isAlertable(): boolean { ... }     // severity=info は観測のみ（分類/調査に乗せない）
+  dedupKey(): string { ... }         // `${source}::${category}::${eventName}` ＝重複観測の畳み込みキー
   toPrimitives(): MonitoringEventPrimitives { ... }
   static fromPrimitives(primitives: MonitoringEventPrimitives): MonitoringEvent { ... }
 }
@@ -201,6 +207,20 @@ export class MonitoringEventCategory extends EnumValueObject<MonitoringEventCate
 
 ---
 
+## 検知ソースと ingest 境界（peer アダプタ）
+
+`MonitoringEvent` への変換境界は検知ソースごとに複数あり、すべて `CollectMonitoringEventUseCase`（→ `AnalyzeAlert`）の同じ観測パイプラインに合流する peer。源固有の型に触れるのはこの境界だけ。
+
+| 検知ソース | ingest アダプタ | category | 種別 |
+| --- | --- | --- | --- |
+| EC 自前 DomainEvent | `CollectMonitoringEventOnECEventPublished`（RabbitMQ Subscriber） | APPLICATION | 実装済み（Datadog 不在のデモ stand-in） |
+| Cloud Monitoring（Alerting Policy 発火） | `CloudMonitoringAlertIngestController` ＋ `CloudMonitoringAlertTranslator`（`POST /ingest/cloud-monitoring`） | INFRASTRUCTURE / CAPACITY | 実装済み |
+| CI / Trivy | `SecurityScanIngestController`（`POST /ingest/security-scan`） | SECURITY | 設計 |
+
+> **category オーナーシップ（被り対策の主防御）**: APPLICATION は EC イベント、INFRASTRUCTURE/CAPACITY は Cloud Monitoring が権威。同じものを両ソースに監視させない＝検知の被りを構造的に消す。残る同一シグナルの重複は `dedupKey`（§MonitoringEvent）で畳む。詳細は `docs/step4-1-strategy.md` §2.5。
+>
+> `CloudMonitoringAlertTranslator` は webhook payload を防御的に読み、condition_name をスラグ化して `eventName=gcp.monitoring.<slug>` に正規化（dedup 粒度）。CPU/接続数等の飽和系は CAPACITY、それ以外は INFRASTRUCTURE。closed/回復通知は `severity=info`＝観測のみ。
+
 ## CollectMonitoringEventOnECEventPublished（詳細）
 
 **ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventOnECEventPublished.ts`
@@ -256,6 +276,8 @@ PaymentTimeout発生時はOrderがDBに存在しない（決済が注文確定�
 | `investigationReport`  | `InvestigationReport \| null` | AI分析結果（未知障害時のみ）                 |
 | `feedback`             | `AlertFeedback \| null`       | オペレーターのフィードバック                 |
 | `correctFeedbackCount` | `number`                      | 正解フィードバック累計（自動昇格判定に使用） |
+| `dedupKey`             | `string`                      | `monitoringEvent.dedupKey()` を materialize（クエリ容易性のため Alert に非正規化） |
+| `occurrenceCount`      | `number`                      | 同一 dedupKey の重複観測をまとめた発生回数（初期1・UI は「×N」表示） |
 | `createdAt`            | `Date`                        |                                              |
 | `updatedAt`            | `Date`                        |                                              |
 
@@ -284,6 +306,13 @@ static createAsUnknown(params: {
 - `status` を `ANALYZING` に設定する
 - `severity` を `WARNING` に設定する（AI分析後に更新）
 - `classification` を `UnknownAlertClassification` に設定する
+- `dedupKey` を `monitoringEvent.dedupKey()` で設定・`occurrenceCount` を `1` で初期化する（known/unknown 共通）
+
+```typescript
+recordOccurrence(): Alert
+```
+
+- 同一 dedupKey の重複観測を受けたときの畳み込み。新規 Alert を作らず `occurrenceCount` を +1（分類・調査・状態は不変）。`AnalyzeAlert` が classify 前に呼ぶ。
 
 ### 状態変更メソッド
 
@@ -639,6 +668,13 @@ interface AnalyzeAlertCommand {
 ### 処理フロー
 
 ```
+0. 重複観測の畳み込み（classify より前）
+   AlertRepository.findOpenByDedupKey(monitoringEvent.dedupKey())
+   → 未解決（OPEN/ANALYZING）Alert がヒットしたら:
+       existing.recordOccurrence() で occurrenceCount を加算して save → SSE notify → return
+       （新規作成・再分類・再調査をしない＝アラート嵐の抑制・重複表示の防止）
+   → ヒットしなければ通常フローへ
+
 1. AlertClassifier.classify(monitoringEvent) を呼び出す（パターン取得・照合は Classifier 内部の責務）
    → result: AlertClassificationResult
 

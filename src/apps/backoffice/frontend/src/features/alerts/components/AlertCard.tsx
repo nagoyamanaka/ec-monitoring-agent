@@ -126,6 +126,15 @@ export function AlertCard({
           >
             {formatRelativeTime(alert.occurredOn)}
           </span>
+          {/* 重複観測の畳み込み回数。嵐をカード乱立でなく1枚＋件数で見せる。 */}
+          {alert.occurrenceCount > 1 && (
+            <span
+              className="shrink-0 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30"
+              title={`同一インシデントの観測 ${alert.occurrenceCount} 件をまとめています`}
+            >
+              ×{alert.occurrenceCount}
+            </span>
+          )}
         </div>
 
         {/* ③ 副次: 推定原因（該当パターン／AI推定パターン） */}

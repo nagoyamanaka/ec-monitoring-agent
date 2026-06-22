@@ -35,4 +35,18 @@ export class MongoAlertRepository
       Alert.fromPrimitives({ id: _id, ...rest } as AlertPrimitives),
     );
   }
+
+  async findOpenByDedupKey(dedupKey: string): Promise<Alert | null> {
+    const doc = await this.collection().findOne(
+      {
+        dedupKey,
+        status: { $in: ["OPEN", "ANALYZING"] },
+      } as unknown as Filter<Document>,
+      { sort: { updatedAt: -1 } },
+    );
+    if (!doc) return null;
+
+    const { _id, ...rest } = doc as unknown as AlertDoc;
+    return Alert.fromPrimitives({ id: _id, ...rest } as AlertPrimitives);
+  }
 }

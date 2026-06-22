@@ -64,6 +64,11 @@ export type AlertPrimitives = {
   investigationReport: InvestigationReportPrimitives | null;
   feedback: { isCorrect: boolean; operatorNote?: string } | null;
   correctFeedbackCount: number;
+  // 重複観測の畳み込みキーと発生回数。同一 dedupKey の OPEN/ANALYZING Alert は
+  // 新規作成せず occurrenceCount を加算する（アラート嵐の抑制・UI は「×N」表示）。
+  // optional は旧データ互換（未保存なら backend が dedupKey 再導出・count=1 で補完）。
+  dedupKey?: string;
+  occurrenceCount?: number;
   createdAt: string;
   updatedAt: string;
 };

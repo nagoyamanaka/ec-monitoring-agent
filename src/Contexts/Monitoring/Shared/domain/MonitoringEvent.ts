@@ -47,6 +47,20 @@ export class MonitoringEvent {
     return !this.severity.isInfo();
   }
 
+  /**
+   * 同一インシデントの重複観測をまとめるための決定的キー。
+   * 検知ソースが複数（EC 自前イベント / Cloud Monitoring / CI）になった今、
+   * どの単一上流もソース横断の重複を畳めない。境界での最小の冪等キーがこれ。
+   *
+   * 粒度は「ソース × カテゴリ × イベント種別」。aggregateId は意図的に含めない
+   * ＝注文ごとに違う決済タイムアウトの嵐を1件（×N）にまとめる（storm 抑制）。
+   * 異症状・同一根本原因（例: DB枯渇=infra と payment失敗=app）は別キーになる。
+   * それは検知層の dedup ではなく AI 調査が根本原因として相関させる責務（境界の外）。
+   */
+  dedupKey(): string {
+    return `${this.source}::${this.category.value}::${this.eventName}`;
+  }
+
   toPrimitives(): MonitoringEventPrimitives {
     return {
       eventId: this.eventId,
