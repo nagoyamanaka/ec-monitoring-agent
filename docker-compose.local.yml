@@ -9,6 +9,10 @@ services:
       - "5672:5672"
       - "15672:15672"
 
+  elasticsearch:
+    ports:
+      - "9200:9200"
+
   ec-backend:
     build:
       context: .
@@ -46,8 +50,12 @@ services:
       # payment-timeout シナリオで在庫予約を通すため有効な UUID 商品を使う（global-setup が seed）
       DEMO_PRODUCT_ID: "11111111-1111-4111-8111-111111111111"
       GCP_PROJECT_ID: local
+      # SimilarIncident を ES に永続し SimilarPatternRule（graded confidence 分類）を有効化する
+      ELASTICSEARCH_URL: http://elasticsearch:9200
     depends_on:
       ec-backend:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
 
   backoffice-frontend:

@@ -175,20 +175,30 @@
 - タスク25連携（任意）: 証拠を `InvestigationReport` に `evidenceSourceCount` として永続化すると昇格スコア補助信号になる（主信号は タスク17 類似確度。証拠源数は任意加点）
 - 参考: 「インフラ横断調査パイプライン」節 → デモシナリオ4
 
-### タスク 16: Remediation（PR起票・write隔離）〔P1〕
+### タスク 16: Remediation（PR起票・write隔離）〔P1〕✅ 完了済み
 
 - 【新規】`AIInvestigation/Remediation/domain/RemediationPort.ts` / `RemediationPlan.ts`
 - 【新規】`infrastructure/GitHubPullRequestGateway.ts`（GITHUB_TOKEN・対象repo限定・自動マージしない）
 - SECURITYカテゴリの RemediationPlanner から呼ぶ。参考: 「セキュリティ＋自律リメディエーション」節
 
-### タスク 17: SimilarPatternRule（Elastic 分類 Rule）〔P1/stretch〕
+### タスク 17: SimilarPatternRule（Elastic 分類 Rule）〔P1/stretch〕✅ 完了済み
 
 > **位置づけ（重要）**: これが「**graded confidence 付き分類**」の本体。学習を 0/1（未知/既知）でなく **probability low〜high の連続スペクトル**にするのはこのルール。正解フィードバックで蓄積された `SimilarIncident` を**分類段階で読み**、完全一致でなくても「過去のDB枯渇に82%類似・確度 中」のような確度を返す。**確度をレポートに出す＝意思決定支援**が価値の核（差別化テーブル「評価（confidence付き）」の実体）。現状 `SimilarIncident` は AI 調査の文脈強化にしか使われておらず、分類には未接続 → それを繋ぐのが本タスク。背景は `step4-1` 2章「学習ループ ①連続的な確度」。
 
-- 【新規】`domain/classification/rules/SimilarPatternRule.ts`（`ClassificationRule` 実装・Elastic Gateway を内包・hybrid search・スコア正規化→`ClassificationConfidence`(0〜1)・閾値未満は null 棄権）
-- `Shared/infrastructure/persistence/elasticsearch/` を利用。InfraEvidenceでクエリ強化
-- `ApplicationClassificationPolicy` の Rule 配列に `KnownPatternRule` と並べて追加するだけ。`AlertClassifier` IF も AnalyzeAlertCommandHandler もノータッチ
+- 【完了】`SimilarIncident/domain/SimilarIncidentRepository.ts`（**1インターフェースに統合**）: `findSimilar`(件数のみ・AI調査文脈)／`index`(追記)／`search(query): Promise<ScoredIncident[]>`(graded confidence 用スコア付き) ＋ `ScoredIncident{incident,score}`/`SimilarSearchQuery{eventName,text,limit}`。当初は別 Port（`SimilarIncidentSearchPort`）に分離したが、**同一クラスが両方実装し consumer も少ないため統合**（レビュー指摘）。`SimilarIncidentSearchPort.ts` は削除
+- 【完了】`domain/classification/rules/SimilarPatternRule.ts`（`ClassificationRule` 実装・kind=`SIMILARITY`・`SimilarIncidentRepository.search` を内包・最類似ヒット採用→スコア正規化→`ClassificationConfidence`(0〜1)・閾値未満は null 棄権・`type:"known"` の graded 分類を返す）＋ `SimilarPatternRule.test.ts`（9ケース：棄権/閾値境界/最大採用/正規化/クランプ/severity/クエリ組立）。**分岐ロジックが厚いので fake 注入の UT で担保**
+- 【完了】`SimilarIncident/infrastructure/InMemorySimilarIncidentRepository.ts` に `search`(Jaccard 字句類似 [0,1]) を**追加**（独立アダプタ `InMemorySimilarIncidentSearchAdapter.ts` は廃止＝統合）。**Elastic 無しでもデモ/E2Eで graded confidence を通すフォールバック兼 application 層 UT 用**
+- 【完了】`SimilarIncident/infrastructure/ElasticSimilarIncidentRepository.ts`（**本物の Elasticsearch アダプタ**・`SimilarIncidentRepository` を実装）。既存スキャフォルド `Shared/.../elasticsearch/`（`ElasticClientFactory`/`ElasticConfig`）に乗せて接続・index 自動生成。`findSimilar`=eventName 厳密一致(`.keyword` term)＋resolvedAt 降順／`index`=冪等追記／`search`=`multi_match`(eventName^2,resolvedNote, fuzziness AUTO) で**生 _score** を返す（正規化は Rule）。`@elastic/elasticsearch@^7.17`（scaffold のレスポンス形に合わせ v7）を workspace root に追加
+- 【完了】**死蔵スキャフォルド削除**: `ElasticRepository.ts`/`ElasticCriteriaConverter.ts` は誰も使っておらず（自己参照のみ）、`AggregateRoot` 制約＋スコア非対応（`_score` を捨てる）で SimilarIncident（type の projection）には不適合。これらが依存していた `bodybuilder`/`http-status`（未インストールの旧ライブラリ）ごと削除。新アダプタは最新クライアントの素のクエリオブジェクトで書くので両ライブラリ不要
+- 【完了】実 ES コンテナで疎通検証済み（index→findSimilar→search→`SimilarPatternRule.classify` まで通し）。BM25 生スコアは短文 corpus だと max 数程度なので `scoreCeiling` を env で調整可能化（既定 5・`minConfidence` 既定 0.6）
+- 【完了】docker-compose / Makefile: `elasticsearch`(7.17.18 single-node/security無効) を `docker-compose.yml` に追加＋`docker-compose.local.yml` で 9200 公開／`ELASTICSEARCH_URL` 注入／`es-data` volume／backoffice `depends_on` 健全待ち。`Makefile` の `infra-up`/`infra-down` に `elasticsearch` を追加（`make up`/`make e2e` で自動起動）。`.env.example`/`backoffice config.ts` に `ELASTICSEARCH_URL`/`*_INDEX`/`*_SCORE_CEILING`/`*_MIN_CONFIDENCE`
+- 【完了】配線（composition root＝`BackofficeApp.buildSimilarIncidentRepository`）: `ELASTICSEARCH_URL` 設定時のみ ES リポジトリを `similarIncidentRepository` に使い `SimilarPatternRule` を policy へ追加。**未設定なら InMemory＝従来挙動（完全一致のみ）でE2E無傷**にする opt-in 方式。E2E はフィードバック投入が無く ES が空のまま＝`search` が常に空→Rule 棄権なので、ES 常時起動でも分類結果は不変。`AlertClassifier` IF も `AnalyzeAlertCommandHandler`/`AnalyzeAlertUseCase` もノータッチ（類似一致は `matched:true`→`createFromKnownPattern`→AI調査スキップ＝「準・既知」確度付き）
 - UI/レポートで low/中/high バンド表示（`ClassificationConfidence.isHighConfidence()` 等）。`classification.confidence` フィールドは世代互換なので表示コードは不変
+- 設計判断（スコア正規化の置き場）: 生スコアの尺度（BM25 は数十／cosine・RRF は 1 付近）は**バックエンド固有**なので、repository は生 `score` を返し、`SimilarPatternRule` が注入された `scoreCeiling`（飽和点）で `[0,1]` 正規化する。バックエンド尺度を domain に漏らさず、ceiling は composition root で調整可能（Sorter が kind しか見ない／リトライを GeminiLLMClient に寄せたのと同じ DIP 方針）
+- 設計判断（severity）: 類似一致は重大度を断定できないため、コンストラクタ注入の既定 severity（既定 `WARNING`）を使う。AI調査/フィードバックが後で精緻化する
+- 設計判断（patternId）: `similar:${incident.id}` 接頭辞で「KnownErrorPattern 参照ではなく解決済みインシデント参照」を明示。自動昇格は `classification.type==="unknown"` 限定なので類似一致(known)は誤昇格しない
+- 設計判断（InfraEvidence クエリ強化は見送り）: `ClassificationRule.classify` は `MonitoringEvent` のみ受け取る契約。`InfraInvestigationPort` を rule に内包すると **AlertAnalysis→AIInvestigation の逆向き依存（既存は AIInvestigation→AlertAnalysis の一方向）でモジュール循環**になり、かつ分類ホットパス全件にインフラ収集レイテンシが乗る。よってクエリは eventName＋payload から組み立てる（InfraEvidence 強化は将来 Source 経由で別途検討）
+- 将来改善: `search` は現状 `multi_match`(BM25 字句＋fuzziness) のみ。真のハイブリッド（kNN ベクトル併用）には embedding プロバイダが要るので別途。`scoreCeiling` の corpus 別自動較正、ES への ES_e2e シナリオ追加（現状はライブ疎通スクリプトで確認・UT は Rule 側で担保）も将来課題
 
 ### タスク 24: PatternPromotionPolicy 抽象化（昇格判定の差し替え可能化）〔P1〕
 

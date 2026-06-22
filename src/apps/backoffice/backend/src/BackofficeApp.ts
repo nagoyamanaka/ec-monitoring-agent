@@ -17,6 +17,8 @@ import { ApplicationClassificationPolicy } from "../../../../Contexts/Monitoring
 import { PolicyBasedAlertClassifier } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/PolicyBasedAlertClassifier.js";
 import { ClassificationRuleSorter } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/ClassificationRuleSorter.js";
 import { KnownPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/rules/KnownPatternRule.js";
+import { SimilarPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/rules/SimilarPatternRule.js";
+import { ClassificationRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/ClassificationRule.js";
 import { MongoAlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoAlertRepository.js";
 import { MongoKnownErrorPatternRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoKnownErrorPatternRepository.js";
 import { InvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.js";
@@ -30,6 +32,12 @@ import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestig
 import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/GitHubGatewayImpl.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
 import { InMemorySimilarIncidentRepository } from "../../../../Contexts/Monitoring/SimilarIncident/infrastructure/InMemorySimilarIncidentRepository.js";
+import {
+  ElasticSimilarIncidentRepository,
+  SIMILAR_INCIDENTS_INDEX_CONFIG,
+} from "../../../../Contexts/Monitoring/SimilarIncident/infrastructure/ElasticSimilarIncidentRepository.js";
+import { SimilarIncidentRepository } from "../../../../Contexts/Monitoring/SimilarIncident/domain/SimilarIncidentRepository.js";
+import { ElasticClientFactory } from "../../../../Contexts/Shared/infrastructure/persistence/elasticsearch/ElasticClientFactory.js";
 import { CommandHandlers } from "../../../../Contexts/Shared/infrastructure/CommandBus/CommandHandlers.js";
 import { InMemoryCommandBus } from "../../../../Contexts/Shared/infrastructure/CommandBus/InMemoryCommandBus.js";
 import { DomainEventFailoverPublisher } from "../../../../Contexts/Shared/infrastructure/EventBus/DomainEventFailoverPublisher/DomainEventFailoverPublisher.js";
@@ -81,14 +89,16 @@ export class BackofficeApp {
 
     const alertRepository = new MongoAlertRepository(mongoClient);
     const knownErrorPatternRepository = new MongoKnownErrorPatternRepository(mongoClient);
-    const similarIncidentRepository = new InMemorySimilarIncidentRepository();
-    await similarIncidentRepository.warmUp([]);
+
+    // 完全一致は常時。ES 設定時のみ類似度（graded confidence）の SimilarPatternRule を足す。
+    const rules: ClassificationRule[] = [
+      new KnownPatternRule(knownErrorPatternRepository),
+    ];
+    const similarIncidentRepository =
+      await this.buildSimilarIncidentRepository(rules);
 
     const classifier = new PolicyBasedAlertClassifier([
-      new ApplicationClassificationPolicy(
-        [new KnownPatternRule(knownErrorPatternRepository)],
-        new ClassificationRuleSorter(),
-      ),
+      new ApplicationClassificationPolicy(rules, new ClassificationRuleSorter()),
     ]);
 
     // ★差し替えポイント: ローカルE2E では Stub に切替え（Gemini課金・非決定性を排除）
@@ -190,6 +200,37 @@ export class BackofficeApp {
   async stop(): Promise<void> {
     await this.connection?.close();
     await this.server?.stop();
+  }
+
+  // ES 設定時は Elasticsearch を SimilarIncident の永続＋類似検索に使い、SimilarPatternRule を分類に追加する。
+  // 未設定時は InMemory にフォールバック（従来挙動＝完全一致のみ・分類は変えない）。
+  private async buildSimilarIncidentRepository(
+    rules: ClassificationRule[],
+  ): Promise<SimilarIncidentRepository> {
+    if (!config.elasticsearch.url) {
+      const inMemory = new InMemorySimilarIncidentRepository();
+      await inMemory.warmUp([]);
+      return inMemory;
+    }
+
+    const esClient = ElasticClientFactory.createClient("backoffice-similar-incidents", {
+      url: config.elasticsearch.url,
+      indexName: config.elasticsearch.similarIncidentsIndex,
+      indexConfig: SIMILAR_INCIDENTS_INDEX_CONFIG,
+    });
+    const esRepository = new ElasticSimilarIncidentRepository(
+      esClient,
+      config.elasticsearch.similarIncidentsIndex,
+    );
+    // BM25 の生スコアを scoreCeiling で [0,1] 正規化、minConfidence 未満は棄権（いずれも env 調整可）。
+    rules.push(
+      new SimilarPatternRule(
+        esRepository,
+        config.elasticsearch.similarMinConfidence,
+        config.elasticsearch.similarScoreCeiling,
+      ),
+    );
+    return esRepository;
   }
 
   private async configureEventBus(

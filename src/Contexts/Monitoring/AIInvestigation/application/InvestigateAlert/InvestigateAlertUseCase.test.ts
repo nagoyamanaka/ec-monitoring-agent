@@ -65,6 +65,7 @@ const makeSimilarRepo = (
 ): SimilarIncidentRepository => ({
   findSimilar: async () => incidents,
   index: async () => {},
+  search: async () => [],
 });
 
 describe("InvestigateAlertUseCase", () => {

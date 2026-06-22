@@ -14,10 +14,10 @@ DC := docker compose $(COMPOSE_FILES_$(ENV))
 
 # ── Infra ─────────────────────────────────────────────────────
 infra-up:
-	$(DC) up -d mongo rabbitmq
+	$(DC) up -d mongo rabbitmq elasticsearch
 
 infra-down:
-	$(DC) stop mongo rabbitmq
+	$(DC) stop mongo rabbitmq elasticsearch
 
 # ── EC ────────────────────────────────────────────────────────
 ec-up: infra-up
