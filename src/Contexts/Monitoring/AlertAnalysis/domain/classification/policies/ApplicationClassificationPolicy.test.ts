@@ -24,6 +24,7 @@ class StubRule implements ClassificationRule {
 function classification(patternName: string): KnownAlertClassification {
   return {
     type: "known",
+    source: ClassificationRuleKind.EXACT_MATCH,
     patternId: `id-${patternName}`,
     patternName,
     severity: AlertSeverity.warning(),

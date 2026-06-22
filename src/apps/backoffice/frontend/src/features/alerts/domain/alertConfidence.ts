@@ -23,9 +23,13 @@ export function alertConfidence(alert: AlertView): AlertConfidence {
   if (isAnalyzing(alert)) return { kind: "none" };
 
   if (alert.classification.type === "known") {
-    const value = alert.classification.confidence;
-    // 完全一致（>=1）は AI 推定ではなく確定分類。％表示せず「完全一致」と見せる。
-    return value >= 1 ? { kind: "exact-match" } : { kind: "known", value };
+    const { source, confidence } = alert.classification;
+    // 由来で出し分ける（confidence>=1 の嗅ぎ分けでなく source を一級判別子に）。
+    // EXACT_MATCH は AI 推定でない確定分類なので％表示せず「完全一致」。
+    // SIMILARITY/INFERENCE は部分一致なのでパターン一致度 N% を見せる。
+    return source === "EXACT_MATCH"
+      ? { kind: "exact-match" }
+      : { kind: "known", value: confidence };
   }
 
   // 未知パターンは AI 調査レポートの confidence が推定確信度。レポート未着は none。

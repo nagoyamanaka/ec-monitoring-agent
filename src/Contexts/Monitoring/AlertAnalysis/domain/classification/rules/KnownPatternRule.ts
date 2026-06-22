@@ -53,6 +53,7 @@ export class KnownPatternRule implements ClassificationRule {
 
       return {
         type: "known",
+        source: this.kind,
         patternId: pattern.id,
         patternName: pattern.name,
         severity: pattern.severity,

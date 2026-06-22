@@ -1,5 +1,6 @@
 import { DomainError } from "../../../Shared/domain/errors/DomainError.js";
 import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
+import { ClassificationRuleKind } from "./classification/ClassificationRuleKind.js";
 import type {
   MatchedCondition,
   UnmatchedCondition,
@@ -52,6 +53,8 @@ export class ClassificationConfidence {
 
 export type KnownAlertClassification = {
   readonly type: "known";
+  // 当てた分類ルールの種別。完全一致(EXACT_MATCH)/類似一致(SIMILARITY)/AI推論(INFERENCE) を判別する。
+  readonly source: ClassificationRuleKind;
   readonly patternId: string;
   readonly patternName: string;
   // KnownErrorPattern.severity を Classifier 側で解決済み（Alert が KnownErrorPattern に直接依存しない）
@@ -76,6 +79,7 @@ export function alertClassificationToPrimitives(
   if (classification.type === "known") {
     return {
       type: "known",
+      source: classification.source,
       patternId: classification.patternId,
       patternName: classification.patternName,
       severity: classification.severity.value,
@@ -93,6 +97,7 @@ export function alertClassificationFromPrimitives(
   if (primitives.type === "known") {
     return {
       type: "known",
+      source: primitives.source as ClassificationRuleKind,
       patternId: primitives.patternId,
       patternName: primitives.patternName,
       severity: AlertSeverity.fromString(primitives.severity),

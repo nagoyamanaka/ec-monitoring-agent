@@ -218,7 +218,7 @@
 > **位置づけの再整理（重要）**: 昇格は「学習そのもの」ではなく、`step4-1` 2章 ②「**頻出が確定した知識を完全一致の高速パスに焼き付ける結晶化**」。連続的な確度は タスク17（SimilarPatternRule）が担うので、**昇格しきい値の微調整は correctness クリティカルではない**（未昇格でも類似確度で「準・既知」分類されるため、未知に取り残されない）。よって本タスクは「結晶化ゲートを賢くする最適化」＝**nice-to-have**。タスク17 実装後に効果を測ってから着手可。
 > 狙い: 「類似確度が高く頻出が確定したものは feedback 1 回でも焼き付け、確度が低ければ複数回要求」。固定回数 → 加重スコアへ。
 
-- 【前提】タスク17 の `SimilarPatternRule` が `classification.confidence`（0〜1）を返していること。これを昇格判定の主信号にする
+- 【前提✅充足済み】タスク17（✅ 完了済み）の `SimilarPatternRule` が `classification.confidence`（0〜1）を返していること。これを昇格判定の主信号にする
 - 【新規】`AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.ts`（`PatternPromotionPolicy` 実装）
   - スコア式: `score = humanWeight(correctFeedbackCount) + similarityWeight(classification.confidence) + evidenceWeight(任意・InfraEvidence源数) − penalty`、`score >= 1.0` で昇格
   - 重み案（現挙動と互換）: correct 1回=+0.4（3回単独で 1.2≥1.0＝従来と一致）／類似確度≥0.8=+0.3・≥0.6=+0.1／（任意）独立証拠源1つ=+0.2（上限+0.4）／`isFallback`=ハード除外／却下=減点 or ブロック

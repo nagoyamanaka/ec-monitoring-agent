@@ -28,10 +28,15 @@ export type MatchedConditionView = {
   readonly actualValue: unknown;
 };
 
+/** 分類の由来（どのルールが当てたか）。backend の ClassificationRuleKind と整合。 */
+export type ClassificationSource = "EXACT_MATCH" | "SIMILARITY" | "INFERENCE";
+
 /** 分類結果の表示用型。未知障害（unknown）は confidence が null。 */
 export type AlertClassificationView =
   | {
       readonly type: "known";
+      /** 完全一致(EXACT_MATCH)/類似一致(SIMILARITY)/AI推論(INFERENCE) の判別子。表示の出し分けに使う。 */
+      readonly source: ClassificationSource;
       readonly patternId: string;
       readonly patternName: string;
       readonly confidence: number;
@@ -68,6 +73,7 @@ function toClassificationView(
   if (dto.type === "known") {
     return {
       type: "known",
+      source: dto.source as ClassificationSource,
       patternId: dto.patternId,
       patternName: dto.patternName,
       confidence: dto.confidence,

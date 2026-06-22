@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { alertConfidence } from "./alertConfidence";
 import { makeAlert, makeReport } from "../test-support/alertFixture";
+import type { ClassificationSource } from "./AlertView";
 
-const knownClassification = (confidence: number) =>
+const knownClassification = (
+  source: ClassificationSource,
+  confidence: number,
+) =>
   ({
     type: "known" as const,
+    source,
     patternId: "p-1",
     patternName: "決済APIタイムアウト",
     confidence,
@@ -18,18 +23,24 @@ describe("alertConfidence", () => {
     ).toEqual({ kind: "none" });
   });
 
-  it("既知パターンの完全一致（confidence>=1）は exact-match（％を持たない）", () => {
+  it("EXACT_MATCH 由来は exact-match（％を持たない・confidence 値に依存しない）", () => {
     expect(
       alertConfidence(
-        makeAlert({ report: null, classification: knownClassification(1) }),
+        makeAlert({
+          report: null,
+          classification: knownClassification("EXACT_MATCH", 1),
+        }),
       ),
     ).toEqual({ kind: "exact-match" });
   });
 
-  it("既知パターンの部分一致は known＋一致度", () => {
+  it("SIMILARITY 由来（類似一致）は known＋一致度", () => {
     expect(
       alertConfidence(
-        makeAlert({ report: null, classification: knownClassification(0.7) }),
+        makeAlert({
+          report: null,
+          classification: knownClassification("SIMILARITY", 0.7),
+        }),
       ),
     ).toEqual({ kind: "known", value: 0.7 });
   });

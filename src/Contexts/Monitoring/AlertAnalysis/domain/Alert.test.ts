@@ -3,6 +3,7 @@ import { Alert } from "./Alert.js";
 import { AlertId } from "./AlertId.js";
 import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { ClassificationConfidence, KnownAlertClassification } from "./AlertClassification.js";
+import { ClassificationRuleKind } from "./classification/ClassificationRuleKind.js";
 import { MonitoringEvent } from "../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../Shared/domain/MonitoringEventCategory.js";
 import { InvestigationReport } from "./InvestigationReport.js";
@@ -22,6 +23,7 @@ const testEvent = new MonitoringEvent({
 
 const knownClassification: KnownAlertClassification = {
   type: "known",
+  source: ClassificationRuleKind.EXACT_MATCH,
   patternId: "pattern-001",
   patternName: "PAYMENT_TIMEOUT",
   severity: AlertSeverity.critical(),

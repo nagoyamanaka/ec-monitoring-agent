@@ -156,6 +156,7 @@ describe("InvestigateAlertUseCase", () => {
         occurredOn: new Date("2025-12-01T00:00:00.000Z"),
         resolvedNote: "再起動で解消",
         resolvedAt: new Date("2025-12-01T01:00:00.000Z"),
+        severity: AlertSeverity.warning(),
       };
       const useCase = makeUseCase(port, notifier, makeSimilarRepo([similar]));
 

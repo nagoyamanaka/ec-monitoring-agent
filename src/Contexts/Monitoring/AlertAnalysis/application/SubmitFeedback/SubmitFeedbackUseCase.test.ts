@@ -13,6 +13,7 @@ import {
   ClassificationConfidence,
   KnownAlertClassification,
 } from "../../domain/AlertClassification.js";
+import { ClassificationRuleKind } from "../../domain/classification/ClassificationRuleKind.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 import { Criteria } from "../../../../Shared/domain/criteria/Criteria.js";
@@ -50,6 +51,7 @@ const makeReport = () =>
 
 const makeKnownClassification = (): KnownAlertClassification => ({
   type: "known",
+  source: ClassificationRuleKind.EXACT_MATCH,
   patternId: "pattern-1",
   patternName: "PAYMENT_TIMEOUT",
   severity: AlertSeverity.critical(),

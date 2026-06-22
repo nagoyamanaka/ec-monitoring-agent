@@ -40,7 +40,7 @@
 **① 連続的な確度（分類の確度・読み取り）＝学習の本体**
 
 - 正解フィードバックは毎回 `SimilarIncident` として蓄積される（確度の母集団が太る）。
-- 将来 `SimilarPatternRule`（kind=`SIMILARITY`・Elastic hybrid search）がそれを読み、**完全一致でなくても「過去のDB枯渇に82%類似・確度 中」のような graded confidence で分類**する。
+- `SimilarPatternRule`（kind=`SIMILARITY`・ES `multi_match` + fuzziness）がそれを読み、**完全一致でなくても「過去のDB枯渇に82%類似・確度 中」のような graded confidence で分類**する（✅ タスク17 実装済み）。
 - `ClassificationConfidence`（0〜1・`isHighConfidence()`）で low/中/high バンドを表現。**この確度をレポートに出すこと自体が意思決定支援**＝「未知です」より圧倒的に価値が高い（差別化テーブルの「評価（confidence付き）」の実体）。
 
 **② 離散的な結晶化（昇格・書き込み）＝高速パスの最適化**
@@ -55,7 +55,7 @@
 | 起点 | 確認回数・確度がしきい値到達                   | 人間が「確実」と判断                 |
 | 値   | 統計的合意による焼き付け（早とちりを防ぐゲート） | 即時・人間のオーバーライド           |
 
-> **正直な現状と弱点**: 今は分類が exact-match のみ＝**0/1 で粗い**。① の本体（`SimilarPatternRule`）は未実装で、`SimilarIncident` はまだ AI 調査の文脈強化にしか使われていない。これを分類段階へ引き込むのが **`step4-2` タスク17**（＝graded confidence の本体）。② の昇格ゲートを「回数固定 → 類似確度を取り込んだ加重」にするのが **タスク24/25**。confidence の出処が増えても `classification.confidence` / UI は不変（世代互換設計）。
+> **現状（✅ タスク17 完了済み）**: ① の本体（`SimilarPatternRule`）は**実装済み**。正解フィードバック蓄積 → `SimilarIncident.search()` graded confidence 分類が通るようになり、`SimilarIncident` は AI 調査の文脈強化＋分類段階の両方に接続された（`ELASTICSEARCH_URL` 設定時は ES `multi_match`・未設定時は InMemory Jaccard でフォールバック）。② の昇格ゲートを「回数固定 → 類似確度を取り込んだ加重」にするのが **タスク24/25**。confidence の出処が増えても `classification.confidence` / UI は不変（世代互換設計）。
 
 > **発表の一言**: デモシナリオ3「次回1秒で既知」は ②（結晶化）の効果。だが**学習の連続性・確度付き意思決定支援は ①（`SimilarIncident` 蓄積 → 類似分類）が生む**。昇格は「学習」ではなく「よく確認された知識を安価な高速パスに焼き付ける最適化」と捉えるのが正確。
 
@@ -305,7 +305,7 @@ stretchⅡ の予兆は「既知の未来シグナル × 過去インシデン�
   AnalyzeAlertUseCase                       （CommandBus 経由）
     │  AlertClassifier.classify(monitoringEvent)
     │
-    ├─【既知＝完全一致】──────────────────┐
+    ├─【既知（完全一致 or 類似一致）】───────┐
     │   Alert.createFromKnownPattern()     │
     │   AlertRepository.save() [OPEN]      │
     │   SSEAlertNotifier.notify()          │
@@ -382,12 +382,13 @@ stretchⅡ の予兆は「既知の未来シグナル × 過去インシデン�
         ┌────────────────────────────────────────────┐
         │ AnalyzeAlertUseCase.run()                   │
         │   AlertClassifier.classify(monitoringEvent) │
-        │   └ KnownPatternRule（eventName+payload 完全一致）│
+        │   ├ KnownPatternRule（eventName+payload 完全一致・confidence 1.0）│
+        │   └ SimilarPatternRule（ES multi_match graded confidence・ELASTICSEARCH_URL 設定時）│
         └────────────────────────────────────────────┘
                              │
             matched: true    │    matched: false
          ┌───────────────────┴────────────────────┐
-         ▼【既知＝完全一致】                        ▼【未知】
+         ▼【既知（完全一致 or 類似一致）】           ▼【未知】
   Alert.createFromKnownPattern()           Alert.createAsUnknown()
          │                                        │
   AlertRepository.save()                   AlertRepository.save()
@@ -412,7 +413,7 @@ stretchⅡ の予兆は「既知の未来シグナル × 過去インシデン�
                           └──────────────────────────────────────────────┘
 ```
 
-> **要点**: 「完全一致 → 即終了」は決定論的に安く済む `AnalyzeAlert`（上流）で完結し、コストのかかる AI 調査は未知時のみ。両者は EventBus（`InvestigateAlertDomainEvent`）で疎結合。受け口は `InvestigateAlertOnAlertClassifiedUnknown`（`DomainEventSubscriber`）が直接担い、Command/CommandHandler の二段ホップは挟まない。
+> **要点**: 「完全一致 or 類似一致（graded confidence） → 即終了」は `AnalyzeAlert`（上流）で完結し、コストのかかる AI 調査は未知時のみ。両者は EventBus（`InvestigateAlertDomainEvent`）で疎結合。受け口は `InvestigateAlertOnAlertClassifiedUnknown`（`DomainEventSubscriber`）が直接担い、Command/CommandHandler の二段ホップは挟まない。
 
 ---
 
