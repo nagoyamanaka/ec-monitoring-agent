@@ -1,6 +1,7 @@
 import { Client as ElasticClient } from "@elastic/elasticsearch";
 import { Criteria } from "../../../Shared/domain/criteria/Criteria.js";
 import { Uuid } from "../../../Shared/domain/value-object/Uuid.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { SimilarIncident } from "../domain/SimilarIncident.js";
 import {
   ResolvedIncident,
@@ -23,6 +24,7 @@ export const SIMILAR_INCIDENTS_INDEX_CONFIG = {
       occurredOn: { type: "date" },
       resolvedNote: { type: "text" },
       resolvedAt: { type: "date" },
+      severity: { type: "keyword" },
     },
   },
 } as const;
@@ -33,6 +35,7 @@ type IncidentDoc = {
   occurredOn: string;
   resolvedNote: string;
   resolvedAt: string;
+  severity: string;
 };
 
 type EsSearchBody<D> = {
@@ -71,6 +74,7 @@ export class ElasticSimilarIncidentRepository
       occurredOn: incident.occurredOn.toISOString(),
       resolvedNote: incident.resolvedNote,
       resolvedAt: new Date().toISOString(),
+      severity: incident.severity.value,
     };
     await client.index({ index: this.indexName, id, body: doc, refresh: true });
   }
@@ -135,6 +139,7 @@ export class ElasticSimilarIncidentRepository
       occurredOn: incident.occurredOn.toISOString(),
       resolvedNote: incident.resolvedNote,
       resolvedAt: incident.resolvedAt.toISOString(),
+      severity: incident.severity.value,
     };
   }
 
@@ -145,6 +150,7 @@ export class ElasticSimilarIncidentRepository
       occurredOn: new Date(doc.occurredOn),
       resolvedNote: doc.resolvedNote,
       resolvedAt: new Date(doc.resolvedAt),
+      severity: AlertSeverity.fromString(doc.severity),
     };
   }
 }

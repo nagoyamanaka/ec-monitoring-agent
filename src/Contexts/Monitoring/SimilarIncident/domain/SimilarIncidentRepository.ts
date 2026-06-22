@@ -1,4 +1,5 @@
 import { Criteria } from "../../../Shared/domain/criteria/Criteria.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { SimilarIncident } from "./SimilarIncident.js";
 
 // インデックス登録用（正解フィードバック時に解決済みインシデントとして登録する）
@@ -6,6 +7,7 @@ export type ResolvedIncident = {
   readonly eventName: string;
   readonly occurredOn: Date;
   readonly resolvedNote: string;
+  readonly severity: AlertSeverity;
 };
 
 // 類似度スコア付きの検索ヒット。score は検索バックエンドが返す関連度（高いほど類似）。

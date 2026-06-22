@@ -59,6 +59,7 @@ export class SubmitFeedbackUseCase {
       eventName: alert.monitoringEvent.eventName,
       occurredOn: alert.monitoringEvent.occurredOn,
       resolvedNote: operatorNote ?? "正解フィードバックによる解決",
+      severity: alert.severity,
     };
     await this.similarIncidentRepository.index(incident);
   }

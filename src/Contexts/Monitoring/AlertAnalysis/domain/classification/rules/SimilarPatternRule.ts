@@ -1,5 +1,4 @@
 import { MonitoringEvent } from "../../../../Shared/domain/MonitoringEvent.js";
-import { AlertSeverity } from "../../../../Shared/domain/AlertSeverity.js";
 import { SimilarIncidentRepository } from "../../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import {
   ClassificationConfidence,
@@ -28,8 +27,6 @@ export class SimilarPatternRule implements ClassificationRule {
     private readonly similarIncidents: SimilarIncidentRepository,
     private readonly minConfidence: number = DEFAULT_MIN_CONFIDENCE,
     private readonly scoreCeiling: number = DEFAULT_SCORE_CEILING,
-    // 類似一致は重大度を断定できないため保守的な既定値を使う（AI調査/フィードバックが後で精緻化）
-    private readonly defaultSeverity: AlertSeverity = AlertSeverity.warning(),
     private readonly limit: number = DEFAULT_LIMIT,
   ) {}
 
@@ -69,10 +66,11 @@ export class SimilarPatternRule implements ClassificationRule {
 
     return {
       type: "known",
+      source: this.kind,
       // KnownErrorPattern ではなく解決済みインシデント参照であることを id 接頭辞で明示
       patternId: `similar:${best.incident.id}`,
       patternName: `類似既知: ${best.incident.eventName}`,
-      severity: this.defaultSeverity,
+      severity: best.incident.severity,
       confidence: ClassificationConfidence.of(confidenceValue),
       matchedConditions,
       unmatchedConditions: [],

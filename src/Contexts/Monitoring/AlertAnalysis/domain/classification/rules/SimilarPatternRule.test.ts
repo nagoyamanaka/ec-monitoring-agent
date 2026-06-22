@@ -31,6 +31,7 @@ function makeIncident(params: {
   id?: string;
   eventName?: string;
   resolvedNote?: string;
+  severity?: AlertSeverity;
 }): SimilarIncident {
   return {
     id: params.id ?? "inc-001",
@@ -38,6 +39,7 @@ function makeIncident(params: {
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     resolvedNote: params.resolvedNote ?? "在庫枯渇により失敗",
     resolvedAt: new Date("2026-01-02T00:00:00.000Z"),
+    severity: params.severity ?? AlertSeverity.warning(),
   };
 }
 
@@ -131,12 +133,11 @@ describe("SimilarPatternRule", () => {
     expect(result?.confidence.value).toBe(1);
   });
 
-  it("severity は注入された既定値を使う", async () => {
+  it("severity はマッチしたインシデントの severity を引き継ぐ", async () => {
     const rule = new SimilarPatternRule(
-      new FakeSearchPort([{ incident: makeIncident({}), score: 0.9 }]),
-      0.6,
-      1,
-      AlertSeverity.critical(),
+      new FakeSearchPort([
+        { incident: makeIncident({ severity: AlertSeverity.critical() }), score: 0.9 },
+      ]),
     );
 
     const result = await rule.classify(makeEvent());
