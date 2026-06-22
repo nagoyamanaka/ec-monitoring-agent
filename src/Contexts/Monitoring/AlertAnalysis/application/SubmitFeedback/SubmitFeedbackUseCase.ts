@@ -1,3 +1,4 @@
+import { EvidenceWeightedPromotionPolicy } from "@monitoring/AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { Uuid } from "../../../../Shared/domain/value-object/Uuid.js";
 import { ResolvedIncident } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
@@ -7,7 +8,6 @@ import { AlertId } from "../../domain/AlertId.js";
 import { AlertRepository } from "../../domain/AlertRepository.js";
 import { KnownErrorPattern } from "../../domain/KnownErrorPattern.js";
 import { KnownErrorPatternRepository } from "../../domain/KnownErrorPatternRepository.js";
-import { FixedThresholdPromotionPolicy } from "../../domain/promotion/FixedThresholdPromotionPolicy.js";
 import { PatternPromotionPolicy } from "../../domain/promotion/PatternPromotionPolicy.js";
 import { MonitoringResourceNotFoundError } from "../errors/MonitoringResourceNotFoundError.js";
 
@@ -17,8 +17,9 @@ export class SubmitFeedbackUseCase {
     private readonly knownErrorPatternRepository: KnownErrorPatternRepository,
     private readonly similarIncidentRepository: SimilarIncidentRepository,
     private readonly logger: Logger,
-    // 昇格判定（いつ結晶化するか）は差し替え可能なドメインサービスへ委譲。既定は現挙動の固定回数。
-    private readonly promotionPolicy: PatternPromotionPolicy = new FixedThresholdPromotionPolicy(),
+    // 昇格判定（いつ結晶化するか）は差し替え可能なドメインサービスへ委譲。
+    //既定はソースの信頼性に応じた加重度で判定。
+    private readonly promotionPolicy: PatternPromotionPolicy = new EvidenceWeightedPromotionPolicy(),
   ) {}
 
   async run(params: {

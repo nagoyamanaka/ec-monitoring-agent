@@ -212,21 +212,21 @@
 - 設計判断: 「いつ昇格するか（判定）」と「どう昇格するか（KnownErrorPattern 構築・save・ログ）」を分離。判定をドメインへ、構築は UseCase に残す。低コストで今でも入れられ、式の進化を吸収する受け皿になる
 - テスト: `FixedThresholdPromotionPolicy` の分岐（回数未満／到達／既知分類除外／fallback除外／report無除外）をユニットテスト
 
-### タスク 25: EvidenceWeightedPromotionPolicy（結晶化ゲートの加重化）〔P1・低優先〕
+### タスク 25: EvidenceWeightedPromotionPolicy（結晶化ゲートの加重化）〔P1・低優先〕✅ 完了済み
 
 > 採番は末尾追加（位置づけ P1・**低優先**）。**タスク24（抽象化）に依存。主たる証拠信号は タスク17（類似確度）**（旧版はタスク15依存と書いていたが、下記の整理で主信号を類似確度に変更）。
 > **位置づけの再整理（重要）**: 昇格は「学習そのもの」ではなく、`step4-1` 2章 ②「**頻出が確定した知識を完全一致の高速パスに焼き付ける結晶化**」。連続的な確度は タスク17（SimilarPatternRule）が担うので、**昇格しきい値の微調整は correctness クリティカルではない**（未昇格でも類似確度で「準・既知」分類されるため、未知に取り残されない）。よって本タスクは「結晶化ゲートを賢くする最適化」＝**nice-to-have**。タスク17 実装後に効果を測ってから着手可。
 > 狙い: 「類似確度が高く頻出が確定したものは feedback 1 回でも焼き付け、確度が低ければ複数回要求」。固定回数 → 加重スコアへ。
 
-- 【前提✅充足済み】タスク17（✅ 完了済み）の `SimilarPatternRule` が `classification.confidence`（0〜1）を返していること。これを昇格判定の主信号にする
-- 【新規】`AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.ts`（`PatternPromotionPolicy` 実装）
-  - スコア式: `score = humanWeight(correctFeedbackCount) + similarityWeight(classification.confidence) + evidenceWeight(任意・InfraEvidence源数) − penalty`、`score >= 1.0` で昇格
-  - 重み案（現挙動と互換）: correct 1回=+0.4（3回単独で 1.2≥1.0＝従来と一致）／類似確度≥0.8=+0.3・≥0.6=+0.1／（任意）独立証拠源1つ=+0.2（上限+0.4）／`isFallback`=ハード除外／却下=減点 or ブロック
-  - 例: 類似確度 0.85（+0.3）＋証拠1源（+0.2）→ feedback 1回（+0.4）で 0.9… もう1回で焼き付け、等。**「似ている度が高いほど少ない確認で結晶化」**
-- 設計判断（重み付けの根拠）: 信頼順は「**人間の承認 > 類似の積み上げ（SimilarIncident 母集団）> AI 自己申告 confidence**」。LLM の生 confidence は較正されておらず過信しがちなので主役にしない
-- 設計判断（却下の活用）: 現状 REJECTED は記録のみ。スコア式なら却下を減点／ブロックに使える。`correctFeedbackCount` だけでなく却下回数も Alert に持つか検討
-- 配線: composition root（step4-3 DI）で `PatternPromotionPolicy` 実装を `FixedThreshold` → `EvidenceWeighted` に差し替えるだけ。`SubmitFeedbackUseCase` はノータッチ
-- 設計判断（ADR種）: 「昇格を*学習*でなく*結晶化（高速パス焼き付け）*と位置づける理由」「結晶化ゲートを固定回数 → 類似確度加重へ上げる理由」を Step5 ADR に残す
+- 【完了】`AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.ts`（`PatternPromotionPolicy` 実装）＋ `EvidenceWeightedPromotionPolicy.test.ts`（後方互換2／確度加重4／ハード除外3／重み注入1 の全分岐 10ケース。**分岐ロジックなので fake不要の純ドメインUT**）
+  - スコア式: `score = humanWeight(correctFeedbackCount) + confidenceWeight(report.confidence)`、`score >= promoteThreshold(=1.0)` で昇格
+  - 重み（`DEFAULT_EVIDENCE_WEIGHTS`・`Partial<EvidenceWeights>` でコンストラクタ注入＝env非依存テスト可）: correct 1回=+0.4（3回単独で 1.2≥1.0＝**FixedThreshold(3) と一致**）／確度≥0.8=+0.3・≥0.6=+0.1／`type!=="unknown"`・report無・`isFallback`=ハード除外
+  - 例: 高確度 0.85（+0.3）→ feedback 2回（+0.8）で 1.1≥1.0 で焼き付け（低確度なら従来どおり3回要求）。**「似ている度が高いほど少ない確認で結晶化」**
+- 設計判断（**二次信号の出どころ**＝当初設計の修正点）: 昇格候補は常に `classification.type==="unknown"`（既知/類似一致は `createFromKnownPattern` 経由で昇格対象外）で、`UnknownAlertClassification.confidence` は**常に null**。よってタスク17 の `classification.confidence` は**昇格パスの Alert には載っていない**。代わりに Alert が実際に持つ graded confidence＝`investigationReport.confidence` を二次信号に使う。これは `InvestigateAlertUseCase` が SimilarIncident 母集団を AI 調査コンテキストへ流し込んだ結果の確度なので「類似の積み上げに裏打ちされた確度」という設計意図と整合する
+- 設計判断（重み付けの根拠）: 信頼順は「**人間の承認 > 類似の積み上げ（SimilarIncident 母集団）> AI 自己申告 confidence**」。LLM の生 confidence は較正されておらず過信しがちなので、人間承認を主係数（×0.4）、確度は補助係数（+0.3/+0.1）に抑える
+- 設計判断（証拠源数・却下は見送り）: `evidenceWeight(InfraEvidence源数)` は `Alert`/`InvestigationReport` に永続化されておらず（タスク15 の `evidenceSourceCount` 永続化は未実施）、`shouldPromote(alert: Alert)` 契約から取得不能なので**スコープ外**（任意信号なので影響なし）。却下減点も Alert が却下回数を持たず（最新 feedback のみ・しかも昇格パスは isCorrect=true 限定で最新は常に正解）、減点が効かないため見送り＝**Alert/contracts 拡張のスコープクリープを回避**。両者は将来 Alert 拡張時に再検討
+- 配線: composition root（step4-3 DI）で `PatternPromotionPolicy` 実装を `FixedThreshold` → `EvidenceWeighted` に差し替えるだけ。`SubmitFeedbackUseCase` はノータッチ（既定は引き続き `FixedThresholdPromotionPolicy`）
+- 設計判断（ADR種）: 「昇格を*学習*でなく*結晶化（高速パス焼き付け）*と位置づける理由」「結晶化ゲートを固定回数 → 確度加重へ上げる理由」「主信号を`classification.confidence`でなく`investigationReport.confidence`にした理由（unknown は confidence=null）」を Step5 ADR に残す
 - 注意: P0 提出は固定回数のままで成立。**タスク17（連続確度）が入れば本タスクの必要性はさらに下がる**＝後回し可
 
 ---
