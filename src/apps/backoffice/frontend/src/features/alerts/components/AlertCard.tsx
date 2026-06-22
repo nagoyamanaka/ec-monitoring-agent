@@ -52,7 +52,11 @@ function formatAbsoluteTime(iso: string): string {
  * レイアウトは2ゾーン: 左=内容（①ドメイン日本語ラベル＋eventName主役 ②従属メタ ③原因サマリ）、
  * 右=固定幅レール（対応状態＋確信度を集約）。右端の情報が散らず間延びしない。
  */
-export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps) {
+export function AlertCard({
+  alert,
+  selected = false,
+  onSelect,
+}: AlertCardProps) {
   const analyzing = isAnalyzing(alert);
   const confidence = alertConfidence(alert);
   // AI 調査が失敗した fallback レポートは confidence が当てにならない。
@@ -92,7 +96,10 @@ export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps)
             {title}
           </span>
           {info && (
-            <code className="shrink-0 text-xs text-slate-500" title={alert.eventName}>
+            <code
+              className="shrink-0 text-xs text-slate-500"
+              title={alert.eventName}
+            >
               {alert.eventName}
             </code>
           )}
@@ -113,7 +120,10 @@ export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps)
           >
             {category.label}
           </span>
-          <span className="shrink-0" title={formatAbsoluteTime(alert.occurredOn)}>
+          <span
+            className="shrink-0"
+            title={formatAbsoluteTime(alert.occurredOn)}
+          >
             {formatRelativeTime(alert.occurredOn)}
           </span>
         </div>
@@ -151,7 +161,7 @@ export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps)
         ) : confidence.kind === "known" ? (
           <ConfidenceChip
             confidence={confidence.value}
-            label="一致度"
+            label="類似度"
             tone="match"
           />
         ) : analyzing ? (

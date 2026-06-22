@@ -4,7 +4,7 @@ import { cn } from "../cn";
 export interface ConfidenceChipProps {
   /** 0..1 の確信度。範囲外はクランプする。 */
   confidence: number;
-  /** 数値の前に出すラベル。確信度の“正体”（AI確信度／一致度 等）を明示する。 */
+  /** 数値の前に出すラベル。確信度の“正体”（AI確信度／類似度 等）を明示する。 */
   label?: string;
   /**
    * 確信度の由来をトーン（色）で区別する。
