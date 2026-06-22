@@ -190,11 +190,22 @@ export class BackofficeApp {
     );
 
     this.server = new Server(config.port);
-    registerRoutes(this.server.router, commandBus, queryBus, sseNotifier, {
-      ecDemoGateway,
-      triggerScenarioUseCase,
-      demoResetUseCase,
-    });
+    registerRoutes(
+      this.server.router,
+      commandBus,
+      queryBus,
+      sseNotifier,
+      {
+        ecDemoGateway,
+        triggerScenarioUseCase,
+        demoResetUseCase,
+      },
+      {
+        // Cloud Monitoring 等の検知ソースからの ingest（EC イベントと同じ観測パイプラインに合流）。
+        collectMonitoringEventUseCase,
+        ingestToken: config.ingestToken,
+      },
+    );
     await this.server.listen();
   }
 
