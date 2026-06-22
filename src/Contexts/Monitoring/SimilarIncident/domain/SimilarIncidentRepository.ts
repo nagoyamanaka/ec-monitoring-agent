@@ -8,6 +8,8 @@ export type ResolvedIncident = {
   readonly occurredOn: Date;
   readonly resolvedNote: string;
   readonly severity: AlertSeverity;
+  // 元になった解決済み Alert の id（UI ディープリンク用の back-link）。
+  readonly sourceAlertId?: string;
 };
 
 // 類似度スコア付きの検索ヒット。score は検索バックエンドが返す関連度（高いほど類似）。

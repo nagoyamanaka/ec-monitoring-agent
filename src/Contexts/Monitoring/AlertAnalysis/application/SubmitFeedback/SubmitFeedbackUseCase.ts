@@ -57,8 +57,15 @@ export class SubmitFeedbackUseCase {
     const incident: ResolvedIncident = {
       eventName: alert.monitoringEvent.eventName,
       occurredOn: alert.monitoringEvent.occurredOn,
-      resolvedNote: operatorNote ?? "正解フィードバックによる解決",
+      // オペレーターのメモ＞AI調査summary＞汎用文字列の順でフォールバック。
+      // AI調査結果は手元の alert に載っているので「どう直したか」を記憶に残す。
+      resolvedNote:
+        operatorNote ??
+        alert.investigationReport?.summary ??
+        "正解フィードバックによる解決",
       severity: alert.severity,
+      // 元アラートへ辿れる back-link（UI ディープリンク用）
+      sourceAlertId: alert.id.value,
     };
     await this.similarIncidentRepository.index(incident);
   }

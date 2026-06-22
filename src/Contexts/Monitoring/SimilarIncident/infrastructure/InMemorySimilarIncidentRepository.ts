@@ -41,6 +41,7 @@ export class InMemorySimilarIncidentRepository implements SimilarIncidentReposit
       resolvedNote: incident.resolvedNote,
       resolvedAt: new Date(),
       severity: incident.severity,
+      sourceAlertId: incident.sourceAlertId,
     };
     this.incidents.unshift(entry); // 最新を先頭に
     if (this.incidents.length > MAX_INCIDENTS) {

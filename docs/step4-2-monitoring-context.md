@@ -1210,7 +1210,12 @@ const AUTO_PROMOTE_THRESHOLD = 3; // 正解フィードバック3回で自動昇
      new ResolvedIncident({
        eventName: updatedAlert.monitoringEvent.eventName,
        occurredOn: updatedAlert.monitoringEvent.occurredOn,
-       resolvedNote: operatorNote ?? '正解フィードバックによる解決',
+       // resolvedNote はオペレーターのメモ＞AI調査summary＞汎用文字列の順でフォールバック。
+       // 手元の alert に載る調査レポートの summary を拾い「どう直したか」を記憶に残す。
+       resolvedNote:
+         operatorNote ?? updatedAlert.investigationReport?.summary ?? '正解フィードバックによる解決',
+       severity: updatedAlert.severity,
+       sourceAlertId: updatedAlert.id.value, // 元アラートへの back-link（UI ディープリンク用）
      })
    ) を呼び出す
 
@@ -1261,23 +1266,30 @@ interface SimilarIncidentRepository {
 **ファイルパス**: `src/Contexts/Monitoring/SimilarIncident/domain/SimilarIncident.ts`
 
 ```typescript
-interface SimilarIncident {
+// 純粋データ構造なので type で定義する（contract でなく projection）
+type SimilarIncident = {
   readonly id: string;
   readonly eventName: string;
   readonly occurredOn: Date;
-  readonly resolvedNote: string; // オペレーターのメモまたはAI分析summary
+  readonly resolvedNote: string; // オペレーターのメモ or AI調査summary（index 時にフォールバックで充填）
   readonly resolvedAt: Date;
-}
+  readonly severity: AlertSeverity;
+  // 元になった解決済み Alert への back-link（UI ディープリンク用）。
+  // optional: seed や将来の非 Alert 源（CI/infra ingest）は持たない。
+  readonly sourceAlertId?: string;
+};
 ```
 
 ### ResolvedIncident（インデックス登録用）
 
 ```typescript
-interface ResolvedIncident {
+type ResolvedIncident = {
   readonly eventName: string;
   readonly occurredOn: Date;
   readonly resolvedNote: string;
-}
+  readonly severity: AlertSeverity;
+  readonly sourceAlertId?: string; // 元 Alert の id（back-link）
+};
 ```
 
 ### InMemorySimilarIncidentRepository
