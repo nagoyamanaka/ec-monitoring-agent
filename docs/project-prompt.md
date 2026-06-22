@@ -740,14 +740,16 @@ Before（継承・避ける）:
 abstract class AbstractAIInvestigationAdapter implements AIInvestigationPort {
   async investigate(ctx: InvestigationContext): Promise<InvestigationReport> {
     const prompt = this.buildPrompt(ctx);
-    const raw = await this.generate(prompt);     // ← 子に丸投げ
+    const raw = await this.generate(prompt); // ← 子に丸投げ
     const out = this.safeParse(raw);
     return out ? this.toReport(out) : this.fallback();
   }
   protected abstract generate(prompt: string): Promise<string>;
 }
 class GeminiAIInvestigationAdapter extends AbstractAIInvestigationAdapter {
-  protected generate(p: string) { /* Gemini SDK */ }
+  protected generate(p: string) {
+    /* Gemini SDK */
+  }
 }
 // 問題: Geminiアダプタは「調査オーケストレーションの一種」ではない（is-a不成立）。
 //       オーケストレーションのテストに毎回サブクラスが要る。子が親処理を上書きでき境界が緩い。
@@ -767,8 +769,11 @@ class LLMInvestigationAdapter implements AIInvestigationPort {
   async investigate(ctx: InvestigationContext): Promise<InvestigationReport> {
     const prompt = buildUserPrompt(ctx);
     let raw: string;
-    try { raw = await this.llm.generate(SYSTEM_INSTRUCTION, prompt); }
-    catch { return buildFallback(); }            // API/timeout失敗 → fallback
+    try {
+      raw = await this.llm.generate(SYSTEM_INSTRUCTION, prompt);
+    } catch {
+      return buildFallback();
+    } // API/timeout失敗 → fallback
     const out = safeParse(raw);
     return out ? toReport(out) : buildFallback(); // パース不能 → fallback
   }
@@ -776,11 +781,15 @@ class LLMInvestigationAdapter implements AIInvestigationPort {
 
 // infrastructure: プロバイダ固有実装 + 呼び出しの信頼性（リトライ/タイムアウト）
 class GeminiLLMClient implements LLMTextClient {
-  async generate(systemInstruction: string, prompt: string) { /* Gemini SDK + 30sタイムアウト1回リトライ */ }
+  async generate(systemInstruction: string, prompt: string) {
+    /* Gemini SDK + 30sタイムアウト1回リトライ */
+  }
 }
 
 // composition root（backoffice DI）で組み立てる
-const port: AIInvestigationPort = new LLMInvestigationAdapter(new GeminiLLMClient());
+const port: AIInvestigationPort = new LLMInvestigationAdapter(
+  new GeminiLLMClient(),
+);
 ```
 
 効果:
@@ -843,6 +852,7 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(new GeminiLLMClien
 1. **予兆の入力源を `ForecastSignalSource` で源非依存に抽象化し、stretchⅢで event-log 源を追加してもハンドラ・ポートをノータッチにする理由（stretchⅡ→Ⅲを再設計でなく追加で繋ぐ継ぎ目）**（v18追加）
 1. **ログベース・イベントソーシング基盤（全DomainEvent追記＋予知ビュー）を前倒しせず stretchⅢ に置く理由（薄い／障害寄りの現行DomainEventでは予兆の母集団が不足しデモ価値が出ない・DDIA unbundling は設計とADRで先に示す）**（v18追加）
 1. **予知の差別化を「予知機構」でなく「入力データの質（DDDの集約粒度の業務 DomainEvent）」に置く理由。OpenTelemetry 標準のインフラ指標は横展開でき汎用ベンダーが作れるが、ドメインイベントは会社ごとに異なり外部ベンダーが原理的に作れない内製の強み（ビジネスオブザーバビリティ）であること**（v18追加）
+1. 「正常系の業務イベントなのにアラートを出す」のは壊れていたので、観測の収集とアラート判定を分離するトリアージゲートを入れました（決定どおり severity 軸・CollectMonitoringEventUseCase 配置）。今は severity=info を「正常系」のプロキシにしています。将来 info でも「監視したい正常系」と「本当に捨てる正常系」を分けたくなったら、category とは別軸の明示弁別子（BUSINESS/FAULT）への昇格を検討する余地があります。今は不要と判断してやっていません。
 
 ---
 

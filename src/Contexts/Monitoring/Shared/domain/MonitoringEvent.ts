@@ -37,6 +37,16 @@ export class MonitoringEvent {
     this.source = params.source;
   }
 
+  /**
+   * この観測がアラート判定（分類→調査）の候補かどうか。
+   * info は正常系の業務テレメトリ（例: OrderPlaced）であり、観測としては収集するが
+   * アラート経路には乗せない。warning/critical のみが分類器へ進む。
+   * ＝「観測の収集」と「アラート判定」を分離するトリアージ述語。
+   */
+  isAlertable(): boolean {
+    return !this.severity.isInfo();
+  }
+
   toPrimitives(): MonitoringEventPrimitives {
     return {
       eventId: this.eventId,

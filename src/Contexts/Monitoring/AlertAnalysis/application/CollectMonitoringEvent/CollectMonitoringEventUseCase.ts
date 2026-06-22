@@ -11,6 +11,18 @@ export class CollectMonitoringEventUseCase {
 
   async run(monitoringEvent: MonitoringEvent): Promise<void> {
     try {
+      // 正常系の業務イベント（info）は観測として収集するがアラート判定にはかけない。
+      // 分類→AI調査の手前で打ち切ることで、注文成功などが未知アラート化するのを防ぐ。
+      // （将来 §7.10 の EventLog/forecast sink ができたら、ここから流す継ぎ目になる）
+      if (!monitoringEvent.isAlertable()) {
+        await this.logger.debug({
+          service: "monitoring",
+          action: "monitoring_event_observed_non_alertable",
+          message: `観測のみ（アラート対象外）：${monitoringEvent.eventName} severity=${monitoringEvent.severity.value}`,
+        });
+        return;
+      }
+
       const command = new AnalyzeAlertCommand(
         crypto.randomUUID(),
         monitoringEvent.toPrimitives(),

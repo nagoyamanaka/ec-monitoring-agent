@@ -10,14 +10,14 @@ import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventC
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const makeMonitoringEvent = () =>
+const makeMonitoringEvent = (severity: AlertSeverity = AlertSeverity.critical()) =>
   new MonitoringEvent({
     eventId: "550e8400-e29b-41d4-a716-446655440000",
     eventName: "ec.payment.timeout",
     aggregateId: "550e8400-e29b-41d4-a716-446655440001",
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     category: MonitoringEventCategory.application(),
-    severity: AlertSeverity.critical(),
+    severity,
     source: "payment",
     payload: { orderId: "order-1", customerId: "cust-1", amount: 5000 },
   });
@@ -57,6 +57,14 @@ describe("CollectMonitoringEventUseCase", () => {
 
       const [command] = handler.handle.mock.calls[0] as [AnalyzeAlertCommand];
       expect(command.alertId).toMatch(UUID_V4_PATTERN);
+    });
+  });
+
+  describe("正常系の業務イベント（info）の場合", () => {
+    it("アラート判定にかけず AnalyzeAlertCommandHandler.handle を呼ばない", async () => {
+      await useCase.run(makeMonitoringEvent(AlertSeverity.info()));
+
+      expect(handler.handle).not.toHaveBeenCalled();
     });
   });
 
