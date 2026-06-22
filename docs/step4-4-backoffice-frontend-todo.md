@@ -125,6 +125,8 @@
 ### タスク 8: 証拠パネル 〔P1〕
 
 - 【新規】`features/alerts/domain/EvidenceView.ts` / `infrastructure/evidenceApi.ts`
+  - `GET /alerts/:id/evidence` → `InfraEvidence`（appLogs / terraformDiff / recentCommits）を取得
+  - `GET /alerts/:id/investigation/status` → `collecting | analyzing | done` をポーリング。証拠が「**到着ごとに積み上がる**」演出のトリガーに使う（`done` になったタイミングで evidence を fetch → stagger フェードイン）
 - 【新規】`components/EvidencePanel.tsx`（Cloud Logging/Terraform/GitHub の証拠が**到着ごとに積み上がる**演出＝自律性の可視化）
 - シナリオ4の見せ場
 
