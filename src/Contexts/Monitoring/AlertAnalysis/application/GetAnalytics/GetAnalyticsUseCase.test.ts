@@ -3,11 +3,12 @@ import { GetAnalyticsUseCase } from "./GetAnalyticsUseCase.js";
 import { InMemoryAlertRepository } from "../../infrastructure/persistence/InMemoryAlertRepository.js";
 import { Alert } from "../../domain/Alert.js";
 import { AlertId } from "../../domain/AlertId.js";
-import { AlertSeverity } from "../../domain/AlertSeverity.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import {
   ClassificationConfidence,
   KnownAlertClassification,
 } from "../../domain/AlertClassification.js";
+import { ClassificationRuleKind } from "../../domain/classification/ClassificationRuleKind.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 
@@ -23,11 +24,13 @@ const makeEvent = () =>
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: {},
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.pending(),
     source: "unknown",
   });
 
 const makeKnownClassification = (): KnownAlertClassification => ({
   type: "known",
+  source: ClassificationRuleKind.EXACT_MATCH,
   patternId: "pattern-1",
   patternName: "PAYMENT_TIMEOUT",
   severity: AlertSeverity.critical(),

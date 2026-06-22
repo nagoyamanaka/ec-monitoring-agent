@@ -6,19 +6,21 @@ import { InMemorySimilarIncidentRepository } from "../../../SimilarIncident/infr
 import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/ConsoleLogger.js";
 import { Alert } from "../../domain/Alert.js";
 import { AlertId } from "../../domain/AlertId.js";
-import { AlertSeverity } from "../../domain/AlertSeverity.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { InvestigationReport } from "../../domain/InvestigationReport.js";
 import { ReviewStatus } from "../../domain/ReviewStatus.js";
 import {
   ClassificationConfidence,
   KnownAlertClassification,
 } from "../../domain/AlertClassification.js";
+import { ClassificationRuleKind } from "../../domain/classification/ClassificationRuleKind.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 import { Criteria } from "../../../../Shared/domain/criteria/Criteria.js";
 import { Filters } from "../../../../Shared/domain/criteria/Filters.js";
 import { Order } from "../../../../Shared/domain/criteria/Order.js";
 import { MonitoringResourceNotFoundError } from "../errors/MonitoringResourceNotFoundError.js";
+import { FixedThresholdPromotionPolicy } from "../../domain/promotion/FixedThresholdPromotionPolicy.js";
 
 const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";
 const AUTO_PROMOTE_THRESHOLD = 3;
@@ -31,6 +33,7 @@ const makeEvent = () =>
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: {},
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.pending(),
     source: "unknown",
   });
 
@@ -49,6 +52,7 @@ const makeReport = () =>
 
 const makeKnownClassification = (): KnownAlertClassification => ({
   type: "known",
+  source: ClassificationRuleKind.EXACT_MATCH,
   patternId: "pattern-1",
   patternName: "PAYMENT_TIMEOUT",
   severity: AlertSeverity.critical(),
@@ -84,7 +88,7 @@ describe("SubmitFeedbackUseCase", () => {
       patternRepo,
       similarRepo,
       logger,
-      AUTO_PROMOTE_THRESHOLD,
+      new FixedThresholdPromotionPolicy(AUTO_PROMOTE_THRESHOLD),
     );
   });
 

@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { Alert } from "./Alert.js";
 import { AlertId } from "./AlertId.js";
-import { AlertSeverity } from "./AlertSeverity.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { ClassificationConfidence, KnownAlertClassification } from "./AlertClassification.js";
+import { ClassificationRuleKind } from "./classification/ClassificationRuleKind.js";
 import { MonitoringEvent } from "../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../Shared/domain/MonitoringEventCategory.js";
 import { InvestigationReport } from "./InvestigationReport.js";
@@ -16,11 +17,13 @@ const testEvent = new MonitoringEvent({
   occurredOn: new Date("2026-01-01T00:00:00Z"),
   payload: { orderId: "order-001", customerId: "customer-001", amount: 5000 },
   category: MonitoringEventCategory.application(),
+  severity: AlertSeverity.critical(),
   source: "payment",
 });
 
 const knownClassification: KnownAlertClassification = {
   type: "known",
+  source: ClassificationRuleKind.EXACT_MATCH,
   patternId: "pattern-001",
   patternName: "PAYMENT_TIMEOUT",
   severity: AlertSeverity.critical(),
@@ -60,14 +63,15 @@ describe("Alert.createFromKnownPattern()", () => {
 });
 
 describe("Alert.createAsUnknown()", () => {
-  it("statusがANALYZING、severityがWARNINGになる", () => {
+  it("statusがANALYZING、severityはソース観測値を引き継ぐ", () => {
     const alert = Alert.createAsUnknown({
       id: new AlertId(Uuid.random().value),
       monitoringEvent: testEvent,
     });
 
     expect(alert.status.isAnalyzing()).toBe(true);
-    expect(alert.severity.isWarning()).toBe(true);
+    // 分類は未知でも、ソース（ingest 境界）が付与した severity を初期値に使う。
+    expect(alert.severity.value).toBe(testEvent.severity.value);
     expect(alert.classification).toEqual({ type: "unknown", confidence: null });
     expect(alert.investigationReport).toBeNull();
   });

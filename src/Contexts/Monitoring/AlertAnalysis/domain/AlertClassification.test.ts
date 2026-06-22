@@ -6,7 +6,7 @@ import {
   ClassificationConfidence,
   InvalidClassificationConfidenceError,
 } from "./AlertClassification.js";
-import { AlertSeverity } from "./AlertSeverity.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 
 describe("ClassificationConfidence", () => {
   describe("of()", () => {
@@ -56,6 +56,7 @@ describe("alertClassificationToPrimitives / alertClassificationFromPrimitives", 
   it("knownのラウンドトリップで同じ値が復元される", () => {
     const original: AlertClassificationPrimitives = {
       type: "known",
+      source: "EXACT_MATCH",
       patternId: "pattern-001",
       patternName: "PAYMENT_TIMEOUT",
       severity: "CRITICAL",
@@ -86,6 +87,7 @@ describe("alertClassificationToPrimitives / alertClassificationFromPrimitives", 
   it("fromPrimitivesでseverityとconfidenceが値オブジェクトに変換される", () => {
     const primitives: AlertClassificationPrimitives = {
       type: "known",
+      source: "SIMILARITY",
       patternId: "p-001",
       patternName: "TEST",
       severity: "WARNING",

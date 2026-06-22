@@ -1,5 +1,5 @@
 import type { AlertView } from "../domain/AlertView";
-import type { AlertStream } from "./AlertStream";
+import type { AlertStream, StreamStatus } from "./AlertStream";
 
 /**
  * テスト・デモ用の AlertStream。emit() で任意の AlertView を購読者へ流せる。
@@ -8,8 +8,13 @@ import type { AlertStream } from "./AlertStream";
 export class MockAlertStream implements AlertStream {
   private readonly listeners = new Set<(alert: AlertView) => void>();
 
-  subscribe(onAlert: (alert: AlertView) => void): () => void {
+  subscribe(
+    onAlert: (alert: AlertView) => void,
+    onStatus?: (status: StreamStatus) => void,
+  ): () => void {
     this.listeners.add(onAlert);
+    // 購読開始＝接続確立とみなす（デモでライブ表示を緑にする）。
+    onStatus?.("open");
     return () => {
       this.listeners.delete(onAlert);
     };

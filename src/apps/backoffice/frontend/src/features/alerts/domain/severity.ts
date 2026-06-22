@@ -16,6 +16,7 @@ const SEVERITY_WEIGHT: Record<AlertSeverity, number> = {
   CRITICAL: 3,
   WARNING: 2,
   INFO: 1,
+  PENDING: 0,
 };
 
 /** 危険度の重み。一覧を重大度の降順に並べる比較で使う。 */

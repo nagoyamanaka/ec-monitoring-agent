@@ -3,6 +3,7 @@
         bo-up bo-down bo-restart bo-logs bo-build \
         front-up front-down front-restart front-logs front-build \
         up down rebuild test e2e swagger \
+        seed \
         prune prune-all
 
 # ENV=local (default) or ENV=prod
@@ -14,10 +15,10 @@ DC := docker compose $(COMPOSE_FILES_$(ENV))
 
 # ── Infra ─────────────────────────────────────────────────────
 infra-up:
-	$(DC) up -d mongo rabbitmq
+	$(DC) up -d mongo rabbitmq elasticsearch
 
 infra-down:
-	$(DC) stop mongo rabbitmq
+	$(DC) stop mongo rabbitmq elasticsearch
 
 # ── EC ────────────────────────────────────────────────────────
 ec-up: infra-up
@@ -88,6 +89,10 @@ e2e: ec-up
 swagger: ec-up
 	$(DC) --profile swagger up -d swagger-ui
 	@echo "Swagger UI: http://localhost:8080"
+
+# ── Seed ──────────────────────────────────────────────────────
+seed:
+	curl -X POST http://localhost:3001/demo/reset 
 
 # ── Cleanup ───────────────────────────────────────────────────
 prune:

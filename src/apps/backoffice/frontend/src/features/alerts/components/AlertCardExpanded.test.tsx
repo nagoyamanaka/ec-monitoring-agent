@@ -20,6 +20,7 @@ describe("AlertCardExpanded", () => {
           report: null,
           classification: {
             type: "known",
+            source: "EXACT_MATCH",
             patternId: "p-1",
             patternName: "決済APIタイムアウト",
             confidence: 0.9,

@@ -6,7 +6,7 @@ import { KnownPatternRule } from "./rules/KnownPatternRule.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 import { KnownErrorPattern } from "../KnownErrorPattern.js";
-import { AlertSeverity } from "../AlertSeverity.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { InMemoryKnownErrorPatternRepository } from "../../infrastructure/persistence/InMemoryKnownErrorPatternRepository.js";
 
 const paymentTimeoutPattern = KnownErrorPattern.create({
@@ -44,6 +44,7 @@ function makeEvent(params: {
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: {},
     category: params.category ?? MonitoringEventCategory.application(),
+    severity: AlertSeverity.warning(),
     source: "test",
   });
 }

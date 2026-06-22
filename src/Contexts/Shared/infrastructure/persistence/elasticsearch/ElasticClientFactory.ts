@@ -1,18 +1,23 @@
-// @ts-nocheck
-import { Client as ElasticClient } from '@elastic/elasticsearch';
-import { Nullable } from '../../../domain/Nullable.js';
-import ElasticConfig from './ElasticConfig.js';
+import { Client as ElasticClient } from "@elastic/elasticsearch";
+import { Nullable } from "../../../domain/Nullable.js";
+import ElasticConfig from "./ElasticConfig.js";
 
 export class ElasticClientFactory {
   private static clients: { [key: string]: ElasticClient } = {};
 
-  static async createClient(contextName: string, config: ElasticConfig): Promise<ElasticClient> {
+  static async createClient(
+    contextName: string,
+    config: ElasticConfig,
+  ): Promise<ElasticClient> {
     let client = ElasticClientFactory.getClient(contextName);
 
     if (!client) {
       client = await ElasticClientFactory.createAndConnectClient(config);
 
-      await ElasticClientFactory.createIndexWithSettingsIfNotExists(client, config);
+      await ElasticClientFactory.createIndexWithSettingsIfNotExists(
+        client,
+        config,
+      );
 
       ElasticClientFactory.registerClient(client, contextName);
     }
@@ -24,23 +29,33 @@ export class ElasticClientFactory {
     return ElasticClientFactory.clients[contextName];
   }
 
-  private static async createAndConnectClient(config: ElasticConfig): Promise<ElasticClient> {
+  private static async createAndConnectClient(
+    config: ElasticConfig,
+  ): Promise<ElasticClient> {
     const client = new ElasticClient({ node: config.url });
 
     return client;
   }
 
-  private static registerClient(client: ElasticClient, contextName: string): void {
+  private static registerClient(
+    client: ElasticClient,
+    contextName: string,
+  ): void {
     ElasticClientFactory.clients[contextName] = client;
   }
 
-  private static async createIndexWithSettingsIfNotExists(client: ElasticClient, config: ElasticConfig): Promise<void> {
-    const { body: exist } = await client.indices.exists({ index: config.indexName });
+  private static async createIndexWithSettingsIfNotExists(
+    client: ElasticClient,
+    config: ElasticConfig,
+  ): Promise<void> {
+    const { body: exist } = await client.indices.exists({
+      index: config.indexName,
+    });
 
     if (!exist) {
       await client.indices.create({
         index: config.indexName,
-        body: config.indexConfig
+        body: config.indexConfig,
       });
     }
   }

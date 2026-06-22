@@ -12,6 +12,7 @@ const MONITORING_EVENT: MonitoringEventPrimitives = {
   occurredOn: "2026-01-01T00:00:00.000Z",
   payload: { orderId: "order-1", customerId: "cust-1", amount: 5000 },
   category: "APPLICATION",
+  severity: "CRITICAL",
   source: "payment",
 };
 

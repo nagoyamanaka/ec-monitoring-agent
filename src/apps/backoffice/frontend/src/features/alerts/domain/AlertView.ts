@@ -14,7 +14,7 @@ import {
  */
 
 export type AlertStatus = "OPEN" | "ANALYZING" | "RESOLVED";
-export type AlertSeverity = "CRITICAL" | "WARNING" | "INFO";
+export type AlertSeverity = "CRITICAL" | "WARNING" | "INFO" | "PENDING";
 export type AlertCategory =
   | "APPLICATION"
   | "INFRASTRUCTURE"
@@ -28,10 +28,15 @@ export type MatchedConditionView = {
   readonly actualValue: unknown;
 };
 
+/** 分類の由来（どのルールが当てたか）。backend の ClassificationRuleKind と整合。 */
+export type ClassificationSource = "EXACT_MATCH" | "SIMILARITY" | "INFERENCE";
+
 /** 分類結果の表示用型。未知障害（unknown）は confidence が null。 */
 export type AlertClassificationView =
   | {
       readonly type: "known";
+      /** 完全一致(EXACT_MATCH)/類似一致(SIMILARITY)/AI推論(INFERENCE) の判別子。表示の出し分けに使う。 */
+      readonly source: ClassificationSource;
       readonly patternId: string;
       readonly patternName: string;
       readonly confidence: number;
@@ -68,6 +73,7 @@ function toClassificationView(
   if (dto.type === "known") {
     return {
       type: "known",
+      source: dto.source as ClassificationSource,
       patternId: dto.patternId,
       patternName: dto.patternName,
       confidence: dto.confidence,
@@ -104,13 +110,4 @@ export function toAlertView(dto: AlertPrimitives): AlertView {
 /** 分析中（未知障害の調査待ち）か。SSE の ANALYZING→OPEN 演出で使う純関数。 */
 export function isAnalyzing(alert: AlertView): boolean {
   return alert.status === "ANALYZING";
-}
-
-/**
- * カードに出す代表 confidence(0..1)。調査レポートがあれば AI 確信度、
- * なければ既知パターンの分類確信度。未知・未分析は null。
- */
-export function primaryConfidence(alert: AlertView): number | null {
-  if (alert.report) return alert.report.confidence;
-  return alert.classification.confidence;
 }

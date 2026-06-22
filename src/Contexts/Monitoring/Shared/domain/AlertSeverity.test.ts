@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { AlertSeverity, AlertSeverities } from "./AlertSeverity.js";
+import { AlertSeverity, AlertSeverities } from "../../Shared/domain/AlertSeverity.js";
 import { InvalidArgumentError } from "../../../Shared/domain/errors/InvalidArgumentError.js";
 
 describe("AlertSeverity", () => {
@@ -14,6 +14,10 @@ describe("AlertSeverity", () => {
 
     it("info()でINFOが生成される", () => {
       expect(AlertSeverity.info().value).toBe(AlertSeverities.INFO);
+    });
+
+    it("pending()でPENDINGが生成される", () => {
+      expect(AlertSeverity.pending().value).toBe(AlertSeverities.PENDING);
     });
   });
 
@@ -35,18 +39,28 @@ describe("AlertSeverity", () => {
       expect(AlertSeverity.critical().isCritical()).toBe(true);
       expect(AlertSeverity.warning().isCritical()).toBe(false);
       expect(AlertSeverity.info().isCritical()).toBe(false);
+      expect(AlertSeverity.pending().isCritical()).toBe(false);
     });
 
     it("isWarning()が正しく動作する", () => {
       expect(AlertSeverity.warning().isWarning()).toBe(true);
       expect(AlertSeverity.critical().isWarning()).toBe(false);
       expect(AlertSeverity.info().isWarning()).toBe(false);
+      expect(AlertSeverity.pending().isWarning()).toBe(false);
     });
 
     it("isInfo()が正しく動作する", () => {
       expect(AlertSeverity.info().isInfo()).toBe(true);
       expect(AlertSeverity.critical().isInfo()).toBe(false);
       expect(AlertSeverity.warning().isInfo()).toBe(false);
+      expect(AlertSeverity.pending().isInfo()).toBe(false);
+    });
+
+    it("isPending()が正しく動作する", () => {
+      expect(AlertSeverity.pending().isPending()).toBe(true);
+      expect(AlertSeverity.critical().isPending()).toBe(false);
+      expect(AlertSeverity.warning().isPending()).toBe(false);
+      expect(AlertSeverity.info().isPending()).toBe(false);
     });
   });
 

@@ -9,7 +9,7 @@ import { Order } from "../../../../Shared/domain/criteria/Order.js";
 import { Alert } from "../../../AlertAnalysis/domain/Alert.js";
 import { AlertId } from "../../../AlertAnalysis/domain/AlertId.js";
 import { AlertRepository } from "../../../AlertAnalysis/domain/AlertRepository.js";
-import { AlertSeverity } from "../../../AlertAnalysis/domain/AlertSeverity.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
@@ -63,6 +63,7 @@ export class InvestigateAlertUseCase {
         eventName: monitoringEvent.eventName,
         occurredOn: monitoringEvent.occurredOn.toISOString(),
         payload: monitoringEvent.payload,
+        severity: monitoringEvent.severity.value,
       },
       knownPatterns: [],
       similarIncidents: similarIncidents.map((incident) => ({
@@ -121,7 +122,7 @@ export class InvestigateAlertUseCase {
         action: "alert_investigate_failed",
         message: `AI調査に失敗しました：${alertId.value}, ${(error as Error).message}`,
       });
-      return this.fallbackReport();
+      return this.fallbackReport(context);
     }
   }
 
@@ -154,11 +155,12 @@ export class InvestigateAlertUseCase {
     });
   }
 
-  private fallbackReport(): InvestigationReport {
+  // AI失敗時はソース付与の重大度を保持する（不正確な上書きで緊急度を歪めない）。
+  private fallbackReport(context: InvestigationContext): InvestigationReport {
     return new InvestigationReport({
       summary: "AI分析に失敗しました。手動での確認をお願いします。",
       confidence: 0,
-      severity: AlertSeverity.warning(),
+      severity: AlertSeverity.fromString(context.errorEvent.severity),
       investigationSteps: [],
       suggestedActions: ["手動で原因を確認してください"],
       suggestedPatternName: "",

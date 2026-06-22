@@ -7,6 +7,8 @@ export interface InvestigationContext {
     eventName: string;
     occurredOn: string;
     payload: Record<string, unknown>;
+    /** ソースが観測時点で付与した重大度。AIはこれを事前情報（prior）として精緻化する。 */
+    severity: string;
   };
   readonly knownPatterns: Array<{
     name: string;

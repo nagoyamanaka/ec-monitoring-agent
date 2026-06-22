@@ -9,7 +9,7 @@ import { PolicyBasedAlertClassifier } from "../../domain/classification/PolicyBa
 import { InMemoryAsyncEventBus } from "../../../../Shared/infrastructure/EventBus/InMemory/InMemoryAsyncEventBus.js";
 import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/ConsoleLogger.js";
 import { KnownErrorPattern } from "../../domain/KnownErrorPattern.js";
-import { AlertSeverity } from "../../domain/AlertSeverity.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { AlertId } from "../../domain/AlertId.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
@@ -27,6 +27,7 @@ const makePaymentTimeoutEvent = () =>
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: { orderId: "order-1", customerId: "cust-1", amount: 5000 },
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.critical(),
     source: "payment",
   });
 
@@ -38,6 +39,7 @@ const makeUnknownEvent = () =>
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     payload: {},
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.pending(),
     source: "unknown",
   });
 

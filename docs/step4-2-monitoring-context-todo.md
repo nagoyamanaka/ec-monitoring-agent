@@ -175,22 +175,32 @@
 - タスク25連携（任意）: 証拠を `InvestigationReport` に `evidenceSourceCount` として永続化すると昇格スコア補助信号になる（主信号は タスク17 類似確度。証拠源数は任意加点）
 - 参考: 「インフラ横断調査パイプライン」節 → デモシナリオ4
 
-### タスク 16: Remediation（PR起票・write隔離）〔P1〕
+### タスク 16: Remediation（PR起票・write隔離）〔P1〕✅ 完了済み
 
 - 【新規】`AIInvestigation/Remediation/domain/RemediationPort.ts` / `RemediationPlan.ts`
 - 【新規】`infrastructure/GitHubPullRequestGateway.ts`（GITHUB_TOKEN・対象repo限定・自動マージしない）
 - SECURITYカテゴリの RemediationPlanner から呼ぶ。参考: 「セキュリティ＋自律リメディエーション」節
 
-### タスク 17: SimilarPatternRule（Elastic 分類 Rule）〔P1/stretch〕
+### タスク 17: SimilarPatternRule（Elastic 分類 Rule）〔P1/stretch〕✅ 完了済み
 
 > **位置づけ（重要）**: これが「**graded confidence 付き分類**」の本体。学習を 0/1（未知/既知）でなく **probability low〜high の連続スペクトル**にするのはこのルール。正解フィードバックで蓄積された `SimilarIncident` を**分類段階で読み**、完全一致でなくても「過去のDB枯渇に82%類似・確度 中」のような確度を返す。**確度をレポートに出す＝意思決定支援**が価値の核（差別化テーブル「評価（confidence付き）」の実体）。現状 `SimilarIncident` は AI 調査の文脈強化にしか使われておらず、分類には未接続 → それを繋ぐのが本タスク。背景は `step4-1` 2章「学習ループ ①連続的な確度」。
 
-- 【新規】`domain/classification/rules/SimilarPatternRule.ts`（`ClassificationRule` 実装・Elastic Gateway を内包・hybrid search・スコア正規化→`ClassificationConfidence`(0〜1)・閾値未満は null 棄権）
-- `Shared/infrastructure/persistence/elasticsearch/` を利用。InfraEvidenceでクエリ強化
-- `ApplicationClassificationPolicy` の Rule 配列に `KnownPatternRule` と並べて追加するだけ。`AlertClassifier` IF も AnalyzeAlertCommandHandler もノータッチ
+- 【完了】`SimilarIncident/domain/SimilarIncidentRepository.ts`（**1インターフェースに統合**）: `findSimilar`(件数のみ・AI調査文脈)／`index`(追記)／`search(query): Promise<ScoredIncident[]>`(graded confidence 用スコア付き) ＋ `ScoredIncident{incident,score}`/`SimilarSearchQuery{eventName,text,limit}`。当初は別 Port（`SimilarIncidentSearchPort`）に分離したが、**同一クラスが両方実装し consumer も少ないため統合**（レビュー指摘）。`SimilarIncidentSearchPort.ts` は削除
+- 【完了】`domain/classification/rules/SimilarPatternRule.ts`（`ClassificationRule` 実装・kind=`SIMILARITY`・`SimilarIncidentRepository.search` を内包・最類似ヒット採用→スコア正規化→`ClassificationConfidence`(0〜1)・閾値未満は null 棄権・`type:"known"` の graded 分類を返す）＋ `SimilarPatternRule.test.ts`（9ケース：棄権/閾値境界/最大採用/正規化/クランプ/severity/クエリ組立）。**分岐ロジックが厚いので fake 注入の UT で担保**
+- 【完了】`SimilarIncident/infrastructure/InMemorySimilarIncidentRepository.ts` に `search`(Jaccard 字句類似 [0,1]) を**追加**（独立アダプタ `InMemorySimilarIncidentSearchAdapter.ts` は廃止＝統合）。**Elastic 無しでもデモ/E2Eで graded confidence を通すフォールバック兼 application 層 UT 用**
+- 【完了】`SimilarIncident/infrastructure/ElasticSimilarIncidentRepository.ts`（**本物の Elasticsearch アダプタ**・`SimilarIncidentRepository` を実装）。既存スキャフォルド `Shared/.../elasticsearch/`（`ElasticClientFactory`/`ElasticConfig`）に乗せて接続・index 自動生成。`findSimilar`=eventName 厳密一致(`.keyword` term)＋resolvedAt 降順／`index`=冪等追記／`search`=`multi_match`(eventName^2,resolvedNote, fuzziness AUTO) で**生 \_score** を返す（正規化は Rule）。`@elastic/elasticsearch@^7.17`（scaffold のレスポンス形に合わせ v7）を workspace root に追加
+- 【完了】**死蔵スキャフォルド削除**: `ElasticRepository.ts`/`ElasticCriteriaConverter.ts` は誰も使っておらず（自己参照のみ）、`AggregateRoot` 制約＋スコア非対応（`_score` を捨てる）で SimilarIncident（type の projection）には不適合。これらが依存していた `bodybuilder`/`http-status`（未インストールの旧ライブラリ）ごと削除。新アダプタは最新クライアントの素のクエリオブジェクトで書くので両ライブラリ不要
+- 【完了】実 ES コンテナで疎通検証済み（index→findSimilar→search→`SimilarPatternRule.classify` まで通し）。BM25 生スコアは短文 corpus だと max 数程度なので `scoreCeiling` を env で調整可能化（既定 5・`minConfidence` 既定 0.6）
+- 【完了】docker-compose / Makefile: `elasticsearch`(7.17.18 single-node/security無効) を `docker-compose.yml` に追加＋`docker-compose.local.yml` で 9200 公開／`ELASTICSEARCH_URL` 注入／`es-data` volume／backoffice `depends_on` 健全待ち。`Makefile` の `infra-up`/`infra-down` に `elasticsearch` を追加（`make up`/`make e2e` で自動起動）。`.env.example`/`backoffice config.ts` に `ELASTICSEARCH_URL`/`*_INDEX`/`*_SCORE_CEILING`/`*_MIN_CONFIDENCE`
+- 【完了】配線（composition root＝`BackofficeApp.buildSimilarIncidentRepository`）: `ELASTICSEARCH_URL` 設定時のみ ES リポジトリを `similarIncidentRepository` に使い `SimilarPatternRule` を policy へ追加。**未設定なら InMemory＝従来挙動（完全一致のみ）でE2E無傷**にする opt-in 方式。E2E はフィードバック投入が無く ES が空のまま＝`search` が常に空→Rule 棄権なので、ES 常時起動でも分類結果は不変。`AlertClassifier` IF も `AnalyzeAlertCommandHandler`/`AnalyzeAlertUseCase` もノータッチ（類似一致は `matched:true`→`createFromKnownPattern`→AI調査スキップ＝「準・既知」確度付き）
 - UI/レポートで low/中/high バンド表示（`ClassificationConfidence.isHighConfidence()` 等）。`classification.confidence` フィールドは世代互換なので表示コードは不変
+- 設計判断（スコア正規化の置き場）: 生スコアの尺度（BM25 は数十／cosine・RRF は 1 付近）は**バックエンド固有**なので、repository は生 `score` を返し、`SimilarPatternRule` が注入された `scoreCeiling`（飽和点）で `[0,1]` 正規化する。バックエンド尺度を domain に漏らさず、ceiling は composition root で調整可能（Sorter が kind しか見ない／リトライを GeminiLLMClient に寄せたのと同じ DIP 方針）
+- 設計判断（severity）: 類似一致は重大度を断定できないため、コンストラクタ注入の既定 severity（既定 `WARNING`）を使う。AI調査/フィードバックが後で精緻化する
+- 設計判断（patternId）: `similar:${incident.id}` 接頭辞で「KnownErrorPattern 参照ではなく解決済みインシデント参照」を明示。自動昇格は `classification.type==="unknown"` 限定なので類似一致(known)は誤昇格しない
+- 設計判断（InfraEvidence クエリ強化は見送り）: `ClassificationRule.classify` は `MonitoringEvent` のみ受け取る契約。`InfraInvestigationPort` を rule に内包すると **AlertAnalysis→AIInvestigation の逆向き依存（既存は AIInvestigation→AlertAnalysis の一方向）でモジュール循環**になり、かつ分類ホットパス全件にインフラ収集レイテンシが乗る。よってクエリは eventName＋payload から組み立てる（InfraEvidence 強化は将来 Source 経由で別途検討）
+- 将来改善: `search` は現状 `multi_match`(BM25 字句＋fuzziness) のみ。真のハイブリッド（kNN ベクトル併用）には embedding プロバイダが要るので別途。`scoreCeiling` の corpus 別自動較正、ES への ES_e2e シナリオ追加（現状はライブ疎通スクリプトで確認・UT は Rule 側で担保）も将来課題
 
-### タスク 24: PatternPromotionPolicy 抽象化（昇格判定の差し替え可能化）〔P1〕
+### タスク 24: PatternPromotionPolicy 抽象化（昇格判定の差し替え可能化）〔P1〕✅ 完了済み
 
 > 採番は末尾追加（既存タスクの相互参照を壊さないため番号据え置き）。位置づけは P1。タスク25の前提。
 > 背景: 現状の自動昇格は `SubmitFeedbackUseCase` 内の `correctFeedbackCount >= AUTO_PROMOTE_THRESHOLD(=3)` 直書き。**全 Alert を等しく扱う固定回数判定**。まず判定ロジックを差し替え可能なドメインサービスに切り出す（式は次タスクで育てる）。分類側の `AlertClassifier`/`ClassificationPolicy`/`Rule` と**対称**の設計思想。
@@ -202,21 +212,21 @@
 - 設計判断: 「いつ昇格するか（判定）」と「どう昇格するか（KnownErrorPattern 構築・save・ログ）」を分離。判定をドメインへ、構築は UseCase に残す。低コストで今でも入れられ、式の進化を吸収する受け皿になる
 - テスト: `FixedThresholdPromotionPolicy` の分岐（回数未満／到達／既知分類除外／fallback除外／report無除外）をユニットテスト
 
-### タスク 25: EvidenceWeightedPromotionPolicy（結晶化ゲートの加重化）〔P1・低優先〕
+### タスク 25: EvidenceWeightedPromotionPolicy（結晶化ゲートの加重化）〔P1・低優先〕✅ 完了済み
 
 > 採番は末尾追加（位置づけ P1・**低優先**）。**タスク24（抽象化）に依存。主たる証拠信号は タスク17（類似確度）**（旧版はタスク15依存と書いていたが、下記の整理で主信号を類似確度に変更）。
 > **位置づけの再整理（重要）**: 昇格は「学習そのもの」ではなく、`step4-1` 2章 ②「**頻出が確定した知識を完全一致の高速パスに焼き付ける結晶化**」。連続的な確度は タスク17（SimilarPatternRule）が担うので、**昇格しきい値の微調整は correctness クリティカルではない**（未昇格でも類似確度で「準・既知」分類されるため、未知に取り残されない）。よって本タスクは「結晶化ゲートを賢くする最適化」＝**nice-to-have**。タスク17 実装後に効果を測ってから着手可。
 > 狙い: 「類似確度が高く頻出が確定したものは feedback 1 回でも焼き付け、確度が低ければ複数回要求」。固定回数 → 加重スコアへ。
 
-- 【前提】タスク17 の `SimilarPatternRule` が `classification.confidence`（0〜1）を返していること。これを昇格判定の主信号にする
-- 【新規】`AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.ts`（`PatternPromotionPolicy` 実装）
-  - スコア式: `score = humanWeight(correctFeedbackCount) + similarityWeight(classification.confidence) + evidenceWeight(任意・InfraEvidence源数) − penalty`、`score >= 1.0` で昇格
-  - 重み案（現挙動と互換）: correct 1回=+0.4（3回単独で 1.2≥1.0＝従来と一致）／類似確度≥0.8=+0.3・≥0.6=+0.1／（任意）独立証拠源1つ=+0.2（上限+0.4）／`isFallback`=ハード除外／却下=減点 or ブロック
-  - 例: 類似確度 0.85（+0.3）＋証拠1源（+0.2）→ feedback 1回（+0.4）で 0.9… もう1回で焼き付け、等。**「似ている度が高いほど少ない確認で結晶化」**
-- 設計判断（重み付けの根拠）: 信頼順は「**人間の承認 > 類似の積み上げ（SimilarIncident 母集団）> AI 自己申告 confidence**」。LLM の生 confidence は較正されておらず過信しがちなので主役にしない
-- 設計判断（却下の活用）: 現状 REJECTED は記録のみ。スコア式なら却下を減点／ブロックに使える。`correctFeedbackCount` だけでなく却下回数も Alert に持つか検討
-- 配線: composition root（step4-3 DI）で `PatternPromotionPolicy` 実装を `FixedThreshold` → `EvidenceWeighted` に差し替えるだけ。`SubmitFeedbackUseCase` はノータッチ
-- 設計判断（ADR種）: 「昇格を*学習*でなく*結晶化（高速パス焼き付け）*と位置づける理由」「結晶化ゲートを固定回数 → 類似確度加重へ上げる理由」を Step5 ADR に残す
+- 【完了】`AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.ts`（`PatternPromotionPolicy` 実装）＋ `EvidenceWeightedPromotionPolicy.test.ts`（後方互換2／確度加重4／ハード除外3／重み注入1 の全分岐 10ケース。**分岐ロジックなので fake不要の純ドメインUT**）
+  - スコア式: `score = humanWeight(correctFeedbackCount) + confidenceWeight(report.confidence)`、`score >= promoteThreshold(=1.0)` で昇格
+  - 重み（`DEFAULT_EVIDENCE_WEIGHTS`・`Partial<EvidenceWeights>` でコンストラクタ注入＝env非依存テスト可）: correct 1回=+0.4（3回単独で 1.2≥1.0＝**FixedThreshold(3) と一致**）／確度≥0.8=+0.3・≥0.6=+0.1／`type!=="unknown"`・report無・`isFallback`=ハード除外
+  - 例: 高確度 0.85（+0.3）→ feedback 2回（+0.8）で 1.1≥1.0 で焼き付け（低確度なら従来どおり3回要求）。**「似ている度が高いほど少ない確認で結晶化」**
+- 設計判断（**二次信号の出どころ**＝当初設計の修正点）: 昇格候補は常に `classification.type==="unknown"`（既知/類似一致は `createFromKnownPattern` 経由で昇格対象外）で、`UnknownAlertClassification.confidence` は**常に null**。よってタスク17 の `classification.confidence` は**昇格パスの Alert には載っていない**。代わりに Alert が実際に持つ graded confidence＝`investigationReport.confidence` を二次信号に使う。これは `InvestigateAlertUseCase` が SimilarIncident 母集団を AI 調査コンテキストへ流し込んだ結果の確度なので「類似の積み上げに裏打ちされた確度」という設計意図と整合する
+- 設計判断（重み付けの根拠）: 信頼順は「**人間の承認 > 類似の積み上げ（SimilarIncident 母集団）> AI 自己申告 confidence**」。LLM の生 confidence は較正されておらず過信しがちなので、人間承認を主係数（×0.4）、確度は補助係数（+0.3/+0.1）に抑える
+- 設計判断（証拠源数・却下は見送り）: `evidenceWeight(InfraEvidence源数)` は `Alert`/`InvestigationReport` に永続化されておらず（タスク15 の `evidenceSourceCount` 永続化は未実施）、`shouldPromote(alert: Alert)` 契約から取得不能なので**スコープ外**（任意信号なので影響なし）。却下減点も Alert が却下回数を持たず（最新 feedback のみ・しかも昇格パスは isCorrect=true 限定で最新は常に正解）、減点が効かないため見送り＝**Alert/contracts 拡張のスコープクリープを回避**。両者は将来 Alert 拡張時に再検討
+- 配線: composition root（step4-3 DI）で `PatternPromotionPolicy` 実装を `FixedThreshold` → `EvidenceWeighted` に差し替えるだけ。`SubmitFeedbackUseCase` はノータッチ（既定は引き続き `FixedThresholdPromotionPolicy`）
+- 設計判断（ADR種）: 「昇格を*学習*でなく*結晶化（高速パス焼き付け）*と位置づける理由」「結晶化ゲートを固定回数 → 確度加重へ上げる理由」「主信号を`classification.confidence`でなく`investigationReport.confidence`にした理由（unknown は confidence=null）」を Step5 ADR に残す
 - 注意: P0 提出は固定回数のままで成立。**タスク17（連続確度）が入れば本タスクの必要性はさらに下がる**＝後回し可
 
 ---

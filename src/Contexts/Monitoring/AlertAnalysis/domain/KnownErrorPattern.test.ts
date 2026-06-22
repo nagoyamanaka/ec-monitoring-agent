@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { KnownErrorPattern } from "./KnownErrorPattern.js";
-import { AlertSeverity } from "./AlertSeverity.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 
 const baseParams = {
   id: "a1b2c3d4-1234-4a5b-89ab-c1d2e3f4a5b6",

@@ -3,6 +3,7 @@ import { CollectMonitoringEventUseCase } from "./CollectMonitoringEventUseCase.j
 import { AnalyzeAlertCommandHandler } from "../AnalyzeAlert/AnalyzeAlertCommandHandler.js";
 import { AnalyzeAlertCommand } from "../AnalyzeAlert/AnalyzeAlertCommand.js";
 import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/ConsoleLogger.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 
@@ -16,6 +17,7 @@ const makeMonitoringEvent = () =>
     aggregateId: "550e8400-e29b-41d4-a716-446655440001",
     occurredOn: new Date("2026-01-01T00:00:00.000Z"),
     category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.critical(),
     source: "payment",
     payload: { orderId: "order-1", customerId: "cust-1", amount: 5000 },
   });

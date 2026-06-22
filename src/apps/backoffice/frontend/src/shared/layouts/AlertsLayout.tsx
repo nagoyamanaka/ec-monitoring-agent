@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Outlet } from "react-router-dom";
 import { cn } from "../ui/cn";
+import { BrandMark } from "../ui/BrandMark";
 
 export interface AlertsLayoutProps {
   /**
@@ -9,19 +10,29 @@ export interface AlertsLayoutProps {
    * タスク10で features/demo の <DemoDrawer/> をここに渡す。
    */
   demoDrawer?: ReactNode;
+  /**
+   * グローバルヘッダ右側の差し込み口（SSE ライブ状態など）。
+   * shared は features を import できないため slot で受け取る（demoDrawer と同じ流儀）。
+   */
+  headerSlot?: ReactNode;
   children?: ReactNode;
 }
 
 /** /alerts 専用レイアウト（デモの舞台）。右側にデモドロワーを差し込む。 */
-export function AlertsLayout({ demoDrawer, children }: AlertsLayoutProps) {
+export function AlertsLayout({
+  demoDrawer,
+  headerSlot,
+  children,
+}: AlertsLayoutProps) {
   return (
     <div className="min-h-screen bg-[#0B0E14] text-tremor-content-emphasis">
       <header className="sticky top-0 z-10 border-b border-[#232A36] bg-[#0B0E14]/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3">
-          <span className="size-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px] shadow-cyan-400/60" />
+          <BrandMark />
           <h1 className="text-sm font-semibold tracking-wide text-slate-100">
             EC Monitoring · Alerts
           </h1>
+          {headerSlot && <div className="ml-auto">{headerSlot}</div>}
         </div>
       </header>
 

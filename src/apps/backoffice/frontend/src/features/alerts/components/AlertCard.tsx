@@ -5,12 +5,13 @@ import {
   type AlertView,
   type AlertSeverity,
   isAnalyzing,
-  primaryConfidence,
 } from "../domain/AlertView";
+import { alertConfidence } from "../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../domain/eventCatalog";
 import { categoryInfo } from "../domain/alertCategory";
 import { alertReason } from "../domain/alertReason";
 import { AlertStatusBadge } from "./AlertStatusBadge";
+import { ExactMatchBadge } from "./ExactMatchBadge";
 
 export interface AlertCardProps {
   alert: AlertView;
@@ -25,6 +26,8 @@ const STRIPE_COLOR: Record<AlertSeverity, string> = {
   CRITICAL: "bg-rose-500",
   WARNING: "bg-amber-500",
   INFO: "bg-sky-500",
+  // 未確定（AI調査前 / ソース判断不能）。確定済み severity と視覚的に区別する。
+  PENDING: "bg-slate-500",
 };
 
 function formatRelativeTime(iso: string): string {
@@ -51,7 +54,9 @@ function formatAbsoluteTime(iso: string): string {
  */
 export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps) {
   const analyzing = isAnalyzing(alert);
-  const confidence = primaryConfidence(alert);
+  const confidence = alertConfidence(alert);
+  // AI 調査が失敗した fallback レポートは confidence が当てにならない。
+  const aiFallback = confidence.kind === "ai" && alert.report?.isFallback;
   const info = eventInfo(alert.eventName);
   const title = eventTitle(alert.eventName);
   const category = categoryInfo(alert.category);
@@ -61,6 +66,8 @@ export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps)
     <button
       type="button"
       aria-pressed={selected}
+      data-testid="alert-card"
+      data-alert-id={alert.id}
       onClick={() => onSelect?.(alert.id)}
       className={cn(
         "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition",
@@ -129,8 +136,24 @@ export function AlertCard({ alert, selected = false, onSelect }: AlertCardProps)
       {/* 右ゾーン: 状態＋確信度レール */}
       <div className="flex w-32 shrink-0 flex-col items-end justify-center gap-2 border-l border-slate-700/50 px-3 py-4">
         <AlertStatusBadge alert={alert} />
-        {confidence !== null ? (
-          <ConfidenceChip confidence={confidence} />
+        {confidence.kind === "exact-match" ? (
+          <ExactMatchBadge variant="chip" />
+        ) : confidence.kind === "ai" && aiFallback ? (
+          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300 ring-1 ring-inset ring-amber-500/30">
+            暫定
+          </span>
+        ) : confidence.kind === "ai" ? (
+          <ConfidenceChip
+            confidence={confidence.value}
+            label="AI確信度"
+            tone="ai"
+          />
+        ) : confidence.kind === "known" ? (
+          <ConfidenceChip
+            confidence={confidence.value}
+            label="一致度"
+            tone="match"
+          />
         ) : analyzing ? (
           <span className="text-sm text-cyan-300/80">算出中…</span>
         ) : null}

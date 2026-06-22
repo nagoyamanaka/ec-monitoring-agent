@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest";
 import { LLMInvestigationAdapter } from "./LLMInvestigationAdapter.js";
 import { LLMTextClient } from "../../domain/LLMTextClient.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
-import { AlertSeverities } from "../../../AlertAnalysis/domain/AlertSeverity.js";
+import { AlertSeverities } from "../../../Shared/domain/AlertSeverity.js";
 
 const context: InvestigationContext = {
-  errorEvent: { eventName: "PaymentTimeout", occurredOn: "2026-06-20T00:00:00.000Z", payload: {} },
+  errorEvent: { eventName: "PaymentTimeout", occurredOn: "2026-06-20T00:00:00.000Z", payload: {}, severity: AlertSeverities.CRITICAL },
   knownPatterns: [],
   similarIncidents: [],
 };

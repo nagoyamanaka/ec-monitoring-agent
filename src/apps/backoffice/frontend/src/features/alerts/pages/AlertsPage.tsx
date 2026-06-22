@@ -10,6 +10,7 @@ import {
 } from "../application/submitFeedback";
 import { AlertList } from "../components/AlertList";
 import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
+import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
 
 /**
  * アラート一覧ページ（デモの舞台＝AlertsLayout）。
@@ -21,7 +22,15 @@ import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
 export function AlertsPage() {
   const api = useMemo(() => createAlertsApi(new FetchHttpClient()), []);
   const stream = useMemo(() => new SSEAlertStream(), []);
-  const { alerts, status, error, refreshAlert } = useAlerts(api, stream);
+  const {
+    alerts,
+    status,
+    error,
+    streamStatus,
+    lastUpdatedAt,
+    refreshAlert,
+    reconnectStream,
+  } = useAlerts(api, stream);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(
@@ -44,7 +53,15 @@ export function AlertsPage() {
 
   return (
     <>
-      <AlertsLayout>
+      <AlertsLayout
+        headerSlot={
+          <StreamStatusIndicator
+            status={streamStatus}
+            lastUpdatedAt={lastUpdatedAt}
+            onReconnect={reconnectStream}
+          />
+        }
+      >
         <AlertList
           alerts={alerts}
           status={status}

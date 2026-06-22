@@ -5,6 +5,7 @@ export enum AlertSeverities {
   CRITICAL = "CRITICAL",
   WARNING = "WARNING",
   INFO = "INFO",
+  PENDING = "PENDING",
 }
 
 export class AlertSeverity extends EnumValueObject<AlertSeverities> {
@@ -24,6 +25,11 @@ export class AlertSeverity extends EnumValueObject<AlertSeverities> {
     return new AlertSeverity(AlertSeverities.INFO);
   }
 
+  /** AI調査完了前の未確定状態。attachInvestigationReport で上書きされる。 */
+  static pending(): AlertSeverity {
+    return new AlertSeverity(AlertSeverities.PENDING);
+  }
+
   static fromString(value: string): AlertSeverity {
     return new AlertSeverity(value as AlertSeverities);
   }
@@ -38,6 +44,10 @@ export class AlertSeverity extends EnumValueObject<AlertSeverities> {
 
   isInfo(): boolean {
     return this.value === AlertSeverities.INFO;
+  }
+
+  isPending(): boolean {
+    return this.value === AlertSeverities.PENDING;
   }
 
   protected throwErrorForInvalidValue(value: AlertSeverities): void {

@@ -19,6 +19,22 @@ services:
       timeout: 5s
       retries: 10
 
+  # 類似インシデント検索（SimilarPatternRule の graded confidence 用）。
+  # client は v7 系なので image も 7.17 系で揃える。シングルノード・security 無効（ローカル/デモ用途）。
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.18
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   # ── EC ────────────────────────────────────────────────────
   ec-backend:
     environment:
@@ -68,3 +84,4 @@ services:
 
 volumes:
   mongo-data:
+  es-data:

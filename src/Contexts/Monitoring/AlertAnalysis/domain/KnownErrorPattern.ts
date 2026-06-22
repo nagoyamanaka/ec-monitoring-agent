@@ -1,4 +1,4 @@
-import { AlertSeverity } from "./AlertSeverity.js";
+import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { AggregateRoot } from "../../../Shared/domain/AggregateRoot.js";
 
 export type PayloadCondition = {

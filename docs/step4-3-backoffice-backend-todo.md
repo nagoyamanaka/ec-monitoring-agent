@@ -122,7 +122,7 @@
 - 【修正】`BackofficeApp.ts`：read-only依存を new して `ForecastRiskCommandHandler` を Bus 登録
   - **★継ぎ目**: `signalSources: ForecastSignalSource[]` を組み立てて渡す（Gateway を名指ししない）。`PullRequestSignalSource`（GitHub）/ `PendingPlanSignalSource`（Terraform〔メソッド追加済〕）/ `ScheduleSignalSource`（ScheduleSource）の3つ
   - `ForecastMemoryRepository` / **ForecastPort=GeminiForecastAdapter★差し替え点**
-- 起動時 `ForecastMemoryRepository.warmUp()` を `SimilarIncidentRepository.warmUp()` と並べる
+- 起動時 `ForecastMemoryRepository.warmUp()` を `BackofficeApp.buildSimilarIncidentRepository(rules)` 呼び出しと並行して `start()` 内に追加する（SimilarIncident の warmUp は `buildSimilarIncidentRepository` 内に内包済み）
 - 【新規】`ScheduleSource` の seed 実装（JSON/config）。`DEMO_ENABLED` 配下で投入
 - 【修正】`config.ts`：`FORECAST_ENABLED`（既定off）/ `FORECAST_HORIZON`（既定 "今週末"）追加
 - **write は発生しない**（全Gateway read-only）。リメディエーション要時のみ既存 `RemediationPort` 再利用

@@ -1,6 +1,6 @@
 import type { AlertPrimitives } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
 import { type AlertView, toAlertView } from "../domain/AlertView";
-import type { AlertStream } from "./AlertStream";
+import type { AlertStream, StreamStatus } from "./AlertStream";
 
 const DEFAULT_URL = "/alerts/stream";
 const RECONNECT_DELAY_MS = 3_000;
@@ -15,10 +15,27 @@ const RECONNECT_DELAY_MS = 3_000;
 export class SSEAlertStream implements AlertStream {
   constructor(private readonly url: string = DEFAULT_URL) {}
 
-  subscribe(onAlert: (alert: AlertView) => void): () => void {
+  /**
+   * 購読中に set される「即時再接続」クロージャ。subscribe の外からも呼べるように
+   * インスタンスフィールドに保持し、切断時にユーザーが手動で再接続できるようにする。
+   * 購読解除後は null にリセットする。
+   */
+  private _forceReconnect: (() => void) | null = null;
+
+  /** 切断状態からの即時再接続（自動タイマーをキャンセルして即実行）。 */
+  reconnect(): void {
+    this._forceReconnect?.();
+  }
+
+  subscribe(
+    onAlert: (alert: AlertView) => void,
+    onStatus?: (status: StreamStatus) => void,
+  ): () => void {
     let source: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
+
+    const emitStatus = (status: StreamStatus) => onStatus?.(status);
 
     const handleMessage = (event: MessageEvent<string>) => {
       if (!event.data) return; // 空 data は無視（保険）
@@ -40,22 +57,40 @@ export class SSEAlertStream implements AlertStream {
 
     const handleError = () => {
       if (source && source.readyState === EventSource.CLOSED) {
+        // 完全クローズ＝自前で再接続する。それまでは切断状態。
         source.close();
         source = null;
+        emitStatus("closed");
         scheduleReconnect();
+      } else {
+        // 一過性エラー（EventSource が自前で再接続中）＝接続中表示に戻す。
+        emitStatus("connecting");
       }
     };
 
     const connect = () => {
       if (closed) return;
+      emitStatus("connecting");
       source = new EventSource(this.url);
+      source.onopen = () => emitStatus("open");
       source.onmessage = handleMessage;
       source.onerror = handleError;
+    };
+
+    // 切断時にユーザーが手動で即時再接続できるよう、クロージャをインスタンスに公開する。
+    this._forceReconnect = () => {
+      if (closed) return;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      connect();
     };
 
     connect();
 
     return () => {
+      this._forceReconnect = null;
       closed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       source?.close();

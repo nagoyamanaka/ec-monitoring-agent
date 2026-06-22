@@ -1,3 +1,4 @@
+import { EvidenceWeightedPromotionPolicy } from "@monitoring/AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { Uuid } from "../../../../Shared/domain/value-object/Uuid.js";
 import { ResolvedIncident } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
@@ -7,12 +8,8 @@ import { AlertId } from "../../domain/AlertId.js";
 import { AlertRepository } from "../../domain/AlertRepository.js";
 import { KnownErrorPattern } from "../../domain/KnownErrorPattern.js";
 import { KnownErrorPatternRepository } from "../../domain/KnownErrorPatternRepository.js";
+import { PatternPromotionPolicy } from "../../domain/promotion/PatternPromotionPolicy.js";
 import { MonitoringResourceNotFoundError } from "../errors/MonitoringResourceNotFoundError.js";
-
-// 正解フィードバックがこの回数に達したら未知パターンを自動昇格する（デモ調整用に env で上書き可能）
-const DEFAULT_AUTO_PROMOTE_THRESHOLD = Number(
-  process.env.FEEDBACK_AUTO_PROMOTE_THRESHOLD ?? 3,
-);
 
 export class SubmitFeedbackUseCase {
   constructor(
@@ -20,7 +17,9 @@ export class SubmitFeedbackUseCase {
     private readonly knownErrorPatternRepository: KnownErrorPatternRepository,
     private readonly similarIncidentRepository: SimilarIncidentRepository,
     private readonly logger: Logger,
-    private readonly autoPromoteThreshold: number = DEFAULT_AUTO_PROMOTE_THRESHOLD,
+    // 昇格判定（いつ結晶化するか）は差し替え可能なドメインサービスへ委譲。
+    //既定はソースの信頼性に応じた加重度で判定。
+    private readonly promotionPolicy: PatternPromotionPolicy = new EvidenceWeightedPromotionPolicy(),
   ) {}
 
   async run(params: {
@@ -59,17 +58,17 @@ export class SubmitFeedbackUseCase {
       eventName: alert.monitoringEvent.eventName,
       occurredOn: alert.monitoringEvent.occurredOn,
       resolvedNote: operatorNote ?? "正解フィードバックによる解決",
+      severity: alert.severity,
     };
     await this.similarIncidentRepository.index(incident);
   }
 
-  // 正解フィードバックがしきい値に達した未知パターンを既知パターンへ自動昇格する
+  // 昇格判定（いつ）はポリシーに委譲し、満たせば既知パターンを構築・save（どう）する
   private async maybeAutoPromote(alert: Alert): Promise<void> {
-    if (alert.correctFeedbackCount < this.autoPromoteThreshold) return;
-    if (alert.classification.type !== "unknown") return;
-    if (alert.investigationReport === null) return;
+    if (!this.promotionPolicy.shouldPromote(alert)) return;
 
     const report = alert.investigationReport;
+    if (report === null) return; // ポリシーが保証済みだが型を絞るためのガード
     const eventName = alert.monitoringEvent.eventName;
     const pattern = KnownErrorPattern.create({
       id: Uuid.random().value,

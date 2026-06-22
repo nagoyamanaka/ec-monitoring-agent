@@ -23,6 +23,9 @@ export type UnmatchedCondition = {
 
 export type KnownAlertClassificationPrimitives = {
   readonly type: "known";
+  // どの分類ルールが当てたか（ClassificationRuleKind の文字列値: EXACT_MATCH / SIMILARITY / INFERENCE）。
+  // 「完全一致」と「類似一致」を patternId プレフィックス等で嗅ぎ分けず一級の判別子として持つ。
+  readonly source: string;
   readonly patternId: string;
   readonly patternName: string;
   readonly severity: string;
