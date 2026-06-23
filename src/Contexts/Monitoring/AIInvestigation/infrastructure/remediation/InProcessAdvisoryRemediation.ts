@@ -1,10 +1,10 @@
 import {
   RemediationExecutor,
   RemediationOutcome,
-} from "../../Remediation/domain/RemediationExecutor.js";
-import { RemediationInput } from "../../Remediation/domain/RemediationInput.js";
-import { RemediationPlanner } from "../../Remediation/domain/RemediationPlanner.js";
-import { RemediationPort } from "../../Remediation/domain/RemediationPort.js";
+} from "../../domain/remediation/RemediationExecutor.js";
+import { RemediationInput } from "../../domain/remediation/RemediationInput.js";
+import { RemediationPlanner } from "../../domain/remediation/RemediationPlanner.js";
+import { RemediationPort } from "../../domain/remediation/RemediationPort.js";
 
 /**
  * その場で（バックエンドプロセス内で）修正方針を起草し草案PRを起票する advisory 経路。

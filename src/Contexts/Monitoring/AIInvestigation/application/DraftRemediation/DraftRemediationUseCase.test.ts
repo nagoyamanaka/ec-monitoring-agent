@@ -8,11 +8,8 @@ import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/ConsoleLogger.js";
 import { MonitoringResourceNotFoundError } from "../../../AlertAnalysis/application/errors/MonitoringResourceNotFoundError.js";
-import { RemediationExecutor } from "../../Remediation/domain/RemediationExecutor.js";
-import {
-  RemediationRecord,
-} from "../../Remediation/domain/RemediationRecord.js";
-import { RemediationRepository } from "../../Remediation/domain/RemediationRepository.js";
+import { RemediationExecutor } from "../../domain/remediation/RemediationExecutor.js";
+import { InMemoryRemediationRepository } from "../../infrastructure/remediation/InMemoryRemediationRepository.js";
 
 const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -36,25 +33,14 @@ const makeAlert = (payload: Record<string, unknown>) =>
     }),
   });
 
-class FakeRemediationRepository implements RemediationRepository {
-  readonly saved: RemediationRecord[] = [];
-  async save(record: RemediationRecord): Promise<void> {
-    this.saved.push(record);
-  }
-  async findByAlertId(alertId: string): Promise<RemediationRecord | null> {
-    const matches = this.saved.filter((r) => r.alertId === alertId);
-    return matches[matches.length - 1] ?? null;
-  }
-}
-
 describe("DraftRemediationUseCase", () => {
   let alertRepo: InMemoryAlertRepository;
-  let remediationRepo: FakeRemediationRepository;
+  let remediationRepo: InMemoryRemediationRepository;
   let logger: ConsoleLogger;
 
   beforeEach(() => {
     alertRepo = new InMemoryAlertRepository();
-    remediationRepo = new FakeRemediationRepository();
+    remediationRepo = new InMemoryRemediationRepository();
     logger = new ConsoleLogger();
     vi.spyOn(logger, "write").mockResolvedValue(undefined);
   });
@@ -77,8 +63,7 @@ describe("DraftRemediationUseCase", () => {
     await useCase.run(new AlertId(ALERT_ID));
 
     expect(executor.execute).not.toHaveBeenCalled();
-    expect(remediationRepo.saved).toHaveLength(1);
-    expect(remediationRepo.saved[0]).toMatchObject({
+    expect(await remediationRepo.findByAlertId(ALERT_ID)).toMatchObject({
       status: "skipped",
       pullRequestUrl: null,
       vulnerabilityCount: 0,
@@ -105,7 +90,7 @@ describe("DraftRemediationUseCase", () => {
         ]),
       }),
     );
-    expect(remediationRepo.saved[0]).toMatchObject({
+    expect(await remediationRepo.findByAlertId(ALERT_ID)).toMatchObject({
       status: "drafted",
       pullRequestUrl: "https://github.com/owner/repo/pull/1",
       vulnerabilityCount: 2,
@@ -122,7 +107,7 @@ describe("DraftRemediationUseCase", () => {
 
     await useCase.run(new AlertId(ALERT_ID));
 
-    expect(remediationRepo.saved[0]).toMatchObject({
+    expect(await remediationRepo.findByAlertId(ALERT_ID)).toMatchObject({
       status: "dispatched",
       pullRequestUrl: null,
       vulnerabilityCount: 2,
@@ -141,7 +126,7 @@ describe("DraftRemediationUseCase", () => {
 
     await useCase.run(new AlertId(ALERT_ID));
 
-    expect(remediationRepo.saved[0]).toMatchObject({
+    expect(await remediationRepo.findByAlertId(ALERT_ID)).toMatchObject({
       status: "failed",
       pullRequestUrl: null,
       vulnerabilityCount: 2,

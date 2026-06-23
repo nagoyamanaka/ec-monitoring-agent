@@ -178,7 +178,7 @@
 
 ### タスク 16: Remediation（PR起票・write隔離）〔P1〕✅ 完了済み
 
-- 【新規】`AIInvestigation/Remediation/domain/RemediationPort.ts` / `RemediationPlan.ts`
+- 【新規】`AIInvestigation/domain/remediation/RemediationPort.ts` / `RemediationPlan.ts`
 - 【新規】`infrastructure/GitHubPullRequestGateway.ts`（GITHUB_TOKEN・対象repo限定・自動マージしない）
 - SECURITYカテゴリの RemediationPlanner から呼ぶ。参考: 「セキュリティ＋自律リメディエーション」節
 

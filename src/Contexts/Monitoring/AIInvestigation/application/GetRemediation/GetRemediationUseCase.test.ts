@@ -1,26 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { GetRemediationUseCase } from "./GetRemediationUseCase.js";
-import { RemediationRecord } from "../../Remediation/domain/RemediationRecord.js";
-import { RemediationRepository } from "../../Remediation/domain/RemediationRepository.js";
+import { InMemoryRemediationRepository } from "../../infrastructure/remediation/InMemoryRemediationRepository.js";
 
 const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";
 
-class FakeRemediationRepository implements RemediationRepository {
-  private record: RemediationRecord | null = null;
-  seed(record: RemediationRecord): void {
-    this.record = record;
-  }
-  async save(record: RemediationRecord): Promise<void> {
-    this.record = record;
-  }
-  async findByAlertId(): Promise<RemediationRecord | null> {
-    return this.record;
-  }
-}
-
 describe("GetRemediationUseCase", () => {
   it("未起票なら status='none' を返す", async () => {
-    const useCase = new GetRemediationUseCase(new FakeRemediationRepository());
+    const useCase = new GetRemediationUseCase(new InMemoryRemediationRepository());
 
     const response = await useCase.run(ALERT_ID);
 
@@ -31,8 +17,8 @@ describe("GetRemediationUseCase", () => {
   });
 
   it("記録があれば状態・PR URL を返し createdAt を ISO 正規化する", async () => {
-    const repo = new FakeRemediationRepository();
-    repo.seed({
+    const repo = new InMemoryRemediationRepository();
+    await repo.save({
       alertId: ALERT_ID,
       status: "drafted",
       pullRequestUrl: "https://github.com/owner/repo/pull/7",

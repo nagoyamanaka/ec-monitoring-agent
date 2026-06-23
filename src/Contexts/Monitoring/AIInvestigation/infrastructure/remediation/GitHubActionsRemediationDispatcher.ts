@@ -1,8 +1,8 @@
 import {
   RemediationExecutor,
   RemediationOutcome,
-} from "../../Remediation/domain/RemediationExecutor.js";
-import { RemediationInput } from "../../Remediation/domain/RemediationInput.js";
+} from "../../domain/remediation/RemediationExecutor.js";
+import { RemediationInput } from "../../domain/remediation/RemediationInput.js";
 
 /**
  * 修正をバックエンドでは行わず、GitHub Actions（repository_dispatch）へジョブを投げる agentic 経路。

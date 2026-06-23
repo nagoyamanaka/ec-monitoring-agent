@@ -1,6 +1,6 @@
 import { Collection, Document, Filter, MongoClient } from "mongodb";
-import { RemediationRecord } from "../../Remediation/domain/RemediationRecord.js";
-import { RemediationRepository } from "../../Remediation/domain/RemediationRepository.js";
+import { RemediationRecord } from "../../domain/remediation/RemediationRecord.js";
+import { RemediationRepository } from "../../domain/remediation/RemediationRepository.js";
 
 type RemediationDoc = {
   _id: string;

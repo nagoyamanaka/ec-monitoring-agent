@@ -31,7 +31,7 @@ import { DraftRemediationCommandHandler } from "../../../../Contexts/Monitoring/
 import { GetRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationUseCase.js";
 import { GetRemediationQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationQueryHandler.js";
 import { RecordRemediationResultUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/RecordRemediationResult/RecordRemediationResultUseCase.js";
-import { RemediationExecutor } from "../../../../Contexts/Monitoring/AIInvestigation/Remediation/domain/RemediationExecutor.js";
+import { RemediationExecutor } from "../../../../Contexts/Monitoring/AIInvestigation/domain/remediation/RemediationExecutor.js";
 import { LLMRemediationPlanner } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/LLMRemediationPlanner.js";
 import { GitHubPullRequestGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestGateway.js";
 import { InProcessAdvisoryRemediation } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/InProcessAdvisoryRemediation.js";

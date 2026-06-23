@@ -1180,7 +1180,7 @@ GitHub Actions（CIパイプライン）
 
 ### RemediationPort（人間承認ゲート付きの write 操作）
 
-**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/Remediation/domain/RemediationPort.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/domain/remediation/RemediationPort.ts`
 
 ```typescript
 interface RemediationPort {

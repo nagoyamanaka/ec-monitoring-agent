@@ -1,5 +1,5 @@
 import { Response } from "../../../../Shared/domain/Response.js";
-import { RemediationRecord } from "../../Remediation/domain/RemediationRecord.js";
+import { RemediationRecord } from "../../domain/remediation/RemediationRecord.js";
 
 // 未起票（record 無し）は "none"。フロントはこの1値でボタン活性/ポーリングを判断できる。
 export type RemediationViewStatus = RemediationRecord["status"] | "none";

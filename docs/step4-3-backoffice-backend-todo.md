@@ -112,7 +112,7 @@ subscriber は EC 自前 DomainEvent（CollectMonitoringEventOnECEventPublished�
 - 【新規】`routes/remediationRoutes.ts` ＋ `RemediationDraftPrPostController`（POST→`DraftRemediationCommand`・202）/ `RemediationGetController`（GET→`GetRemediationQuery`）
 - POST `/alerts/:id/remediation/draft-pr`（承認＝手動POST→`RemediationPort.draftPullRequest`・draft起票）/ GET `/alerts/:id/remediation`（PR URL・状態）
 - application: `DraftRemediation`（UseCase/Command/Handler）＝ alert.payload.vulnerabilities[] を入力に AI で全CVEの修正方針を起草→草案PR起票→結果を `RemediationRepository` に保存 / `GetRemediation`（UseCase/Query/Handler/Response）＝状態読み取り（未起票は status="none"）
-- domain（`AIInvestigation/Remediation`）: `RemediationPlanner` ポート（追加）/ `RemediationRecord`+`RemediationRepository`（追加）。既存 `RemediationPort`/`RemediationPlan`/`GitHubPullRequestGateway` を再利用
+- domain（`AIInvestigation/domain/remediation`）: `RemediationPlanner` ポート（追加）/ `RemediationRecord`+`RemediationRepository`（追加）。既存 `RemediationPort`/`RemediationPlan`/`GitHubPullRequestGateway` を再利用
 - infra: `LLMRemediationPlanner`（既存 `LLMTextClient` 再利用・LLM失敗/stub時は fixedVersion ベースの決定論フォールバック→`SECURITY_REMEDIATION.md` 草案）/ `MongoRemediationRepository`（collection=remediations・_id=alertId）
 - DI: `BackofficeApp` で planner（llmClient 共用）/ gateway（`config.github.remediationRepo` 明示）/ repo を new、Draft を commandBus・Get を queryBus に登録
 - config/env: `GITHUB_REMEDIATION_REPO`（未設定は `GITHUB_TARGET_REPO` フォールバック）を追加

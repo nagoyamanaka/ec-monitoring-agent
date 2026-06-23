@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RecordRemediationResultUseCase } from "./RecordRemediationResultUseCase.js";
 import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/ConsoleLogger.js";
-import { RemediationRecord } from "../../Remediation/domain/RemediationRecord.js";
-import { RemediationRepository } from "../../Remediation/domain/RemediationRepository.js";
+import { RemediationRecord } from "../../domain/remediation/RemediationRecord.js";
+import { RemediationRepository } from "../../domain/remediation/RemediationRepository.js";
 
 const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";
 

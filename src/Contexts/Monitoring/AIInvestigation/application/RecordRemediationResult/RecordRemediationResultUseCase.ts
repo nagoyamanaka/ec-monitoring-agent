@@ -1,6 +1,6 @@
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
-import { RemediationRepository } from "../../Remediation/domain/RemediationRepository.js";
-import { RemediationStatus } from "../../Remediation/domain/RemediationRecord.js";
+import { RemediationRepository } from "../../domain/remediation/RemediationRepository.js";
+import { RemediationStatus } from "../../domain/remediation/RemediationRecord.js";
 
 /**
  * CI（GitHub Actions のAIリメディジョブ）からの最終結果を受けて RemediationRecord を確定する。

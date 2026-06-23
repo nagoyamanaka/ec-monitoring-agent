@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { LLMRemediationPlanner } from "./LLMRemediationPlanner.js";
 import { LLMTextClient } from "../../domain/LLMTextClient.js";
-import { RemediationInput } from "../../Remediation/domain/RemediationInput.js";
+import { RemediationInput } from "../../domain/remediation/RemediationInput.js";
 
 const INPUT: RemediationInput = {
   alertId: "550e8400-e29b-41d4-a716-446655440000",

@@ -2,9 +2,9 @@ import { LLMTextClient } from "../../domain/LLMTextClient.js";
 import {
   RemediationInput,
   RemediationVulnerability,
-} from "../../Remediation/domain/RemediationInput.js";
-import { RemediationPlan } from "../../Remediation/domain/RemediationPlan.js";
-import { RemediationPlanner } from "../../Remediation/domain/RemediationPlanner.js";
+} from "../../domain/remediation/RemediationInput.js";
+import { RemediationPlan } from "../../domain/remediation/RemediationPlan.js";
+import { RemediationPlanner } from "../../domain/remediation/RemediationPlanner.js";
 
 const SYSTEM_INSTRUCTION = [
   "あなたはセキュリティ脆弱性の修正PR草案を作成するアシスタントです。",

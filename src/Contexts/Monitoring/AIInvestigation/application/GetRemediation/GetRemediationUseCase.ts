@@ -1,4 +1,4 @@
-import { RemediationRepository } from "../../Remediation/domain/RemediationRepository.js";
+import { RemediationRepository } from "../../domain/remediation/RemediationRepository.js";
 import { RemediationResponse } from "./RemediationResponse.js";
 
 // アラート別のリメディエーション状態（PR URL・状態）を read-only で返す。

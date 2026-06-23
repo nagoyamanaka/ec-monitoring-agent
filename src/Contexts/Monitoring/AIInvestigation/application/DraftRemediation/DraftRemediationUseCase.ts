@@ -2,10 +2,10 @@ import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { AlertId } from "../../../AlertAnalysis/domain/AlertId.js";
 import { AlertRepository } from "../../../AlertAnalysis/domain/AlertRepository.js";
 import { MonitoringResourceNotFoundError } from "../../../AlertAnalysis/application/errors/MonitoringResourceNotFoundError.js";
-import { RemediationExecutor } from "../../Remediation/domain/RemediationExecutor.js";
-import { vulnerabilitiesFromPayload } from "../../Remediation/domain/RemediationInput.js";
-import { RemediationRecord } from "../../Remediation/domain/RemediationRecord.js";
-import { RemediationRepository } from "../../Remediation/domain/RemediationRepository.js";
+import { RemediationExecutor } from "../../domain/remediation/RemediationExecutor.js";
+import { vulnerabilitiesFromPayload } from "../../domain/remediation/RemediationInput.js";
+import { RemediationRecord } from "../../domain/remediation/RemediationRecord.js";
+import { RemediationRepository } from "../../domain/remediation/RemediationRepository.js";
 
 /**
  * security-scan アラートの payload.vulnerabilities[] を入力に修正を実行する。
