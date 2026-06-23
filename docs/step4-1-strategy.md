@@ -14,17 +14,19 @@
 
 ## 1. プロダクトの一言
 
-**既存の観測SaaS（Datadog等）の "検知" の上に乗り、アラート発火後の「調査 → 評価 → レビュー」という人手のワークフローを圧縮するAI調査エージェント。**
+**既存の観測基盤の "検知" の上に乗り、アラート発火後の「調査 → 評価 → レビュー」という人手のワークフローを圧縮するAI調査エージェント。**
 
 分類ツールではなく、複数ソース（Cloud Logging / Terraform差分 / GitHub）を**自律的に横断して証拠を積み上げ、根拠付きで原因を推定し、人間がレビュー・承認する**——この一連を1ループで体現する。
+
+> **検知基盤は Cloud Monitoring を採用（Datadog ではない）**。理由は §2.5。Datadog は有料で本ハッカソンに乗せると物語が「使っていない」と矛盾する。Cloud Monitoring は **無料枠があり・Google 主催ハッカソンの GCP 活用要件に加点され・既に次フェーズ Gateway として設計済み**。「Alerting Policy が発火 → その上に乗る」が文字通り成立する。
 
 ---
 
 ## 2. 差別化（なぜSaaSと競合しないか）
 
-| レイヤー              | 既存SaaS（Datadog/NewRelic/Splunk）          | 本プロダクト                                       |
+| レイヤー              | 既存観測基盤（Cloud Monitoring / Datadog / NewRelic）          | 本プロダクト                                       |
 | --------------------- | -------------------------------------------- | -------------------------------------------------- |
-| 検知（detection）     | **支配領域**。メトリクス・ログ集約・異常検知 | やらない（彼らの上に乗る）                         |
+| 検知（detection）     | **支配領域**。メトリクス・ログ集約・閾値発火・dedup/相関 | やらない（Cloud Monitoring の上に乗る）。発火済みアラートを受ける |
 | 調査（investigation） | 一部AI補助（Watchdog/Bits AI）               | **主戦場**。複数ソース横断の証拠収集を自律化       |
 | 評価（evaluation）    | 手作業                                       | 類似インシデント照合＋AI原因推定（confidence付き） |
 | レビュー（review）    | 手作業（ポストモーテム）                     | reviewStatus（承認/却下）＋修正PR起票まで          |
@@ -32,6 +34,30 @@
 **Elasticのシナジー**: 運用履歴へのRAG。証拠が太る（logs + terraform diff + git）ほど類似検索の精度が上がり、ハルシネーションでなく**引用付きの仮説**が出る。
 
 **設計の肝**: 「証拠収集（read-only）→ 事例照合（Elastic）→ AI推定（Gemini/ADK）→ 人間レビュー（＋修正PR）」の多層パイプライン。各層は別レイヤーでトレードオフでなくシナジー。
+
+### 2.5 検知境界（detection boundary）と検知ソースの被り対策
+
+「Datadog の上に乗る」と言いながら検知層を自分で持ってしまう、という**位置づけの矛盾**を解く節。要点は **検知（dedup/相関/grouping/閾値発火）を自分の境界の外に追い出す**こと。これで「実質 Datadog と同じことをしている」懸念も「障害時にアラートが大量に出る」懸念も**1手で同時に**解ける。
+
+**(1) 検知ソースは peer な ingest アダプタ**。`MonitoringEvent` は「生の業務イベント」ではなく「**上流の検知ソースが発火した／検知済みの事象**」を表す（§8.3 のフレーム＝異種の源を均質な観測へ正規化する境界、と一致）。
+
+| 検知ソース | ingest アダプタ | 位置づけ |
+| --- | --- | --- |
+| Cloud Monitoring（Alerting Policy 発火） | `CloudMonitoringAlertIngestController`（実装済み・`POST /ingest/cloud-monitoring`） | 「上に乗る」の本命。Datadog を使わず GCP・無料枠で成立 |
+| CI / Trivy | `SecurityScanIngestController`（設計） | DevOps 半分（シナリオ5） |
+| **EC 自前 DomainEvent** | `CollectMonitoringEventOnECEventPublished`（実装済み） | **自前検知ソース＝Datadog 不在のデモ stand-in**。嘘の検知ではなく正直な代役 |
+
+> `AlertClassifier` ≠ Cloud Monitoring の monitor。前者は**発火済みアラート**を過去事例/既知パターンと突合し known/unknown に**トリアージ**する（入力＝発火済みアラート、出力＝分類）。後者はメトリクス閾値で**発火させる**（入力＝メトリクスストリーム、出力＝発火）。入力も出力も別レイヤー。
+
+**(2) 被り対策は3層**（検知ソースが複数になり、どの単一上流も横断 dedup できないため、境界での最小の突き合わせは自分の責務になる。ただし correlation エンジンは作らない）。
+
+| 層 | 機構 | 実装 |
+| --- | --- | --- |
+| (a) **category オーナーシップ**（主防御・コードゼロ） | APPLICATION（業務失敗）は EC 自前イベントが権威、INFRASTRUCTURE/CAPACITY（CPU/接続数/5xx 等の症状）は Cloud Monitoring が権威。**同じものを両者に監視させない**＝被りの大半を構造的に消す | 設計／設定（`category` 弁別子を検知主担当キーに流用） |
+| (b) **dedupKey ＋ occurrenceCount**（唯一“実装”する被り対策） | `MonitoringEvent.dedupKey()`＝`source::category::eventName`。同一 dedupKey の未解決 Alert があれば新規作成・再分類・再調査せず**発生回数だけ加算**（UI は「×N」）。同一シグナルの嵐と文字通りの重複を1枚に畳む | 実装済み（`AnalyzeAlertUseCase` の classify 前・`AlertRepository.findOpenByDedupKey`） |
+| (c) **異症状・同一根本原因の相関**（例: DB枯渇=infra と payment失敗=app） | dedupKey では捕まえない。**AI 調査が根本原因を突き止める過程で相関が浮く**＝検知層の dedup でなく investigation の副産物。エンジン化しない | ADR・将来（トーク） |
+
+> **要点**: (b) は correlation エンジンではなく**冪等キー＋grouping lite**。aggregateId を dedupKey に含めない＝注文ごとに違う決済タイムアウトの嵐を1件（×N）に畳む。closed 通知（Cloud Monitoring 回復）は `severity=info` ＝ `isAlertable()=false` で観測のみ・分類/調査に乗せない。
 
 ### 学習ループ：確度付き分類と知識の結晶化（差別化の中核）
 
@@ -92,6 +118,13 @@
 
 - `MonitoringEvent.category`（APPLICATION/INFRASTRUCTURE/CAPACITY/SECURITY）をサブクラスでなく弁別子フィールドで持つ。
 - 「どの調査担当に振るか」のディスパッチキー。a2aの有無に依存しない前方互換。
+
+### 検知ソースは Cloud Monitoring・検知境界は外（ADR種）
+
+- 検知基盤に **Cloud Monitoring を採用**（Datadog は有料・物語と矛盾／Cloud Monitoring は無料枠・GCP 要件加点・設計済み）。
+- 検知（dedup/相関/grouping/閾値発火）は**上流の責務＝境界の外**。`MonitoringEvent` は発火済みアラートを受ける。1 ingest = 1 Alert は「手抜き」でなく**境界を引いた結果として正しい**（§2.5）。
+- 検知ソースは peer な ingest アダプタ（Cloud Monitoring / CI / EC 自前イベント）。EC 自前イベントは Datadog 不在の**デモ stand-in** と正直に位置づける。
+- 被りは **(a) category オーナーシップ（主防御）＋ (b) dedupKey＋occurrenceCount（実装）＋ (c) 異症状・同一根本原因は AI 相関に委譲（エンジン化しない）** の3層。詳細は §2.5。
 
 ### 調査(read) と リメディエーション(write) の分離
 

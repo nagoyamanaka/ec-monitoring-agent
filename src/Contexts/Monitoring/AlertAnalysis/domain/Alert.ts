@@ -33,6 +33,11 @@ export class Alert extends AggregateRoot {
   private readonly _investigationReport: InvestigationReport | null;
   private readonly _feedback: AlertFeedback | null;
   private readonly _correctFeedbackCount: number;
+  // 重複観測の畳み込みキー（monitoringEvent.dedupKey() を materialize）と発生回数。
+  // dedupKey はクエリ容易性のため Alert ドキュメントの一級フィールドとして持つ
+  // （monitoringEvent から導出可能だが、検索のために非正規化する）。
+  private readonly _dedupKey: string;
+  private readonly _occurrenceCount: number;
   private readonly _updatedAt: Date;
 
   private constructor(params: {
@@ -44,6 +49,8 @@ export class Alert extends AggregateRoot {
     investigationReport: InvestigationReport | null;
     feedback: AlertFeedback | null;
     correctFeedbackCount: number;
+    dedupKey: string;
+    occurrenceCount: number;
     createdAt: Date;
     updatedAt: Date;
   }) {
@@ -56,6 +63,8 @@ export class Alert extends AggregateRoot {
     this._investigationReport = params.investigationReport;
     this._feedback = params.feedback;
     this._correctFeedbackCount = params.correctFeedbackCount;
+    this._dedupKey = params.dedupKey;
+    this._occurrenceCount = params.occurrenceCount;
     this.createdAt = params.createdAt;
     this._updatedAt = params.updatedAt;
   }
@@ -88,6 +97,14 @@ export class Alert extends AggregateRoot {
     return this._correctFeedbackCount;
   }
 
+  get dedupKey(): string {
+    return this._dedupKey;
+  }
+
+  get occurrenceCount(): number {
+    return this._occurrenceCount;
+  }
+
   get updatedAt(): Date {
     return this._updatedAt;
   }
@@ -107,6 +124,8 @@ export class Alert extends AggregateRoot {
       investigationReport: null,
       feedback: null,
       correctFeedbackCount: 0,
+      dedupKey: params.monitoringEvent.dedupKey(),
+      occurrenceCount: 1,
       createdAt: now,
       updatedAt: now,
     });
@@ -132,8 +151,31 @@ export class Alert extends AggregateRoot {
       investigationReport: null,
       feedback: null,
       correctFeedbackCount: 0,
+      dedupKey: params.monitoringEvent.dedupKey(),
+      occurrenceCount: 1,
       createdAt: now,
       updatedAt: now,
+    });
+  }
+
+  /**
+   * 同一 dedupKey の重複観測を受けたときの畳み込み。新規 Alert を作らず発生回数を増やす。
+   * 分類・調査・状態はそのまま（既に分類済み/調査中の同一インシデント）。UI は「×N」で表示。
+   */
+  recordOccurrence(): Alert {
+    return new Alert({
+      id: this.id,
+      monitoringEvent: this._monitoringEvent,
+      severity: this._severity,
+      status: this._status,
+      classification: this._classification,
+      investigationReport: this._investigationReport,
+      feedback: this._feedback,
+      correctFeedbackCount: this._correctFeedbackCount,
+      dedupKey: this._dedupKey,
+      occurrenceCount: this._occurrenceCount + 1,
+      createdAt: this.createdAt,
+      updatedAt: new Date(),
     });
   }
 
@@ -147,6 +189,8 @@ export class Alert extends AggregateRoot {
       investigationReport: report,
       feedback: this._feedback,
       correctFeedbackCount: this._correctFeedbackCount,
+      dedupKey: this._dedupKey,
+      occurrenceCount: this._occurrenceCount,
       createdAt: this.createdAt,
       updatedAt: new Date(),
     });
@@ -172,6 +216,8 @@ export class Alert extends AggregateRoot {
       correctFeedbackCount: params.isCorrect
         ? this._correctFeedbackCount + 1
         : this._correctFeedbackCount,
+      dedupKey: this._dedupKey,
+      occurrenceCount: this._occurrenceCount,
       createdAt: this.createdAt,
       updatedAt: new Date(),
     });
@@ -187,17 +233,20 @@ export class Alert extends AggregateRoot {
       investigationReport: this._investigationReport?.toPrimitives() ?? null,
       feedback: this._feedback ? { ...this._feedback } : null,
       correctFeedbackCount: this._correctFeedbackCount,
+      dedupKey: this._dedupKey,
+      occurrenceCount: this._occurrenceCount,
       createdAt: this.createdAt.toISOString(),
       updatedAt: this._updatedAt.toISOString(),
     };
   }
 
   static fromPrimitives(primitives: AlertPrimitives): Alert {
+    const monitoringEvent = MonitoringEvent.fromPrimitives(
+      primitives.monitoringEvent,
+    );
     return new Alert({
       id: new AlertId(primitives.id),
-      monitoringEvent: MonitoringEvent.fromPrimitives(
-        primitives.monitoringEvent,
-      ),
+      monitoringEvent,
       severity: AlertSeverity.fromString(primitives.severity),
       status: AlertStatus.fromString(primitives.status),
       classification: alertClassificationFromPrimitives(
@@ -208,6 +257,9 @@ export class Alert extends AggregateRoot {
         : null,
       feedback: primitives.feedback ?? null,
       correctFeedbackCount: primitives.correctFeedbackCount,
+      // 旧データ互換: dedupKey 未保存の Alert は monitoringEvent から再導出、回数は 1。
+      dedupKey: primitives.dedupKey ?? monitoringEvent.dedupKey(),
+      occurrenceCount: primitives.occurrenceCount ?? 1,
       createdAt: new Date(primitives.createdAt),
       updatedAt: new Date(primitives.updatedAt),
     });

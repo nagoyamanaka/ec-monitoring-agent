@@ -25,6 +25,7 @@ export const SIMILAR_INCIDENTS_INDEX_CONFIG = {
       resolvedNote: { type: "text" },
       resolvedAt: { type: "date" },
       severity: { type: "keyword" },
+      sourceAlertId: { type: "keyword" },
     },
   },
 } as const;
@@ -36,6 +37,7 @@ type IncidentDoc = {
   resolvedNote: string;
   resolvedAt: string;
   severity: string;
+  sourceAlertId?: string;
 };
 
 type EsSearchBody<D> = {
@@ -75,6 +77,9 @@ export class ElasticSimilarIncidentRepository
       resolvedNote: incident.resolvedNote,
       resolvedAt: new Date().toISOString(),
       severity: incident.severity.value,
+      ...(incident.sourceAlertId
+        ? { sourceAlertId: incident.sourceAlertId }
+        : {}),
     };
     await client.index({ index: this.indexName, id, body: doc, refresh: true });
   }
@@ -140,6 +145,9 @@ export class ElasticSimilarIncidentRepository
       resolvedNote: incident.resolvedNote,
       resolvedAt: incident.resolvedAt.toISOString(),
       severity: incident.severity.value,
+      ...(incident.sourceAlertId
+        ? { sourceAlertId: incident.sourceAlertId }
+        : {}),
     };
   }
 
@@ -151,6 +159,7 @@ export class ElasticSimilarIncidentRepository
       resolvedNote: doc.resolvedNote,
       resolvedAt: new Date(doc.resolvedAt),
       severity: AlertSeverity.fromString(doc.severity),
+      ...(doc.sourceAlertId ? { sourceAlertId: doc.sourceAlertId } : {}),
     };
   }
 }

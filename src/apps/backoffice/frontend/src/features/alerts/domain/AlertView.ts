@@ -63,6 +63,8 @@ export type AlertView = {
   readonly report: InvestigationReportView | null;
   readonly feedback: AlertFeedbackView | null;
   readonly correctFeedbackCount: number;
+  /** 同一インシデントの重複観測をまとめた発生回数。2以上なら「×N」をカードに出す。 */
+  readonly occurrenceCount: number;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -102,6 +104,8 @@ export function toAlertView(dto: AlertPrimitives): AlertView {
       : null,
     feedback: dto.feedback,
     correctFeedbackCount: dto.correctFeedbackCount,
+    // 旧データ・契約 optional 互換: 未設定は 1 件として扱う。
+    occurrenceCount: dto.occurrenceCount ?? 1,
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
   };

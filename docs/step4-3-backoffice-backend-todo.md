@@ -81,16 +81,24 @@
 
 ## P1: 差別化
 
-### タスク 9: evidence ルート 〔P1〕
+### タスク 9: evidence ルート 〔P1〕　✅ 完了済み
 
-- 【新規】`routes/evidenceRoutes.ts` ＋ `AlertEvidenceGetController`
+- 【新規】`routes/evidenceRoutes.ts` ＋ `AlertEvidenceGetController`（evidence/status の2メソッド）
 - GET /alerts/:id/evidence（InfraEvidence）/ GET /alerts/:id/investigation/status（collecting/analyzing/done）
+- 委譲先（application 層・AIInvestigation コンテキスト新規）
+  - `GetInfraEvidenceQuery` → `GetInfraEvidenceUseCase`：alert を findById → `InfraInvestigationPort.collect()` で**証拠を再収集**（調査時の証拠は永続化していないため。全 Gateway は read-only）→ `InfraEvidenceResponse`（Date を ISO 正規化）
+  - `GetInvestigationStatusQuery` → `GetInvestigationStatusUseCase`：alert から status を導出（report 添付 or 既知パターン→done / 未知・未添付→analyzing。`collecting` は永続フェーズ未追跡のため契約上予約）
+- `InfraEvidencePrimitives` を `AIInvestigation/domain/InfraEvidence.ts` に追加（ワイヤ契約）
+- UT: 両 UseCase（not-found / 再収集・正規化 / status 導出4分岐）。BackofficeApp の queryBus に2ハンドラ登録
 
 ### タスク 10: security-scan ingest 〔P1〕
 
 - 【新規】`routes/ingestRoutes.ts` ＋ `SecurityScanIngestPostController`
 - X-Ingest-Token検証 → HIGH未満は204 → MonitoringEvent(SECURITY)構築 → AnalyzeAlartCommand dispatch → 202
 - CI（step4-1 タスク4）と結線。シナリオ5の起点
+- [ ] Trivy / `npm audit`（pnpm audit）ステップ追加（HIGH以上で検出）
+- [ ] 検出結果を `POST /ingest/security-scan` に送る step（`INGEST_TOKEN` ヘッダ）
+      デプロイはどうする？普通にアラートだけか？
 
 ### タスク 11: remediation ルート 〔P1〕
 

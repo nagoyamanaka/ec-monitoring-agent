@@ -1,5 +1,10 @@
-# 設計エージェント向けプロンプト v18
+# 設計エージェント向けプロンプト v19
 
+> **変更履歴（v18→v19）**
+> 検知境界（detection boundary）を明文化。検知基盤に Cloud Monitoring を採用（Datadog 不採用＝有料・物語矛盾／Cloud Monitoring は無料枠・GCP 要件加点）。
+> 検知ソースを peer な ingest アダプタ化（`CloudMonitoringAlertIngestController`・`POST /ingest/cloud-monitoring` 実装）。EC 自前イベントは Datadog 不在のデモ stand-in と位置づけ。
+> 検知の被り対策3層（category オーナーシップ／dedupKey＋occurrenceCount／AI 相関委譲）。`MonitoringEvent.dedupKey()`・`Alert.occurrenceCount`・`AnalyzeAlert` dedup を実装。詳細は `docs/step4-1-strategy.md` §2.5。
+>
 > **変更履歴（v11→v12）**
 > インフラ横断調査パイプラインを設計に追加。
 > AlertClassifier（Elastic類似検索）とインフラ横断調査のシナジー構造を明文化。
@@ -169,6 +174,23 @@ RabbitMQ
   ├─ CompensateOrderOnInventoryFailed → OrderをFAILEDに遷移
   └─ CollectMonitoringEventOnECDomainEvent → AlertAnalysis → AI分析 → SSE push
 ```
+
+---
+
+## 検知境界と検知ソース（v19追加）
+
+「Datadog の上に乗る」と言いながら検知層を自前で持つ矛盾を解く。**検知（dedup/相関/grouping/閾値発火）は上流の責務＝境界の外**。`MonitoringEvent` は「発火済み／検知済みの事象」を表し、検知ソースは peer な ingest アダプタで合流する。
+
+- **検知基盤 = Cloud Monitoring**（Datadog 不採用。有料・物語矛盾 ↔ Cloud Monitoring は無料枠・GCP 要件加点・設計済み）。
+- ingest アダプタ（すべて同じ観測パイプラインに合流）:
+  - `CollectMonitoringEventOnECEventPublished`（EC 自前 DomainEvent → APPLICATION）＝**Datadog 不在のデモ stand-in**
+  - `CloudMonitoringAlertIngestController`（`POST /ingest/cloud-monitoring` → INFRASTRUCTURE/CAPACITY）
+  - `SecurityScanIngestController`（CI/Trivy → SECURITY・設計）
+- **検知の被り対策（3層）**:
+  - (a) **category オーナーシップ**: APPLICATION は EC イベント、INFRASTRUCTURE/CAPACITY は Cloud Monitoring が権威。同じものを両者に監視させず被りを構造的に消す。
+  - (b) **dedupKey ＋ occurrenceCount**: 同一 dedupKey（`source::category::eventName`）の未解決 Alert は新規作成せず発生回数を加算（UI は「×N」）。アラート嵐・重複表示を抑制。`AnalyzeAlertUseCase` の classify 前で判定。
+  - (c) **異症状・同一根本原因**は dedup でなく AI 調査の相関に委譲（エンジン化しない・ADR）。
+- 詳細・ADR は `docs/step4-1-strategy.md` §2.5 を参照。
 
 ---
 
@@ -550,9 +572,10 @@ const AUTO_PROMOTE_THRESHOLD = 3; // 正解フィードバック3回で自動昇
 
 ### MonitoringEventの設計原則
 
-- 単一の `MonitoringEvent` 型にすべてのECイベントをマッピングする
-- ECコンテキストの型をMonitoringコンテキストに直接importしない
-- `payload: Record<string, unknown>` として均質に扱い、将来のECイベント追加でMonitoringドメインモデルが変わらない構造にする
+- 単一の `MonitoringEvent` 型にすべての検知ソース（EC イベント / Cloud Monitoring / CI）をマッピングする
+- ECコンテキストの型をMonitoringコンテキストに直接importしない。源固有の型に触れるのは ingest 境界（subscriber / ingest controller）だけ
+- `payload: Record<string, unknown>` として均質に扱い、将来のイベント追加でMonitoringドメインモデルが変わらない構造にする
+- **`dedupKey()`（`source::category::eventName`）で重複観測を畳む**。同一 dedupKey の未解決 Alert があれば `AnalyzeAlert` は新規作成・再分類・再調査せず `occurrenceCount` を加算（UI は「×N」・アラート嵐の抑制）。aggregateId は含めない＝同型障害の連発を1件に集約。closed/回復通知は `severity=info`＝`isAlertable()=false` で観測のみ
 
 ---
 
@@ -639,6 +662,9 @@ GET  /demo/status
 GET  /alerts/:id/evidence              ← 収集済みInfraEvidenceの取得
 GET  /alerts/:id/investigation/status  ← 調査ステータス（collecting / analyzing / done）
 
+# 検知ソース ingest（v19追加・検知境界）
+POST /ingest/cloud-monitoring          ← Cloud Monitoring Alerting Policy発火の受信（MonitoringEvent(INFRASTRUCTURE/CAPACITY)化）。x-ingest-token で認証（INGEST_TOKEN 設定時）
+
 # CI/CD連携・自律リメディエーション（v13追加）
 POST /ingest/security-scan             ← CIからの脆弱性スキャン結果受信（MonitoringEvent(SECURITY)化）
 POST /alerts/:id/remediation/draft-pr  ← 承認操作：RemediationPlanからPR草案を起票（write・人間承認ゲート）
@@ -692,6 +718,8 @@ interface StructuredLog {
 - RepositoryのインターフェースはDomainに置き、実装はInfrastructureに置く
 - ECドメインはMonitoringを直接importしない
 - MonitoringドメインはECコンテキストの型を直接importしない（`MonitoringEvent` で変換して受け取る）
+- **検知ソース（EC イベント / Cloud Monitoring / CI）は peer な ingest アダプタで合流する。源固有の型に触れるのは ingest 境界だけ。検知（dedup/相関/閾値発火）は上流の責務＝境界の外**（v19）
+- **重複観測は `MonitoringEvent.dedupKey()` で畳む。同一 dedupKey の未解決 Alert は再分類・再調査せず `occurrenceCount` 加算。被りの主防御は category オーナーシップ、異症状・同一根本原因の相関は AI 調査に委譲しエンジン化しない**（v19）
 - `DemoDrawer.tsx` は `/alerts` のレイアウト層にのみ差し込む
 - ApplicationService / CommandHandler は `Logger` interfaceにのみ依存し、GCP固有実装を直接importしない
 - ApplicationServiceのメソッド名は `run()` で統一する（CodelyTV準拠）
@@ -740,14 +768,16 @@ Before（継承・避ける）:
 abstract class AbstractAIInvestigationAdapter implements AIInvestigationPort {
   async investigate(ctx: InvestigationContext): Promise<InvestigationReport> {
     const prompt = this.buildPrompt(ctx);
-    const raw = await this.generate(prompt);     // ← 子に丸投げ
+    const raw = await this.generate(prompt); // ← 子に丸投げ
     const out = this.safeParse(raw);
     return out ? this.toReport(out) : this.fallback();
   }
   protected abstract generate(prompt: string): Promise<string>;
 }
 class GeminiAIInvestigationAdapter extends AbstractAIInvestigationAdapter {
-  protected generate(p: string) { /* Gemini SDK */ }
+  protected generate(p: string) {
+    /* Gemini SDK */
+  }
 }
 // 問題: Geminiアダプタは「調査オーケストレーションの一種」ではない（is-a不成立）。
 //       オーケストレーションのテストに毎回サブクラスが要る。子が親処理を上書きでき境界が緩い。
@@ -767,8 +797,11 @@ class LLMInvestigationAdapter implements AIInvestigationPort {
   async investigate(ctx: InvestigationContext): Promise<InvestigationReport> {
     const prompt = buildUserPrompt(ctx);
     let raw: string;
-    try { raw = await this.llm.generate(SYSTEM_INSTRUCTION, prompt); }
-    catch { return buildFallback(); }            // API/timeout失敗 → fallback
+    try {
+      raw = await this.llm.generate(SYSTEM_INSTRUCTION, prompt);
+    } catch {
+      return buildFallback();
+    } // API/timeout失敗 → fallback
     const out = safeParse(raw);
     return out ? toReport(out) : buildFallback(); // パース不能 → fallback
   }
@@ -776,11 +809,15 @@ class LLMInvestigationAdapter implements AIInvestigationPort {
 
 // infrastructure: プロバイダ固有実装 + 呼び出しの信頼性（リトライ/タイムアウト）
 class GeminiLLMClient implements LLMTextClient {
-  async generate(systemInstruction: string, prompt: string) { /* Gemini SDK + 30sタイムアウト1回リトライ */ }
+  async generate(systemInstruction: string, prompt: string) {
+    /* Gemini SDK + 30sタイムアウト1回リトライ */
+  }
 }
 
 // composition root（backoffice DI）で組み立てる
-const port: AIInvestigationPort = new LLMInvestigationAdapter(new GeminiLLMClient());
+const port: AIInvestigationPort = new LLMInvestigationAdapter(
+  new GeminiLLMClient(),
+);
 ```
 
 効果:
@@ -843,6 +880,7 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(new GeminiLLMClien
 1. **予兆の入力源を `ForecastSignalSource` で源非依存に抽象化し、stretchⅢで event-log 源を追加してもハンドラ・ポートをノータッチにする理由（stretchⅡ→Ⅲを再設計でなく追加で繋ぐ継ぎ目）**（v18追加）
 1. **ログベース・イベントソーシング基盤（全DomainEvent追記＋予知ビュー）を前倒しせず stretchⅢ に置く理由（薄い／障害寄りの現行DomainEventでは予兆の母集団が不足しデモ価値が出ない・DDIA unbundling は設計とADRで先に示す）**（v18追加）
 1. **予知の差別化を「予知機構」でなく「入力データの質（DDDの集約粒度の業務 DomainEvent）」に置く理由。OpenTelemetry 標準のインフラ指標は横展開でき汎用ベンダーが作れるが、ドメインイベントは会社ごとに異なり外部ベンダーが原理的に作れない内製の強み（ビジネスオブザーバビリティ）であること**（v18追加）
+1. 「正常系の業務イベントなのにアラートを出す」のは壊れていたので、観測の収集とアラート判定を分離するトリアージゲートを入れました（決定どおり severity 軸・CollectMonitoringEventUseCase 配置）。今は severity=info を「正常系」のプロキシにしています。将来 info でも「監視したい正常系」と「本当に捨てる正常系」を分けたくなったら、category とは別軸の明示弁別子（BUSINESS/FAULT）への昇格を検討する余地があります。今は不要と判断してやっていません。
 
 ---
 

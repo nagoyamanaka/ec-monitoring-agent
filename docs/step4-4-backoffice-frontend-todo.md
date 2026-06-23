@@ -125,6 +125,8 @@
 ### タスク 8: 証拠パネル 〔P1〕
 
 - 【新規】`features/alerts/domain/EvidenceView.ts` / `infrastructure/evidenceApi.ts`
+  - `GET /alerts/:id/evidence` → `InfraEvidence`（appLogs / terraformDiff / recentCommits）を取得
+  - `GET /alerts/:id/investigation/status` → `collecting | analyzing | done` をポーリング。証拠が「**到着ごとに積み上がる**」演出のトリガーに使う（`done` になったタイミングで evidence を fetch → stagger フェードイン）
 - 【新規】`components/EvidencePanel.tsx`（Cloud Logging/Terraform/GitHub の証拠が**到着ごとに積み上がる**演出＝自律性の可視化）
 - シナリオ4の見せ場
 
@@ -147,6 +149,7 @@
 - [ ] 【新規/改修】`InvestigationReportView` ＋ `toInvestigationReportView` を構造化型へ拡張（後方互換: 文字列も受ける）
 - [ ] 【改修】`AlertCardExpanded` の調査ステップ／推奨アクションを、`href` があれば外部リンク（新規タブ・`rel="noopener"`・kind アイコン）に
 - [ ] 【seed】E2E/デモ seed に GitHub/Cloud Logging のサンプル URL を付与し動線を可視化
+- [ ] 【内部リンク】「類似既知」分類（`SimilarPatternRule`）のカードから**元の解決済み Alert（`/alerts/:id`）へ内部ディープリンク**する。土台は揃っている — `SimilarIncident`/`ResolvedIncident` は optional `sourceAlertId`（back-link）を保持済み（step4-2 タスク 12 追記）。残る結線は2点: ①`SimilarPatternRule` が `best.incident.sourceAlertId` を分類結果へ載せる（現状は `patternId: similar:${incident.id}` のみで back-link 未露出）／②contracts の classification primitives に optional `sourceAlertId` を足してフロントへ伝搬。「過去の同型障害をどう直したか」へ即移動できる動線で、graded confidence の意思決定支援を補強する
 - 補足（#4 `suggestedPatternName` の扱い）: これは **LLM が生成する自由記述ラベル**（eventName/category のような閉じた語彙ではない）。よって eventCatalog のような JSON マッピングは不適。**検索キーではなく表示用の人間語ラベル**（検索キーは `patternId`/`eventName`）。本番プロンプトで「日本語の読めるパターン名」を要求し、フロントはそのまま表示する方針。StubLLMClient のスラッグは人間語ラベルへ修正済み。
 
 ### タスク 10: demo ドロワー 〔P1〕

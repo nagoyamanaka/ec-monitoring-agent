@@ -135,6 +135,37 @@ describe("SubmitFeedbackUseCase", () => {
     expect(indexed).toHaveLength(1);
     expect(indexed[0].eventName).toBe("ec.some.unknown_event");
     expect(indexed[0].resolvedNote).toBe("プール拡張で解決");
+    // 元アラートへの back-link を保持する（UI ディープリンク用）
+    expect(indexed[0].sourceAlertId).toBe(ALERT_ID);
+  });
+
+  it("operatorNote 無しでも investigationReport.summary を resolvedNote に残す", async () => {
+    const alert = Alert.createAsUnknown({
+      id: new AlertId(ALERT_ID),
+      monitoringEvent: makeEvent(),
+    }).attachInvestigationReport(makeReport());
+    await alertRepo.save(alert);
+
+    await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
+
+    const indexed = await findAllSimilar();
+    expect(indexed).toHaveLength(1);
+    // メモ未入力時は AI 調査 summary を記憶に残す（汎用文字列に潰さない）
+    expect(indexed[0].resolvedNote).toBe("DB コネクションが枯渇していました");
+  });
+
+  it("operatorNote も investigationReport も無ければ汎用文字列にフォールバックする", async () => {
+    const alert = Alert.createAsUnknown({
+      id: new AlertId(ALERT_ID),
+      monitoringEvent: makeEvent(),
+    });
+    await alertRepo.save(alert);
+
+    await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
+
+    const indexed = await findAllSimilar();
+    expect(indexed).toHaveLength(1);
+    expect(indexed[0].resolvedNote).toBe("正解フィードバックによる解決");
   });
 
   it("しきい値未満では自動昇格しない", async () => {

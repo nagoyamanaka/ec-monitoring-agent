@@ -131,6 +131,7 @@
 - 【完了】`SimilarIncident/infrastructure/InMemorySimilarIncidentRepository.ts`（warmUp/findSimilar/index・上限100・最新先頭）
 - `InMemoryCriteriaConverter` は不要。`InMemoryCriteriaEvaluator`（Shared）を直接流用
 - `findSimilar` は criteria に eventName EQUAL フィルタ＋limit で最大5件。`index` は先頭に追加、100件超で末尾削除
+- 【追記】`SimilarIncident`/`ResolvedIncident` に optional `sourceAlertId?: string`（元解決済み Alert への back-link）を追加。InMemory/Elastic 両アダプタが index/projection で透過。Elastic は `sourceAlertId: { type: "keyword" }` をマッピングに追加し、未設定時はドキュメントに含めない。UI ディープリンクの土台（フロント側結線は step4-4 タスク 9b）／Forecast の citation incidentId 供給源（タスク 20）になる
 - 参考: 「SimilarIncidentRepository」節
 
 ### タスク 13: SSEAlertNotifier interface ＋ EventEmitter 実装 〔P0〕✅ 完了済み
@@ -144,8 +145,8 @@
 ### タスク 14: SubmitFeedback ＋ 自動昇格 / 手動昇格 〔P0〕✅ 完了済み
 
 - 【完了】`AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommand.ts` / `SubmitFeedbackCommandHandler.ts`（VO変換のみ → UseCase委譲）
-- 【完了】`AlertAnalysis/application/SubmitFeedback/SubmitFeedbackUseCase.ts`（ロジック本体）＋ `SubmitFeedbackUseCase.test.ts`（Alert不在→NotFound／不正解→index・昇格なし／正解→ResolvedIncident index／しきい値未満→昇格なし／しきい値到達＋未知＋レポート→自動昇格／既知分類→昇格なし／レポート無→昇格なし の全分岐 7ケース）
-- フロー: findById（null→`MonitoringResourceNotFoundError`）→ `alert.submitFeedback` → save →【isCorrect】SimilarIncident.index ＋ `correctFeedbackCount>=AUTO_PROMOTE_THRESHOLD` かつ unknown かつ investigationReport 有で `KnownErrorPattern.create(...).promote()` を save（自動昇格）→ INFOログ（feedback_submitted / pattern_auto_promoted）
+- 【完了】`AlertAnalysis/application/SubmitFeedback/SubmitFeedbackUseCase.ts`（ロジック本体）＋ `SubmitFeedbackUseCase.test.ts`（Alert不在→NotFound／不正解→index・昇格なし／正解→ResolvedIncident index＋sourceAlertId back-link／operatorNote無→investigationReport.summary を resolvedNote に充填／note・report 両無→汎用文字列フォールバック／しきい値未満→昇格なし／しきい値到達＋未知＋レポート→自動昇格／既知分類→昇格なし／レポート無→昇格なし の全分岐 9ケース）
+- フロー: findById（null→`MonitoringResourceNotFoundError`）→ `alert.submitFeedback` → save →【isCorrect】SimilarIncident.index（`resolvedNote = operatorNote ?? investigationReport?.summary ?? '正解フィードバックによる解決'`・`sourceAlertId = alert.id.value`）＋ `correctFeedbackCount>=AUTO_PROMOTE_THRESHOLD` かつ unknown かつ investigationReport 有で `KnownErrorPattern.create(...).promote()` を save（自動昇格）→ INFOログ（feedback_submitted / pattern_auto_promoted）
 - しきい値: `AUTO_PROMOTE_THRESHOLD=3`、env `FEEDBACK_AUTO_PROMOTE_THRESHOLD` で上書き可（UseCase コンストラクタ引数の既定値として注入。テストは明示注入で env 非依存）
 - 【完了】`AlertAnalysis/application/PromotePattern/PromotePatternCommand.ts` / `PromotePatternCommandHandler.ts` / `PromotePatternUseCase.ts`（手動 `POST /patterns/:id/promote`：findById（null→NotFound）→ `pattern.promote()` → save → INFOログ pattern_promoted）＋ `PromotePatternUseCase.test.ts`（不在→NotFound／昇格→保存 2ケース）
 - 【完了】`AlertAnalysis/application/errors/MonitoringResourceNotFoundError.ts`（`ApplicationError` 継承・404相当・Alert/Pattern 両方で再利用）
@@ -255,7 +256,8 @@
 ### タスク 20: ForecastMemory projection（突合キーB）〔stretchⅡ〕
 
 - 【新規】`Forecast/domain/ForecastMemory.ts`（`ForecastMemoryEntry`=incidentId/subject/trigger/outcome、`ForecastMemoryRepository`：warmUp/findBySubjects）
-- 【新規】`infrastructure/` 実装（Resolved から subject 投影）
+- 【新規】`infrastructure/` 実装（Resolved から subject 投影）。`ForecastMemoryEntry.incidentId` は `SimilarIncident.sourceAlertId`（step4-2 タスク 12 で追加した back-link）を投影元にすれば、citation を**実在する Alert id**に解決でき引用検証（§7.3）が効く
+- 【補足】`trigger`/`outcome` 文も `resolvedNote`（index 時に AI調査 summary をフォールバック充填）から導出できる。汎用文字列ではなく「どう直したか」が入るようになったため、突合の母集団が痩せない
 - 【修正】`InvestigationReport` に optional `subject?: string` 追記（後方互換）＋ `InvestigateAlertUseCase` で導出して埋める ← **唯一の既存P0変更点**
 
 ### タスク 21: Gateway 未来シグナル取得メソッド ＋ ForecastSignalSource 実装 〔stretchⅡ〕

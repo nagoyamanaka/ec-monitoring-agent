@@ -19,6 +19,26 @@ export class AnalyzeAlertUseCase {
 
   async run(params: { alertId: AlertId; monitoringEvent: MonitoringEvent }): Promise<void> {
     const { alertId, monitoringEvent } = params;
+
+    // 重複観測の畳み込み（classify より前）。同一 dedupKey の未解決 Alert があれば
+    // 新規作成・再分類・再調査をせず発生回数だけ加算する＝アラート嵐の抑制。
+    // 検知ソースが複数（EC イベント / Cloud Monitoring）になり、単一上流では
+    // 横断 dedup できないため、この境界が最小の冪等点になる。
+    const existing = await this.alertRepository.findOpenByDedupKey(
+      monitoringEvent.dedupKey(),
+    );
+    if (existing) {
+      const updated = existing.recordOccurrence();
+      await this.alertRepository.save(updated);
+      this.sseNotifier.notify(updated.toPrimitives());
+      await this.logger.info({
+        service: "backoffice-backend",
+        action: "alert_occurrence_deduplicated",
+        message: `重複観測を畳み込み：${existing.id.value}, dedupKey=${monitoringEvent.dedupKey()}, count=${updated.occurrenceCount}`,
+      });
+      return;
+    }
+
     const result = await this.alertClassifier.classify(monitoringEvent);
 
     if (result.matched) {

@@ -33,6 +33,7 @@ export function makeAlert(overrides: Partial<AlertView> = {}): AlertView {
     report: makeReport(),
     feedback: null,
     correctFeedbackCount: 0,
+    occurrenceCount: 1,
     createdAt: "2026-06-21T00:00:00.000Z",
     updatedAt: "2026-06-21T00:00:00.000Z",
     ...overrides,

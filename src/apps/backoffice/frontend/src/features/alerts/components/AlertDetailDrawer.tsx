@@ -87,7 +87,9 @@ export function AlertDetailDrawer({
               </span>
               <AlertStatusBadge alert={alert} />
             </div>
-            <h2 className="truncate text-lg font-semibold text-slate-50">{title}</h2>
+            <h2 className="truncate text-lg font-semibold text-slate-50">
+              {title}
+            </h2>
             {info && (
               <p className="text-sm leading-relaxed text-slate-300">
                 {info.description}
@@ -96,7 +98,8 @@ export function AlertDetailDrawer({
             <p className="text-sm text-slate-400">
               {info && (
                 <>
-                  <code className="text-slate-400">{alert.eventName}</code> ·{" "}
+                  <code className="text-slate-400">{alert.eventName}</code>{" "}
+                  ·{" "}
                 </>
               )}
               {alert.source} · {formatAbsoluteTime(alert.occurredOn)}
@@ -139,7 +142,7 @@ export function AlertDetailDrawer({
               <ConfidenceGauge
                 confidence={confidence.value}
                 size="lg"
-                label="パターン一致度"
+                label="既知事例との類似度"
                 color="emerald"
               />
             </div>
