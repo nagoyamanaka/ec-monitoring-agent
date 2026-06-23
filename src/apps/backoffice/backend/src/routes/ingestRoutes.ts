@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { CollectMonitoringEventUseCase } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventUseCase.js";
 import { CloudMonitoringAlertIngestController } from "../controllers/ingest/CloudMonitoringAlertIngestController.js";
+import { SecurityScanIngestPostController } from "../controllers/ingest/SecurityScanIngestPostController.js";
 
 /**
  * 検知ソースからの ingest 境界ルート群。
@@ -16,9 +17,17 @@ export function registerIngestRoutes(
     collectMonitoringEventUseCase,
     ingestToken,
   );
+  const securityScanController = new SecurityScanIngestPostController(
+    collectMonitoringEventUseCase,
+    ingestToken,
+  );
 
   router.post(
     "/ingest/cloud-monitoring",
     cloudMonitoringController.run.bind(cloudMonitoringController),
+  );
+  router.post(
+    "/ingest/security-scan",
+    securityScanController.run.bind(securityScanController),
   );
 }

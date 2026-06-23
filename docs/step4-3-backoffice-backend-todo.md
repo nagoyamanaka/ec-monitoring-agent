@@ -91,19 +91,51 @@
 - `InfraEvidencePrimitives` を `AIInvestigation/domain/InfraEvidence.ts` に追加（ワイヤ契約）
 - UT: 両 UseCase（not-found / 再収集・正規化 / status 導出4分岐）。BackofficeApp の queryBus に2ハンドラ登録
 
-### タスク 10: security-scan ingest 〔P1〕
+### タスク 10: security-scan ingest 〔P1〕　✅ 完了済み
 
-- 【新規】`routes/ingestRoutes.ts` ＋ `SecurityScanIngestPostController`
-- X-Ingest-Token検証 → HIGH未満は204 → MonitoringEvent(SECURITY)構築 → AnalyzeAlartCommand dispatch → 202
+<!--
+パターン選定: subscriber ではなく HTTP ingest コントローラ。
+理由 = CI(GitHub Actions の Trivy/npm audit) は外部システムで、自システムの RabbitMQ に
+DomainEvent を publish しない → 購読対象が無いので CollectMonitoringEventSubscriber は使えない。
+同種の外部HTTP源である CloudMonitoringAlertIngestController（実装済み peer）と対称に、
+CollectMonitoringEventUseCase.run() を直接呼ぶプレーンなコントローラとして実装する。
+subscriber は EC 自前 DomainEvent（CollectMonitoringEventOnECEventPublished）専用。
+-->
+
+- 【新規】`controllers/ingest/SecurityScanIngestPostController.ts` ＋ `routes/ingestRoutes.ts` に `POST /ingest/security-scan` 追加
+- X-Ingest-Token検証 → HIGH/CRITICAL未満は204 → MonitoringEvent(category=SECURITY, source=npm_audit)構築 → `CollectMonitoringEventUseCase.run()`（内部で AnalyzeAlertCommand dispatch）→ 202
+- DI は既存の `IngestDependencies`（collectMonitoringEventUseCase / ingestToken）を再利用＝BackofficeApp 配線は変更不要
 - CI（step4-1 タスク4）と結線。シナリオ5の起点
-- [ ] Trivy / `npm audit`（pnpm audit）ステップ追加（HIGH以上で検出）
-- [ ] 検出結果を `POST /ingest/security-scan` に送る step（`INGEST_TOKEN` ヘッダ）
-      デプロイはどうする？普通にアラートだけか？
 
 ### タスク 11: remediation ルート 〔P1〕
 
 - 【新規】`routes/remediationRoutes.ts` ＋ `RemediationDraftPrPostController` / `RemediationGetController`
 - POST draft-pr（承認後に `RemediationPort.draftPullRequest`）/ GET remediation（PR URL・ステータス）
+
+<!--
+【認識合わせ: Trivy 生出力 ⇔ security-scan ボディ／代表CVE+全件 設計】（step4-1 タスク4と結線）
+
+問題: `trivy fs --format json` は `Results[].Vulnerabilities[]` のネストで HIGH/CRITICAL を
+「どばっと」吐く。一方 `SecurityScanIngestPostController` のボディは CVE 1件のフラット構造で、
+そのまま投げても受からない（フィールド名も VulnerabilityID/PkgName と cveId/package で異なる）。
+
+採用方針 = 「A: CI 側 jq 変換 ＋ 案2: 最深刻を代表CVEに寄せる」＋「全件 payload 同梱」:
+  CI(.github/workflows/ci.yml security-scan job)
+    1. trivy fs --severity HIGH,CRITICAL --format json（--exit-code 0＝ビルドは落とさない）
+    2. jq で HIGH/CRITICAL 抽出 → CRITICAL 優先で最深刻=代表CVEをトップレベル昇格
+       → 全件を vulnerabilities[] に同梱 → 1回だけ POST /ingest/security-scan
+  Controller
+    - 代表CVEで MonitoringEvent(category=SECURITY, severity=CRITICAL|WARNING, source=scanner) を構築
+    - payload に { 代表CVE項目..., scanner, target, repo, vulnerabilityCount, vulnerabilities[] }
+    - HIGH/CRITICAL 未満は 204。source=scanner なので dedupKey は scanner×SECURITY×eventName 粒度
+      → CI 再実行・複数CVE は1インシデント(×occurrenceCount)に畳まれる（storm 抑制と整合）
+
+なぜ代表CVE+全件か: インシデントは最悪CVEにアンカーして物語を1本に絞りつつ、リメディは
+全件を直す必要がある。タスク11の `RemediationPort.draftPullRequest` は payload.vulnerabilities を
+入力に、AI 経由で「全CVE をまとめて修正する1 PR」を起票する（個別CVE詳細を失わないため全件同梱）。
+INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-only でスキップ（Cloud Run 未デプロイでも CI は緑）。
+-->
+- リメディ入力は security-scan の `payload.vulnerabilities[]`（全 HIGH/CRITICAL）。AI で一括修正 PR を起票
 
 ---
 
