@@ -32,6 +32,8 @@ import { GetRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvesti
 import { GetRemediationQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationQueryHandler.js";
 import { RecordRemediationResultUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/RecordRemediationResult/RecordRemediationResultUseCase.js";
 import { RemediationExecutor } from "../../../../Contexts/Monitoring/AIInvestigation/domain/remediation/RemediationExecutor.js";
+import { RemediationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/remediation/RemediationPort.js";
+import { InfraInvestigationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/InfraInvestigationPort.js";
 import { LLMRemediationPlanner } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/LLMRemediationPlanner.js";
 import { GitHubPullRequestGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestGateway.js";
 import { InProcessAdvisoryRemediation } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/InProcessAdvisoryRemediation.js";
@@ -65,20 +67,38 @@ import { GcpCloudLoggingLogger } from "../../../../Contexts/Shared/infrastructur
 import { MongoClientFactory } from "../../../../Contexts/Shared/infrastructure/persistence/mongo/MongoClientFactory.js";
 import { InMemoryQueryBus } from "../../../../Contexts/Shared/infrastructure/QueryBus/InMemoryQueryBus.js";
 import { QueryHandlers } from "../../../../Contexts/Shared/infrastructure/QueryBus/QueryHandlers.js";
+import type { Application } from "express";
 import { Server } from "./server.js";
 import { registerRoutes } from "./routes/index.js";
 import { buildBackofficeSubscribers } from "./subscribers/BackofficeSubscribers.js";
 import { HttpEcDemoGateway } from "./demo/HttpEcDemoGateway.js";
+import { EcDemoGateway } from "./demo/EcDemoGateway.js";
 import { TriggerDemoScenarioUseCase } from "./demo/TriggerDemoScenarioUseCase.js";
 import { MongoDemoDataAdapter } from "./demo/MongoDemoDataAdapter.js";
 import { DemoResetUseCase } from "./demo/DemoResetUseCase.js";
 import { config } from "./config.js";
 
+// 結合テスト用の差し替え seam。本番は何も渡さず（既定の実装を使う）、
+// 結合テストだけ「実際に外部を叩く driven アダプタ」を vi.fn 等で置き換える。
+export type BackofficeAppOverrides = {
+  // PR起票（GitHub への write）の唯一の出口。未指定なら GitHubPullRequestGateway。
+  // advisory 経路のみ有効（dispatch 経路は GitHubActionsRemediationDispatcher が担う）。
+  remediationPort?: RemediationPort;
+  // インフラ証拠の収集口（Cloud Logging/Terraform/GitHub を読む）。未指定なら実 Gateway 群。
+  // evidence ルートと、未知分類後の非同期調査が叩くため、結合テストでは stub に差し替える。
+  infraInvestigationPort?: InfraInvestigationPort;
+  // demo パネルが EC backend を叩く口。未指定なら HttpEcDemoGateway（実 EC へ HTTP）。
+  ecDemoGateway?: EcDemoGateway;
+};
+
 export class BackofficeApp {
   private server!: Server;
   private connection!: RabbitMqConnection;
 
-  async start(): Promise<void> {
+  constructor(private readonly overrides: BackofficeAppOverrides = {}) {}
+
+  // 配線をすべて行うが listen はしない。結合テストは build() 後に httpApp を supertest へ渡す。
+  async build(): Promise<void> {
     const mongoClient = await MongoClientFactory.createClient("backoffice", { url: config.mongoUrl });
     const logger = new GcpCloudLoggingLogger();
 
@@ -121,11 +141,13 @@ export class BackofficeApp {
       ? new StubLLMClient()
       : new GeminiLLMClient();
     const aiInvestigationPort = new LLMInvestigationAdapter(llmClient);
-    const infraInvestigationPort = new DefaultInfraInvestigationAdapter(
-      new CloudLoggingGatewayImpl(),
-      new TerraformGatewayImpl(),
-      new GitHubGatewayImpl(config.github.token, config.github.targetRepo),
-    );
+    const infraInvestigationPort =
+      this.overrides.infraInvestigationPort ??
+      new DefaultInfraInvestigationAdapter(
+        new CloudLoggingGatewayImpl(),
+        new TerraformGatewayImpl(),
+        new GitHubGatewayImpl(config.github.token, config.github.targetRepo),
+      );
     const sseNotifier = new EventEmitterSSEAlertNotifier();
 
     const analyzeAlertUseCase = new AnalyzeAlertUseCase(
@@ -198,7 +220,9 @@ export class BackofficeApp {
         : new InProcessAdvisoryRemediation(
             // advisory の planner は調査と同じ llmClient を再利用（stub 時は決定論フォールバックへ落ちる）。
             new LLMRemediationPlanner(llmClient),
-            new GitHubPullRequestGateway(config.github.token, config.github.remediationRepo),
+            // 結合テストは override で本物の GitHub HTTP 呼び出しだけを差し替える。
+            this.overrides.remediationPort ??
+              new GitHubPullRequestGateway(config.github.token, config.github.remediationRepo),
           );
     const draftRemediationUseCase = new DraftRemediationUseCase(
       alertRepository,
@@ -248,7 +272,8 @@ export class BackofficeApp {
       buildBackofficeSubscribers(collectMonitoringEventUseCase, investigateAlertUseCase),
     );
 
-    const ecDemoGateway = new HttpEcDemoGateway(config.demo.ecBackendUrl);
+    const ecDemoGateway =
+      this.overrides.ecDemoGateway ?? new HttpEcDemoGateway(config.demo.ecBackendUrl);
     const triggerScenarioUseCase = new TriggerDemoScenarioUseCase(ecDemoGateway, config.demo.productId);
     const demoResetUseCase = new DemoResetUseCase(
       new MongoDemoDataAdapter(mongoClient),
@@ -275,7 +300,16 @@ export class BackofficeApp {
         ingestToken: config.ingestToken,
       },
     );
+  }
+
+  async start(): Promise<void> {
+    await this.build();
     await this.server.listen();
+  }
+
+  // supertest 用：ポートを listen せず Express アプリだけ取り出す（build() 後に呼ぶ）。
+  get httpApp(): Application {
+    return this.server.express;
   }
 
   async stop(): Promise<void> {

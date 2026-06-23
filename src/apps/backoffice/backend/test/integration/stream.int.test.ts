@@ -1,0 +1,41 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { AddressInfo } from "node:net";
+import type { Server } from "node:http";
+import { BackofficeApp } from "../../src/BackofficeApp.js";
+import { startApp } from "./support.js";
+
+/**
+ * routes/streamRoutes.ts に 1:1 対応。
+ * GET /alerts/stream（SSE）。長時間接続なので本文の完了は待たず、
+ * ヘッダ（200・text/event-stream）が返った時点で検証して接続を破棄する。
+ * supertest は本文 end を待ってしまうため、実ポートに listen して fetch でヘッダだけ受ける。
+ */
+describe("streamRoutes (integration)", () => {
+  let app: BackofficeApp;
+  let server: Server;
+  let baseUrl: string;
+
+  beforeAll(async () => {
+    const started = await startApp();
+    app = started.app;
+    server = app.httpApp.listen(0);
+    const { port } = server.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await app?.stop();
+  });
+
+  it("GET /alerts/stream は SSE ヘッダで開通する", async () => {
+    const controller = new AbortController();
+    // fetch はヘッダ受信時点で resolve する（body は stream のまま）。
+    const res = await fetch(`${baseUrl}/alerts/stream`, { signal: controller.signal });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
+
+    controller.abort();
+  });
+});
