@@ -31,8 +31,10 @@
 - [ ] Trivy / `npm audit`（pnpm audit）ステップ追加（HIGH以上で検出）
 - [ ] 検出結果を `POST /ingest/security-scan` に送る step（`INGEST_TOKEN` ヘッダ）
 - [ ] Cloud Run への deploy step（とどける）
+- [x] **AIリメディ workflow**: `.github/workflows/ai-remediation.yml`（`repository_dispatch: ai-remediation` 起動）。ブランチ作成→AIエージェント(Gemini CLI/差替可)が実コード修正→trivy再スキャン+UT緑→draft PR→`POST /ingest/remediation-result` callback。backend の dispatch 経路（`REMEDIATION_MODE=dispatch`）から起動される
 
 **設計メモ**: これがシナリオ5（DevOpsループ）の起点。backendの `/ingest/security-scan`（step4-3）完成後に結線。
+リメディの「実修正＋UT検証」は API サーバ内ではなく **CI ランナー**で回す（精度はテストゲートで担保・隔離/安全/リソース面）。Gemini は Vertex AI 認証で GCP 無料クレジット内、品質不足なら workflow の1ステップを `claude-code-action` に差し替え。詳細は `step4-3` タスク11。
 
 ## タスク 5: GitHub リメディエーション権限 〔P1〕
 
@@ -47,6 +49,7 @@
 ## タスク 7: 意思決定のロック（ADR Step5の種）〔P0・ドキュメント〕
 
 - [ ] a2a不使用 / ADK in-process / category弁別子 / read-write分離 / Cloud Run折衷 を ADR 化（`docs/step5-adr.md`）
+  - **a2a不使用の補強（2026-06-23 確定）**: マルチエージェント統合を3パターンに分離して論じる＝①ADK in-process（調査/推論・密結合・関数呼び出し）／②dispatch+callback（実行/修正・疎・タスク委譲）／③A2A facade（外部相互運用・stretch候補・コア外）。①②とも「会話」でなく「タスク委譲/関数呼び出し」なので A2A 不要。トポロジは hub-and-spoke（mesh でない）。詳細は `step4-2` タスク18 コメント＋タスク30
 - [ ] 参照: `project-prompt.md` の「Step5で作成するADR」一覧
 
 ## タスク 8: 予兆ブリーフィングの意思決定ロック 〔stretchⅡ・ドキュメント〕

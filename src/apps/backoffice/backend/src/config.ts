@@ -30,6 +30,21 @@ export const config = {
   github: {
     token: process.env.GITHUB_TOKEN ?? "",
     targetRepo: process.env.GITHUB_TARGET_REPO ?? "",
+    // 修正PRの起票先。未設定なら調査用の targetRepo にフォールバック（同一リポを想定）。
+    remediationRepo:
+      process.env.GITHUB_REMEDIATION_REPO ??
+      process.env.GITHUB_TARGET_REPO ??
+      "",
+  },
+  remediation: {
+    // "dispatch" = CI(GitHub Actions)のAIエージェントへ repository_dispatch（実修正+UT/E2E）。
+    // "advisory" = in-process で SECURITY_REMEDIATION.md の方針PRを起票（CI不要・既定）。
+    mode: (process.env.REMEDIATION_MODE ?? "advisory") as "dispatch" | "advisory",
+    // dispatch 経路で起動する repository_dispatch のイベント種別（ターゲットリポの workflow と一致させる）。
+    dispatchEventType: process.env.REMEDIATION_DISPATCH_EVENT_TYPE ?? "ai-remediation",
+    // AI修正→検証→再修正の自己修正ループ上限。通らないと延々リトライして課金暴走するのを防ぐ安全弁。
+    // CI 側ループ（ai-remediation.yml）と将来の調査検証ループ（タスク16）の両方が従う単一ソース。
+    maxAttempts: Math.max(1, parseInt(process.env.REMEDIATION_MAX_ATTEMPTS ?? "2")),
   },
   elasticsearch: {
     // 空なら InMemory にフォールバック（SimilarPatternRule は無効）。設定すると ES バックエンド＋graded confidence 分類が有効化される。

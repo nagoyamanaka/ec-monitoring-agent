@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run --config vitest.e2e.config.ts"
+    "test": "vitest run --config vitest.e2e.config.ts",
+    "test:prod": "node --env-file=.env.prod node_modules/vitest/vitest.mjs run --config vitest.e2e.prod.config.ts"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

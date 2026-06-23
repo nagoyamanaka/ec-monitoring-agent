@@ -23,6 +23,8 @@ export class StubLLMClient implements LLMTextClient {
     // 表示用の人間語ラベル（本番 LLM も日本語の読めるパターン名を返す前提）。
     // 機械スラッグだと UI に "stub-investigated-pattern" がそのまま出てしまうため。
     suggestedPatternName: "[STUB] 未知の障害パターン（推定）",
+    // remediate ボタン活性経路を E2E で通すため true 固定（advisory シグナルの配線確認）。
+    remediable: true,
   });
 
   async generate(_systemInstruction: string, _prompt: string): Promise<string> {

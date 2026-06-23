@@ -800,6 +800,8 @@ class InvestigateAlertDomainEvent extends DomainEvent {
 > `investigationSteps`（AIが何を調べたか）・`suggestedActions`（推奨対応）・`reviewStatus`（承認/却下）を持つ。
 > 分類ツールではなく**調査エージェント**として機能させるための核心フィールド。
 
+> **`suggestedActions` は修正方針の提示を兼ねる（ROI判断材料）**: リメディエーション（PR起票）は人間の承認後に走る別ステップなので、ユーザーは「起票前に」方針へ納得できる必要がある。その判断材料は専用フィールドを足さず `suggestedActions` に集約する（YAGNI）。特に SECURITY では「どのパッケージを→どのバージョンへ（CVE）」を具体的に載せ、ユーザーがコスト対効果を判断してから `POST /remediation/draft-pr` を押せるようにする。起票時に `LLMRemediationPlanner` が出す構造化方針（recommendations）はこの提示と整合する内容になる（別物の方針が後から出ない）。
+
 ```typescript
 export class InvestigationReport {
   readonly summary: string; // 「DBコネクションプール枯渇の可能性87%」などの自然言語説明
@@ -811,6 +813,7 @@ export class InvestigationReport {
   readonly reviewStatus: ReviewStatus; // PENDING_REVIEW / APPROVED / REJECTED
   readonly investigatedAt: Date;
   readonly isFallback: boolean; // Gemini APIエラー時のfallbackか
+  readonly remediable: boolean; // AIが「コードで直せる（PR起票可）」と判定したか。未指定/旧データ/fallbackはfalse
 
   constructor(params: { ... }) { ... }
 
@@ -949,14 +952,16 @@ const SYSTEM_INSTRUCTION = `
   "confidence": 0.87,
   "severity": "CRITICAL" | "WARNING" | "INFO",
   "investigationSteps": ["調べたこと1", "調べたこと2"],
-  "suggestedActions": ["対応アクション1", "対応アクション2"],
-  "suggestedPatternName": "自動昇格候補のパターン名（例: DB_CONNECTION_EXHAUSTION）"
+  "suggestedActions": ["対応アクション1（具体的な修正方針）", "対応アクション2"],
+  "suggestedPatternName": "自動昇格候補のパターン名（例: DB_CONNECTION_EXHAUSTION）",
+  "remediable": true | false
 }
 `;
 ```
 
 > `reviewStatus` / `investigatedAt` / `isFallback` はLLMの出力ではなくアダプタ/ドメイン側で付与する
 > （`reviewStatus` は `PENDING_REVIEW` 固定、`isFallback` は `false`）。
+> `remediable` はLLM出力（未指定・型不正は `LLMOutputParser` が `false` に丸める。必須スキーマには含めず、欠落しても fallback にしない）。`suggestedActions` には「どう直すか」の具体的な修正方針を含めるよう system instruction で指示する（ROI判断材料）。
 > 出力は `LLMInvestigationAdapter` 側で `safeParse` によりスキーマ検証し、`confidence` は 0.0〜1.0 にクランプする。
 > リトライ（30sタイムアウト・1回）は `GeminiLLMClient` 側に寄せた（呼び出しの信頼性はインフラの関心事）。
 > タイムアウト/APIエラーはリトライ後に例外送出 → アダプタが catch して fallback。JSONパース不能時もアダプタが fallback を返す（パース失敗ではリトライしない）。
@@ -1134,23 +1139,38 @@ src/Contexts/Monitoring/AIInvestigation/infrastructure/
 
 ## セキュリティインシデントと自律リメディエーション（CI/CD連携・v13追加）
 
-「DevOps × AI Agent」の DevOps 半分を担うフロー。CI で検出した脆弱性を `MonitoringEvent`（`category: SECURITY`）として同一の調査パイプラインに流し、**AIが調査し修正PRを起票、人間がレビュー・承認**する。
+「DevOps × AI Agent」の DevOps 半分を担うフロー。CI で検出した脆弱性を `MonitoringEvent`（`category: SECURITY`）として同一の調査パイプラインに流す。**調査（read-only）は自動で走り修正方針までレポートに載せる。実際のPR起票（write）は、ユーザーが方針に納得し「自社コードで直せる」と判断した後の承認アクションとして分離する。**
+
+> **重要（旧図からの訂正）**: 以前の図は `InvestigateAlert` の中で `RemediationPlanner → draftPullRequest()` まで一気に描いており「調査の副産物としてPRが自動起票される」ように読めたが、これは誤り。①修正方針の生成（read 相当・レポートに同梱）と ②PR起票（write・人間ゲート後）は別ステップ。理由は2つ — **(a) ROI/コスト**: 全アラートで毎回 remediate（特に dispatch モードは CI 上で AI 自己修正ループ＋trivy再スキャン＋UT/E2E が走る最も高コストな経路）すると課金が暴れる。**(b) 方針一致**: 自社起因でない／コードで直せないものを起票しても無駄。判断は人間が握る。これは戦略 §4「調査(read)とリメディエーション(write)の分離＝AIが調査・人間が承認」をコードで保つことと同義。
 
 ### フロー
 
 ```
+【自動・read-only フェーズ】
 GitHub Actions（CIパイプライン）
   └─ Trivy / npm audit でHIGH以上の脆弱性を検出
        └─ POST /ingest/security-scan（CI → backoffice）
             └─ SecurityScanIngestController が MonitoringEvent(category=SECURITY) を構築
                ※ ECDomainEvent由来ではない。MonitoringEventがECと疎結合である設計の実証
                  → AnalyzeAlertCommandHandler（既存の調査パイプラインに合流）
-                      └─ InvestigateAlert（ADK）
+                      └─ InvestigateAlert（read-only 調査）
                           ├─ EvidenceCollector: GitHub Gatewayで利用箇所・依存グラフを収集
                           ├─ RootCauseAnalyst(security): CVE概要 / 影響範囲 / 修正版を分析
-                          └─ RemediationPlanner: 修正方針 → RemediationPort.draftPullRequest()
-                               └─ 人間が PR と reviewStatus をレビュー・承認/却下
+                          └─ InvestigationReport.suggestedActions に修正方針を載せる
+                               （どのパッケージをどのバージョンへ＝ユーザーのROI判断材料）
+        ───── ここまで自動。PR起票（write）はしない ─────
+            ▼ フロントに調査レポート（修正方針込み）を表示
+
+【人間の承認フェーズ】  起点 = ユーザーが方針に納得し「コードで直せる」と判断
+       POST /alerts/:id/remediation/draft-pr   ← 承認アクション（write はここから）
+            └─ DraftRemediationUseCase
+                 └─ RemediationExecutor
+                      ├─ advisory : その場で SECURITY_REMEDIATION.md 草案PRを起票
+                      └─ dispatch : CI（GitHub Actions）へAI修正ジョブを投げ、実コード修正+UT/E2E
+                           → RemediationPort.draftPullRequest() → 人間が PR をレビュー・承認/却下
 ```
+
+> リメディは SECURITY/Trivy に限定されない。app 起因・infra 起因でも「コードで直せる」と判断できれば同じ承認アクションに流せる（判断材料の置き場＝`suggestedActions`、判定属性の設計は後述の検討事項）。
 
 ### MonitoringEvent への直接マッピング（SECURITY）
 
@@ -1160,7 +1180,7 @@ GitHub Actions（CIパイプライン）
 
 ### RemediationPort（人間承認ゲート付きの write 操作）
 
-**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/Remediation/domain/RemediationPort.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AIInvestigation/domain/remediation/RemediationPort.ts`
 
 ```typescript
 interface RemediationPort {
@@ -1185,6 +1205,14 @@ type RemediationResult =
 - **InfraInvestigation の Gateway は read-only を厳守**（`terraform apply` 等を持たない）。
 - **PR起票だけが write 操作**で、`RemediationPort` に隔離する。実装は `GitHubPullRequestGateway`（`GITHUB_TOKEN` 必須・対象リポジトリを環境変数で限定）。
 - PRは**自動マージしない**。エージェントは「調査して草案を出す」、人間は「レビューして承認する」。この境界が「AIが調査・人間がレビュー」という体験価値（step1）をそのまま体現する。
+
+### remediable シグナル（category 非依存の修正可否判定）
+
+リメディは SECURITY/Trivy 専用ではない。APPLICATION 起因・INFRASTRUCTURE 起因でも「自社コードで直せる」ものはありうる。そこで **`InvestigationReport.remediable`（AI 判定の boolean）** を「コードで直せるか」の汎用シグナルとして持つ。
+
+- **置き場所＝`InvestigationReport`（`AlertAnalysis/domain`）**。調査は既に根本原因と `suggestedActions` を出しており、修正可否判断に必要な文脈を最も持つ。レポートは Monitoring フレーム内の共有語（§8.3）なので、ここへの optional フィールド追加は **フレーム内変更でありモジュール間結合を増やさない**（生成側 `AIInvestigation→InvestigationReport`・読取側 `DraftRemediation` は既に Alert/Report に依存済み＝新規の矢印ゼロ）。
+- **役割は advisory（UIゲート＋ROI提示）に限定**。フロントは `remediable` で remediate ボタンの活性／「コードで修正可能（AI判定）」提示を制御する。**write 実行の最終ゲートは握らせない** — LLM 判定を権威にすると脆いため、実行可否は**人間承認＋`RemediationExecutor` の deterministic 判定**（SECURITY は `payload.vulnerabilities` の有無）が握る。`remediable` 欠落は `false`（`DraftRemediationUseCase` の実行ゲートは不変）。
+- **将来**: APPLICATION/INFRASTRUCTURE の実コード修正を実際に起票するには executor/planner の汎用化が要る（現状の planner は依存更新＝SECURITY 形）。`remediable` はその UI/判断の足場を先に用意するもので、executor 汎用化とは独立に入れられる。
 
 ### 関連エンドポイント
 

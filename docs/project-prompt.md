@@ -424,7 +424,15 @@ interface InfraEvidence {
 6. 人間が PR と reviewStatus をレビュー・承認/却下（自動マージはしない）
 ```
 
-> このシナリオで「つくる（調査エージェント）・まわす（GitHub Actions/CI）・とどける（デプロイ）」の3コンセプトを1ループで踏む。PR起票は唯一のwrite操作で `RemediationPort` に隔離する。
+> リメディの実行は2モード（`RemediationExecutor` で差し替え、`config.remediation.mode`）:
+> - **advisory**（既定・CI不要）: in-process で方針テキストのみ生成し `SECURITY_REMEDIATION.md` の草案PR。実コードは直さない（人間が直す前提）。
+> - **dispatch**（agentic・本命）: `repository_dispatch(ai-remediation)` で GitHub Actions（`.github/workflows/ai-remediation.yml`）へ投げ、**ランナー上でAIエージェント(Gemini CLI/差替可)が実コード修正→trivy再スキャン+UT/E2E が緑→draft PR**。**修正精度はテストゲートで担保**（APIサーバ内では実コードを書かない）。非同期のため起票時は `dispatched`、CI完了時に `POST /ingest/remediation-result` で `drafted`/`failed` に確定。過去のローカル版（Trivyローカルスキャン+Copilot Agent プロンプト）の CI/CD 化に相当。
+>
+> このシナリオで「つくる（調査エージェント）・まわす（GitHub Actions/CI）・とどける（デプロイ）」の3コンセプトを1ループで踏む。write 操作（PR起票/コミット）は `RemediationExecutor` の裏（in-process は `RemediationPort`、agentic は CI ランナー）に隔離し、本番への直接 write はしない。
+>
+> リメディの自己修正ループは `REMEDIATION_MAX_ATTEMPTS`（既定2）で必ず打ち切る（無限リトライ＝課金暴走の安全弁）。
+>
+> 〔将来P1〕dispatch＋検証ループの **AI調査**への展開構想あり（`step4-3` タスク16・未実装）。ただし「障害＝コードデグレ＝コード修正」は誤りで、根本原因カテゴリにより修正ターゲット（アプリのコード→PR+UT / 自前IaC→Terraform PR+`terraform plan` / 外部起因→runbook+エスカレーション・自動修正対象外）と検証ゲートが変わる。設計の中心は検証ループでなく **修正ターゲットのルーティング**。トークン多消費＋上限必須のため効果見極め後に着手。
 
 ### シナリオ6：予兆ブリーフィング（stretchⅡ・v15追加）
 

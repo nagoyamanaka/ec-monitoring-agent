@@ -53,6 +53,11 @@ export type InvestigationReportPrimitives = {
   readonly reviewStatus: string;
   readonly investigatedAt: string;
   readonly isFallback: boolean;
+  // AI が「コードで直せる（PR で remediate 可能）」と判定したか。category 非依存の
+  // 汎用シグナルで、フロントは remediate ボタンの活性／ROI 提示の判断に使う（advisory）。
+  // 実際の write 実行ゲートは人間承認＋executor の deterministic 判定が握る。
+  // optional は旧データ互換（未保存なら false 扱い／dedupKey と同じ規約）。
+  readonly remediable?: boolean;
 };
 
 export type AlertPrimitives = {

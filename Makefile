@@ -2,7 +2,7 @@
         ec-up ec-down ec-restart ec-logs ec-build \
         bo-up bo-down bo-restart bo-logs bo-build \
         front-up front-down front-restart front-logs front-build \
-        up down rebuild test e2e swagger \
+        up down rebuild test integration e2e e2e-prod swagger \
         seed \
         prune prune-all
 
@@ -83,8 +83,25 @@ rebuild:
 test:
 	pnpm test
 
-e2e: ec-up
-	$(DC) run --rm e2e
+## backoffice backend の結合テスト（Mongo + RabbitMQ が必要）
+test-integration: infra-up
+	pnpm --filter @ec-monitoring-agent/backoffice-backend run test:integration; \
+	status=$$?; \
+	$(MAKE) infra-down; \
+	exit $$status
+
+## E2E: CI 用（Docker Compose でサービス起動 → mock モードで全テスト実行）
+## infra-up が RabbitMQ を起動し直すと、既存のまま動いている backend は
+## AMQP consumer の接続が切れたままになる（自動再接続しない）。
+## そのため e2e 直前に backend を restart し、稼働中の broker へ確実に繋ぎ直す。
+e2e: ec-up bo-up
+	$(DC) restart ec-backend backoffice-backend
+	$(DC) run --build --rm e2e
+
+## E2E: CD smoke 用（デプロイ済みサービスに対して実行 / URL を環境変数で渡す）
+## 例: make e2e-prod EC_BASE_URL=https://ec.prod.example.com BACKOFFICE_BASE_URL=https://backoffice.prod.example.com
+e2e-prod:
+	EC_BASE_URL=$(EC_BASE_URL) BACKOFFICE_BASE_URL=$(BACKOFFICE_BASE_URL) pnpm test:e2e:prod
 
 swagger: ec-up
 	$(DC) --profile swagger up -d swagger-ui

@@ -19,6 +19,8 @@ export type InvestigationReportView = {
   readonly reviewStatus: ReviewStatus;
   readonly investigatedAt: string;
   readonly isFallback: boolean;
+  // AI が「コードで直せる」と判定したか。remediate ボタンの活性／ROI 提示に使う（未指定は false）。
+  readonly remediable: boolean;
 };
 
 export function toInvestigationReportView(
@@ -34,6 +36,7 @@ export function toInvestigationReportView(
     reviewStatus: dto.reviewStatus as ReviewStatus,
     investigatedAt: dto.investigatedAt,
     isFallback: dto.isFallback,
+    remediable: dto.remediable ?? false,
   };
 }
 
