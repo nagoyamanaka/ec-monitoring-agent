@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MongoClient, ObjectId } from "mongodb";
 import {
   connectMonitoringDb,
+  clearAlerts,
   setPaymentMode,
   setInventoryMode,
   placeEcOrder,
@@ -25,6 +26,8 @@ describe("backoffice E2E: known-pattern path (no AI)", () => {
   const customerId = crypto.randomUUID();
 
   beforeAll(async () => {
+    // 既存 Alert を消して payment.timeout を第1観測にする（dedup 回避）
+    await clearAlerts();
     mongo = connectMonitoringDb();
     await mongo.connect();
     const patterns = mongo.db().collection(KNOWN_ERROR_PATTERNS_COLLECTION);

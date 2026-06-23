@@ -93,9 +93,12 @@ services:
         condition: service_healthy
       backoffice-backend:
         condition: service_healthy
+    # 既定はローカル compose 内の値。商用CI 等では環境変数で上書きできる
+    # （例: CI で EC_BASE_URL を export → ${EC_BASE_URL:-...} が拾う）。
     environment:
-      EC_BASE_URL: http://ec-backend:3000
-      MONGO_URL: mongodb://mongo:27017/ec
+      EC_BASE_URL: ${EC_BASE_URL:-http://ec-backend:3000}
+      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017/ec}
       # backoffice E2E 用（別プロセス・別DB）
-      BACKOFFICE_BASE_URL: http://backoffice-backend:3001
-      MONITORING_MONGO_URL: mongodb://mongo:27017/monitoring
+      BACKOFFICE_BASE_URL: ${BACKOFFICE_BASE_URL:-http://backoffice-backend:3001}
+      MONITORING_MONGO_URL: ${MONITORING_MONGO_URL:-mongodb://mongo:27017/monitoring}
+      E2E_SEED: ${E2E_SEED:-true}

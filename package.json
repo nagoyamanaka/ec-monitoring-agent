@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "pnpm --filter @ec-monitoring-agent/e2e run test",
+    "test:e2e:prod": "pnpm --filter @ec-monitoring-agent/e2e run test:prod",
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },

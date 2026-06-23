@@ -37,15 +37,18 @@ export async function setup(): Promise<void> {
   await waitForHealth("EC backend", BASE_URL);
   await waitForHealth("Backoffice backend", BACKOFFICE_BASE_URL);
 
-  mongo = new MongoClient(MONGO_URL);
-  await mongo.connect();
-  await seedInventory();
+  // E2E_SEED=false（prod smoke）のときは Mongo 直接アクセスと状態変更をスキップする。
+  if (process.env.E2E_SEED !== "false") {
+    mongo = new MongoClient(MONGO_URL);
+    await mongo.connect();
+    await seedInventory();
 
-  await fetch(`${BASE_URL}/demo/payment-mode`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "SUCCESS" }),
-  });
+    await fetch(`${BASE_URL}/demo/payment-mode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "SUCCESS" }),
+    });
+  }
 }
 
 export async function teardown(): Promise<void> {
