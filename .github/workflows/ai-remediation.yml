@@ -1,0 +1,148 @@
+name: AI Remediation
+
+# backend(dispatch経路)からの repository_dispatch で起動する、AI駆動の脆弱性修正ジョブ。
+# 過去のローカル版（Trivyローカルスキャン + Copilot Agent プロンプト）の CI/CD 版:
+#   ブランチ作成 → AIエージェントが実コード修正 → trivy 再スキャン + UT/E2E が緑になるまで → draft PR。
+# 修正の精度は「テストゲートのある実行環境」で担保する（API サーバ内では実コードを書かない）。
+on:
+  repository_dispatch:
+    types: [ai-remediation]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    env:
+      ALERT_ID: ${{ github.event.client_payload.alertId }}
+      # 脆弱性一覧（backend が dispatch 時に同梱）。AIエージェントの修正入力。
+      VULNERABILITIES: ${{ toJSON(github.event.client_payload.vulnerabilities) }}
+      BRANCH: security/ai-remediation-${{ github.event.client_payload.alertId }}
+      # AI自己修正ループの上限（backend config が単一ソース。未指定時のみ 2 にフォールバック）。
+      # 通らないと延々リトライして課金暴走するのを防ぐ安全弁。
+      MAX_ATTEMPTS: ${{ github.event.client_payload.maxAttempts || '2' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create remediation branch
+        run: git switch -c "$BRANCH"
+
+      # Gemini CLI（非対話）をバイナリで導入。バイナリ実行にするのは、下の
+      # 「修正→検証→失敗をフィードバックして再修正」ループを上限つきで回すため
+      # （Action 1発だと我々のテストゲートでの自己修正ループを制御できない）。
+      # ※ パッケージ名/CLI フラグは利用時点の最新リリースに合わせてピン留め・要確認。
+      # ★GCP無料クレジットで賄う場合は Vertex AI 認証（GOOGLE_GENAI_USE_VERTEXAI=true 等）に切替。
+      # ★品質不足ならこのループの gemini 呼び出しを claude(code) CLI に差し替えるだけ（ゲートは不変）。
+      - name: Install Gemini CLI
+        run: npm install -g @google/gemini-cli
+
+      # ── AI修正 → テストゲート検証 → 失敗なら再修正、を MAX_ATTEMPTS まで ──────
+      # ここが精度と課金の両立点: 検証（trivy再スキャン+typecheck+test）が緑になるまで
+      # 自己修正するが、上限回数で必ず打ち切る（無限リトライ＝課金暴走を防ぐ安全弁）。
+      - name: AI self-correction loop (bounded by MAX_ATTEMPTS)
+        id: fix
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -u
+          attempt=1
+          verified=false
+          feedback=""
+          while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+            echo "::group::Remediation attempt ${attempt}/${MAX_ATTEMPTS}"
+            prompt="あなたはセキュリティ脆弱性を修正するコーディングエージェントです。
+            次の HIGH/CRITICAL 脆弱性をすべて修正してください（JSON配列）:
+            ${VULNERABILITIES}
+
+            手順:
+            1. 影響パッケージを fixedVersion 以上へ更新（package.json/lockfile、必要なら Dockerfile。yarn.lock/pnpm-lock 両対応）。
+            2. 破壊的変更があればソースを最小限修正。変更は必要十分に留める。
+            3. pnpm install でロックファイルを整合させる。
+            修正方針の要約を REMEDIATION_NOTE.md に出力すること（証跡）。
+            ${feedback}"
+
+            # ※ -y/--yolo（ツール自動承認）・-p/--prompt（非対話）はリリースに合わせ要確認。
+            gemini -y -p "$prompt" || true
+
+            # 検証（テストゲート）。出力を捕捉し、失敗時は次試行のフィードバックに使う。
+            if ( pnpm install --no-frozen-lockfile \
+                 && docker run --rm -v "$PWD:/repo" -w /repo aquasec/trivy:latest \
+                      fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --no-progress . \
+                 && pnpm typecheck \
+                 && pnpm test ) > verify.log 2>&1; then
+              verified=true
+              echo "::endgroup::"
+              echo "attempt ${attempt} verified ✅"
+              break
+            fi
+
+            feedback="前回（試行${attempt}）の修正は検証に失敗しました。trivy再スキャン/typecheck/test のいずれかが赤です。
+            以下の検証ログ末尾を踏まえ、最小修正で再度直してください:
+            $(tail -c 4000 verify.log)"
+            echo "::endgroup::"
+            attempt=$((attempt + 1))
+          done
+
+          echo "verified=${verified}" >> "$GITHUB_OUTPUT"
+          if [ "$verified" != "true" ]; then
+            echo "上限 ${MAX_ATTEMPTS} 回で検証通過せず。PRは起票せず failed として返します。"
+          fi
+
+      # ── 緑なら draft PR 起票（自動マージなし=人間レビュー）────────────────────
+      - name: Open draft PR
+        id: pr
+        if: ${{ steps.fix.outputs.verified == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "ai-remediation[bot]"
+          git config user.email "ai-remediation@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(security): AI remediation for alert ${ALERT_ID}"
+          git push -u origin "$BRANCH"
+          url=$(gh pr create --draft \
+            --title "fix(security): AI remediation (alert ${ALERT_ID})" \
+            --body "AI が起票したセキュリティ修正です。trivy 再スキャン + UT 緑を確認済み。マージ前にレビューしてください。" \
+            --head "$BRANCH")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # ── backend へ結果 callback（成功/失敗いずれも必ず通知）─────────────────
+      - name: Callback to backoffice (result)
+        if: always()
+        env:
+          BACKOFFICE_INGEST_URL: ${{ secrets.BACKOFFICE_INGEST_URL }}
+          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          # secrets を if で評価できないため、未設定ガードはここで行う（scan-only/未デプロイ時はスキップ）。
+          if [ -z "$BACKOFFICE_INGEST_URL" ]; then
+            echo "BACKOFFICE_INGEST_URL 未設定。callback をスキップします。"
+            exit 0
+          fi
+          if [ "$JOB_STATUS" = "success" ] && [ -n "$PR_URL" ]; then
+            payload=$(jq -nc --arg id "$ALERT_ID" --arg url "$PR_URL" \
+              '{alertId:$id, status:"drafted", pullRequestUrl:$url}')
+          else
+            payload=$(jq -nc --arg id "$ALERT_ID" --arg n "$MAX_ATTEMPTS" \
+              '{alertId:$id, status:"failed", reason:("AI修正が上限\($n)回でテストゲート（trivy再スキャン/typecheck/test）を通過しませんでした")}')
+          fi
+          curl -fsS -X POST "$BACKOFFICE_INGEST_URL/ingest/remediation-result" \
+            -H "Content-Type: application/json" \
+            -H "x-ingest-token: $INGEST_TOKEN" \
+            -d "$payload"

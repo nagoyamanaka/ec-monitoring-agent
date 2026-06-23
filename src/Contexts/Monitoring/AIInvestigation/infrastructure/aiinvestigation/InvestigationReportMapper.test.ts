@@ -12,6 +12,7 @@ function output(overrides: Partial<LLMInvestigationOutput> = {}): LLMInvestigati
     investigationSteps: ["ログ確認"],
     suggestedActions: ["プール拡張"],
     suggestedPatternName: "DB_CONNECTION_EXHAUSTION",
+    remediable: false,
     ...overrides,
   };
 }
@@ -25,6 +26,11 @@ describe("InvestigationReportMapper", () => {
       expect(report.confidence).toBe(0.87);
       expect(report.isFallback).toBe(false);
       expect(report.reviewStatus.value).toBe(ReviewStatuses.PENDING_REVIEW);
+      expect(report.remediable).toBe(false);
+    });
+
+    it("remediable を伝播する", () => {
+      expect(toInvestigationReport(output({ remediable: true })).remediable).toBe(true);
     });
 
     it("confidenceを[0,1]にクランプする", () => {

@@ -26,6 +26,17 @@ import { GetInfraEvidenceUseCase } from "../../../../Contexts/Monitoring/AIInves
 import { GetInfraEvidenceQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceQueryHandler.js";
 import { GetInvestigationStatusUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInvestigationStatus/GetInvestigationStatusUseCase.js";
 import { GetInvestigationStatusQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInvestigationStatus/GetInvestigationStatusQueryHandler.js";
+import { DraftRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/DraftRemediation/DraftRemediationUseCase.js";
+import { DraftRemediationCommandHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/DraftRemediation/DraftRemediationCommandHandler.js";
+import { GetRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationUseCase.js";
+import { GetRemediationQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationQueryHandler.js";
+import { RecordRemediationResultUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/RecordRemediationResult/RecordRemediationResultUseCase.js";
+import { RemediationExecutor } from "../../../../Contexts/Monitoring/AIInvestigation/Remediation/domain/RemediationExecutor.js";
+import { LLMRemediationPlanner } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/LLMRemediationPlanner.js";
+import { GitHubPullRequestGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestGateway.js";
+import { InProcessAdvisoryRemediation } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/InProcessAdvisoryRemediation.js";
+import { GitHubActionsRemediationDispatcher } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubActionsRemediationDispatcher.js";
+import { MongoRemediationRepository } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/MongoRemediationRepository.js";
 import { LLMInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/LLMInvestigationAdapter.js";
 import { GeminiLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/GeminiLLMClient.js";
 import { StubLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/StubLLMClient.js";
@@ -171,11 +182,47 @@ export class BackofficeApp {
       getInvestigationStatusUseCase,
     );
 
+    // リメディエーション（シナリオ5の出口）。実行戦略は config.remediation.mode で差し替える:
+    //   dispatch = CI(GitHub Actions)のAIエージェントへ投げ、実コード修正+UT/E2E をランナーで回す（精度はテストゲートで担保）
+    //   advisory = in-process で SECURITY_REMEDIATION.md の方針PRを起票（CI/GitHub 不在でも動く既定）
+    // どちらも RemediationExecutor の裏に隠れ、DraftRemediationUseCase はノータッチ。
+    const remediationRepository = new MongoRemediationRepository(mongoClient);
+    const remediationExecutor: RemediationExecutor =
+      config.remediation.mode === "dispatch"
+        ? new GitHubActionsRemediationDispatcher(
+            config.github.token,
+            config.github.remediationRepo,
+            config.remediation.dispatchEventType,
+            config.remediation.maxAttempts,
+          )
+        : new InProcessAdvisoryRemediation(
+            // advisory の planner は調査と同じ llmClient を再利用（stub 時は決定論フォールバックへ落ちる）。
+            new LLMRemediationPlanner(llmClient),
+            new GitHubPullRequestGateway(config.github.token, config.github.remediationRepo),
+          );
+    const draftRemediationUseCase = new DraftRemediationUseCase(
+      alertRepository,
+      remediationExecutor,
+      remediationRepository,
+      logger,
+    );
+    const draftRemediationCommandHandler = new DraftRemediationCommandHandler(draftRemediationUseCase);
+
+    const getRemediationUseCase = new GetRemediationUseCase(remediationRepository);
+    const getRemediationQueryHandler = new GetRemediationQueryHandler(getRemediationUseCase);
+
+    // CI(dispatch経路)からの結果 callback（POST /ingest/remediation-result）の受け口。
+    const recordRemediationResultUseCase = new RecordRemediationResultUseCase(
+      remediationRepository,
+      logger,
+    );
+
     const commandBus = new InMemoryCommandBus(
       new CommandHandlers([
         analyzeAlertCommandHandler,
         submitFeedbackCommandHandler,
         promotePatternCommandHandler,
+        draftRemediationCommandHandler,
       ]),
     );
     const queryBus = new InMemoryQueryBus(
@@ -186,6 +233,7 @@ export class BackofficeApp {
         getAnalyticsQueryHandler,
         getInfraEvidenceQueryHandler,
         getInvestigationStatusQueryHandler,
+        getRemediationQueryHandler,
       ]),
     );
 
@@ -222,6 +270,8 @@ export class BackofficeApp {
       {
         // Cloud Monitoring 等の検知ソースからの ingest（EC イベントと同じ観測パイプラインに合流）。
         collectMonitoringEventUseCase,
+        // CI(AIリメディジョブ)からの結果 callback。
+        recordRemediationResultUseCase,
         ingestToken: config.ingestToken,
       },
     );

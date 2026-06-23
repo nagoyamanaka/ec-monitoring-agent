@@ -40,6 +40,20 @@ describe("LLMOutputParser", () => {
       expect(parseLLMOutput(missing)).toBeNull();
     });
 
+    it("remediable は欠落・非boolはfalse、true指定のみtrueになる", () => {
+      expect(parseLLMOutput(validJson)?.remediable).toBe(false);
+      const truthy = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "", remediable: true,
+      });
+      expect(parseLLMOutput(truthy)?.remediable).toBe(true);
+      const notBool = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "", remediable: "yes",
+      });
+      expect(parseLLMOutput(notBool)?.remediable).toBe(false);
+    });
+
     it("型不一致(confidenceが文字列)ではnullを返す", () => {
       const badType = JSON.stringify({
         summary: "x",

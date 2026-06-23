@@ -240,6 +240,55 @@
 - a2a不使用・in-process。自律的証拠追加収集ループを実装
 - `AIInvestigationPort` のDI差し替えのみ。参考: 「ADKマルチエージェント実装」節
 
+<!--
+【マルチエージェント統合の3パターン整理（A2A 判断のADR種・2026-06-23 確定）】
+「マルチエージェント」を1語で混ぜない。性質の違う3つに分ける:
+  ① ADK in-process（本タスク・調査/推論）: EvidenceCollector/RootCauseAnalyst/Planner が
+     共有コンテキスト（alert/evidence/仮説）を見ながら密に反復。通信=関数呼び出し。→ in-process が正解。
+  ② dispatch + callback（step4-3 タスク11/16・実行/修正・実装済）: GitHub Actions の Gemini CLI 等が
+     test ハーネスのあるランナーで実コード修正。通信=repository_dispatch↓ / ingest callback↑。
+     一発のタスク委譲であって「会話」ではない。
+  ③ A2A facade（タスク30・外部相互運用・stretch候補）: 自分の調査agentを Agent Card で公開し
+     Gemini Enterprise / Elastic から呼ばせる。ベンダー跨ぎの相互運用。
+
+【A2A 判断 = コア不採用＋③ stretch facade 候補】
+- ①も②も「会話」でなく「タスク委譲/関数呼び出し」なので A2A（会話プロトコル）は不要。
+  両端を自分が握るため自前RPC（①関数・②dispatch）の方が軽く確実で、A2A にしても修正の正しさは
+  test gate が担保する点は変わらない。→ 既存ADR「a2a不使用」を「①②とも会話でなくタスク委譲だから」で補強。
+- トポロジは hub-and-spoke（mesh ではない）: hub=backend orchestrator（調査 in-process＋どこを直すか判断）、
+  spoke=各環境の使い捨て実行agent（GitHub Actions / 将来 terraform）。spoke 同士は会話せず各自 hub に結果を返す。
+  情報受け渡し=単一の真実（hub の Alert/InvestigationReport）→ spoke に自己完結ペイロード↓ / 自己完結結果↑。
+  spoke は相互参照・共有可変状態を持たない（既存の冪等・dedup 設計思想と一致）。
+- A2A は③として hub の前段に足す facade（②dispatch を置き換えない・既存無傷）。やるなら Elastic スポンサー絡みの見せ場。
+-->
+
+### タスク 30: A2A 外部 facade（提案・未実装・stretch/ポートフォリオ）
+
+> **状態: 設計のみ・未実装。コア設計には不採用**（上記3パターン整理の③）。やるかは独立判断（Elastic 連携の見せ場として価値が出るなら）。
+> 既存の①ADK in-process / ②dispatch+callback は**ノータッチ**。hub の前段に「外部から呼べる入口」を1枚足すだけ。
+
+<!--
+【狙い】自分の調査エージェント（`AIInvestigationPort` 相当の能力）を A2A Agent Card で公開し、
+Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレータから capability として呼べるようにする。
+今夜の Elastic Bootcamp（Elastic Agent→Gemini Enterprise を A2A 連携）の構成を、向きを変えて
+「自分が callee 側（Agent Card を出す側）」で実装する形。Elastic は SimilarIncident で既に利用中なので接続文脈が近い。
+
+【設計の継ぎ目】
+- 既存 `AIInvestigationPort`（または read-only Query 群）を A2A の「スキル」として薄くラップする adapter を新設。
+  ドメイン/UseCase はノータッチ＝外部プロトコル適合層（ACL）を1枚足すだけ（②dispatch と同じ思想）。
+- 公開物: Agent Card（JSON・能力記述）＋ A2A Protocol Endpoint（task送受信）。A2A Inspector で疎通確認。
+- 認証/認可・レート制御は facade 層で。read-only 能力のみ公開し、write（PR起票/apply）は公開しない
+  （write は人間承認ゲートの内側に閉じる原則を越境させない）。
+
+【コスト/前提】
+- Agent Card ホスティング・protocol endpoint・認証・A2A クライアント側検証の実装コストが乗る。
+  本体の正しさには寄与しない（相互運用性の獲得が目的）。よってコア外・stretch 据え置き。
+- 採用判断は Bootcamp 受講後でよい。不採用でもコア（①②）は完結している。
+-->
+- 【新規(将来)】`infrastructure/a2a/`: `A2AInvestigationFacade`（`AIInvestigationPort`/read-only Query をスキルとして公開）＋ Agent Card ＋ Protocol Endpoint
+- read-only 能力のみ公開（write=PR起票/apply は非公開＝人間承認ゲートの内側に閉じる）。A2A Inspector で疎通確認
+- コア（①ADK in-process / ②dispatch+callback）はノータッチ。採用可否は Elastic 連携の見せ場価値で独立判断
+
 ---
 
 ## stretchⅡ: 予兆ブリーフィング（reactive → proactive）

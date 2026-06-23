@@ -36,6 +36,7 @@ export function toInvestigationReport(output: LLMInvestigationOutput): Investiga
     reviewStatus: ReviewStatus.pendingReview(),
     investigatedAt: new Date(),
     isFallback: false,
+    remediable: output.remediable,
   });
 }
 
