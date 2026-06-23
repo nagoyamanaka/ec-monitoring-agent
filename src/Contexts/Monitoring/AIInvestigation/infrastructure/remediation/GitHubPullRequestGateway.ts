@@ -1,5 +1,5 @@
-import { RemediationPlan, RemediationResult } from "../../Remediation/domain/RemediationPlan.js";
-import { RemediationPort } from "../../Remediation/domain/RemediationPort.js";
+import { RemediationPlan, RemediationResult } from "../../domain/remediation/RemediationPlan.js";
+import { RemediationPort } from "../../domain/remediation/RemediationPort.js";
 
 // write 操作（PR起票）の唯一の出口。read-only の GitHubGateway とは意図的に分離する。
 // GITHUB_TOKEN + GITHUB_REMEDIATION_REPO が未設定の場合は起票せず理由を返す。

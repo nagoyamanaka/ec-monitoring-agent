@@ -15,6 +15,9 @@ export class InvestigationReport {
   readonly reviewStatus: ReviewStatus;
   readonly investigatedAt: Date;
   readonly isFallback: boolean;
+  // AI が「コードで直せる（PR で remediate 可能）」と判定したか。UI の remediate ゲート＋
+  // ROI 提示用の advisory シグナル。未指定は false（旧データ・fallback 互換）。
+  readonly remediable: boolean;
 
   constructor(params: {
     summary: string;
@@ -26,6 +29,7 @@ export class InvestigationReport {
     reviewStatus: ReviewStatus;
     investigatedAt: Date;
     isFallback: boolean;
+    remediable?: boolean;
   }) {
     this.summary = params.summary;
     this.confidence = params.confidence;
@@ -36,6 +40,7 @@ export class InvestigationReport {
     this.reviewStatus = params.reviewStatus;
     this.investigatedAt = params.investigatedAt;
     this.isFallback = params.isFallback;
+    this.remediable = params.remediable ?? false;
   }
 
   withReviewStatus(reviewStatus: ReviewStatus): InvestigationReport {
@@ -53,6 +58,7 @@ export class InvestigationReport {
       reviewStatus: this.reviewStatus.value,
       investigatedAt: this.investigatedAt.toISOString(),
       isFallback: this.isFallback,
+      remediable: this.remediable,
     };
   }
 
@@ -67,6 +73,7 @@ export class InvestigationReport {
       reviewStatus: ReviewStatus.fromString(primitives.reviewStatus),
       investigatedAt: new Date(primitives.investigatedAt),
       isFallback: primitives.isFallback,
+      remediable: primitives.remediable ?? false,
     });
   }
 }

@@ -11,6 +11,8 @@ export type LLMInvestigationOutput = {
   investigationSteps: string[];
   suggestedActions: string[];
   suggestedPatternName: string;
+  // 「コードで直せるか」の AI 判定。未指定・型不正は false に丸める（必須スキーマには含めない）。
+  remediable: boolean;
 };
 
 export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
@@ -37,6 +39,7 @@ export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
       investigationSteps: parsed["investigationSteps"] as string[],
       suggestedActions: parsed["suggestedActions"] as string[],
       suggestedPatternName: parsed["suggestedPatternName"] as string,
+      remediable: parsed["remediable"] === true,
     };
   } catch {
     return null;

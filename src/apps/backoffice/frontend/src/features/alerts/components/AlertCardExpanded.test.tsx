@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AlertCardExpanded } from "./AlertCardExpanded";
-import { makeAlert } from "../test-support/alertFixture";
+import { makeAlert, makeReport } from "../test-support/alertFixture";
 
 describe("AlertCardExpanded", () => {
   it("AI 調査（未知）はサマリ・調査ステップ・推奨アクションを表示する", () => {
@@ -11,6 +11,18 @@ describe("AlertCardExpanded", () => {
     expect(screen.getByText("未知のレイテンシ急増を検知")).toBeInTheDocument();
     expect(screen.getByText("ログ確認")).toBeInTheDocument();
     expect(screen.getByText("ロールバック")).toBeInTheDocument();
+  });
+
+  it("remediable=true のとき「コードで修正可能」バッジを出す", () => {
+    const { rerender } = render(
+      <AlertCardExpanded alert={makeAlert({ report: makeReport({ remediable: false }) })} />,
+    );
+    expect(screen.queryByText(/コードで修正可能/)).not.toBeInTheDocument();
+
+    rerender(
+      <AlertCardExpanded alert={makeAlert({ report: makeReport({ remediable: true }) })} />,
+    );
+    expect(screen.getByText(/コードで修正可能/)).toBeInTheDocument();
   });
 
   it("既知パターンは該当パターン名と一致根拠を表示する", () => {

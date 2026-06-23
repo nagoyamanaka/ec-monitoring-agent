@@ -135,9 +135,17 @@ export function AlertCardExpanded({
 
           {report.suggestedActions.length > 0 && (
             <section className="space-y-1">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                推奨アクション
-              </h4>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                  推奨アクション
+                </h4>
+                {/* AI が「コードで直せる」と判定した場合のみ提示。remediate 実行の判断材料。 */}
+                {report.remediable && (
+                  <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
+                    コードで修正可能（AI 判定）
+                  </span>
+                )}
+              </div>
               <ul className="list-disc space-y-1 pl-5 marker:text-cyan-500/70">
                 {report.suggestedActions.map((action, i) => (
                   <li key={i}>{action}</li>

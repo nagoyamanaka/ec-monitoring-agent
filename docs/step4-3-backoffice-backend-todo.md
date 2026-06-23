@@ -91,19 +91,110 @@
 - `InfraEvidencePrimitives` を `AIInvestigation/domain/InfraEvidence.ts` に追加（ワイヤ契約）
 - UT: 両 UseCase（not-found / 再収集・正規化 / status 導出4分岐）。BackofficeApp の queryBus に2ハンドラ登録
 
-### タスク 10: security-scan ingest 〔P1〕
+### タスク 10: security-scan ingest 〔P1〕　✅ 完了済み
 
-- 【新規】`routes/ingestRoutes.ts` ＋ `SecurityScanIngestPostController`
-- X-Ingest-Token検証 → HIGH未満は204 → MonitoringEvent(SECURITY)構築 → AnalyzeAlartCommand dispatch → 202
+<!--
+パターン選定: subscriber ではなく HTTP ingest コントローラ。
+理由 = CI(GitHub Actions の Trivy/npm audit) は外部システムで、自システムの RabbitMQ に
+DomainEvent を publish しない → 購読対象が無いので CollectMonitoringEventSubscriber は使えない。
+同種の外部HTTP源である CloudMonitoringAlertIngestController（実装済み peer）と対称に、
+CollectMonitoringEventUseCase.run() を直接呼ぶプレーンなコントローラとして実装する。
+subscriber は EC 自前 DomainEvent（CollectMonitoringEventOnECEventPublished）専用。
+-->
+
+- 【新規】`controllers/ingest/SecurityScanIngestPostController.ts` ＋ `routes/ingestRoutes.ts` に `POST /ingest/security-scan` 追加
+- X-Ingest-Token検証 → HIGH/CRITICAL未満は204 → MonitoringEvent(category=SECURITY, source=npm_audit)構築 → `CollectMonitoringEventUseCase.run()`（内部で AnalyzeAlertCommand dispatch）→ 202
+- DI は既存の `IngestDependencies`（collectMonitoringEventUseCase / ingestToken）を再利用＝BackofficeApp 配線は変更不要
 - CI（step4-1 タスク4）と結線。シナリオ5の起点
-- [ ] Trivy / `npm audit`（pnpm audit）ステップ追加（HIGH以上で検出）
-- [ ] 検出結果を `POST /ingest/security-scan` に送る step（`INGEST_TOKEN` ヘッダ）
-      デプロイはどうする？普通にアラートだけか？
 
-### タスク 11: remediation ルート 〔P1〕
+### タスク 11: remediation ルート 〔P1〕　✅ 完了済み
 
-- 【新規】`routes/remediationRoutes.ts` ＋ `RemediationDraftPrPostController` / `RemediationGetController`
-- POST draft-pr（承認後に `RemediationPort.draftPullRequest`）/ GET remediation（PR URL・ステータス）
+- 【新規】`routes/remediationRoutes.ts` ＋ `RemediationDraftPrPostController`（POST→`DraftRemediationCommand`・202）/ `RemediationGetController`（GET→`GetRemediationQuery`）
+- POST `/alerts/:id/remediation/draft-pr`（承認＝手動POST→`RemediationPort.draftPullRequest`・draft起票）/ GET `/alerts/:id/remediation`（PR URL・状態）
+- application: `DraftRemediation`（UseCase/Command/Handler）＝ alert.payload.vulnerabilities[] を入力に AI で全CVEの修正方針を起草→草案PR起票→結果を `RemediationRepository` に保存 / `GetRemediation`（UseCase/Query/Handler/Response）＝状態読み取り（未起票は status="none"）
+- domain（`AIInvestigation/domain/remediation`）: `RemediationPlanner` ポート（追加）/ `RemediationRecord`+`RemediationRepository`（追加）。既存 `RemediationPort`/`RemediationPlan`/`GitHubPullRequestGateway` を再利用
+- infra: `LLMRemediationPlanner`（既存 `LLMTextClient` 再利用・LLM失敗/stub時は fixedVersion ベースの決定論フォールバック→`SECURITY_REMEDIATION.md` 草案）/ `MongoRemediationRepository`（collection=remediations・_id=alertId）
+- DI: `BackofficeApp` で planner（llmClient 共用）/ gateway（`config.github.remediationRepo` 明示）/ repo を new、Draft を commandBus・Get を queryBus に登録
+- config/env: `GITHUB_REMEDIATION_REPO`（未設定は `GITHUB_TARGET_REPO` フォールバック）を追加
+
+**実行戦略は2モード（`RemediationExecutor` で差し替え・`config.remediation.mode`）**:
+- **advisory**（既定・CI不要）: in-process で `LLMRemediationPlanner` が方針テキストのみ生成→ `SECURITY_REMEDIATION.md` の草案PR（実コードは直さない・人間が直す前提）。LLM はファイルパス/パッチ全文を生成しない（ハルシネーション防止の足場）。GitHub/CI 不在のローカル・デモ用フォールバック
+- **dispatch**（agentic・本命）: `GitHubActionsRemediationDispatcher` が `repository_dispatch(ai-remediation, {alertId, vulnerabilities})` を投げる→ ターゲットリポの `.github/workflows/ai-remediation.yml` が **ブランチ作成→AIエージェント(Gemini CLI/差し替え可)が実コード修正→trivy 再スキャン+UT/E2E が緑→draft PR**。**修正精度はランナーのテストゲートで担保**（APIサーバ内では実コードを書かない）
+- **結果 callback**: dispatch は非同期＝起票時は `dispatched`（PR URL 無し）。CI 完了時に `POST /ingest/remediation-result`（x-ingest-token）で `drafted`(PR URL)/`failed`(理由) に確定（`RecordRemediationResultUseCase`）。GET /remediation がそれを返す
+- 過去のローカル版（Trivyローカルスキャン+Copilot Agent プロンプト）の CI/CD 化に相当。Gemini は Vertex AI 認証で GCP 無料クレジット内、品質不足なら workflow の1ステップを `claude-code-action` に差し替え
+- **自己修正ループ上限（課金安全弁）**: CI は「AI修正→検証（trivy再スキャン+typecheck+test）→赤ならログをフィードバックして再修正」を `REMEDIATION_MAX_ATTEMPTS`（既定2）回まで回し**必ず打ち切る**（無限リトライ＝課金暴走を防ぐ）。上限は `config.remediation.maxAttempts` が単一ソースで、dispatch の `client_payload.maxAttempts` として CI に渡す。上限超過は `failed`（PR起票なし）で callback
+
+- リメディ入力は security-scan の `payload.vulnerabilities[]`（全 HIGH/CRITICAL）。AI で一括修正 PR を起票
+
+<!--
+【認識合わせ: Trivy 生出力 ⇔ security-scan ボディ／代表CVE+全件 設計】（step4-1 タスク4と結線）
+
+問題: `trivy fs --format json` は `Results[].Vulnerabilities[]` のネストで HIGH/CRITICAL を
+「どばっと」吐く。一方 `SecurityScanIngestPostController` のボディは CVE 1件のフラット構造で、
+そのまま投げても受からない（フィールド名も VulnerabilityID/PkgName と cveId/package で異なる）。
+
+採用方針 = 「A: CI 側 jq 変換 ＋ 案2: 最深刻を代表CVEに寄せる」＋「全件 payload 同梱」:
+  CI(.github/workflows/ci.yml security-scan job)
+    1. trivy fs --severity HIGH,CRITICAL --format json（--exit-code 0＝ビルドは落とさない）
+    2. jq で HIGH/CRITICAL 抽出 → CRITICAL 優先で最深刻=代表CVEをトップレベル昇格
+       → 全件を vulnerabilities[] に同梱 → 1回だけ POST /ingest/security-scan
+  Controller
+    - 代表CVEで MonitoringEvent(category=SECURITY, severity=CRITICAL|WARNING, source=scanner) を構築
+    - payload に { 代表CVE項目..., scanner, target, repo, vulnerabilityCount, vulnerabilities[] }
+    - HIGH/CRITICAL 未満は 204。source=scanner なので dedupKey は scanner×SECURITY×eventName 粒度
+      → CI 再実行・複数CVE は1インシデント(×occurrenceCount)に畳まれる（storm 抑制と整合）
+
+なぜ代表CVE+全件か: インシデントは最悪CVEにアンカーして物語を1本に絞りつつ、リメディは
+全件を直す必要がある。dispatch/advisory いずれも payload.vulnerabilities を入力に
+「全CVE をまとめて修正する1 PR」を起票する（個別CVE詳細を失わないため全件同梱）。
+INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-only でスキップ（Cloud Run 未デプロイでも CI は緑）。
+-->
+
+### タスク 16: 検証付きリメディ・ターゲットルーティング（提案・未実装）〔P1〕
+
+> **状態: 設計のみ。実装は未着手。** トークン×CI分が multiplicative に増えるため、効果を見極めてから着手。
+> タスク11（dispatch経路）の `RemediationExecutor`/`ai-remediation.yml`/callback/`maxAttempts` 基盤を流用する。
+
+<!--
+【前提の誤りを正す（このタスクの出発点）】
+当初構想は「AI調査→コード修正案→GitHub Actionsへ投げてUT検証」だったが、これは成立しない。
+障害の根本原因は「アプリのコードデグレ」だけではないため、"コード修正→Actionに投げるだけ" では
+直せない／検証できないインシデントが大半を占める。フィードバック先（修正ターゲット）と
+"緑"（検証ゲート）の定義は根本原因カテゴリごとに異なる。よって設計の中心は
+「検証ループ」ではなく【修正ターゲットのルーティング】に置く。
+
+【修正ターゲットと検証ゲート（カテゴリ別）】MonitoringEventCategory を起点に分岐:
+- APPLICATION / SECURITY(自リポのコード由来):
+    ターゲット = アプリのコード/依存。修正 = PR（タスク11の ai-remediation を流用）。
+    検証ゲート = trivy再スキャン + typecheck + UT/E2E（＝既存の "緑"）。← 唯一きれいに自動修正+自動検証できる。
+- INFRASTRUCTURE / CAPACITY(自前 IaC 由来。Terraform デグレ・設定ミス・スケール不足):
+    ターゲット = IaC リポ（Terraform/manifest）。修正 = IaC への PR。
+    検証ゲート = `terraform plan`/`validate`（UTではない！）。apply は人間承認後（本番writeは絶対に自動化しない）。
+    → ai-remediation とは別ジョブ（例 ai-iac-remediation）と別の "緑" 判定が要る。
+- 外部起因（ベンダー障害・マネージドサービス停止・上流API障害・データ起因 等):
+    自分たちのコードでも IaC でも直せない。ターゲット = runbook/手順 + 通知/エスカレーション。
+    自動修正も検証ループも回さない（回しても緑にならず課金だけ増える）。"修正対象外" として明示ルーティングする。
+
+【設計の継ぎ目】
+- `RemediationTargetRouter`（新）: 検証済み根本原因（InvestigationReport + category）→ ターゲット種別を決める。
+- ターゲット種別ごとに `VerifiableRemediation`（execute + 固有の verifyゲート）を実装。
+  RemediationExecutor を「app-code / iac / none(runbook)」へ一般化した姿。
+- 検証ループ（生成→検証→フィードバック→再生成）は automatable なターゲット（app-code / iac）でのみ回す。
+  上限は `config.remediation.maxAttempts` を共有（タスク11と同じ安全弁）。上限超過は人間へエスカレーション。
+- ループ制御は application 層の新 UseCase（例 `RouteAndVerifyRemediation`）に置き、Handler/Controller は薄く保つ。
+- read-only 不変条件は不変: 検証は「仮ブランチ/`terraform plan`」での実行であって本番writeではない。
+  最終適用（PR merge / terraform apply）は人間承認後に限定。
+
+【コスト注意（着手前提）】
+- multiplicative なループは maxAttempts で必ず打ち切る（タスク11で実装済みの仕組みを共有）。
+- runbook ターゲットはループ自体を回さない＝最大の節約。先にルーティングで "対象外" を弾くのが効く。
+- 段階導入: ①app-code ターゲットの1イテレーション固定（既存 ai-remediation そのまま）→ ②検証ゲート＋自己修正ループ
+  （maxAttempts）→ ③RemediationTargetRouter で iac/runbook 分岐を追加。env フラグ既定off・既存P0/P1は無傷。
+-->
+- 【新規(将来)】`RemediationTargetRouter`（root cause → app-code / iac / runbook 振り分け）＋ ターゲット別 `VerifiableRemediation`
+- 【新規(将来)】`application/RouteAndVerifyRemediation`（ルーティング→automatableなら検証ループ・`maxAttempts` 共有→結果取り込み）
+- 【再利用】`RemediationExecutor`/`ai-remediation.yml`/callback/`maxAttempts`。iac 用は別ジョブ＋`terraform plan` ゲートを追加
+- 段階導入: ①app-code 1イテレーション固定 → ②検証ゲート＋自己修正ループ → ③iac/runbook 分岐。env 既定off・既存無傷
 
 ---
 

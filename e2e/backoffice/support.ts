@@ -13,6 +13,7 @@ const MONITORING_MONGO_URL =
   process.env.MONITORING_MONGO_URL ?? "mongodb://localhost:27017/monitoring";
 
 export const KNOWN_ERROR_PATTERNS_COLLECTION = "known_error_patterns";
+export const ALERTS_COLLECTION = "alerts";
 
 // global-setup が EC の inventory に seed する商品（在庫あり / 在庫0）
 export const PRODUCT_IN_STOCK = "11111111-1111-4111-8111-111111111111";
@@ -34,6 +35,22 @@ export type AlertPrimitives = {
 
 export function connectMonitoringDb(): MongoClient {
   return new MongoClient(MONITORING_MONGO_URL);
+}
+
+// monitoring の alerts コレクションを空にする。
+// AnalyzeAlert は dedupKey(source::category::eventName) 単位で「未解決 Alert」へ
+// 重複観測を畳み込む（recordOccurrence は最初の observation の payload を保持）。
+// 各テストは自分の orderId/customerId が Alert の payload に乗ることを期待するため、
+// テスト開始前に既存 Alert を消して「自分の event を第1観測にする」必要がある。
+// （demo/reset は seed Alert を投入してしまうので使わず、直接削除する）
+export async function clearAlerts(): Promise<void> {
+  const client = connectMonitoringDb();
+  await client.connect();
+  try {
+    await client.db().collection(ALERTS_COLLECTION).deleteMany({});
+  } finally {
+    await client.close();
+  }
 }
 
 // backoffice の demo データを seed 初期状態へ戻す（make reset と同じ経路）。

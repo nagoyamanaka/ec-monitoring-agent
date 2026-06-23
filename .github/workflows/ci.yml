@@ -46,3 +46,67 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose.local.yml \
             run --rm e2e
+
+  # ── Job 3: Trivy 脆弱性スキャン → /ingest/security-scan ────────────────────
+  # シナリオ5（DevOpsループ: 検知→調査→PR起票）の起点。
+  # Trivy は1スキャンで HIGH/CRITICAL を大量に吐くので、jq で
+  #   (1) HIGH/CRITICAL のみ抽出 (2) 最深刻=代表CVEに昇格 (3) 全件を vulnerabilities[] に同梱
+  # まで整形してから1回 POST する（代表でインシデントを立て、AI は全件を一括リメディ）。
+  # スキャン自体ではビルドを落とさない（--exit-code 0）。検知はパイプラインを止めず ingest に流す。
+  security-scan:
+    name: Trivy scan -> ingest
+    runs-on: ubuntu-latest
+    needs: check
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy fs scan (vuln, HIGH/CRITICAL) -> JSON
+        # 依存（pnpm-lock 等）を対象にした fs スキャン。PR リメディ（パッケージ昇格）に直結する。
+        # イメージ脆弱性を見たい場合は `fs .` を `image <ref>` に差し替える。
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo aquasec/trivy:latest \
+            fs --scanners vuln --severity HIGH,CRITICAL \
+            --exit-code 0 --no-progress \
+            --format json --output /repo/trivy-report.json .
+
+      - name: Transform & POST to /ingest/security-scan
+        env:
+          INGEST_URL: ${{ secrets.INGEST_URL }}
+          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+        run: |
+          if [ -z "$INGEST_URL" ]; then
+            echo "INGEST_URL 未設定（Cloud Run 未デプロイ）。scan-only でスキップします。"
+            exit 0
+          fi
+
+          # HIGH/CRITICAL を抽出し CRITICAL 優先で代表CVEに昇格、全件を vulnerabilities[] に同梱。
+          payload=$(jq -c '
+            [ .Results[]?.Vulnerabilities[]?
+              | select(.Severity == "HIGH" or .Severity == "CRITICAL")
+              | { cveId: .VulnerabilityID, severity: .Severity,
+                  package: .PkgName, version: .InstalledVersion,
+                  fixedVersion: (.FixedVersion // null) } ] as $vulns
+            | if ($vulns | length) == 0 then empty
+              else
+                ( ($vulns | map(select(.severity == "CRITICAL")) | .[0])
+                  // ($vulns | .[0]) ) as $top
+                | { cveId: $top.cveId, severity: $top.severity,
+                    package: $top.package, version: $top.version,
+                    fixedVersion: $top.fixedVersion,
+                    scanner: "trivy", target: "repo:fs",
+                    repo: "${{ github.repository }}",
+                    vulnerabilities: $vulns }
+              end
+          ' trivy-report.json)
+
+          if [ -z "$payload" ]; then
+            echo "HIGH/CRITICAL なし。ingest スキップ。"
+            exit 0
+          fi
+
+          echo "$payload" | jq '{ cveId, severity, count: (.vulnerabilities | length) }'
+          curl -fsS -X POST "$INGEST_URL/ingest/security-scan" \
+            -H "Content-Type: application/json" \
+            -H "x-ingest-token: $INGEST_TOKEN" \
+            -d "$payload"

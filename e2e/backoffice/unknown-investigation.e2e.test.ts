@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MongoClient } from "mongodb";
 import {
   connectMonitoringDb,
+  clearAlerts,
   setPaymentMode,
   setInventoryMode,
   placeEcOrder,
@@ -27,6 +28,8 @@ describe("backoffice E2E: unknown-investigation path (stub AI)", () => {
   const orderId = crypto.randomUUID();
 
   beforeAll(async () => {
+    // 既存 Alert を消して reservation_failed を第1観測にする（dedup 回避）
+    await clearAlerts();
     mongo = connectMonitoringDb();
     await mongo.connect();
     // この eventName を既知化するパターンが残っていないことを保証（未知経路を確実に通す）
