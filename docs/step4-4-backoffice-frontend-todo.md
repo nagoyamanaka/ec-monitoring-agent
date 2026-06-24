@@ -167,7 +167,7 @@
 - [x] 検証：backend/frontend `tsc --noEmit` 緑 / 全テスト緑（backend 32＋frontend 全 109、root workspace 475。`InvestigationReportView`/`AlertCardExpanded`(外部・内部リンク)/`SimilarPatternRule`/`AlertClassification`(sourceAlertId round-trip) の UT 追加）
 - 補足（#4 `suggestedPatternName` の扱い）: これは **LLM が生成する自由記述ラベル**（eventName/category のような閉じた語彙ではない）。よって eventCatalog のような JSON マッピングは不適。**検索キーではなく表示用の人間語ラベル**（検索キーは `patternId`/`eventName`）。本番プロンプトで「日本語の読めるパターン名」を要求し、フロントはそのまま表示する方針。StubLLMClient のスラッグは人間語ラベルへ修正済み。
 
-### タスク 9c: フィードバックを対話・編集形式へ深化 〔P1〕
+### タスク 9c: フィードバックを対話・編集形式へ深化 〔P1〕 ✅（(a)+再調査 を採用）
 
 > **背景（懸念1）**: 現状のフィードバックは [✓承認]/[✗却下] の二値（`alertReview`/`submitFeedback`）。「正解の積み上げで学習」には足りるが、**“どう違うか・どう直すか”を人間が書き込み、それを AI に返して再調査させる**動線が無い。これがあると (1) 学習シグナルが二値→自然言語で太り、(2) AI の修正方針/severity をその場で正せる。
 > **設計の選択肢**:
@@ -177,15 +177,17 @@
 > **推奨**: (a) を土台に (b) を段階追加。まず却下時に自由記述 note（差分/理由）を必須化し再調査トリガーへ、次にスレッド化。
 > **backend 依存**: 自由記述 note は既存 `operatorNote` を流用可。再調査は `InvestigateAlertUseCase` を人手トリガーで再実行する経路が要る（step4-2/4-3）。`feedbackThread` 化は contracts/Alert 拡張。
 
-- [ ] 【設計】(a)/(b)/(c) と再調査トリガー有無を決定（学習シグナルの形＝二値 vs 自然言語）。`submitFeedback` の二値学習は維持し、上乗せで設計
-- [ ] 【改修】却下フローに理由/修正方針の入力（`operatorNote` 活用）→送信→（任意）再調査トリガー
-- [ ] 【新規・(b)採用時】`feedbackThread` View＋API（追記コメント列）と AI 応答表示
-- [ ] 【演出】送信→AI 再調査中→更新 の3状態（共通原則）
+- [x] 【設計】**(a)+再調査 を採用**（(b)スレッド化は次段）。「却下＝二値の学習シグナル」と「却下して再調査＝やり直し（自然言語を AI へ返す）」を**別経路**にして学習を濁さない。`submitFeedback`（二値）は無改修で維持し上乗せ
+- [x] 【改修】`AlertCardExpanded` の却下フローを 2 段化：[✗却下] クリックで理由/修正方針の textarea を開き（note 必須・空は送信不可）、[却下する]＝`onDecision(reject, note)`（`operatorNote` を feedback に保存・二値学習）／[却下して AI 再調査]＝`onReinvestigate(note)`（note を AI 文脈へ）。`AlertDetailDrawer`／`AlertsPage`／`AlertDetailPage` に `onReinvestigate` を配線（202 後 refresh、確定は SSE）
+- [x] 【演出】送信→AI 再調査中→更新 の3状態：再調査は status を ANALYZING へ戻して即 SSE push（`AlertCardExpanded` に「AI が指摘を反映して再調査中…」バナー・cyan パルス／再調査中はレビュー操作を伏せる）→ 新レポート到着で OPEN へ
+- [ ] 【次段・(b)】`feedbackThread` View＋API（追記コメント列）と AI 応答表示（対話履歴）。本タスクでは未着手
 - **backend で何をやるか（step4-2/4-3）**:
-  - [ ] **再調査トリガー経路**: `POST /alerts/:id/reinvestigate`（新規）で `InvestigateAlertUseCase` を人手再実行（現状は `InvestigateAlertDomainEvent`＝unknown 分類時のみ自動）。人間の note/差分を `InvestigationContext` に足して渡す
-  - [ ] **(a) 最小**: 却下 note は既存 `operatorNote`（`SubmitFeedbackUseCase`）流用で済む。レポート編集を保存するなら Alert に編集コマンド/エンドポイント
-  - [ ] **(b) スレッド化**: `feedbackThread`（追記コメント列・who/when/text）を Alert 集約＋`AlertContract` に追加、append コマンド/エンドポイント、AI 応答の保存
-  - 注意: 二値学習（`SubmitFeedback`→`SimilarIncident.index`/昇格）の経路は壊さず**上乗せ**で設計する
+  - [x] **再調査トリガー経路**: `POST /alerts/:id/reinvestigate`（新規・`AlertReinvestigatePostController`→`ReinvestigateAlertCommand`/Handler→**専用 `ReinvestigateAlertUseCase.run()`**）。自動調査 `InvestigateAlertUseCase` とは別 UseCase に分離（「やり直し」の独立ライフサイクル＝今後の差し戻し/対話履歴で役割が分かれる見込み。軽微なロジック重複より「UseCase は run() で呼ぶ」統一性・独立進化を優先）。`Alert.reopenForReinvestigation()`（ANALYZING へ戻し feedback クリア・既存内容は保持）→ note を `InvestigationContext.operatorNote` に載せ `InvestigationPromptBuilder` が `operatorFeedback` として最優先反映 → 新レポート添付＋SSE push。`BackofficeApp` の CommandHandlers に配線。ガードレール: 境界で operatorNote 長を 2000 字に制限（プロンプト水増し防御。意味的防御は LLM＋ADK へ委譲）
+  - [x] **(a) 最小**: 却下 note は既存 `operatorNote`（`SubmitFeedbackUseCase`）流用で済む（無改修）
+  - [ ] **(b) スレッド化**: `feedbackThread`（追記コメント列・who/when/text）を Alert 集約＋`AlertContract` に追加、append コマンド/エンドポイント、AI 応答の保存（次段）
+  - 注意: 二値学習（`SubmitFeedback`→`SimilarIncident.index`/昇格）の経路は無改修で維持＝**上乗せ**で実装した
+- [x] 【修正】証拠パネルは **AI 調査対象（未知）アラートのみ**に出す（`hasAiInvestigation`＝`classification.type==="unknown"`）。既知（完全一致/類似）は即時分類で調査しないのに「AI が証拠を解析しています…」が出ていたバグを修正（`AlertDetailDrawer`/`AlertDetailPage` の `EvidencePanel` をゲート）
+- [x] 検証：root/frontend `tsc --noEmit` 緑 / 全テスト緑（496。`ReinvestigateAlertUseCase` UT・`AlertCardExpanded` 却下2段/再調査/バナー UT・`reinvestigate` application UT・証拠パネル ゲート UT 追加）
 
 ### タスク 9d: レビュー後のライフサイクル状態遷移（修正フェーズ・差し戻し）〔P1〕
 

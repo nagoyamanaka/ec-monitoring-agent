@@ -14,13 +14,28 @@ import type { FeedbackDecision } from "../application/submitFeedback";
 
 export interface AlertCardExpandedProps {
   alert: AlertView;
-  /** 承認/却下。await できる場合は送信中ボタンを無効化する。 */
+  /**
+   * 承認/却下（二値の学習シグナル）。却下時は理由/修正方針（operatorNote）を添える。
+   * await できる場合は送信中ボタンを無効化する。
+   */
   onDecision?: (
     alertId: string,
     decision: FeedbackDecision,
+    operatorNote?: string,
+  ) => void | Promise<void>;
+  /**
+   * 「却下して AI 再調査」。人間の指摘を AI に返して再調査させる（やり直し＝二値学習とは別経路）。
+   * 渡されない場合は再調査ボタンを出さない。
+   */
+  onReinvestigate?: (
+    alertId: string,
+    operatorNote: string,
   ) => void | Promise<void>;
   className?: string;
 }
+
+/** レビュー操作の送信中状態。3 種それぞれで個別にスピナー/無効化する。 */
+type ReviewAction = FeedbackDecision | "reinvestigate";
 
 const REVIEW_LABEL: Record<AlertReviewState, string> = {
   PENDING: "レビュー待ち",
@@ -41,26 +56,51 @@ function formatValue(value: unknown): string {
 export function AlertCardExpanded({
   alert,
   onDecision,
+  onReinvestigate,
   className,
 }: AlertCardExpandedProps) {
-  const [submitting, setSubmitting] = useState<FeedbackDecision | null>(null);
+  const [submitting, setSubmitting] = useState<ReviewAction | null>(null);
+  // 却下フロー：理由/修正方針の入力を開いているか・入力中の note。
+  const [rejecting, setRejecting] = useState(false);
+  const [note, setNote] = useState("");
   const report = alert.report;
   const reason = alertReason(alert);
   const known = alert.classification.type === "known";
   const reviewed = isAlertReviewed(alert);
   const reviewState = alertReviewState(alert);
+  // 状態が ANALYZING に戻っている＝AI が（再）調査中。既存の内容を持つときは再調査の最中。
+  const analyzingNow = alert.status === "ANALYZING";
+  const trimmedNote = note.trim();
 
-  const decide = async (decision: FeedbackDecision) => {
+  const decide = async (decision: FeedbackDecision, operatorNote?: string) => {
     if (submitting || !onDecision) return;
     setSubmitting(decision);
     try {
-      await onDecision(alert.id, decision);
+      await onDecision(alert.id, decision, operatorNote);
     } finally {
       setSubmitting(null);
     }
   };
 
-  // 分析中（既知でもなく調査レポートも無い）はプレースホルダ
+  const requestReinvestigation = async () => {
+    if (submitting || !onReinvestigate || !trimmedNote) return;
+    setSubmitting("reinvestigate");
+    try {
+      await onReinvestigate(alert.id, trimmedNote);
+      setRejecting(false);
+      setNote("");
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const cancelReject = () => {
+    if (submitting) return;
+    setRejecting(false);
+    setNote("");
+  };
+
+  // 分析中（既知でもなく調査レポートも無い＝初回調査）はプレースホルダ
   if (reason.kind === "analyzing" && !report && !known) {
     return (
       <div className={cn("text-sm text-slate-300", className)}>
@@ -71,6 +111,14 @@ export function AlertCardExpanded({
 
   return (
     <div className={cn("space-y-4 text-sm text-slate-200", className)}>
+      {/* 再調査中（人間の指摘を反映して AI が再分析中）。既存内容は下に残したまま明示する。 */}
+      {analyzingNow && (
+        <div className="flex items-center gap-2 rounded-md bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200 ring-1 ring-inset ring-cyan-500/30">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" aria-hidden />
+          AI が指摘を反映して再調査中です…
+        </div>
+      )}
+
       {/* 推定原因（該当パターン / AI 推定パターン） */}
       {reason.kind !== "analyzing" && (
         <section className="space-y-1">
@@ -175,24 +223,82 @@ export function AlertCardExpanded({
         </>
       )}
 
-      {/* レビュー（承認/却下） */}
-      <Card className="flex items-center justify-between gap-3 !bg-slate-800/40 !p-3 !ring-slate-700/60">
-        {reviewed ? (
-          <>
+      {/* レビュー（承認/却下／却下して再調査）。再調査中は操作を伏せて再分析を待つ。 */}
+      {!analyzingNow &&
+        (reviewed ? (
+          <Card className="flex items-center justify-between gap-3 !bg-slate-800/40 !p-3 !ring-slate-700/60">
             <span className="text-xs text-slate-400">この分類の判定</span>
-            <span
-              className={cn(
-                "rounded-full px-2.5 py-0.5 text-xs font-semibold",
-                reviewState === "APPROVED"
-                  ? "bg-emerald-500/15 text-emerald-300"
-                  : "bg-rose-500/15 text-rose-300",
+            <div className="flex flex-col items-end gap-1">
+              <span
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                  reviewState === "APPROVED"
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : "bg-rose-500/15 text-rose-300",
+                )}
+              >
+                {REVIEW_LABEL[reviewState]}
+              </span>
+              {alert.feedback?.operatorNote && (
+                <p className="max-w-[16rem] text-right text-[11px] leading-snug text-slate-400">
+                  「{alert.feedback.operatorNote}」
+                </p>
               )}
-            >
-              {REVIEW_LABEL[reviewState]}
-            </span>
-          </>
+            </div>
+          </Card>
+        ) : rejecting ? (
+          <Card className="space-y-3 !bg-slate-800/40 !p-3 !ring-slate-700/60">
+            <div className="space-y-1">
+              <label
+                htmlFor={`reject-note-${alert.id}`}
+                className="text-xs font-semibold text-slate-300"
+              >
+                何が違うか・どう直すか（AI へ返す指摘）
+              </label>
+              <textarea
+                id={`reject-note-${alert.id}`}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                disabled={submitting !== null}
+                rows={3}
+                autoFocus
+                placeholder="例: 原因は決済 API ではなく在庫サービス。タイムアウト閾値の見直しを提案して。"
+                className="w-full resize-y rounded-md border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/50 disabled:opacity-50"
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={submitting !== null}
+                onClick={cancelReject}
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 disabled:opacity-50"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={submitting !== null || trimmedNote === ""}
+                onClick={() => decide("reject", trimmedNote)}
+                className="min-w-[6rem] rounded-md bg-rose-500/15 px-3 py-1.5 text-center text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+              >
+                {submitting === "reject" ? "送信中…" : "却下する"}
+              </button>
+              {onReinvestigate && (
+                <button
+                  type="button"
+                  disabled={submitting !== null || trimmedNote === ""}
+                  onClick={requestReinvestigation}
+                  className="min-w-[9rem] rounded-md bg-cyan-500/15 px-3 py-1.5 text-center text-xs font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                >
+                  {submitting === "reinvestigate"
+                    ? "再調査を依頼中…"
+                    : "却下して AI 再調査"}
+                </button>
+              )}
+            </div>
+          </Card>
         ) : (
-          <>
+          <Card className="flex items-center justify-between gap-3 !bg-slate-800/40 !p-3 !ring-slate-700/60">
             <span className="text-xs text-slate-400">この分類は正しいですか？</span>
             <div className="flex items-center gap-2">
               <button
@@ -206,15 +312,14 @@ export function AlertCardExpanded({
               <button
                 type="button"
                 disabled={submitting !== null}
-                onClick={() => decide("reject")}
+                onClick={() => setRejecting(true)}
                 className="min-w-[5.5rem] rounded-md bg-rose-500/15 px-3 py-1.5 text-center text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {submitting === "reject" ? "送信中…" : "✗ 却下"}
+                ✗ 却下
               </button>
             </div>
-          </>
-        )}
-      </Card>
+          </Card>
+        ))}
     </div>
   );
 }

@@ -120,3 +120,12 @@ export function toAlertView(dto: AlertPrimitives): AlertView {
 export function isAnalyzing(alert: AlertView): boolean {
   return alert.status === "ANALYZING";
 }
+
+/**
+ * AI のインフラ証拠調査の対象か。未知（unknown）アラートだけが調査パイプラインを通り、
+ * Cloud Logging/Terraform/GitHub の証拠を持つ。既知（完全一致/類似）は即時分類で調査しないため
+ * 証拠パネル（「AI が証拠を解析しています…」含む）を出さない。
+ */
+export function hasAiInvestigation(alert: AlertView): boolean {
+  return alert.classification.type === "unknown";
+}

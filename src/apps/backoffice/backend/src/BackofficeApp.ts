@@ -22,6 +22,8 @@ import { ClassificationRule } from "../../../../Contexts/Monitoring/AlertAnalysi
 import { MongoAlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoAlertRepository.js";
 import { MongoKnownErrorPatternRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoKnownErrorPatternRepository.js";
 import { InvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.js";
+import { ReinvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/ReinvestigateAlert/ReinvestigateAlertUseCase.js";
+import { ReinvestigateAlertCommandHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/ReinvestigateAlert/ReinvestigateAlertCommandHandler.js";
 import { GetInfraEvidenceUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceUseCase.js";
 import { GetInfraEvidenceQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceQueryHandler.js";
 import { DraftRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/DraftRemediation/DraftRemediationUseCase.js";
@@ -176,6 +178,18 @@ export class BackofficeApp {
       logger,
       infraInvestigationPort,
     );
+    // 人手トリガーの再調査（タスク9c）。自動調査とは別 UseCase（やり直しの独立ライフサイクル）。
+    const reinvestigateAlertUseCase = new ReinvestigateAlertUseCase(
+      alertRepository,
+      similarIncidentRepository,
+      aiInvestigationPort,
+      sseNotifier,
+      logger,
+      infraInvestigationPort,
+    );
+    const reinvestigateAlertCommandHandler = new ReinvestigateAlertCommandHandler(
+      reinvestigateAlertUseCase,
+    );
 
     const getAlertReportUseCase = new GetAlertReportUseCase(alertRepository);
     const getAlertReportQueryHandler = new GetAlertReportQueryHandler(getAlertReportUseCase);
@@ -242,6 +256,7 @@ export class BackofficeApp {
         submitFeedbackCommandHandler,
         promotePatternCommandHandler,
         draftRemediationCommandHandler,
+        reinvestigateAlertCommandHandler,
       ]),
     );
     const queryBus = new InMemoryQueryBus(

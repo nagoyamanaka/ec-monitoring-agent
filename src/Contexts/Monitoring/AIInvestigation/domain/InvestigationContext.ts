@@ -21,4 +21,10 @@ export interface InvestigationContext {
     resolvedNote: string;
   }>;
   readonly infraEvidence?: InfraEvidence;
+  /**
+   * 人間が再調査時に書き込んだ指摘（前回調査の誤り・どう直すか）。
+   * 自動調査（unknown 分類時）では未設定。再調査トリガー（人手）でのみ載り、
+   * AI は最優先の手がかりとして前回の結論を見直す。
+   */
+  readonly operatorNote?: string;
 }

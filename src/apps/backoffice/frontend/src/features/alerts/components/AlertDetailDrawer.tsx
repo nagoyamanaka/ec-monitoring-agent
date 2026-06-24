@@ -2,7 +2,11 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ConfidenceGauge } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
-import { type AlertView, isAnalyzing } from "../domain/AlertView";
+import {
+  type AlertView,
+  isAnalyzing,
+  hasAiInvestigation,
+} from "../domain/AlertView";
 import { alertConfidence } from "../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../domain/eventCatalog";
 import { categoryInfo } from "../domain/alertCategory";
@@ -23,6 +27,12 @@ export interface AlertDetailDrawerProps {
   onDecision?: (
     alertId: string,
     decision: FeedbackDecision,
+    operatorNote?: string,
+  ) => void | Promise<void>;
+  /** 「却下して AI 再調査」。人間の指摘を AI に返して再調査させる。 */
+  onReinvestigate?: (
+    alertId: string,
+    operatorNote: string,
   ) => void | Promise<void>;
   /** 渡された場合のみ証拠パネルを表示する（composition root で注入）。 */
   evidenceApi?: EvidenceApi;
@@ -47,6 +57,7 @@ export function AlertDetailDrawer({
   alert,
   onClose,
   onDecision,
+  onReinvestigate,
   evidenceApi,
   remediationApi,
   pushedRemediation,
@@ -161,7 +172,11 @@ export function AlertDetailDrawer({
               />
             </div>
           ) : null}
-          <AlertCardExpanded alert={alert} onDecision={onDecision} />
+          <AlertCardExpanded
+            alert={alert}
+            onDecision={onDecision}
+            onReinvestigate={onReinvestigate}
+          />
           {remediationApi && (
             <RemediationPanel
               alert={alert}
@@ -170,7 +185,9 @@ export function AlertDetailDrawer({
               live
             />
           )}
-          {evidenceApi && <EvidencePanel api={evidenceApi} alert={alert} />}
+          {evidenceApi && hasAiInvestigation(alert) && (
+            <EvidencePanel api={evidenceApi} alert={alert} />
+          )}
         </div>
 
         <footer className="border-t border-slate-700/60 px-5 py-3">

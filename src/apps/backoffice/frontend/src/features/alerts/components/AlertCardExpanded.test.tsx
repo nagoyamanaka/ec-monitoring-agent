@@ -132,17 +132,77 @@ describe("AlertCardExpanded", () => {
     expect(screen.getByText("eventName")).toBeInTheDocument();
   });
 
-  it("承認/却下ボタンが decision 付きで onDecision を呼ぶ", async () => {
+  it("承認は単一クリックで onDecision(approve) を呼ぶ", async () => {
     const onDecision = vi.fn().mockResolvedValue(undefined);
     render(
       <AlertCardExpanded alert={makeAlert({ id: "a-9" })} onDecision={onDecision} />,
     );
 
     await userEvent.click(screen.getByRole("button", { name: /承認/ }));
-    expect(onDecision).toHaveBeenCalledWith("a-9", "approve");
+    expect(onDecision).toHaveBeenCalledWith("a-9", "approve", undefined);
+  });
 
-    await userEvent.click(screen.getByRole("button", { name: /却下/ }));
-    expect(onDecision).toHaveBeenCalledWith("a-9", "reject");
+  it("却下は note 入力を開き、note 付きで onDecision(reject) を呼ぶ", async () => {
+    const onDecision = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AlertCardExpanded alert={makeAlert({ id: "a-9" })} onDecision={onDecision} />,
+    );
+
+    // 却下クリックで理由入力パネルが開く（即時送信はしない）
+    await userEvent.click(screen.getByRole("button", { name: "✗ 却下" }));
+    expect(onDecision).not.toHaveBeenCalled();
+
+    // note 空のうちは送信不可
+    const submit = screen.getByRole("button", { name: "却下する" });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(
+      screen.getByLabelText(/何が違うか/),
+      "原因は在庫サービス",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "却下する" }));
+    expect(onDecision).toHaveBeenCalledWith("a-9", "reject", "原因は在庫サービス");
+  });
+
+  it("「却下して AI 再調査」は note 付きで onReinvestigate を呼ぶ", async () => {
+    const onReinvestigate = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({ id: "a-9" })}
+        onDecision={vi.fn()}
+        onReinvestigate={onReinvestigate}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "✗ 却下" }));
+    await userEvent.type(screen.getByLabelText(/何が違うか/), "閾値を見直して");
+    await userEvent.click(
+      screen.getByRole("button", { name: "却下して AI 再調査" }),
+    );
+    expect(onReinvestigate).toHaveBeenCalledWith("a-9", "閾値を見直して");
+  });
+
+  it("onReinvestigate 未指定なら再調査ボタンを出さない", async () => {
+    render(
+      <AlertCardExpanded alert={makeAlert({ id: "a-9" })} onDecision={vi.fn()} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "✗ 却下" }));
+    expect(
+      screen.queryByRole("button", { name: /AI 再調査/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("再調査中（ANALYZING かつ既存内容あり）はバナーを出しレビュー操作を伏せる", () => {
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({ id: "a-9", status: "ANALYZING" })}
+        onDecision={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/再調査中/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "✗ 却下" }),
+    ).not.toBeInTheDocument();
   });
 
   it("レビュー済み（feedback あり）はボタンを出さずステータスを表示する", () => {

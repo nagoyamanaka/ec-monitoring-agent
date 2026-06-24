@@ -10,6 +10,7 @@ import {
   submitFeedback,
   type FeedbackDecision,
 } from "../application/submitFeedback";
+import { reinvestigate } from "../application/reinvestigate";
 import { AlertList } from "../components/AlertList";
 import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
 import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
@@ -45,13 +46,26 @@ export function AlertsPage() {
   );
 
   const handleDecision = useCallback(
-    async (alertId: string, decision: FeedbackDecision) => {
+    async (alertId: string, decision: FeedbackDecision, operatorNote?: string) => {
       try {
-        await submitFeedback(api, { alertId, decision });
+        await submitFeedback(api, { alertId, decision, operatorNote });
         // PATCH は ok のみ返し SSE push も無いため、自前で再取得して reviewStatus を反映する
         await refreshAlert(alertId);
       } catch (e) {
         console.error("feedback submission failed", e);
+      }
+    },
+    [api, refreshAlert],
+  );
+
+  const handleReinvestigate = useCallback(
+    async (alertId: string, operatorNote: string) => {
+      try {
+        await reinvestigate(api, { alertId, operatorNote });
+        // 202 直後に ANALYZING（再調査中）を即時反映。確定（OPEN＋新レポート）は SSE で届く。
+        await refreshAlert(alertId);
+      } catch (e) {
+        console.error("reinvestigation request failed", e);
       }
     },
     [api, refreshAlert],
@@ -80,6 +94,7 @@ export function AlertsPage() {
         alert={selected}
         onClose={() => setSelectedId(null)}
         onDecision={handleDecision}
+        onReinvestigate={handleReinvestigate}
         evidenceApi={evidenceApi}
         remediationApi={remediationApi}
         pushedRemediation={

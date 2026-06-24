@@ -7,11 +7,13 @@ import { createAlertsApi } from "../infrastructure/alertsApi";
 import { createEvidenceApi } from "../infrastructure/evidenceApi";
 import { createRemediationApi } from "../infrastructure/remediationApi";
 import { SSEAlertStream } from "../infrastructure/SSEAlertStream";
+import { hasAiInvestigation } from "../domain/AlertView";
 import { useAlert } from "../presentation/hooks/useAlert";
 import {
   submitFeedback,
   type FeedbackDecision,
 } from "../application/submitFeedback";
+import { reinvestigate } from "../application/reinvestigate";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { EvidencePanel } from "../components/EvidencePanel";
 import { RemediationPanel } from "../components/RemediationPanel";
@@ -30,12 +32,25 @@ export function AlertDetailPage() {
   const { alert, status, error, refresh } = useAlert(api, id, stream);
 
   const handleDecision = useCallback(
-    async (alertId: string, decision: FeedbackDecision) => {
+    async (alertId: string, decision: FeedbackDecision, operatorNote?: string) => {
       try {
-        await submitFeedback(api, { alertId, decision });
+        await submitFeedback(api, { alertId, decision, operatorNote });
         await refresh();
       } catch (e) {
         console.error("feedback submission failed", e);
+      }
+    },
+    [api, refresh],
+  );
+
+  const handleReinvestigate = useCallback(
+    async (alertId: string, operatorNote: string) => {
+      try {
+        await reinvestigate(api, { alertId, operatorNote });
+        // 202 直後に ANALYZING（再調査中）を反映。確定は SSE（useAlert に stream 注入済み）で届く。
+        await refresh();
+      } catch (e) {
+        console.error("reinvestigation request failed", e);
       }
     },
     [api, refresh],
@@ -76,9 +91,15 @@ export function AlertDetailPage() {
               <p className="text-xs text-slate-500">{alert.source}</p>
             </header>
 
-            <AlertCardExpanded alert={alert} onDecision={handleDecision} />
+            <AlertCardExpanded
+              alert={alert}
+              onDecision={handleDecision}
+              onReinvestigate={handleReinvestigate}
+            />
             <RemediationPanel alert={alert} api={remediationApi} />
-            <EvidencePanel api={evidenceApi} alert={alert} />
+            {hasAiInvestigation(alert) && (
+              <EvidencePanel api={evidenceApi} alert={alert} />
+            )}
           </article>
         )}
       </div>
