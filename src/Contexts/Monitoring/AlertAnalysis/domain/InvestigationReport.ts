@@ -1,16 +1,24 @@
 import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { ReviewStatus } from "./ReviewStatus.js";
-import type { InvestigationReportPrimitives } from "./contracts/AlertContract.js";
+import type {
+  InvestigationReportPrimitives,
+  InvestigationItemPrimitives,
+} from "./contracts/AlertContract.js";
 
 // シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
-export type { InvestigationReportPrimitives };
+export type { InvestigationReportPrimitives, InvestigationItemPrimitives };
+
+/** 調査ステップ／推奨アクション項目から表示・学習用のプレーンテキストを取り出す。 */
+export function investigationItemText(item: InvestigationItemPrimitives): string {
+  return typeof item === "string" ? item : item.text;
+}
 
 export class InvestigationReport {
   readonly summary: string;
   readonly confidence: number;
   readonly severity: AlertSeverity;
-  readonly investigationSteps: string[];
-  readonly suggestedActions: string[];
+  readonly investigationSteps: InvestigationItemPrimitives[];
+  readonly suggestedActions: InvestigationItemPrimitives[];
   readonly suggestedPatternName: string;
   readonly reviewStatus: ReviewStatus;
   readonly investigatedAt: Date;
@@ -23,8 +31,8 @@ export class InvestigationReport {
     summary: string;
     confidence: number;
     severity: AlertSeverity;
-    investigationSteps: string[];
-    suggestedActions: string[];
+    investigationSteps: InvestigationItemPrimitives[];
+    suggestedActions: InvestigationItemPrimitives[];
     suggestedPatternName: string;
     reviewStatus: ReviewStatus;
     investigatedAt: Date;

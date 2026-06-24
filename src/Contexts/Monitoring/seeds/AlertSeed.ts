@@ -39,14 +39,31 @@ export const ALERT_SEEDS: Alert[] = [
       summary: "決済サービスへの接続が30秒でタイムアウトしました。外部決済APIのレスポンス遅延が原因と推定されます。",
       confidence: 0.95,
       severity: AlertSeverity.critical(),
+      // 構造化（href/kind）で配信し、調査ステップ／アクションから外部サービスへ直接飛べる動線を見せる。
       investigationSteps: [
-        "外部決済サービスのステータスページを確認",
-        "過去1時間のタイムアウト発生頻度を集計",
-        "ネットワーク遅延ログを確認",
+        {
+          text: "外部決済サービスのステータスページを確認",
+          href: "https://status.stripe.com/",
+          kind: "runbook",
+        },
+        {
+          text: "過去1時間のタイムアウト発生頻度を Cloud Logging で集計",
+          href: "https://console.cloud.google.com/logs/query;query=resource.type%3D%22cloud_run_revision%22%20textPayload%3D~%22payment.timeout%22",
+          kind: "log",
+        },
+        {
+          text: "決済クライアントのタイムアウト設定を確認",
+          href: "https://github.com/example-org/ec-backend/blob/main/src/payment/PaymentClient.ts",
+          kind: "code",
+        },
       ],
       suggestedActions: [
         "決済サービスのステータスを確認し、タイムアウトした注文を手動で再処理してください。",
-        "タイムアウト閾値の調整またはリトライロジックの追加を検討してください。",
+        {
+          text: "タイムアウト閾値の調整／リトライ追加（修正方針の PR を確認）",
+          href: "https://github.com/example-org/ec-backend/pull/482",
+          kind: "code",
+        },
       ],
       suggestedPatternName: "PAYMENT_TIMEOUT",
       reviewStatus: ReviewStatus.pendingReview(),
@@ -118,6 +135,8 @@ export const ALERT_SEEDS: Alert[] = [
       confidence: ClassificationConfidence.of(0.87),
       matchedConditions: [{ field: "reason", expectedValue: "CONCURRENT_CONFLICT", actualValue: "CONCURRENT_CONFLICT" }],
       unmatchedConditions: [],
+      // 類似既知（SIMILARITY）の back-link。過去の同型在庫障害（...0002）へ内部遷移できる動線を見せる。
+      sourceAlertId: "5eeda1e7-0002-4000-8000-000000000002",
     },
   }).attachInvestigationReport(
     new InvestigationReport({

@@ -15,6 +15,16 @@ export type LLMInvestigationOutput = {
   remediable: boolean;
 };
 
+/**
+ * 配列要素を文字列のみへ正規化する。LLM が誤って文字列以外（オブジェクト・数値）を混ぜても
+ * 落とす防御。href/kind はここでは受け取らない（リンクは LLM ではなく evidence から決定的に
+ * 導出する＝ハルシネーション URL を排除する。`evidenceLinks` 参照）。
+ */
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
 export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
   try {
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
@@ -36,8 +46,8 @@ export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
       summary: parsed["summary"] as string,
       confidence: parsed["confidence"] as number,
       severity: parsed["severity"] as string,
-      investigationSteps: parsed["investigationSteps"] as string[],
-      suggestedActions: parsed["suggestedActions"] as string[],
+      investigationSteps: toStringArray(parsed["investigationSteps"]),
+      suggestedActions: toStringArray(parsed["suggestedActions"]),
       suggestedPatternName: parsed["suggestedPatternName"] as string,
       remediable: parsed["remediable"] === true,
     };

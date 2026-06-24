@@ -75,6 +75,45 @@ describe("alertClassificationToPrimitives / alertClassificationFromPrimitives", 
     expect(restored).toEqual(original);
   });
 
+  it("sourceAlertId（類似既知の back-link）もラウンドトリップで保持される", () => {
+    const original: AlertClassificationPrimitives = {
+      type: "known",
+      source: "SIMILARITY",
+      patternId: "similar:inc-1",
+      patternName: "類似既知: ec.inventory.reservation_failed",
+      severity: "WARNING",
+      confidence: 0.87,
+      matchedConditions: [],
+      unmatchedConditions: [],
+      sourceAlertId: "alert-past-1",
+    };
+
+    const restored = alertClassificationToPrimitives(
+      alertClassificationFromPrimitives(original),
+    );
+
+    expect(restored).toEqual(original);
+  });
+
+  it("sourceAlertId 未設定なら primitives に現れない（exactOptional 互換）", () => {
+    const original: AlertClassificationPrimitives = {
+      type: "known",
+      source: "EXACT_MATCH",
+      patternId: "p-1",
+      patternName: "X",
+      severity: "WARNING",
+      confidence: 1,
+      matchedConditions: [],
+      unmatchedConditions: [],
+    };
+
+    const restored = alertClassificationToPrimitives(
+      alertClassificationFromPrimitives(original),
+    );
+
+    expect("sourceAlertId" in restored).toBe(false);
+  });
+
   it("unknownのラウンドトリップで同じ値が復元される", () => {
     const original: AlertClassificationPrimitives = { type: "unknown", confidence: null };
 

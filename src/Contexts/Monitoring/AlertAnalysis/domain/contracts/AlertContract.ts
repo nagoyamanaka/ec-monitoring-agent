@@ -32,6 +32,10 @@ export type KnownAlertClassificationPrimitives = {
   readonly confidence: number;
   readonly matchedConditions: MatchedCondition[];
   readonly unmatchedConditions: UnmatchedCondition[];
+  // 類似既知（SIMILARITY）分類のとき、元になった解決済み Alert への back-link。
+  // 「過去の同型障害をどう直したか」へ内部遷移（/alerts/:id）する動線に使う。
+  // optional は EXACT_MATCH / INFERENCE では未設定・旧データ互換のため（dedupKey と同じ規約）。
+  readonly sourceAlertId?: string;
 };
 
 export type UnknownAlertClassificationPrimitives = {
@@ -43,12 +47,33 @@ export type AlertClassificationPrimitives =
   | KnownAlertClassificationPrimitives
   | UnknownAlertClassificationPrimitives;
 
+// 外部サービスへのディープリンク種別。表示側はアイコンを出し分ける（log=Cloud Logging,
+// code=GitHub, runbook=手順書, console=Cloud Console 等）。
+export type InvestigationLinkKind = "log" | "code" | "runbook" | "console";
+
+/**
+ * 調査ステップ／推奨アクションの1項目。`href` があればフロントは外部リンク化し、
+ * `kind` でアイコンを出し分ける。`text` は人間が読む説明。
+ */
+export type InvestigationStepPrimitives = {
+  readonly text: string;
+  readonly href?: string;
+  readonly kind?: InvestigationLinkKind;
+};
+
+/**
+ * 調査ステップ／推奨アクションの配列要素。LLM 出力・旧データは素の文字列、
+ * seed／将来の構造化配信は {text, href?, kind?} を載せる後方互換ユニオン。
+ * フロントは `toInvestigationReportView` で常に構造化形へ正規化する。
+ */
+export type InvestigationItemPrimitives = string | InvestigationStepPrimitives;
+
 export type InvestigationReportPrimitives = {
   readonly summary: string;
   readonly confidence: number;
   readonly severity: string;
-  readonly investigationSteps: string[];
-  readonly suggestedActions: string[];
+  readonly investigationSteps: InvestigationItemPrimitives[];
+  readonly suggestedActions: InvestigationItemPrimitives[];
   readonly suggestedPatternName: string;
   readonly reviewStatus: string;
   readonly investigatedAt: string;

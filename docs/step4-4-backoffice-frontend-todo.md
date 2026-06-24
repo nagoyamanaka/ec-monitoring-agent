@@ -150,7 +150,7 @@
   - [x] **SSE push 実装済み（改訂 2026-06）**: `SSEAlertNotifier.notifyRemediation` を追加し `RecordRemediationResultUseCase`・`DraftRemediationUseCase` から push＋`BackofficeApp` 配線。`RemediationResponsePrimitives` を契約の単一ソースに（GET＝SSE payload＝frontend View 入力）
 - シナリオ5の見せ場
 
-### タスク 9b: 調査ステップ／推奨アクションのリンク化 〔P1〕
+### タスク 9b: 調査ステップ／推奨アクションのリンク化 〔P1〕 ✅
 
 > **背景**: 現状 `AlertCardExpanded` の調査ステップ・推奨アクションは **プレーンテキスト**（seed/LLM の文字列をそのまま列挙）。作業者は「どこを見ればいいか」をテキストから自力で辿る必要があり、障害対応の動線として弱い。外部サービス（GitHub / Cloud Logging / Cloud Console / Runbook）への **ディープリンク** で飛べるようにして、調査の実行コストを下げる。
 > **接続方針**: 既に基盤は揃っている — タスク8 `EvidencePanel`（Cloud Logging / Terraform / GitHub の証拠提示）とタスク9 `RemediationPanel`（修正 PR リンク）が外部連携の入口。本タスクはそれを **調査ステップ／アクション行**にも広げる位置づけ。
@@ -159,11 +159,12 @@
 >   - (b) **契約拡張（推奨）**: `investigationSteps` / `suggestedActions` を `{ text; href?; kind? }` の構造化型へ拡張し、backend（LLM プロンプト or evidence 連携）が `href`（GitHub Issue/PR・Cloud Logging クエリ URL・Runbook）を埋める。表示側は `kind`（log/code/runbook）でアイコン分け。
 > 採用は (b) 寄り。まず contracts に optional `href`/`kind` を足し（後方互換）、seed から URL 付きで配信して体験を作る。
 
-- [ ] 【設計】contracts `InvestigationReportPrimitives` に step/action の構造化（optional `href`/`kind`）を追加するか決定（上記 (a)/(b)）
-- [ ] 【新規/改修】`InvestigationReportView` ＋ `toInvestigationReportView` を構造化型へ拡張（後方互換: 文字列も受ける）
-- [ ] 【改修】`AlertCardExpanded` の調査ステップ／推奨アクションを、`href` があれば外部リンク（新規タブ・`rel="noopener"`・kind アイコン）に
-- [ ] 【seed】E2E/デモ seed に GitHub/Cloud Logging のサンプル URL を付与し動線を可視化
-- [ ] 【内部リンク】「類似既知」分類（`SimilarPatternRule`）のカードから**元の解決済み Alert（`/alerts/:id`）へ内部ディープリンク**する。土台は揃っている — `SimilarIncident`/`ResolvedIncident` は optional `sourceAlertId`（back-link）を保持済み（step4-2 タスク 12 追記）。残る結線は2点: ①`SimilarPatternRule` が `best.incident.sourceAlertId` を分類結果へ載せる（現状は `patternId: similar:${incident.id}` のみで back-link 未露出）／②contracts の classification primitives に optional `sourceAlertId` を足してフロントへ伝搬。「過去の同型障害をどう直したか」へ即移動できる動線で、graded confidence の意思決定支援を補強する
+- [x] 【設計】**(b) 契約拡張を採用**。contracts に `InvestigationStepPrimitives{ text; href?; kind? }`＋後方互換ユニオン `InvestigationItemPrimitives = string | InvestigationStepPrimitives` を追加。`investigationSteps`/`suggestedActions` を当該ユニオン配列へ。`InvestigationLinkKind = log|code|runbook|console`。LLM/旧データは素の文字列のまま流せる
+- [x] 【新規/改修】`InvestigationReportView` を構造化（`InvestigationStepView[]`）へ拡張し、`toInvestigationReportView` が要素を `toStepView`（文字列→`{text}`／構造化はそのまま）で正規化。`InvestigationReport`（domain）も union 型へ拡張＋`investigationItemText` ヘルパ追加（`SubmitFeedbackUseCase` の `.join` を text 抽出へ）
+- [x] 【改修】`AlertCardExpanded` の調査ステップ／推奨アクションを共通 `InvestigationItem`（`components/InvestigationItem.tsx`）へ切り出し、`href` があれば外部リンク（新規タブ・`rel="noopener noreferrer"`・kind アイコン）に。`RemediationPanel` の「修正方針」一覧も同コンポーネントを再利用
+- [x] 【seed】`AlertSeed` の決済タイムアウト Alert に Cloud Logging クエリ URL・GitHub blob/PR・status ページの href＋kind を付与（一部は素の文字列のまま＝後方互換のデモ）
+- [x] 【内部リンク】`SimilarPatternRule` が `best.incident.sourceAlertId` を分類結果へ載せ、contracts/domain の `KnownAlertClassificationPrimitives`/`KnownAlertClassification` に optional `sourceAlertId` を追加して伝搬。frontend `AlertView` の known 分類へ写像し、`AlertCardExpanded` が SIMILARITY＋sourceAlertId のとき `/alerts/:id` への内部リンク（react-router `Link`「過去の同型障害を見る」）を出す。seed では類似既知 Alert(...0003)→過去の在庫障害(...0002) を back-link
+- [x] 検証：backend/frontend `tsc --noEmit` 緑 / 全テスト緑（backend 32＋frontend 全 109、root workspace 475。`InvestigationReportView`/`AlertCardExpanded`(外部・内部リンク)/`SimilarPatternRule`/`AlertClassification`(sourceAlertId round-trip) の UT 追加）
 - 補足（#4 `suggestedPatternName` の扱い）: これは **LLM が生成する自由記述ラベル**（eventName/category のような閉じた語彙ではない）。よって eventCatalog のような JSON マッピングは不適。**検索キーではなく表示用の人間語ラベル**（検索キーは `patternId`/`eventName`）。本番プロンプトで「日本語の読めるパターン名」を要求し、フロントはそのまま表示する方針。StubLLMClient のスラッグは人間語ラベルへ修正済み。
 
 ### タスク 9c: フィードバックを対話・編集形式へ深化 〔P1〕

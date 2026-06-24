@@ -1,5 +1,6 @@
 import { cn } from "@shared/ui/cn";
 import type { AlertView } from "../domain/AlertView";
+import type { InvestigationStepView } from "../domain/InvestigationReportView";
 import {
   hasPullRequest,
   isRemediationUnstarted,
@@ -7,6 +8,7 @@ import {
 } from "../domain/RemediationView";
 import type { RemediationApi } from "../infrastructure/remediationApi";
 import { useRemediation } from "../presentation/hooks/useRemediation";
+import { InvestigationItem } from "./InvestigationItem";
 
 export interface RemediationPanelProps {
   alert: AlertView;
@@ -101,7 +103,7 @@ function RemediationBody({
   remediable: boolean;
   submitting: boolean;
   onDraft: () => void | Promise<void>;
-  suggestedActions: string[];
+  suggestedActions: InvestigationStepView[];
 }) {
   switch (remediation.status) {
     case "none":
@@ -114,7 +116,9 @@ function RemediationBody({
               </p>
               <ul className="list-disc space-y-0.5 pl-5 text-xs text-slate-200 marker:text-cyan-500/70">
                 {suggestedActions.map((a, i) => (
-                  <li key={i}>{a}</li>
+                  <li key={i}>
+                    <InvestigationItem item={a} />
+                  </li>
                 ))}
               </ul>
             </div>

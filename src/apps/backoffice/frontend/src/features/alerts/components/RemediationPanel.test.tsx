@@ -30,7 +30,7 @@ function fakeApi(initial: ReturnType<typeof view>): RemediationApi {
 
 const remediableAlert = makeAlert({
   id: "a-1",
-  report: makeReport({ remediable: true, suggestedActions: ["依存を更新"] }),
+  report: makeReport({ remediable: true, suggestedActions: [{ text: "依存を更新" }] }),
 });
 
 describe("RemediationPanel", () => {

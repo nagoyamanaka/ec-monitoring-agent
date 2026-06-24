@@ -54,6 +54,20 @@ describe("LLMOutputParser", () => {
       expect(parseLLMOutput(notBool)?.remediable).toBe(false);
     });
 
+    it("steps/actions の非文字列要素は落とす（防御的正規化）", () => {
+      const mixed = JSON.stringify({
+        summary: "x",
+        confidence: 0.5,
+        severity: "INFO",
+        investigationSteps: ["ログ確認", { text: "obj" }, 42, "メトリクス相関"],
+        suggestedActions: ["対応", null],
+        suggestedPatternName: "",
+      });
+      const out = parseLLMOutput(mixed);
+      expect(out?.investigationSteps).toEqual(["ログ確認", "メトリクス相関"]);
+      expect(out?.suggestedActions).toEqual(["対応"]);
+    });
+
     it("型不一致(confidenceが文字列)ではnullを返す", () => {
       const badType = JSON.stringify({
         summary: "x",

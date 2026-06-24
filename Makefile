@@ -71,6 +71,7 @@ front-build:
 	$(DC) build backoffice-frontend
 
 # ── All ───────────────────────────────────────────────────────
+# seedのデータ変更後は再度make seedしないとサービスに反映されないリスク
 up: ec-up bo-up front-up
 
 down:

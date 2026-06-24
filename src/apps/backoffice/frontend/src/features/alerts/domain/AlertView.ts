@@ -42,6 +42,8 @@ export type AlertClassificationView =
       readonly confidence: number;
       /** 既知パターン一致の根拠（どの条件が一致したか）。ドロワーで「なぜ」を見せる。 */
       readonly matchedConditions: MatchedConditionView[];
+      /** 類似既知（SIMILARITY）のとき、元の解決済み Alert への内部リンク先 id（任意）。 */
+      readonly sourceAlertId?: string;
     }
   | { readonly type: "unknown"; readonly confidence: null };
 
@@ -84,6 +86,9 @@ function toClassificationView(
         expectedValue: c.expectedValue,
         actualValue: c.actualValue,
       })),
+      ...(dto.sourceAlertId !== undefined
+        ? { sourceAlertId: dto.sourceAlertId }
+        : {}),
     };
   }
   return { type: "unknown", confidence: null };

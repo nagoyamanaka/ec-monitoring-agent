@@ -5,6 +5,7 @@ import { ResolvedIncident } from "../../../SimilarIncident/domain/SimilarInciden
 import { SimilarIncidentRepository } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { Alert } from "../../domain/Alert.js";
 import { AlertId } from "../../domain/AlertId.js";
+import { investigationItemText } from "../../domain/InvestigationReport.js";
 import { AlertRepository } from "../../domain/AlertRepository.js";
 import { KnownErrorPattern } from "../../domain/KnownErrorPattern.js";
 import { KnownErrorPatternRepository } from "../../domain/KnownErrorPatternRepository.js";
@@ -84,7 +85,7 @@ export class SubmitFeedbackUseCase {
       eventNamePattern: eventName,
       payloadConditions: [], // 自動昇格は eventName のみでマッチ（安全側）
       severity: report.severity,
-      suggestedAction: report.suggestedActions.join("\n"),
+      suggestedAction: report.suggestedActions.map(investigationItemText).join("\n"),
     }).promote();
 
     await this.knownErrorPatternRepository.save(pattern);

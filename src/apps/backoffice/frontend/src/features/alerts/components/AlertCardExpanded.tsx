@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
 import { type AlertView } from "../domain/AlertView";
+import { InvestigationItem } from "./InvestigationItem";
 import { alertReason } from "../domain/alertReason";
 import {
   alertReviewState,
@@ -76,6 +78,19 @@ export function AlertCardExpanded({
             {known ? "該当パターン（既知）" : "AI 推定パターン"}
           </h4>
           <p className="text-slate-100">{reason.patternName}</p>
+          {/* 類似既知（SIMILARITY）は元の解決済み Alert へ内部ディープリンク。
+              「過去の同型障害をどう直したか」へ即移動できる動線。 */}
+          {alert.classification.type === "known" &&
+            alert.classification.source === "SIMILARITY" &&
+            alert.classification.sourceAlertId && (
+              <Link
+                to={`/alerts/${encodeURIComponent(alert.classification.sourceAlertId)}`}
+                className="inline-flex items-center gap-1 text-xs text-cyan-300 underline decoration-cyan-500/40 underline-offset-2 transition hover:text-cyan-200 hover:decoration-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              >
+                <span aria-hidden>🔗</span>
+                <span>過去の同型障害を見る</span>
+              </Link>
+            )}
         </section>
       )}
 
@@ -127,7 +142,9 @@ export function AlertCardExpanded({
               </h4>
               <ol className="list-decimal space-y-1 pl-5 marker:text-slate-500">
                 {report.investigationSteps.map((step, i) => (
-                  <li key={i}>{step}</li>
+                  <li key={i}>
+                    <InvestigationItem item={step} />
+                  </li>
                 ))}
               </ol>
             </section>
@@ -148,7 +165,9 @@ export function AlertCardExpanded({
               </div>
               <ul className="list-disc space-y-1 pl-5 marker:text-cyan-500/70">
                 {report.suggestedActions.map((action, i) => (
-                  <li key={i}>{action}</li>
+                  <li key={i}>
+                    <InvestigationItem item={action} />
+                  </li>
                 ))}
               </ul>
             </section>

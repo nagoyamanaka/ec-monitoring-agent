@@ -1,4 +1,8 @@
-import type { InvestigationReportPrimitives } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
+import type {
+  InvestigationReportPrimitives,
+  InvestigationItemPrimitives,
+  InvestigationLinkKind,
+} from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
 import type { AlertSeverity } from "./AlertView";
 
 /**
@@ -8,13 +12,25 @@ import type { AlertSeverity } from "./AlertView";
 
 export type ReviewStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";
 
+export type { InvestigationLinkKind };
+
+/**
+ * 調査ステップ／推奨アクションの表示用1項目。`href` があれば外部リンク化し `kind` でアイコン分け。
+ * ワイヤは文字列も構造化オブジェクトも来るが、View では常にこの構造化形へ正規化済み。
+ */
+export type InvestigationStepView = {
+  readonly text: string;
+  readonly href?: string;
+  readonly kind?: InvestigationLinkKind;
+};
+
 /** 表示用に型を絞った調査レポート。AlertCardExpanded / AlertDetailPage が消費する。 */
 export type InvestigationReportView = {
   readonly summary: string;
   readonly confidence: number;
   readonly severity: AlertSeverity;
-  readonly investigationSteps: string[];
-  readonly suggestedActions: string[];
+  readonly investigationSteps: InvestigationStepView[];
+  readonly suggestedActions: InvestigationStepView[];
   readonly suggestedPatternName: string;
   readonly reviewStatus: ReviewStatus;
   readonly investigatedAt: string;
@@ -23,6 +39,12 @@ export type InvestigationReportView = {
   readonly remediable: boolean;
 };
 
+/** ワイヤ要素（文字列 or 構造化）を表示用の構造化形へ正規化。 */
+function toStepView(item: InvestigationItemPrimitives): InvestigationStepView {
+  if (typeof item === "string") return { text: item };
+  return { text: item.text, href: item.href, kind: item.kind };
+}
+
 export function toInvestigationReportView(
   dto: InvestigationReportPrimitives,
 ): InvestigationReportView {
@@ -30,8 +52,8 @@ export function toInvestigationReportView(
     summary: dto.summary,
     confidence: dto.confidence,
     severity: dto.severity as AlertSeverity,
-    investigationSteps: dto.investigationSteps,
-    suggestedActions: dto.suggestedActions,
+    investigationSteps: dto.investigationSteps.map(toStepView),
+    suggestedActions: dto.suggestedActions.map(toStepView),
     suggestedPatternName: dto.suggestedPatternName,
     reviewStatus: dto.reviewStatus as ReviewStatus,
     investigatedAt: dto.investigatedAt,
