@@ -1,4 +1,5 @@
 import { cn } from "@shared/ui/cn";
+import type { AlertView } from "../domain/AlertView";
 import {
   type EvidenceLogLevel,
   type EvidenceSection,
@@ -9,9 +10,8 @@ import { useEvidence } from "../presentation/hooks/useEvidence";
 
 export interface EvidencePanelProps {
   api: EvidenceApi;
-  alertId: string;
-  /** ポーリング間隔（ms）。テストで短縮する。 */
-  pollIntervalMs?: number;
+  /** SSE ライブの alert。status から証拠の取得タイミング（done）を導出する。 */
+  alert: AlertView;
   className?: string;
 }
 
@@ -135,17 +135,12 @@ function EvidenceSectionView({ section }: { section: EvidenceSection }) {
 
 /**
  * インフラ証拠（Cloud Logging / Terraform / GitHub）の積み上げ可視化＝自律性の見せ場（タスク8）。
- * useEvidence で status をポーリングし、done になった瞬間に証拠を fetch。
+ * 調査完了（done）は SSE ライブの alert.status から導出し（useEvidence）、done になった瞬間に証拠を fetch。
  * 各ソースのセクションを 1 つずつ stagger フェードイン（`evidence-rise`・reduced-motion 尊重）させ、
  * 「AI が調べている過程」を演出する。
  */
-export function EvidencePanel({
-  api,
-  alertId,
-  pollIntervalMs,
-  className,
-}: EvidencePanelProps) {
-  const { phase, evidence, error } = useEvidence(api, alertId, pollIntervalMs);
+export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
+  const { phase, evidence, error } = useEvidence(api, alert);
 
   const sections = evidence ? evidenceSections(evidence) : [];
 
@@ -159,15 +154,13 @@ export function EvidencePanel({
         <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-300 ring-1 ring-inset ring-rose-500/30">
           証拠の取得に失敗しました。{error?.message}
         </div>
-      ) : phase === "collecting" || phase === "analyzing" ? (
+      ) : phase === "analyzing" ? (
         <div className="flex items-center gap-2 rounded-md bg-slate-800/40 px-3 py-3 text-xs text-slate-300 ring-1 ring-inset ring-slate-700/60">
           <span
             aria-hidden
             className="h-2 w-2 animate-pulse rounded-full bg-cyan-400"
           />
-          {phase === "collecting"
-            ? "AI が証拠を収集しています…"
-            : "AI が証拠を解析しています…"}
+          AI が証拠を解析しています…
         </div>
       ) : sections.length === 0 ? (
         <p className="text-xs text-slate-400">証拠は見つかりませんでした。</p>

@@ -4,12 +4,12 @@ import {
   isRemediationPending,
   isRemediationUnstarted,
   toRemediationView,
-  type RemediationResponseWire,
+  type RemediationResponsePrimitives,
 } from "./RemediationView";
 
 function makeWire(
-  overrides: Partial<RemediationResponseWire> = {},
-): RemediationResponseWire {
+  overrides: Partial<RemediationResponsePrimitives> = {},
+): RemediationResponsePrimitives {
   return {
     alertId: "a-1",
     status: "none",

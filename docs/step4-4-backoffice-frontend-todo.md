@@ -124,30 +124,30 @@
 
 ### タスク 8: 証拠パネル 〔P1〕 ✅
 
-- [x] 【新規】`features/alerts/domain/EvidenceView.ts`（`InfraEvidencePrimitives`→`EvidenceView` 純関数・SHA 短縮・`evidenceSections` でソース順に畳み・`InvestigationStatus` は backend を type-only 再利用）＋ UT
-- [x] 【新規】`infrastructure/evidenceApi.ts`（`createEvidenceApi(http)`：`GET /alerts/:id/evidence`→View 写像 / `GET /alerts/:id/investigation/status`→`collecting|analyzing|done`）
-- [x] 【新規】`presentation/hooks/useEvidence.ts`（status を `done` までポーリング→done で evidence を一度 fetch・AbortController/cancel で中断）＋ UT
-- [x] 【新規】`components/EvidencePanel.tsx`（Cloud Logging/Terraform/GitHub の証拠を**到着ごとに積み上がる** stagger フェードイン＝自律性の可視化。`index.css` に `evidence-rise` keyframe・`prefers-reduced-motion` 尊重・収集中インジケータ・空/エラー表示）＋ UT
-- [x] 【配線】`AlertDetailDrawer`（optional `evidenceApi` prop で差し込み）/ `AlertsPage`・`AlertDetailPage`（composition root で `createEvidenceApi(http)` 生成・http を共有）
-- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 84 件緑（`EvidenceView`/`useEvidence`/`EvidencePanel` UT 追加）
+- [x] 【新規】`features/alerts/domain/EvidenceView.ts`（`InfraEvidencePrimitives`→`EvidenceView` 純関数・SHA 短縮・`evidenceSections` でソース順に畳み）＋ UT
+- [x] 【新規】`infrastructure/evidenceApi.ts`（`createEvidenceApi(http)`：`GET /alerts/:id/evidence`→View 写像）
+- [x] 【新規】`presentation/hooks/useEvidence.ts`（**SSE ライブの alert を受け取り**、done 判定を `alert.status` から導出→done で evidence を一度 fetch・AbortController/cancel で中断）＋ UT
+- [x] 【新規】`components/EvidencePanel.tsx`（Cloud Logging/Terraform/GitHub の証拠を**到着ごとに積み上がる** stagger フェードイン＝自律性の可視化。`index.css` に `evidence-rise` keyframe・`prefers-reduced-motion` 尊重・解析中インジケータ・空/エラー表示）＋ UT
+- [x] 【配線】`AlertDetailDrawer`（optional `evidenceApi` prop で差し込み・`alert` を渡す）/ `AlertsPage`（SSE ライブの選択 alert）・`AlertDetailPage`（`useAlert(api,id,stream)` でライブ化）
+- [x] 【改訂 2026-06・step4-1 §10】当初は `GET /investigation/status` を**ポーリング**して done を待つ設計だったが、調査完了は SSE で alert.status に届くため **status ポーリングを廃止**（同じ事実を二重に持たない）。証拠自体は外部 API を叩く重い pull なので「ドロワーを開いた人が done になった時だけ」取得＝broadcast しない。backend の status エンドポイントも削除（step4-3 タスク9）
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト緑（`EvidenceView`/`useEvidence`/`EvidencePanel` UT）
 - シナリオ4の見せ場
 
 ### タスク 9: リメディエーション（remediate 起票ボタン＋API配線＋結果反映）〔P1〕 ✅
 
 > **現状/前提**: backend は揃っている — `POST /alerts/:id/remediation/draft-pr`（起票トリガー＝**人間の承認アクション**・202）/ `GET /alerts/:id/remediation`（status・PR URL・vulnerabilityCount・reason）/ dispatch 経路の CI callback `POST /ingest/remediation-result`。調査レポートに `remediable`（AI が「コードで直せる」と判定）と `suggestedActions`（修正方針＝ROI判断材料）も載る（step4-2）。**フロントには remediation UI が未実装**＝本タスクで新設。
 > **設計原則（step4-1 §4 / step4-2）**: 調査(read)とリメディ(write)は分離。毎回 remediate するとコスト高・方針不一致なら無駄（ROI）なので**起票は人間が判断**。`remediable` は **ボタン活性/ROI提示の advisory** で、write 実行の最終ゲートは人間承認＋executor の deterministic 判定。
-> **状態の非同期性（重要）**: `advisory` モードは即 `drafted`（PR URL あり）。`dispatch` モードは `dispatched`（PR URL なし）で受付のみ→CI が実修正+UT後に callback で `drafted`/`failed` 確定。**この確定は現状 SSE push が無く、フロントは GET /remediation 再取得でしか気づけない**。
-
-- [x] 【新規】`features/alerts/domain/RemediationView.ts`（wire→View 純関数。status `none|dispatched|drafted|skipped|failed`・`isRemediationUnstarted`/`isRemediationPending`/`hasPullRequest` 述語・`RemediationViewStatus` は backend を type-only 再利用）＋ UT
+> **状態の非同期性（重要）**: `advisory` モードは即 `drafted`（PR URL あり）。`dispatch` モードは `dispatched`（PR URL なし）で受付のみ→CI が実修正+UT後に callback で `drafted`/`failed` 確定。**この確定は SSE `remediation` イベントで push される（改訂 2026-06・step4-1 §10）**。
+- [x] 【新規】`features/alerts/domain/RemediationView.ts`（wire→View 純関数。status `none|dispatched|drafted|skipped|failed`・`isRemediationUnstarted`/`isRemediationPending`/`hasPullRequest` 述語・`RemediationResponsePrimitives` は backend contracts を type-only 再利用）＋ UT
 - [x] 【新規】`infrastructure/remediationApi.ts`（`createRemediationApi(http)`：`getRemediation(id)`=GET / `draftRemediation(id)`=POST draft-pr→202）/ `application/triggerRemediation.ts`（write 起票の橋渡し）
-- [x] 【新規】`presentation/hooks/useRemediation.ts`（初回取得＋`dispatched` 間ポーリング＋`draft()` で 202 後再取得・submitting state）＋ UT
+- [x] 【新規】`presentation/hooks/useRemediation.ts`（初回 pull＋`pushed`(SSE)取り込み＋`draft()` で 202 後再取得・submitting state。`live=false` 時のみ `dispatched` 間ポーリングのフォールバック）＋ UT
 - [x] 【新規】`components/RemediationPanel.tsx`：`report.remediable` のときのみ「修正を起票」ボタン活性（`suggestedActions`＝修正方針を ROI 材料として併記）。起票後は status 表示＝drafted（PR リンク＋件数）/dispatched（受付中・cyan パルス）/skipped・failed（理由）。非 remediable かつ未起票はパネル非表示
-- [x] 【配線】起票は **202＋mutation 後再取得**（`useRemediation.draft`）。`dispatched` の間は `GET /remediation` を**ポーリング**（タスク8と同方式）して確定を反映。`AlertDetailDrawer`（optional `remediationApi` prop）/ `AlertsPage`・`AlertDetailPage`（composition root で `createRemediationApi(http)` 生成）
-- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 97 件緑（`RemediationView`/`useRemediation`/`RemediationPanel` UT 追加）
-- [ ] 【SSE通知・要 backend判断】dispatch callback の確定をリアルタイム化するなら `RecordRemediationResultUseCase` に `SSEAlertNotifier`（or 専用 remediation チャネル）を追加。**今回はポーリングで吸収（push は未実装）**＝必要になれば追加（step4-3 へ波及）
+- [x] 【SSE 購読（改訂 2026-06・step4-1 §10）】`AlertStream` に `onRemediation` を追加し1接続で多重化（`SSEAlertStream` が `addEventListener("remediation")`・`MockAlertStream.emitRemediation`）。`useAlerts` が `remediationByAlertId` を収集→ドロワーへ `pushed` で渡す＝**ポーリング廃止**（dispatched 確定が push で届く）。`RecordRemediationResultUseCase`/`DraftRemediationUseCase` が backend で push（step4-3）
+- [x] 【配線】起票は **202＋mutation 後再取得**（`useRemediation.draft`）。`AlertDetailDrawer`（optional `remediationApi`＋`pushedRemediation`・`live`）/ `AlertsPage`（`remediationByAlertId.get(selectedId)` を渡す）/ `AlertDetailPage`（poll フォールバック）。composition root で `createRemediationApi(http)` 生成
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト緑（`RemediationView`/`useRemediation`/`RemediationPanel` UT・SSE live 経路 UT 追加）
 - **backend で何をやるか（step4-3）**:
   - [x] 既存で足りる: `POST /alerts/:id/remediation/draft-pr`・`GET /alerts/:id/remediation`・`POST /ingest/remediation-result`（CI callback）は配線済み。`remediable`/`suggestedActions` も調査レポートに載る（実装済み）
-  - [ ] **追加候補は SSE push のみ**: `RecordRemediationResultUseCase` に notifier 注入＋`BackofficeApp` 配線。ポーリングで吸収済みのため未実施
+  - [x] **SSE push 実装済み（改訂 2026-06）**: `SSEAlertNotifier.notifyRemediation` を追加し `RecordRemediationResultUseCase`・`DraftRemediationUseCase` から push＋`BackofficeApp` 配線。`RemediationResponsePrimitives` を契約の単一ソースに（GET＝SSE payload＝frontend View 入力）
 - シナリオ5の見せ場
 
 ### タスク 9b: 調査ステップ／推奨アクションのリンク化 〔P1〕

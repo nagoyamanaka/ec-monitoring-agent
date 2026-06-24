@@ -47,6 +47,7 @@ const makeSpyNotifier = () => {
   const notified: AlertPrimitives[] = [];
   const notifier: SSEAlertNotifier = {
     notify: (p) => { notified.push(p); },
+    notifyRemediation: () => {},
     addConnection: () => {},
     removeConnection: () => {},
   };

@@ -3,8 +3,18 @@ import { RecordRemediationResultUseCase } from "./RecordRemediationResultUseCase
 import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/ConsoleLogger.js";
 import { RemediationRecord } from "../../domain/remediation/RemediationRecord.js";
 import { RemediationRepository } from "../../domain/remediation/RemediationRepository.js";
+import { SSEAlertNotifier } from "../../../AlertNotification/domain/SSEAlertNotifier.js";
 
 const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";
+
+function fakeNotifier(): SSEAlertNotifier {
+  return {
+    notify: vi.fn(),
+    notifyRemediation: vi.fn(),
+    addConnection: vi.fn(),
+    removeConnection: vi.fn(),
+  };
+}
 
 class FakeRemediationRepository implements RemediationRepository {
   readonly saved: RemediationRecord[] = [];
@@ -20,13 +30,15 @@ class FakeRemediationRepository implements RemediationRepository {
 describe("RecordRemediationResultUseCase", () => {
   let repo: FakeRemediationRepository;
   let logger: ConsoleLogger;
+  let notifier: SSEAlertNotifier;
   let useCase: RecordRemediationResultUseCase;
 
   beforeEach(() => {
     repo = new FakeRemediationRepository();
     logger = new ConsoleLogger();
+    notifier = fakeNotifier();
     vi.spyOn(logger, "write").mockResolvedValue(undefined);
-    useCase = new RecordRemediationResultUseCase(repo, logger);
+    useCase = new RecordRemediationResultUseCase(repo, notifier, logger);
   });
 
   it("dispatch 時に記録済みの vulnerabilityCount を保持して drafted に確定する", async () => {
@@ -79,5 +91,21 @@ describe("RecordRemediationResultUseCase", () => {
       pullRequestUrl: null,
       reason: null,
     });
+  });
+
+  it("確定を SSE で push する（dispatched で待つ画面の即時反映）", async () => {
+    await useCase.run({
+      alertId: ALERT_ID,
+      status: "drafted",
+      pullRequestUrl: "https://github.com/owner/repo/pull/9",
+    });
+
+    expect(notifier.notifyRemediation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alertId: ALERT_ID,
+        status: "drafted",
+        pullRequestUrl: "https://github.com/owner/repo/pull/9",
+      }),
+    );
   });
 });

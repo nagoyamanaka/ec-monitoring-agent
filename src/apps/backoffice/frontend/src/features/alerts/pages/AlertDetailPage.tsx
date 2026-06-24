@@ -6,6 +6,7 @@ import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { createAlertsApi } from "../infrastructure/alertsApi";
 import { createEvidenceApi } from "../infrastructure/evidenceApi";
 import { createRemediationApi } from "../infrastructure/remediationApi";
+import { SSEAlertStream } from "../infrastructure/SSEAlertStream";
 import { useAlert } from "../presentation/hooks/useAlert";
 import {
   submitFeedback,
@@ -25,7 +26,8 @@ export function AlertDetailPage() {
   const api = useMemo(() => createAlertsApi(http), [http]);
   const evidenceApi = useMemo(() => createEvidenceApi(http), [http]);
   const remediationApi = useMemo(() => createRemediationApi(http), [http]);
-  const { alert, status, error, refresh } = useAlert(api, id);
+  const stream = useMemo(() => new SSEAlertStream(), []);
+  const { alert, status, error, refresh } = useAlert(api, id, stream);
 
   const handleDecision = useCallback(
     async (alertId: string, decision: FeedbackDecision) => {
@@ -76,7 +78,7 @@ export function AlertDetailPage() {
 
             <AlertCardExpanded alert={alert} onDecision={handleDecision} />
             <RemediationPanel alert={alert} api={remediationApi} />
-            <EvidencePanel api={evidenceApi} alertId={alert.id} />
+            <EvidencePanel api={evidenceApi} alert={alert} />
           </article>
         )}
       </div>

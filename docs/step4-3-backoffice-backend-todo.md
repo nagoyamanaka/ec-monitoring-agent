@@ -83,13 +83,13 @@
 
 ### タスク 9: evidence ルート 〔P1〕　✅ 完了済み
 
-- 【新規】`routes/evidenceRoutes.ts` ＋ `AlertEvidenceGetController`（evidence/status の2メソッド）
-- GET /alerts/:id/evidence（InfraEvidence）/ GET /alerts/:id/investigation/status（collecting/analyzing/done）
+- 【新規】`routes/evidenceRoutes.ts` ＋ `AlertEvidenceGetController`（evidence メソッド）
+- GET /alerts/:id/evidence（InfraEvidence）
 - 委譲先（application 層・AIInvestigation コンテキスト新規）
   - `GetInfraEvidenceQuery` → `GetInfraEvidenceUseCase`：alert を findById → `InfraInvestigationPort.collect()` で**証拠を再収集**（調査時の証拠は永続化していないため。全 Gateway は read-only）→ `InfraEvidenceResponse`（Date を ISO 正規化）
-  - `GetInvestigationStatusQuery` → `GetInvestigationStatusUseCase`：alert から status を導出（report 添付 or 既知パターン→done / 未知・未添付→analyzing。`collecting` は永続フェーズ未追跡のため契約上予約）
 - `InfraEvidencePrimitives` を `AIInvestigation/domain/InfraEvidence.ts` に追加（ワイヤ契約）
-- UT: 両 UseCase（not-found / 再収集・正規化 / status 導出4分岐）。BackofficeApp の queryBus に2ハンドラ登録
+- UT: GetInfraEvidence（not-found / 再収集・正規化）。BackofficeApp の queryBus にハンドラ登録
+- 【改訂 2026-06・step4-1 §10】`GET /alerts/:id/investigation/status`（＋ `GetInvestigationStatus` UseCase 一式）は**削除**。証拠の done 判定は SSE で更新される alert.status から frontend が導出するため、status 専用エンドポイントは冗長（二重ソース）だった。証拠は「broadcast する小さな事実 / pull する重い詳細」の後者＝外部 API を叩く重い収集なので pull on-demand に残す（push しない）
 
 ### タスク 10: security-scan ingest 〔P1〕　✅ 完了済み
 
@@ -121,6 +121,7 @@ subscriber は EC 自前 DomainEvent（CollectMonitoringEventOnECEventPublished�
 - **advisory**（既定・CI不要）: in-process で `LLMRemediationPlanner` が方針テキストのみ生成→ `SECURITY_REMEDIATION.md` の草案PR（実コードは直さない・人間が直す前提）。LLM はファイルパス/パッチ全文を生成しない（ハルシネーション防止の足場）。GitHub/CI 不在のローカル・デモ用フォールバック
 - **dispatch**（agentic・本命）: `GitHubActionsRemediationDispatcher` が `repository_dispatch(ai-remediation, {alertId, vulnerabilities})` を投げる→ ターゲットリポの `.github/workflows/ai-remediation.yml` が **ブランチ作成→AIエージェント(Gemini CLI/差し替え可)が実コード修正→trivy 再スキャン+UT/E2E が緑→draft PR**。**修正精度はランナーのテストゲートで担保**（APIサーバ内では実コードを書かない）
 - **結果 callback**: dispatch は非同期＝起票時は `dispatched`（PR URL 無し）。CI 完了時に `POST /ingest/remediation-result`（x-ingest-token）で `drafted`(PR URL)/`failed`(理由) に確定（`RecordRemediationResultUseCase`）。GET /remediation がそれを返す
+- **結果の SSE push（改訂 2026-06・step4-1 §10）**: 確定はクライアント操作が起点に無い非同期更新なので、`RecordRemediationResultUseCase`・`DraftRemediationUseCase` が `SSEAlertNotifier.notifyRemediation()` で**名前付きイベント `remediation` を push** する（`RemediationResponsePrimitives` 契約・GET と同形）。frontend は dispatched 表示のままポーリングせず push で確定を反映。`EventEmitterSSEAlertNotifier` は既定 alert イベントと `event: remediation` を1接続に多重化
 - 過去のローカル版（Trivyローカルスキャン+Copilot Agent プロンプト）の CI/CD 化に相当。Gemini は Vertex AI 認証で GCP 無料クレジット内、品質不足なら workflow の1ステップを `claude-code-action` に差し替え
 - **自己修正ループ上限（課金安全弁）**: CI は「AI修正→検証（trivy再スキャン+typecheck+test）→赤ならログをフィードバックして再修正」を `REMEDIATION_MAX_ATTEMPTS`（既定2）回まで回し**必ず打ち切る**（無限リトライ＝課金暴走を防ぐ）。上限は `config.remediation.maxAttempts` が単一ソースで、dispatch の `client_payload.maxAttempts` として CI に渡す。上限超過は `failed`（PR起票なし）で callback
 

@@ -24,8 +24,6 @@ import { MongoKnownErrorPatternRepository } from "../../../../Contexts/Monitorin
 import { InvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.js";
 import { GetInfraEvidenceUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceUseCase.js";
 import { GetInfraEvidenceQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceQueryHandler.js";
-import { GetInvestigationStatusUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInvestigationStatus/GetInvestigationStatusUseCase.js";
-import { GetInvestigationStatusQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInvestigationStatus/GetInvestigationStatusQueryHandler.js";
 import { DraftRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/DraftRemediation/DraftRemediationUseCase.js";
 import { DraftRemediationCommandHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/DraftRemediation/DraftRemediationCommandHandler.js";
 import { GetRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationUseCase.js";
@@ -199,11 +197,6 @@ export class BackofficeApp {
     );
     const getInfraEvidenceQueryHandler = new GetInfraEvidenceQueryHandler(getInfraEvidenceUseCase);
 
-    const getInvestigationStatusUseCase = new GetInvestigationStatusUseCase(alertRepository, logger);
-    const getInvestigationStatusQueryHandler = new GetInvestigationStatusQueryHandler(
-      getInvestigationStatusUseCase,
-    );
-
     // リメディエーション（シナリオ5の出口）。実行戦略は config.remediation.mode で差し替える:
     //   dispatch = CI(GitHub Actions)のAIエージェントへ投げ、実コード修正+UT/E2E をランナーで回す（精度はテストゲートで担保）
     //   advisory = in-process で SECURITY_REMEDIATION.md の方針PRを起票（CI/GitHub 不在でも動く既定）
@@ -228,6 +221,7 @@ export class BackofficeApp {
       alertRepository,
       remediationExecutor,
       remediationRepository,
+      sseNotifier,
       logger,
     );
     const draftRemediationCommandHandler = new DraftRemediationCommandHandler(draftRemediationUseCase);
@@ -238,6 +232,7 @@ export class BackofficeApp {
     // CI(dispatch経路)からの結果 callback（POST /ingest/remediation-result）の受け口。
     const recordRemediationResultUseCase = new RecordRemediationResultUseCase(
       remediationRepository,
+      sseNotifier,
       logger,
     );
 
@@ -256,7 +251,6 @@ export class BackofficeApp {
         getKnownErrorPatternsQueryHandler,
         getAnalyticsQueryHandler,
         getInfraEvidenceQueryHandler,
-        getInvestigationStatusQueryHandler,
         getRemediationQueryHandler,
       ]),
     );

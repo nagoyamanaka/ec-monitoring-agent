@@ -517,3 +517,33 @@ Monitoring（Bounded Context ＝ 観測フレームを画定する。フレー�
 > - G. Bateson, _The Logical Categories of Learning and Communication_ — context / context of context（メタメッセージの階層＝論理型）
 
 ---
+
+## §10. リアルタイム配信の境界：SSE push（broadcast）と frontend pull の使い分け
+
+> **決定（2026-06 確定）**: フロント↔backend のリアルタイム反映を「SSE か ポーリングか」で事象ごとにアドホックに決めず、**1本の軸**で割る。実装の根拠（コードベースでの確認）は step4-3/step4-4 に対応。
+
+### 原則（一文）
+
+> **小さくて全クライアント共通の "事実" は broadcast（SSE）／ 大きい・外部依存・特定ユーザーが見ている時だけ要る "詳細" は pull on-demand。**
+
+### 適用
+
+| 事象 | 手段 | 理由 |
+| ---- | ---- | ---- |
+| アラート集約のライフサイクル（生成・分析中・調査完了・dedup 更新） | **SSE push（既定イベント）** | 小さく・一覧の全員が関心・既に domain で emit 済み（`AnalyzeAlertUseCase`/`InvestigateAlertUseCase` の `SSEAlertNotifier.notify`） |
+| リメディ確定（dispatched→drafted/failed・skipped） | **SSE push（名前付きイベント `remediation`）** | 小さい（status/PR URL/件数）。CI callback は非同期でクライアント操作が起点に無い＝push が最も素直。`RecordRemediationResultUseCase`/`DraftRemediationUseCase` が `SSEAlertNotifier.notifyRemediation` |
+| インフラ証拠（Cloud Logging / Terraform / GitHub） | **pull on-demand**（ドロワーを開いた人が done になった時だけ GET /evidence） | 大きく・外部 API を毎回叩く重い収集。全クライアントへ broadcast すると「1アラート×N クライアント分の再収集」が走る事故。done 判定は **SSE で届く alert.status から導出**し、status 専用ポーリングは廃止（同じ事実を二重に持たない） |
+
+### この決定で消えたもの / 足したもの
+
+- **消えた**: `GET /alerts/:id/investigation/status` エンドポイント（＋ `GetInvestigationStatus` UseCase 一式）。証拠の done 判定は SSE で更新される alert.status から導出できるため、status を別エンドポイントでポーリングするのは冗長（二重ソース）だった。frontend は `useEvidence(api, alert)` が alert を受け取り status を読む。
+- **足した**: SSE の**名前付きイベント**多重化（`EventEmitterSSEAlertNotifier` が `event: remediation` 行を出し分け、frontend `SSEAlertStream` が `addEventListener("remediation")`）。1本の EventSource 接続で alert と remediation の両ライフサイクルを配る。`RemediationResponsePrimitives` を契約の単一ソース（GET レスポンス＝SSE payload＝frontend View 入力）に統一。
+
+### トレードオフと UX 保証
+
+- **「アラートが出来たら即表示」は SSE push で無条件に保証**される（どのポーリング設計とも独立）。ポーリング/pull が効くのは証拠・リメディ確定＝**ドロワーを開いている時だけ問題になる二次情報**なので、ベースライン UX は崩れない。
+- **負荷観点**: 社内オペレーションコンソールで同時オペレータ数が少ない＝同時に開くドロワー数が pull 負荷の上限。pull 負荷は誤差で、選択軸は「一貫性とレイテンシ」。
+- **detail ページ（`/alerts/:id`）**: alert は `useAlert(api, id, stream)` で SSE ライブ化（証拠の done 判定が一覧ドロワーと同挙動）。リメディは現状ポーリングのフォールバック（`live=false`）＝主舞台のドロワーは push、deep-link の detail は poll、という許容した非対称（必要なら detail も `live` に寄せられる）。
+- **スケールアウト時**: `EventEmitterSSEAlertNotifier`（in-process）は同 interface のまま `RedisSSEAlertNotifier` へ差し替え（複数プロセス間の fan-out）。
+
+---

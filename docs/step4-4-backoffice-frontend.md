@@ -81,7 +81,7 @@ src/apps/backoffice/frontend/src/
 │   │   │   └── approveRemediation.ts# 承認 → POST /alerts/:id/remediation/draft-pr
 │   │   ├── infrastructure/
 │   │   │   ├── alertsApi.ts         # GET /alerts, GET /alerts/:id, PATCH feedback（HttpClient依存）
-│   │   │   ├── evidenceApi.ts       # GET /alerts/:id/evidence, /investigation/status
+│   │   │   ├── evidenceApi.ts       # GET /alerts/:id/evidence（done 判定は SSE の alert.status から導出・status API は廃止／step4-1 §10）
 │   │   │   ├── remediationApi.ts    # POST draft-pr, GET remediation
 │   │   │   ├── AlertStream.ts       # SSEストリーム interface（Mock差し替え可能）
 │   │   │   └── SSEAlertStream.ts    # AlertStream の SSE 実装（/alerts/stream）

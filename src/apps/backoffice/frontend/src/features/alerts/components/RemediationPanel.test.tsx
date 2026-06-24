@@ -5,11 +5,11 @@ import { RemediationPanel } from "./RemediationPanel";
 import type { RemediationApi } from "../infrastructure/remediationApi";
 import {
   toRemediationView,
-  type RemediationResponseWire,
+  type RemediationResponsePrimitives,
 } from "../domain/RemediationView";
 import { makeAlert, makeReport } from "../test-support/alertFixture";
 
-function view(overrides: Partial<RemediationResponseWire> = {}) {
+function view(overrides: Partial<RemediationResponsePrimitives> = {}) {
   return toRemediationView({
     alertId: "a-1",
     status: "none",

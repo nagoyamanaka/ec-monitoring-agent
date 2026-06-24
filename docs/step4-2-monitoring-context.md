@@ -1058,9 +1058,10 @@ interface InfraEvidence {
 関連APIエンドポイント（project-prompt v12）:
 
 ```
-GET /alerts/:id/evidence              ← 収集済みInfraEvidenceの取得
-GET /alerts/:id/investigation/status  ← 調査ステータス（collecting / analyzing / done）
+GET /alerts/:id/evidence              ← 収集済みInfraEvidenceの取得（重い外部収集＝pull on-demand）
 ```
+
+> **改訂 2026-06（step4-1 §10）**: `GET /alerts/:id/investigation/status` は廃止。調査の done 判定は SSE で更新される alert.status から frontend が導出するため、status 専用エンドポイントは冗長（二重ソース）だった。
 
 ---
 

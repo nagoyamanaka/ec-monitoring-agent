@@ -35,6 +35,7 @@ export function AlertsPage() {
     lastUpdatedAt,
     refreshAlert,
     reconnectStream,
+    remediationByAlertId,
   } = useAlerts(api, stream);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -81,6 +82,9 @@ export function AlertsPage() {
         onDecision={handleDecision}
         evidenceApi={evidenceApi}
         remediationApi={remediationApi}
+        pushedRemediation={
+          selectedId ? remediationByAlertId.get(selectedId) ?? null : null
+        }
       />
     </>
   );

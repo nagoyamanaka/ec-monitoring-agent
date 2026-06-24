@@ -1,85 +1,77 @@
-import { useEffect, useState } from "react";
-import type {
-  EvidenceView,
-  InvestigationStatus,
-} from "../../domain/EvidenceView";
+import { useEffect, useRef, useState } from "react";
+import { type AlertView, isAnalyzing } from "../../domain/AlertView";
+import type { EvidenceView } from "../../domain/EvidenceView";
 import type { EvidenceApi } from "../../infrastructure/evidenceApi";
 
-/** 段階ポーリングのデフォルト間隔（ms）。 */
-const DEFAULT_POLL_INTERVAL_MS = 1500;
-
-export type EvidencePhase = InvestigationStatus | "error";
+export type EvidencePhase = "analyzing" | "done" | "error";
 
 export type UseEvidenceResult = {
-  /** 調査の段階。collecting/analyzing の間はポーリング継続、done で証拠 fetch 済み。 */
+  /** analyzing=調査中で証拠未着 / done=証拠取得済み / error=取得失敗。 */
   readonly phase: EvidencePhase;
-  /** done に到達して取得した証拠。それ以前は null。 */
   readonly evidence: EvidenceView | null;
   readonly error: Error | null;
 };
 
 /**
- * 証拠の取得 hook。GET /investigation/status を done になるまでポーリングし、
- * done になったタイミングで GET /evidence を一度だけ取得する（積み上げ演出のトリガー）。
- * alertId が変われば再開し、unmount/再開時は AbortController と cancel フラグで前処理を中断する。
+ * 証拠の取得 hook。調査の「完了」判定は **SSE で更新される alert.status** から導出し、
+ * status エンドポイントのポーリングはしない（同じ事実を二重に持たない・段階1の設計統一）。
+ * 分析中（ANALYZING）の間は証拠未着、done（OPEN=既知 or 調査レポート添付）になった瞬間に
+ * 証拠を 1 回だけ fetch する。alert は親が SSE ライブで渡す（ドロワー＝alerts.find / 詳細＝useAlert+stream）。
+ *
+ * 証拠は外部 API（Cloud Logging/Terraform/GitHub）を叩く重い pull なので、
+ * 全クライアントへ broadcast せず「ドロワーを開いた人が done になった時だけ」取得する。
  */
 export function useEvidence(
   api: EvidenceApi,
-  alertId: string | null,
-  pollIntervalMs: number = DEFAULT_POLL_INTERVAL_MS,
+  alert: AlertView | null,
 ): UseEvidenceResult {
-  const [phase, setPhase] = useState<EvidencePhase>("collecting");
   const [evidence, setEvidence] = useState<EvidenceView | null>(null);
+  const [phase, setPhase] = useState<EvidencePhase>("analyzing");
   const [error, setError] = useState<Error | null>(null);
+  // 同一アラートの done に対して二重 fetch しないためのガード。
+  const fetchedFor = useRef<string | null>(null);
+
+  const alertId = alert?.id ?? null;
+  const done = alert !== null && !isAnalyzing(alert);
 
   useEffect(() => {
     if (!alertId) return;
 
+    if (!done) {
+      // 分析中（または別アラートへ切替）: 証拠をリセットし完了を待つ。
+      setPhase("analyzing");
+      setEvidence(null);
+      setError(null);
+      fetchedFor.current = null;
+      return;
+    }
+
+    if (fetchedFor.current === alertId) return; // 取得済みなら何もしない
+    fetchedFor.current = alertId;
+
     const controller = new AbortController();
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    setPhase("collecting");
-    setEvidence(null);
     setError(null);
 
-    const fail = (e: unknown) => {
-      if (cancelled || controller.signal.aborted) return;
-      setError(e instanceof Error ? e : new Error(String(e)));
-      setPhase("error");
-    };
-
-    const poll = async () => {
-      try {
-        const { status } = await api.getInvestigationStatus(
-          alertId,
-          controller.signal,
-        );
+    api
+      .getEvidence(alertId, controller.signal)
+      .then((fetched) => {
         if (cancelled) return;
-
-        if (status === "done") {
-          const fetched = await api.getEvidence(alertId, controller.signal);
-          if (cancelled) return;
-          setEvidence(fetched);
-          setPhase("done");
-          return;
-        }
-
-        setPhase(status);
-        timer = setTimeout(poll, pollIntervalMs);
-      } catch (e) {
-        fail(e);
-      }
-    };
-
-    void poll();
+        setEvidence(fetched);
+        setPhase("done");
+      })
+      .catch((e: unknown) => {
+        if (cancelled || controller.signal.aborted) return;
+        fetchedFor.current = null; // 失敗は再試行余地を残す
+        setError(e instanceof Error ? e : new Error(String(e)));
+        setPhase("error");
+      });
 
     return () => {
       cancelled = true;
       controller.abort();
-      if (timer) clearTimeout(timer);
     };
-  }, [api, alertId, pollIntervalMs]);
+  }, [api, alertId, done]);
 
   return { phase, evidence, error };
 }

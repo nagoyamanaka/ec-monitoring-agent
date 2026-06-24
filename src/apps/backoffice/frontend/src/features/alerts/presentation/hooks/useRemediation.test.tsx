@@ -4,10 +4,10 @@ import { useRemediation } from "./useRemediation";
 import type { RemediationApi } from "../../infrastructure/remediationApi";
 import {
   toRemediationView,
-  type RemediationResponseWire,
+  type RemediationResponsePrimitives,
 } from "../../domain/RemediationView";
 
-function view(overrides: Partial<RemediationResponseWire> = {}) {
+function view(overrides: Partial<RemediationResponsePrimitives> = {}) {
   return toRemediationView({
     alertId: "a-1",
     status: "none",
@@ -67,12 +67,41 @@ describe("useRemediation", () => {
       getRemediation,
       draftRemediation: vi.fn(),
     };
-    const { result } = renderHook(() => useRemediation(api, "a-1", 5));
+    const { result } = renderHook(() =>
+      useRemediation(api, "a-1", { pollIntervalMs: 5 }),
+    );
 
     await waitFor(() =>
       expect(result.current.remediation?.status).toBe("drafted"),
     );
     // ポーリングが止まっていることを確認（呼び出し回数が増え続けない）
+    const calls = getRemediation.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(getRemediation.mock.calls.length).toBe(calls);
+  });
+
+  it("live: pushed（SSE 確定）を取り込み、ポーリングしない", async () => {
+    const getRemediation = vi
+      .fn()
+      .mockResolvedValue(view({ status: "dispatched" }));
+    const api: RemediationApi = { getRemediation, draftRemediation: vi.fn() };
+    const drafted = view({ status: "drafted", pullRequestUrl: "https://x/pr/1" });
+
+    const { result, rerender } = renderHook(
+      ({ pushed }) => useRemediation(api, "a-1", { live: true, pushed }),
+      { initialProps: { pushed: null as ReturnType<typeof view> | null } },
+    );
+    await waitFor(() =>
+      expect(result.current.remediation?.status).toBe("dispatched"),
+    );
+
+    // SSE push 到着 → 反映
+    rerender({ pushed: drafted });
+    await waitFor(() =>
+      expect(result.current.remediation?.status).toBe("drafted"),
+    );
+
+    // live なので初回 GET の 1 回だけ（ポーリングしない）
     const calls = getRemediation.mock.calls.length;
     await new Promise((r) => setTimeout(r, 30));
     expect(getRemediation.mock.calls.length).toBe(calls);

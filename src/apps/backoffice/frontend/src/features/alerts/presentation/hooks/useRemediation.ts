@@ -7,8 +7,17 @@ import type { RemediationApi } from "../../infrastructure/remediationApi";
 import { triggerRemediation } from "../../application/triggerRemediation";
 import type { AlertsStatus } from "./useAlerts";
 
-/** dispatched 確定待ちのポーリング間隔（ms）。 */
+/** live=false 時のフォールバックのポーリング間隔（ms）。 */
 const DEFAULT_POLL_INTERVAL_MS = 2000;
+
+export type UseRemediationOptions = {
+  /** SSE "remediation" で届いた最新の確定。変化したら即 state へ反映する。 */
+  readonly pushed?: RemediationView | null;
+  /** SSE で更新が届く前提か。true ならポーリングしない（push 駆動）。 */
+  readonly live?: boolean;
+  /** live=false 時のポーリング間隔（ms）。テストで短縮する。 */
+  readonly pollIntervalMs?: number;
+};
 
 export type UseRemediationResult = {
   readonly remediation: RemediationView | null;
@@ -21,16 +30,20 @@ export type UseRemediationResult = {
 };
 
 /**
- * リメディエーション状態の取得 hook。初回取得に加え、status が dispatched の間は
- * GET /remediation をポーリングして drafted/failed/skipped への確定を反映する
- * （dispatch callback は SSE push が無いため）。
+ * リメディエーション状態の取得 hook。初回に GET /remediation を pull（ドロワーを開いた人だけ）。
+ * 確定（dispatched→drafted/failed）は SSE "remediation" イベントで届くため、live=true なら
+ * pushed を取り込むだけでポーリングはしない（段階2の設計統一）。
+ * stream を渡せない経路（live=false）では dispatched の間だけポーリングするフォールバックを残す。
  * draft() は起票（POST）後に再取得する（202＋mutation 後再取得の共通原則）。
  */
 export function useRemediation(
   api: RemediationApi,
   alertId: string | null,
-  pollIntervalMs: number = DEFAULT_POLL_INTERVAL_MS,
+  options: UseRemediationOptions = {},
 ): UseRemediationResult {
+  const { pushed = null, live = false, pollIntervalMs = DEFAULT_POLL_INTERVAL_MS } =
+    options;
+
   const [remediation, setRemediation] = useState<RemediationView | null>(null);
   const [status, setStatus] = useState<AlertsStatus>("loading");
   const [error, setError] = useState<Error | null>(null);
@@ -63,28 +76,32 @@ export function useRemediation(
     };
   }, [api, alertId]);
 
+  // SSE push の取り込み（live 経路）。該当アラートの確定だけ反映する。
+  useEffect(() => {
+    if (!pushed || pushed.alertId !== alertId) return;
+    setRemediation(pushed);
+  }, [pushed, alertId]);
+
   const refresh = useCallback(async () => {
     if (!alertId) return;
     const fresh = await api.getRemediation(alertId);
     setRemediation(fresh);
   }, [api, alertId]);
 
-  // dispatched の間だけポーリング。確定（drafted/failed/skipped）に変われば自動で止まる。
+  // フォールバック: live でないときだけ dispatched をポーリングして確定に追従する。
   const pending = remediation !== null && isRemediationPending(remediation);
   useEffect(() => {
-    if (!pending || !alertId) return;
+    if (live || !pending || !alertId) return;
     let active = true;
     const timer = setTimeout(() => {
       if (!active) return;
-      // 失敗しても最後の状態を保持し、次のポーリング機会に委ねる
       void refresh().catch(() => {});
     }, pollIntervalMs);
     return () => {
       active = false;
       clearTimeout(timer);
     };
-    // remediation を依存に含め、ポーリング後（新オブジェクト）に再スケジュールさせる
-  }, [pending, alertId, pollIntervalMs, refresh, remediation]);
+  }, [live, pending, alertId, pollIntervalMs, refresh, remediation]);
 
   const draft = useCallback(async () => {
     if (!alertId || submitting) return;

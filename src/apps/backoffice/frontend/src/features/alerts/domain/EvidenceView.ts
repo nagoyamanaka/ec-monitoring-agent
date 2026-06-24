@@ -1,15 +1,13 @@
 import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/InfraEvidence";
-import type { InvestigationStatus } from "@monitoring/AIInvestigation/application/GetInvestigationStatus/InvestigationStatusResponse";
 
 /**
  * インフラ証拠（Cloud Logging / Terraform / GitHub）の表示用型と、
  * ワイヤ契約（backend と共有する InfraEvidencePrimitives）→ View の純関数。
  * domain は型＋純関数のみ。日付は表示側で整形できるよう ISO 文字列のまま持つ。
+ *
+ * 調査の完了判定（done）は SSE で更新される alert.status から導出する（useEvidence）。
+ * そのため status 用の専用型はここに持たない（同じ事実を二重に持たない・段階1の設計統一）。
  */
-
-// 調査ライフサイクルの段階（backend の単一ソースを type-only で再利用）。
-// collecting=証拠収集中 / analyzing=AI 調査中 / done=triage 済み（証拠 fetch 可）。
-export type { InvestigationStatus };
 
 export type EvidenceLogLevel = "ERROR" | "WARNING" | "INFO";
 

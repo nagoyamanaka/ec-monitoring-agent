@@ -9,7 +9,9 @@ import { makeAppAlert, startApp } from "./support.js";
 
 /**
  * routes/evidenceRoutes.ts に 1:1 対応。
- * GET /alerts/:id/evidence（インフラ証拠の再収集）/ GET /alerts/:id/investigation/status。
+ * GET /alerts/:id/evidence（インフラ証拠の再収集）。
+ * 調査の進捗（done/analyzing）は SSE で push される alert.status からフロントが導出するため、
+ * 専用の investigation/status エンドポイントは持たない。
  * evidence は infraInvestigationPort が Cloud Logging/Terraform/GitHub を読む外部依存のため、
  * その port だけ vi.fn で差し替える（残りは本物の Mongo/QueryBus）。
  */
@@ -50,16 +52,5 @@ describe("evidenceRoutes (integration)", () => {
     expect(res.body.appLogs).toHaveLength(1);
     expect(res.body.appLogs[0]).toMatchObject({ severity: "ERROR", message: "pool exhausted" });
     expect(res.body.appLogs[0].timestamp).toBe("2026-01-01T00:00:00.000Z");
-  });
-
-  it("GET /alerts/:id/investigation/status は alertId と status を返す", async () => {
-    const alertId = randomUUID();
-    await alertRepository.save(makeAppAlert(alertId));
-
-    const res = await request(app.httpApp).get(`/alerts/${alertId}/investigation/status`);
-
-    expect(res.status).toBe(200);
-    expect(res.body.alertId).toBe(alertId);
-    expect(typeof res.body.status).toBe("string");
   });
 });

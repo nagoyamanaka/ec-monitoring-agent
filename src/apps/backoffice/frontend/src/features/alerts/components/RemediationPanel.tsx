@@ -3,6 +3,7 @@ import type { AlertView } from "../domain/AlertView";
 import {
   hasPullRequest,
   isRemediationUnstarted,
+  type RemediationView,
 } from "../domain/RemediationView";
 import type { RemediationApi } from "../infrastructure/remediationApi";
 import { useRemediation } from "../presentation/hooks/useRemediation";
@@ -10,7 +11,11 @@ import { useRemediation } from "../presentation/hooks/useRemediation";
 export interface RemediationPanelProps {
   alert: AlertView;
   api: RemediationApi;
-  /** dispatched 確定待ちのポーリング間隔（ms）。テストで短縮する。 */
+  /** SSE で届いた当該アラートの最新確定（あれば即反映＝live 経路）。 */
+  pushed?: RemediationView | null;
+  /** SSE で更新が届く前提か。true ならポーリングしない。 */
+  live?: boolean;
+  /** live=false 時のポーリング間隔（ms）。テストで短縮する。 */
   pollIntervalMs?: number;
   className?: string;
 }
@@ -24,13 +29,15 @@ export interface RemediationPanelProps {
 export function RemediationPanel({
   alert,
   api,
+  pushed,
+  live,
   pollIntervalMs,
   className,
 }: RemediationPanelProps) {
   const { remediation, status, error, submitting, draft } = useRemediation(
     api,
     alert.id,
-    pollIntervalMs,
+    { pushed, live, pollIntervalMs },
   );
 
   const report = alert.report;

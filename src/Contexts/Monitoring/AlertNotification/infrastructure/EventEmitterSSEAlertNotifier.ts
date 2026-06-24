@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { AlertPrimitives } from "../../AlertAnalysis/domain/Alert.js";
+import { RemediationResponsePrimitives } from "../../AIInvestigation/domain/contracts/RemediationContract.js";
 import { SSEAlertNotifier } from "../domain/SSEAlertNotifier.js";
 
 // オンメモリ（シングルプロセス前提）の SSE 通知実装。
@@ -19,11 +20,22 @@ export class EventEmitterSSEAlertNotifier implements SSEAlertNotifier {
   }
 
   notify(alertPrimitives: AlertPrimitives): void {
-    const data = JSON.stringify(alertPrimitives);
+    // 既定イベント（event 名なし）＝frontend の EventSource.onmessage が受ける。
+    this.broadcast(JSON.stringify(alertPrimitives));
+  }
+
+  notifyRemediation(remediation: RemediationResponsePrimitives): void {
+    // 名前付きイベント "remediation" ＝frontend は addEventListener("remediation") で受ける。
+    this.broadcast(JSON.stringify(remediation), "remediation");
+  }
+
+  // 全接続へ1メッセージを書き込む。event 名があれば `event:` 行を付ける。
+  private broadcast(data: string, eventName?: string): void {
+    const frame = (eventName ? `event: ${eventName}\n` : "") + `data: ${data}\n\n`;
     for (const res of this.connections) {
       // 1接続の書き込み失敗で他接続への push を止めない
       try {
-        res.write(`data: ${data}\n\n`);
+        res.write(frame);
       } catch {
         this.removeConnection(res);
       }

@@ -1,6 +1,6 @@
 import type { HttpClient } from "@shared/api/HttpClient";
 import {
-  type RemediationResponseWire,
+  type RemediationResponsePrimitives,
   type RemediationView,
   toRemediationView,
 } from "../domain/RemediationView";
@@ -21,7 +21,7 @@ export interface RemediationApi {
 export function createRemediationApi(http: HttpClient): RemediationApi {
   return {
     async getRemediation(id, signal) {
-      const wire = await http.get<RemediationResponseWire>(
+      const wire = await http.get<RemediationResponsePrimitives>(
         `/alerts/${encodeURIComponent(id)}/remediation`,
         { signal },
       );

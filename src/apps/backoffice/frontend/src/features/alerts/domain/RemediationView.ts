@@ -1,27 +1,24 @@
-import type { RemediationViewStatus } from "@monitoring/AIInvestigation/application/GetRemediation/RemediationResponse";
+import type {
+  RemediationResponsePrimitives,
+  RemediationResponseStatus,
+} from "@monitoring/AIInvestigation/domain/contracts/RemediationContract";
 
 /**
  * リメディエーション（修正 PR 起票）結果の表示用型と、ワイヤ契約→View の純関数。
- * domain は型＋純関数のみ。status の単一ソースは backend（RemediationViewStatus）を type-only 再利用する。
+ * domain は型＋純関数のみ。ワイヤ形状/status の単一ソースは backend contracts
+ * （RemediationResponsePrimitives）を type-only 再利用する。GET /remediation のレスポンスと
+ * SSE "remediation" イベントの payload は同一契約（remediationRecordToPrimitives 由来）。
  *
  * status の意味（backend RemediationRecord と整合）:
  * - none      : 未起票（record 無し）。remediable なら起票ボタンを活性にできる。
- * - dispatched: CI へ修正ジョブ投入済（実修正+UT は CI 側・結果は callback 確定）。SSE push が無いためポーリング対象。
+ * - dispatched: CI へ修正ジョブ投入済（実修正+UT は CI 側・結果は callback 確定）。確定は SSE push で届く。
  * - drafted   : PR 草案作成済（pullRequestUrl あり）。
  * - skipped   : 対象脆弱性なし（reason に理由）。
  * - failed    : GitHub 未設定・API 失敗等（reason に理由）。
  */
-export type { RemediationViewStatus };
-
-/** GET /alerts/:id/remediation の wire 形状（RemediationResponse を直に JSON 化したもの）。 */
-export type RemediationResponseWire = {
-  readonly alertId: string;
-  readonly status: RemediationViewStatus;
-  readonly pullRequestUrl: string | null;
-  readonly vulnerabilityCount: number;
-  readonly reason: string | null;
-  readonly createdAt: string | null;
-};
+export type RemediationViewStatus = RemediationResponseStatus;
+// feature 内の import 窓口（ワイヤ契約の単一ソースを再エクスポート）。
+export type { RemediationResponsePrimitives };
 
 export type RemediationView = {
   readonly alertId: string;
@@ -32,7 +29,9 @@ export type RemediationView = {
   readonly createdAt: string | null;
 };
 
-export function toRemediationView(dto: RemediationResponseWire): RemediationView {
+export function toRemediationView(
+  dto: RemediationResponsePrimitives,
+): RemediationView {
   return {
     alertId: dto.alertId,
     status: dto.status,

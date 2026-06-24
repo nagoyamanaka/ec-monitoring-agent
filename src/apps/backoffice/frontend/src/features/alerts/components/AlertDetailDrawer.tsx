@@ -9,6 +9,7 @@ import { categoryInfo } from "../domain/alertCategory";
 import type { FeedbackDecision } from "../application/submitFeedback";
 import type { EvidenceApi } from "../infrastructure/evidenceApi";
 import type { RemediationApi } from "../infrastructure/remediationApi";
+import type { RemediationView } from "../domain/RemediationView";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { EvidencePanel } from "./EvidencePanel";
@@ -27,6 +28,8 @@ export interface AlertDetailDrawerProps {
   evidenceApi?: EvidenceApi;
   /** 渡された場合のみリメディエーションパネルを表示する（composition root で注入）。 */
   remediationApi?: RemediationApi;
+  /** SSE で届いた選択中アラートのリメディ確定（live 反映用）。 */
+  pushedRemediation?: RemediationView | null;
 }
 
 function formatAbsoluteTime(iso: string): string {
@@ -46,6 +49,7 @@ export function AlertDetailDrawer({
   onDecision,
   evidenceApi,
   remediationApi,
+  pushedRemediation,
 }: AlertDetailDrawerProps) {
   useEffect(() => {
     if (!alert) return;
@@ -159,11 +163,14 @@ export function AlertDetailDrawer({
           ) : null}
           <AlertCardExpanded alert={alert} onDecision={onDecision} />
           {remediationApi && (
-            <RemediationPanel alert={alert} api={remediationApi} />
+            <RemediationPanel
+              alert={alert}
+              api={remediationApi}
+              pushed={pushedRemediation}
+              live
+            />
           )}
-          {evidenceApi && (
-            <EvidencePanel api={evidenceApi} alertId={alert.id} />
-          )}
+          {evidenceApi && <EvidencePanel api={evidenceApi} alert={alert} />}
         </div>
 
         <footer className="border-t border-slate-700/60 px-5 py-3">
