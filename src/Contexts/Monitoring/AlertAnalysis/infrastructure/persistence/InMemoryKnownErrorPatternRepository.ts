@@ -24,4 +24,10 @@ export class InMemoryKnownErrorPatternRepository implements KnownErrorPatternRep
       this.patterns.push(pattern);
     }
   }
+
+  async removeBySourceAlertId(sourceAlertId: string): Promise<void> {
+    this.patterns = this.patterns.filter(
+      (p) => p.sourceAlertId !== sourceAlertId,
+    );
+  }
 }

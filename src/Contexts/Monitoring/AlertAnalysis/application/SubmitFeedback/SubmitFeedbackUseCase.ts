@@ -35,18 +35,39 @@ export class SubmitFeedbackUseCase {
       throw new MonitoringResourceNotFoundError("Alert", alertId.value);
     }
 
+    // 再レビュー（判定のやり直し）に備え、直前の判定を見て遷移ベースで学習を反映する。
+    // 「現在の判定が承認のときだけ解決済みインシデントが1件ある」状態を保つ。
+    const wasApproved = alert.feedback?.isCorrect === true;
     const updatedAlert = alert.submitFeedback({ isCorrect, operatorNote });
     await this.alertRepository.save(updatedAlert);
 
     if (isCorrect) {
-      await this.indexAsResolved(updatedAlert, operatorNote);
+      // 非承認→承認の遷移時のみ index（再承認での二重 index を防ぐ）。
+      if (!wasApproved) {
+        await this.indexAsResolved(updatedAlert, operatorNote);
+      }
       await this.maybeAutoPromote(updatedAlert);
+    } else if (wasApproved) {
+      // 承認→却下のやり直し（誤承認の訂正）: 承認時に積んだ類似学習を撤回する。
+      await this.withdrawResolved(updatedAlert);
     }
 
     await this.logger.info({
       service: "backoffice-backend",
       action: "feedback_submitted",
       message: `フィードバック受付：${alertId.value}, isCorrect=${isCorrect}`,
+    });
+  }
+
+  // 承認の撤回時に、その Alert 由来の学習を撤回する:
+  //  ① 類似学習（ResolvedIncident）の削除、② 自動昇格した KnownErrorPattern（結晶化）の削除。
+  private async withdrawResolved(alert: Alert): Promise<void> {
+    await this.similarIncidentRepository.removeByAlertId(alert.id.value);
+    await this.knownErrorPatternRepository.removeBySourceAlertId(alert.id.value);
+    await this.logger.info({
+      service: "backoffice-backend",
+      action: "feedback_resolved_withdrawn",
+      message: `承認の撤回により類似学習・自動昇格を撤回：${alert.id.value}`,
     });
   }
 
@@ -86,6 +107,8 @@ export class SubmitFeedbackUseCase {
       payloadConditions: [], // 自動昇格は eventName のみでマッチ（安全側）
       severity: report.severity,
       suggestedAction: report.suggestedActions.map(investigationItemText).join("\n"),
+      // 承認のやり直し（承認→却下）で結晶化を撤回できるよう由来 Alert を記録する。
+      sourceAlertId: alert.id.value,
     }).promote();
 
     await this.knownErrorPatternRepository.save(pattern);

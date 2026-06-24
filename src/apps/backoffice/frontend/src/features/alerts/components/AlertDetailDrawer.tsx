@@ -93,7 +93,7 @@ export function AlertDetailDrawer({
         onClick={onClose}
         aria-hidden
       />
-      <aside className="absolute inset-y-0 right-0 flex w-[clamp(360px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
+      <aside className="absolute inset-y-0 right-0 flex w-[clamp(480px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
         <header className="flex items-start gap-3 border-b border-slate-700/60 px-5 py-4">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">

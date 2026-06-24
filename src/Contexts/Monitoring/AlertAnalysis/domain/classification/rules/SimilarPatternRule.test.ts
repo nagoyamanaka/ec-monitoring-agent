@@ -25,6 +25,7 @@ class FakeSearchPort implements SimilarIncidentRepository {
     return [];
   }
   async index(_incident: ResolvedIncident): Promise<void> {}
+  async removeByAlertId(_sourceAlertId: string): Promise<void> {}
 }
 
 function makeIncident(params: {

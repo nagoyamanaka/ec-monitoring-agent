@@ -49,6 +49,13 @@ export class InMemorySimilarIncidentRepository implements SimilarIncidentReposit
     }
   }
 
+  // 指定 Alert 由来の解決済みインシデントを全削除する（承認の撤回で学習を残さない）。
+  async removeByAlertId(sourceAlertId: string): Promise<void> {
+    this.incidents = this.incidents.filter(
+      (incident) => incident.sourceAlertId !== sourceAlertId,
+    );
+  }
+
   // Elastic 無しでも graded confidence 分類を回すための字句類似スコアリング（Jaccard, [0,1]）。
   // Elastic の生 BM25 と違い既に [0,1] 正規化済みなので SimilarPatternRule の scoreCeiling 既定 1 と整合する。
   async search(query: SimilarSearchQuery): Promise<ScoredIncident[]> {

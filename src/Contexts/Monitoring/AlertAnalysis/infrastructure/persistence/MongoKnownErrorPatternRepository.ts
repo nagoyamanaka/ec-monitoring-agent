@@ -33,6 +33,13 @@ export class MongoKnownErrorPatternRepository
     } as KnownErrorPatternPrimitives);
   }
 
+  // 指定 Alert から自動昇格したパターンを撤回する（承認のやり直しで結晶化を残さない）。
+  async removeBySourceAlertId(sourceAlertId: string): Promise<void> {
+    await this.collection().deleteMany(
+      { sourceAlertId } as unknown as Filter<Document>,
+    );
+  }
+
   // createdAt ASC: シードの登録順がそのままマッチング優先度になる
   async findAll(): Promise<KnownErrorPattern[]> {
     const docs = await this.collection()

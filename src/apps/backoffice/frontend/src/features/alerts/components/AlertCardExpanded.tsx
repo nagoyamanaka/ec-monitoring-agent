@@ -5,11 +5,7 @@ import { cn } from "@shared/ui/cn";
 import { type AlertView } from "../domain/AlertView";
 import { InvestigationItem } from "./InvestigationItem";
 import { alertReason } from "../domain/alertReason";
-import {
-  alertReviewState,
-  isAlertReviewed,
-  type AlertReviewState,
-} from "../domain/alertReview";
+import { alertReviewState, isAlertReviewed } from "../domain/alertReview";
 import type { FeedbackDecision } from "../application/submitFeedback";
 
 export interface AlertCardExpandedProps {
@@ -36,12 +32,6 @@ export interface AlertCardExpandedProps {
 
 /** レビュー操作の送信中状態。3 種それぞれで個別にスピナー/無効化する。 */
 type ReviewAction = FeedbackDecision | "reinvestigate";
-
-const REVIEW_LABEL: Record<AlertReviewState, string> = {
-  PENDING: "レビュー待ち",
-  APPROVED: "承認済み",
-  REJECTED: "却下済み",
-};
 
 /** 一致条件の値を表示用に整形（文字列はそのまま、それ以外は JSON 表記）。 */
 function formatValue(value: unknown): string {
@@ -77,6 +67,9 @@ export function AlertCardExpanded({
     setSubmitting(decision);
     try {
       await onDecision(alert.id, decision, operatorNote);
+      // 成功後は却下入力を畳む（再取得した feedback でトグルの選択状態が更新される）。
+      setRejecting(false);
+      setNote("");
     } finally {
       setSubmitting(null);
     }
@@ -114,7 +107,10 @@ export function AlertCardExpanded({
       {/* 再調査中（人間の指摘を反映して AI が再分析中）。既存内容は下に残したまま明示する。 */}
       {analyzingNow && (
         <div className="flex items-center gap-2 rounded-md bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200 ring-1 ring-inset ring-cyan-500/30">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" aria-hidden />
+          <span
+            className="h-2 w-2 animate-pulse rounded-full bg-cyan-400"
+            aria-hidden
+          />
           AI が指摘を反映して再調査中です…
         </div>
       )}
@@ -223,30 +219,11 @@ export function AlertCardExpanded({
         </>
       )}
 
-      {/* レビュー（承認/却下／却下して再調査）。再調査中は操作を伏せて再分析を待つ。 */}
+      {/* レビュー（承認/却下／却下して再調査）。再調査中は操作を伏せて再分析を待つ。
+          承認/却下は常時2つ並ぶセグメント・トグル＝現在の判定を選択状態で示し、
+          反対側を押すと再決定できる（誤承認→却下・却下→承認）。選択中は押下不可。 */}
       {!analyzingNow &&
-        (reviewed ? (
-          <Card className="flex items-center justify-between gap-3 !bg-slate-800/40 !p-3 !ring-slate-700/60">
-            <span className="text-xs text-slate-400">この分類の判定</span>
-            <div className="flex flex-col items-end gap-1">
-              <span
-                className={cn(
-                  "rounded-full px-2.5 py-0.5 text-xs font-semibold",
-                  reviewState === "APPROVED"
-                    ? "bg-emerald-500/15 text-emerald-300"
-                    : "bg-rose-500/15 text-rose-300",
-                )}
-              >
-                {REVIEW_LABEL[reviewState]}
-              </span>
-              {alert.feedback?.operatorNote && (
-                <p className="max-w-[16rem] text-right text-[11px] leading-snug text-slate-400">
-                  「{alert.feedback.operatorNote}」
-                </p>
-              )}
-            </div>
-          </Card>
-        ) : rejecting ? (
+        (rejecting ? (
           <Card className="space-y-3 !bg-slate-800/40 !p-3 !ring-slate-700/60">
             <div className="space-y-1">
               <label
@@ -298,26 +275,55 @@ export function AlertCardExpanded({
             </div>
           </Card>
         ) : (
-          <Card className="flex items-center justify-between gap-3 !bg-slate-800/40 !p-3 !ring-slate-700/60">
-            <span className="text-xs text-slate-400">この分類は正しいですか？</span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={submitting !== null}
-                onClick={() => decide("approve")}
-                className="min-w-[5.5rem] rounded-md bg-emerald-500/15 px-3 py-1.5 text-center text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-500/30 transition hover:bg-emerald-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+          <Card className="space-y-2 !bg-slate-800/40 !p-3 !ring-slate-700/60">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-slate-400">
+                {reviewed ? "この分類の判定" : "この分類は正しいですか？"}
+              </span>
+              <div
+                className="flex items-center gap-2"
+                role="group"
+                aria-label="分類の判定"
               >
-                {submitting === "approve" ? "送信中…" : "✓ 承認"}
-              </button>
-              <button
-                type="button"
-                disabled={submitting !== null}
-                onClick={() => setRejecting(true)}
-                className="min-w-[5.5rem] rounded-md bg-rose-500/15 px-3 py-1.5 text-center text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
-              >
-                ✗ 却下
-              </button>
+                <button
+                  type="button"
+                  aria-pressed={reviewState === "APPROVED"}
+                  disabled={submitting !== null || reviewState === "APPROVED"}
+                  onClick={() => decide("approve")}
+                  className={cn(
+                    "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
+                    reviewState === "APPROVED"
+                      ? "bg-emerald-500/25 text-emerald-200 ring-2 ring-inset ring-emerald-400/60 disabled:opacity-100"
+                      : "bg-slate-800 text-slate-500 ring-1 ring-slate-700 hover:bg-slate-700",
+                  )}
+                >
+                  {submitting === "approve"
+                    ? "送信中…"
+                    : reviewState === "APPROVED"
+                      ? "✓ 承認済み"
+                      : "✓ 承認"}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={reviewState === "REJECTED"}
+                  disabled={submitting !== null || reviewState === "REJECTED"}
+                  onClick={() => setRejecting(true)}
+                  className={cn(
+                    "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:active:scale-100",
+                    reviewState === "REJECTED"
+                      ? "bg-rose-500/25 text-rose-200 ring-2 ring-inset ring-rose-400/60 disabled:opacity-100"
+                      : "bg-slate-800 text-slate-500 ring-1 ring-slate-700 hover:bg-slate-700",
+                  )}
+                >
+                  {reviewState === "REJECTED" ? "X 却下済み" : "X 却下"}
+                </button>
+              </div>
             </div>
+            {reviewState === "REJECTED" && alert.feedback?.operatorNote && (
+              <p className="text-[11px] leading-snug text-slate-400">
+                却下理由：「{alert.feedback.operatorNote}」
+              </p>
+            )}
           </Card>
         ))}
     </div>

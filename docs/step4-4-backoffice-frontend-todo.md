@@ -138,6 +138,7 @@
 > **現状/前提**: backend は揃っている — `POST /alerts/:id/remediation/draft-pr`（起票トリガー＝**人間の承認アクション**・202）/ `GET /alerts/:id/remediation`（status・PR URL・vulnerabilityCount・reason）/ dispatch 経路の CI callback `POST /ingest/remediation-result`。調査レポートに `remediable`（AI が「コードで直せる」と判定）と `suggestedActions`（修正方針＝ROI判断材料）も載る（step4-2）。**フロントには remediation UI が未実装**＝本タスクで新設。
 > **設計原則（step4-1 §4 / step4-2）**: 調査(read)とリメディ(write)は分離。毎回 remediate するとコスト高・方針不一致なら無駄（ROI）なので**起票は人間が判断**。`remediable` は **ボタン活性/ROI提示の advisory** で、write 実行の最終ゲートは人間承認＋executor の deterministic 判定。
 > **状態の非同期性（重要）**: `advisory` モードは即 `drafted`（PR URL あり）。`dispatch` モードは `dispatched`（PR URL なし）で受付のみ→CI が実修正+UT後に callback で `drafted`/`failed` 確定。**この確定は SSE `remediation` イベントで push される（改訂 2026-06・step4-1 §10）**。
+
 - [x] 【新規】`features/alerts/domain/RemediationView.ts`（wire→View 純関数。status `none|dispatched|drafted|skipped|failed`・`isRemediationUnstarted`/`isRemediationPending`/`hasPullRequest` 述語・`RemediationResponsePrimitives` は backend contracts を type-only 再利用）＋ UT
 - [x] 【新規】`infrastructure/remediationApi.ts`（`createRemediationApi(http)`：`getRemediation(id)`=GET / `draftRemediation(id)`=POST draft-pr→202）/ `application/triggerRemediation.ts`（write 起票の橋渡し）
 - [x] 【新規】`presentation/hooks/useRemediation.ts`（初回 pull＋`pushed`(SSE)取り込み＋`draft()` で 202 後再取得・submitting state。`live=false` 時のみ `dispatched` 間ポーリングのフォールバック）＋ UT
@@ -155,9 +156,10 @@
 > **背景**: 現状 `AlertCardExpanded` の調査ステップ・推奨アクションは **プレーンテキスト**（seed/LLM の文字列をそのまま列挙）。作業者は「どこを見ればいいか」をテキストから自力で辿る必要があり、障害対応の動線として弱い。外部サービス（GitHub / Cloud Logging / Cloud Console / Runbook）への **ディープリンク** で飛べるようにして、調査の実行コストを下げる。
 > **接続方針**: 既に基盤は揃っている — タスク8 `EvidencePanel`（Cloud Logging / Terraform / GitHub の証拠提示）とタスク9 `RemediationPanel`（修正 PR リンク）が外部連携の入口。本タスクはそれを **調査ステップ／アクション行**にも広げる位置づけ。
 > **データ形状の選択肢**（contracts `InvestigationReportPrimitives` の拡張要否）:
->   - (a) **後方互換・フロント補完**: 文字列のまま受け取り、frontend が URL 検出（`/https?:\/\//`）でリンク化。最小コスト・LLM 非依存だが精度は文字列頼み。
->   - (b) **契約拡張（推奨）**: `investigationSteps` / `suggestedActions` を `{ text; href?; kind? }` の構造化型へ拡張し、backend（LLM プロンプト or evidence 連携）が `href`（GitHub Issue/PR・Cloud Logging クエリ URL・Runbook）を埋める。表示側は `kind`（log/code/runbook）でアイコン分け。
-> 採用は (b) 寄り。まず contracts に optional `href`/`kind` を足し（後方互換）、seed から URL 付きで配信して体験を作る。
+>
+> - (a) **後方互換・フロント補完**: 文字列のまま受け取り、frontend が URL 検出（`/https?:\/\//`）でリンク化。最小コスト・LLM 非依存だが精度は文字列頼み。
+> - (b) **契約拡張（推奨）**: `investigationSteps` / `suggestedActions` を `{ text; href?; kind? }` の構造化型へ拡張し、backend（LLM プロンプト or evidence 連携）が `href`（GitHub Issue/PR・Cloud Logging クエリ URL・Runbook）を埋める。表示側は `kind`（log/code/runbook）でアイコン分け。
+>   採用は (b) 寄り。まず contracts に optional `href`/`kind` を足し（後方互換）、seed から URL 付きで配信して体験を作る。
 
 - [x] 【設計】**(b) 契約拡張を採用**。contracts に `InvestigationStepPrimitives{ text; href?; kind? }`＋後方互換ユニオン `InvestigationItemPrimitives = string | InvestigationStepPrimitives` を追加。`investigationSteps`/`suggestedActions` を当該ユニオン配列へ。`InvestigationLinkKind = log|code|runbook|console`。LLM/旧データは素の文字列のまま流せる
 - [x] 【新規/改修】`InvestigationReportView` を構造化（`InvestigationStepView[]`）へ拡張し、`toInvestigationReportView` が要素を `toStepView`（文字列→`{text}`／構造化はそのまま）で正規化。`InvestigationReport`（domain）も union 型へ拡張＋`investigationItemText` ヘルパ追加（`SubmitFeedbackUseCase` の `.join` を text 抽出へ）
@@ -171,11 +173,12 @@
 
 > **背景（懸念1）**: 現状のフィードバックは [✓承認]/[✗却下] の二値（`alertReview`/`submitFeedback`）。「正解の積み上げで学習」には足りるが、**“どう違うか・どう直すか”を人間が書き込み、それを AI に返して再調査させる**動線が無い。これがあると (1) 学習シグナルが二値→自然言語で太り、(2) AI の修正方針/severity をその場で正せる。
 > **設計の選択肢**:
->   - (a) **編集フォーム**: レポート（summary/severity/suggestedActions）を人間が直接編集→**差分**を保存し次回 context へ渡す。最小・確実だが「対話」ではない。
->   - (b) **コメント/対話履歴**: alert に `feedbackThread`（追記のみ・who/when/text）を持たせ人間⇄AI のやりとりを残す。「何が問題？」に人間が答える→AI が再調査。学習が太るが状態とAPIが増える。
->   - (c) **フロー（チャット）形式**: (b) を会話 UI で。最もリッチだが実装コスト最大。
-> **推奨**: (a) を土台に (b) を段階追加。まず却下時に自由記述 note（差分/理由）を必須化し再調査トリガーへ、次にスレッド化。
-> **backend 依存**: 自由記述 note は既存 `operatorNote` を流用可。再調査は `InvestigateAlertUseCase` を人手トリガーで再実行する経路が要る（step4-2/4-3）。`feedbackThread` 化は contracts/Alert 拡張。
+>
+> - (a) **編集フォーム**: レポート（summary/severity/suggestedActions）を人間が直接編集→**差分**を保存し次回 context へ渡す。最小・確実だが「対話」ではない。
+> - (b) **コメント/対話履歴**: alert に `feedbackThread`（追記のみ・who/when/text）を持たせ人間⇄AI のやりとりを残す。「何が問題？」に人間が答える→AI が再調査。学習が太るが状態とAPIが増える。
+> - (c) **フロー（チャット）形式**: (b) を会話 UI で。最もリッチだが実装コスト最大。
+>   **推奨**: (a) を土台に (b) を段階追加。まず却下時に自由記述 note（差分/理由）を必須化し再調査トリガーへ、次にスレッド化。
+>   **backend 依存**: 自由記述 note は既存 `operatorNote` を流用可。再調査は `InvestigateAlertUseCase` を人手トリガーで再実行する経路が要る（step4-2/4-3）。`feedbackThread` 化は contracts/Alert 拡張。
 
 - [x] 【設計】**(a)+再調査 を採用**（(b)スレッド化は次段）。「却下＝二値の学習シグナル」と「却下して再調査＝やり直し（自然言語を AI へ返す）」を**別経路**にして学習を濁さない。`submitFeedback`（二値）は無改修で維持し上乗せ
 - [x] 【改修】`AlertCardExpanded` の却下フローを 2 段化：[✗却下] クリックで理由/修正方針の textarea を開き（note 必須・空は送信不可）、[却下する]＝`onDecision(reject, note)`（`operatorNote` を feedback に保存・二値学習）／[却下して AI 再調査]＝`onReinvestigate(note)`（note を AI 文脈へ）。`AlertDetailDrawer`／`AlertsPage`／`AlertDetailPage` に `onReinvestigate` を配線（202 後 refresh、確定は SSE）
@@ -189,14 +192,27 @@
 - [x] 【修正】証拠パネルは **AI 調査対象（未知）アラートのみ**に出す（`hasAiInvestigation`＝`classification.type==="unknown"`）。既知（完全一致/類似）は即時分類で調査しないのに「AI が証拠を解析しています…」が出ていたバグを修正（`AlertDetailDrawer`/`AlertDetailPage` の `EvidencePanel` をゲート）
 - [x] 検証：root/frontend `tsc --noEmit` 緑 / 全テスト緑（496。`ReinvestigateAlertUseCase` UT・`AlertCardExpanded` 却下2段/再調査/バナー UT・`reinvestigate` application UT・証拠パネル ゲート UT 追加）
 
-### タスク 9d: レビュー後のライフサイクル状態遷移（修正フェーズ・差し戻し）〔P1〕
+### タスク 9d: レビュー判定の再決定（pending↔approved↔rejected）〔P1〕 ✅（スコープを再レビューに限定）
+
+> **着地（2026-06）**: 当初の「レビュー→修正→完了/差し戻しの1本のライフサイクル・ステッパー」から、**実需に絞り「レビュー判定を後から変えられる」だけに限定**した。利用者の関心は「誤って承認→却下し直したい／却下しフィードバック後に正答できたので承認したい＝この遷移が可能か」。**backend は既に3値（feedback: null=PENDING / true=APPROVED / false=REJECTED）を持ち `Alert.submitFeedback` が上書きで自由に遷移できる**＝新状態・遷移APIは不要。唯一の阻害要因は **frontend が review 済みで承認/却下ボタンを伏せていた**点だったので、そこを開けた。修正フェーズ統合（remediating/done/sent_back ステッパー・差し戻し→再 dispatch）は過剰として**見送り**（必要になれば下記 (b) を別途）。
+> **学習整合（対処済み 2026-06）**: 再レビューで学習が汚れないよう、`SubmitFeedbackUseCase` を**遷移ベース**にした＝「現在の判定が承認のときだけ学習成果が残る」を保つ。非承認→承認でのみ index・承認→却下で撤回・再承認では二重 index しない。撤回では **① 類似学習（`ResolvedIncident`）削除（`SimilarIncidentRepository.removeByAlertId`）＋ ② 自動昇格した `KnownErrorPattern` の撤回（`removeBySourceAlertId`）** の両方を行う。昇格パターンには由来 Alert を辿る `sourceAlertId` back-link を持たせた（手動/シードは null）。
+
+- [x] 【設計】**判定の再決定**に限定（ステッパー/差し戻しは見送り）。状態は既存3値（feedback ベース `alertReviewState`）。「却下＝学習シグナル」と「差し戻し＝やり直し」を混ぜない方針は維持（差し戻し自体は本タスクでは作らない）
+- [x] 【確認・backend 無変更】3値遷移は `Alert.submitFeedback` の上書きで成立（approved→rejected→approved で feedback＋`investigationReport.reviewStatus` が更新）。Alert ドメイン UT を追加して遷移可能性を固定
+- [x] 【改修・frontend UI】`AlertCardExpanded` の承認/却下を**セグメント・トグル**化：承認/却下を常時2つ並べ、現在の判定を選択状態（filled・`aria-pressed`・押下不可）で示す。反対側を押すと再決定（却下は note 必須・再調査も可／承認は1クリック反転）。「判定を変更」「やめる」の中間ステップを廃止＝対の分かりやすさ＋現在地の明示＋低クリックを両立
+- [ ] 【見送り (b)】明示ライフサイクル状態列・差し戻し（`SendBackRemediation`）→再 dispatch・ステッパー表示（必要になれば）
+- [x] 【改修・backend 学習整合】再レビューで学習を汚さない遷移ベース化（`SubmitFeedbackUseCase`：非承認→承認で index・承認→却下で **類似学習＋自動昇格パターンを撤回**・再承認は二重 index しない）。`SimilarIncidentRepository.removeByAlertId`／`KnownErrorPatternRepository.removeBySourceAlertId`／`KnownErrorPattern.sourceAlertId` を追加（InMemory/Elastic/Mongo 実装）
+- [x] 検証：root/frontend `tsc --noEmit` 緑 / 全テスト緑（502。Alert 再レビュー遷移 UT・`AlertCardExpanded` トグル選択状態/再決定 UT・`SubmitFeedbackUseCase` 誤承認撤回（類似＋昇格）/誤却下訂正/トグル非重複 UT 追加）
+
+#### 旧設計（参考・見送り分）
 
 > **背景（懸念2）**: いま状態は2系統が分離 — Alert の `reviewStatus`（PENDING_REVIEW/APPROVED/REJECTED）と Remediation の `status`（dispatched/drafted/skipped/failed）。作業者体験としては **「レビュー→修正フェーズ→完了 or 再レビュー（差し戻し）」の1本のライフサイクル**が欲しい。承認したら修正へ進み、PR がダメなら差し戻して再試行、直れば完了、という導線。
 > **設計の論点**: 状態機械をどこに持つか。
->   - (a) **UI 合成（後方互換・最小）**: 既存2状態から表示フェーズ（`reviewing|remediating|done|sent_back`）を純関数で導出。backend 無変更。差し戻し＝却下＋再起票で表現。
->   - (b) **backend ライフサイクル（明示）**: Alert か Remediation に状態列（`reviewed→remediating→verifying→done`/`sent_back`）と遷移APIを足し、差し戻し（`sent_back`）を一級に。dispatch の maxAttempts 自己修正ループとも接続。
-> **推奨**: まず (a) の派生表示で動線を可視化、必要になれば (b)。**「却下＝学習シグナル」と「差し戻し＝やり直し」は別概念**として区別すること（混ぜると学習が濁る）。
-> **backend 依存**: (b) は step4-2/4-3（状態フィールド＋遷移コマンド・差し戻し→再 dispatch）。
+>
+> - (a) **UI 合成（後方互換・最小）**: 既存2状態から表示フェーズ（`reviewing|remediating|done|sent_back`）を純関数で導出。backend 無変更。差し戻し＝却下＋再起票で表現。
+> - (b) **backend ライフサイクル（明示）**: Alert か Remediation に状態列（`reviewed→remediating→verifying→done`/`sent_back`）と遷移APIを足し、差し戻し（`sent_back`）を一級に。dispatch の maxAttempts 自己修正ループとも接続。
+>   **推奨**: まず (a) の派生表示で動線を可視化、必要になれば (b)。**「却下＝学習シグナル」と「差し戻し＝やり直し」は別概念**として区別すること（混ぜると学習が濁る）。
+>   **backend 依存**: (b) は step4-2/4-3（状態フィールド＋遷移コマンド・差し戻し→再 dispatch）。
 
 - [ ] 【設計】(a) 派生 / (b) 明示状態 を決定。状態名・遷移・差し戻しの意味（却下 vs 差し戻しの区別）
 - [ ] 【新規】`domain/alertLifecycle.ts`（reviewStatus＋remediation status→表示フェーズの純関数）＋ UT
@@ -212,11 +228,12 @@
 
 > **背景（懸念3）**: いまアラートは単体表示。だが「該当アラート／相関の高いアラート」を**日付・情報つきで束ねて見たい・詳細へ飛びたい**。これは検知層の dedup（同一 dedupKey の occurrenceCount＝同型の嵐を1枚に畳む）とは別軸の、**異なるアラート間の相関**（例: DB枯渇=infra と payment失敗=app が同一根本原因）。step4-1 §2.5(c)「相関は AI 調査の副産物・エンジン化しない」に沿い、**調査が見つけた関連**を提示する。
 > **データ源の選択肢**:
->   - (a) **occurrenceCount の内訳（最小）**: 既に畳んだ同一 dedupKey の発生履歴（日時×N）を詳細に展開。backend が発生履歴を持つ必要（現状は count のみ）。
->   - (b) **類似既知への back-link（土台あり）**: タスク9b の `sourceAlertId` 経由で過去の解決済み同型 Alert へ内部リンク（`/alerts/:id`）。
->   - (c) **AI 相関（差別化）**: 調査レポートが「関連アラートID＋関係＋根拠」を出し、フロントが関連カード列＋詳細リンクで提示。step4-2 の調査出力（contracts）拡張が要る。
-> **推奨**: まず (b)（既存土台）＋(a) の履歴展開、次に (c) を段階。
-> **backend 依存**: (a) 発生履歴の保持 / (c) 調査出力に `relatedAlerts`（id・relation・根拠）追加（step4-2/4-3）。
+>
+> - (a) **occurrenceCount の内訳（最小）**: 既に畳んだ同一 dedupKey の発生履歴（日時×N）を詳細に展開。backend が発生履歴を持つ必要（現状は count のみ）。
+> - (b) **類似既知への back-link（土台あり）**: タスク9b の `sourceAlertId` 経由で過去の解決済み同型 Alert へ内部リンク（`/alerts/:id`）。
+> - (c) **AI 相関（差別化）**: 調査レポートが「関連アラートID＋関係＋根拠」を出し、フロントが関連カード列＋詳細リンクで提示。step4-2 の調査出力（contracts）拡張が要る。
+>   **推奨**: まず (b)（既存土台）＋(a) の履歴展開、次に (c) を段階。
+>   **backend 依存**: (a) 発生履歴の保持 / (c) 調査出力に `relatedAlerts`（id・relation・根拠）追加（step4-2/4-3）。
 
 - [ ] 【設計】相関の出所（occurrence履歴 / back-link / AI相関）と最小スコープを決定
 - [ ] 【新規】`domain/relatedAlerts.ts`（関連アラート View・日時/severity/関係ラベル）＋ `components/RelatedAlertsPanel.tsx`（カード列→`/alerts/:id` 詳細導線）

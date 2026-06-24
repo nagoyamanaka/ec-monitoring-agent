@@ -66,6 +66,7 @@ const makeSimilarRepo = (
 ): SimilarIncidentRepository => ({
   findSimilar: async () => incidents,
   index: async () => {},
+  removeByAlertId: async () => {},
   search: async () => [],
 });
 

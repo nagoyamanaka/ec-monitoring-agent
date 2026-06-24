@@ -57,6 +57,7 @@ const makeSpyNotifier = () => {
 const makeSimilarRepo = (): SimilarIncidentRepository => ({
   findSimilar: async () => [],
   index: async () => {},
+  removeByAlertId: async () => {},
   search: async () => [],
 });
 

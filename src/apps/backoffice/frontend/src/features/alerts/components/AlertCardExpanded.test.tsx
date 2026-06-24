@@ -20,7 +20,11 @@ describe("AlertCardExpanded", () => {
         alert={makeAlert({
           report: makeReport({
             investigationSteps: [
-              { text: "ログを見る", href: "https://logs.example/q", kind: "log" },
+              {
+                text: "ログを見る",
+                href: "https://logs.example/q",
+                kind: "log",
+              },
             ],
           }),
         })}
@@ -37,7 +41,9 @@ describe("AlertCardExpanded", () => {
     render(
       <AlertCardExpanded
         alert={makeAlert({
-          report: makeReport({ investigationSteps: [{ text: "素のステップ" }] }),
+          report: makeReport({
+            investigationSteps: [{ text: "素のステップ" }],
+          }),
         })}
       />,
     );
@@ -98,12 +104,16 @@ describe("AlertCardExpanded", () => {
 
   it("remediable=true のとき「コードで修正可能」バッジを出す", () => {
     const { rerender } = render(
-      <AlertCardExpanded alert={makeAlert({ report: makeReport({ remediable: false }) })} />,
+      <AlertCardExpanded
+        alert={makeAlert({ report: makeReport({ remediable: false }) })}
+      />,
     );
     expect(screen.queryByText(/コードで修正可能/)).not.toBeInTheDocument();
 
     rerender(
-      <AlertCardExpanded alert={makeAlert({ report: makeReport({ remediable: true }) })} />,
+      <AlertCardExpanded
+        alert={makeAlert({ report: makeReport({ remediable: true }) })}
+      />,
     );
     expect(screen.getByText(/コードで修正可能/)).toBeInTheDocument();
   });
@@ -120,7 +130,11 @@ describe("AlertCardExpanded", () => {
             patternName: "決済APIタイムアウト",
             confidence: 0.9,
             matchedConditions: [
-              { field: "eventName", expectedValue: "ec.payment.timeout", actualValue: "ec.payment.timeout" },
+              {
+                field: "eventName",
+                expectedValue: "ec.payment.timeout",
+                actualValue: "ec.payment.timeout",
+              },
             ],
           },
         })}
@@ -135,7 +149,10 @@ describe("AlertCardExpanded", () => {
   it("承認は単一クリックで onDecision(approve) を呼ぶ", async () => {
     const onDecision = vi.fn().mockResolvedValue(undefined);
     render(
-      <AlertCardExpanded alert={makeAlert({ id: "a-9" })} onDecision={onDecision} />,
+      <AlertCardExpanded
+        alert={makeAlert({ id: "a-9" })}
+        onDecision={onDecision}
+      />,
     );
 
     await userEvent.click(screen.getByRole("button", { name: /承認/ }));
@@ -145,7 +162,10 @@ describe("AlertCardExpanded", () => {
   it("却下は note 入力を開き、note 付きで onDecision(reject) を呼ぶ", async () => {
     const onDecision = vi.fn().mockResolvedValue(undefined);
     render(
-      <AlertCardExpanded alert={makeAlert({ id: "a-9" })} onDecision={onDecision} />,
+      <AlertCardExpanded
+        alert={makeAlert({ id: "a-9" })}
+        onDecision={onDecision}
+      />,
     );
 
     // 却下クリックで理由入力パネルが開く（即時送信はしない）
@@ -161,7 +181,11 @@ describe("AlertCardExpanded", () => {
       "原因は在庫サービス",
     );
     await userEvent.click(screen.getByRole("button", { name: "却下する" }));
-    expect(onDecision).toHaveBeenCalledWith("a-9", "reject", "原因は在庫サービス");
+    expect(onDecision).toHaveBeenCalledWith(
+      "a-9",
+      "reject",
+      "原因は在庫サービス",
+    );
   });
 
   it("「却下して AI 再調査」は note 付きで onReinvestigate を呼ぶ", async () => {
@@ -184,7 +208,10 @@ describe("AlertCardExpanded", () => {
 
   it("onReinvestigate 未指定なら再調査ボタンを出さない", async () => {
     render(
-      <AlertCardExpanded alert={makeAlert({ id: "a-9" })} onDecision={vi.fn()} />,
+      <AlertCardExpanded
+        alert={makeAlert({ id: "a-9" })}
+        onDecision={vi.fn()}
+      />,
     );
     await userEvent.click(screen.getByRole("button", { name: "✗ 却下" }));
     expect(
@@ -205,16 +232,52 @@ describe("AlertCardExpanded", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("レビュー済み（feedback あり）はボタンを出さずステータスを表示する", () => {
+  it("承認済みは承認ボタンが選択状態（押下不可）で却下は押せる（トグル）", () => {
+    render(
+      <AlertCardExpanded alert={makeAlert({ feedback: { isCorrect: true } })} />,
+    );
+    const approve = screen.getByRole("button", { name: /承認済み/ });
+    expect(approve).toHaveAttribute("aria-pressed", "true");
+    expect(approve).toBeDisabled();
+    expect(screen.getByRole("button", { name: "✗ 却下" })).toBeEnabled();
+  });
+
+  it("承認済み→却下トグルで却下し直せる（note 付き onDecision(reject)）", async () => {
+    const onDecision = vi.fn().mockResolvedValue(undefined);
     render(
       <AlertCardExpanded
-        alert={makeAlert({ feedback: { isCorrect: true } })}
+        alert={makeAlert({ id: "a-9", feedback: { isCorrect: true } })}
+        onDecision={onDecision}
       />,
     );
-    expect(
-      screen.queryByRole("button", { name: /承認/ }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("承認済み")).toBeInTheDocument();
+
+    // 反対側の「却下」を押すと理由入力へ
+    await userEvent.click(screen.getByRole("button", { name: "✗ 却下" }));
+    await userEvent.type(screen.getByLabelText(/何が違うか/), "誤承認だった");
+    await userEvent.click(screen.getByRole("button", { name: "却下する" }));
+
+    expect(onDecision).toHaveBeenCalledWith("a-9", "reject", "誤承認だった");
+  });
+
+  it("却下済み→承認トグルは1クリックで onDecision(approve)（却下理由も表示）", async () => {
+    const onDecision = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({
+          id: "a-9",
+          feedback: { isCorrect: false, operatorNote: "別原因だった" },
+        })}
+        onDecision={onDecision}
+      />,
+    );
+
+    expect(screen.getByText(/別原因だった/)).toBeInTheDocument();
+    const reject = screen.getByRole("button", { name: /却下済み/ });
+    expect(reject).toHaveAttribute("aria-pressed", "true");
+    expect(reject).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "✓ 承認" }));
+    expect(onDecision).toHaveBeenCalledWith("a-9", "approve", undefined);
   });
 
   it("レポート未到着（分析中）はプレースホルダを出す", () => {
