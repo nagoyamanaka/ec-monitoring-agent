@@ -122,12 +122,14 @@
 
 ## P1: 差別化
 
-### タスク 8: 証拠パネル 〔P1〕
+### タスク 8: 証拠パネル 〔P1〕 ✅
 
-- 【新規】`features/alerts/domain/EvidenceView.ts` / `infrastructure/evidenceApi.ts`
-  - `GET /alerts/:id/evidence` → `InfraEvidence`（appLogs / terraformDiff / recentCommits）を取得
-  - `GET /alerts/:id/investigation/status` → `collecting | analyzing | done` をポーリング。証拠が「**到着ごとに積み上がる**」演出のトリガーに使う（`done` になったタイミングで evidence を fetch → stagger フェードイン）
-- 【新規】`components/EvidencePanel.tsx`（Cloud Logging/Terraform/GitHub の証拠が**到着ごとに積み上がる**演出＝自律性の可視化）
+- [x] 【新規】`features/alerts/domain/EvidenceView.ts`（`InfraEvidencePrimitives`→`EvidenceView` 純関数・SHA 短縮・`evidenceSections` でソース順に畳み・`InvestigationStatus` は backend を type-only 再利用）＋ UT
+- [x] 【新規】`infrastructure/evidenceApi.ts`（`createEvidenceApi(http)`：`GET /alerts/:id/evidence`→View 写像 / `GET /alerts/:id/investigation/status`→`collecting|analyzing|done`）
+- [x] 【新規】`presentation/hooks/useEvidence.ts`（status を `done` までポーリング→done で evidence を一度 fetch・AbortController/cancel で中断）＋ UT
+- [x] 【新規】`components/EvidencePanel.tsx`（Cloud Logging/Terraform/GitHub の証拠を**到着ごとに積み上がる** stagger フェードイン＝自律性の可視化。`index.css` に `evidence-rise` keyframe・`prefers-reduced-motion` 尊重・収集中インジケータ・空/エラー表示）＋ UT
+- [x] 【配線】`AlertDetailDrawer`（optional `evidenceApi` prop で差し込み）/ `AlertsPage`・`AlertDetailPage`（composition root で `createEvidenceApi(http)` 生成・http を共有）
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 84 件緑（`EvidenceView`/`useEvidence`/`EvidencePanel` UT 追加）
 - シナリオ4の見せ場
 
 ### タスク 9: リメディエーション（remediate 起票ボタン＋API配線＋結果反映）〔P1〕

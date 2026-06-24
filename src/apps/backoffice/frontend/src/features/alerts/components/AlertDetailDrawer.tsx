@@ -7,8 +7,10 @@ import { alertConfidence } from "../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../domain/eventCatalog";
 import { categoryInfo } from "../domain/alertCategory";
 import type { FeedbackDecision } from "../application/submitFeedback";
+import type { EvidenceApi } from "../infrastructure/evidenceApi";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertStatusBadge } from "./AlertStatusBadge";
+import { EvidencePanel } from "./EvidencePanel";
 import { ExactMatchBadge } from "./ExactMatchBadge";
 
 export interface AlertDetailDrawerProps {
@@ -19,6 +21,8 @@ export interface AlertDetailDrawerProps {
     alertId: string,
     decision: FeedbackDecision,
   ) => void | Promise<void>;
+  /** 渡された場合のみ証拠パネルを表示する（composition root で注入）。 */
+  evidenceApi?: EvidenceApi;
 }
 
 function formatAbsoluteTime(iso: string): string {
@@ -36,6 +40,7 @@ export function AlertDetailDrawer({
   alert,
   onClose,
   onDecision,
+  evidenceApi,
 }: AlertDetailDrawerProps) {
   useEffect(() => {
     if (!alert) return;
@@ -148,6 +153,9 @@ export function AlertDetailDrawer({
             </div>
           ) : null}
           <AlertCardExpanded alert={alert} onDecision={onDecision} />
+          {evidenceApi && (
+            <EvidencePanel api={evidenceApi} alertId={alert.id} />
+          )}
         </div>
 
         <footer className="border-t border-slate-700/60 px-5 py-3">

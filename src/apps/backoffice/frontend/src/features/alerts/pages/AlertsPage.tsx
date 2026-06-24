@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { FetchHttpClient } from "@shared/api/FetchHttpClient";
 import { AlertsLayout } from "@shared/layouts/AlertsLayout";
 import { createAlertsApi } from "../infrastructure/alertsApi";
+import { createEvidenceApi } from "../infrastructure/evidenceApi";
 import { SSEAlertStream } from "../infrastructure/SSEAlertStream";
 import { useAlerts } from "../presentation/hooks/useAlerts";
 import {
@@ -20,7 +21,9 @@ import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
  * 選択中 alert は alerts から都度引く＝SSE 更新がドロワーにもライブ反映される。
  */
 export function AlertsPage() {
-  const api = useMemo(() => createAlertsApi(new FetchHttpClient()), []);
+  const http = useMemo(() => new FetchHttpClient(), []);
+  const api = useMemo(() => createAlertsApi(http), [http]);
+  const evidenceApi = useMemo(() => createEvidenceApi(http), [http]);
   const stream = useMemo(() => new SSEAlertStream(), []);
   const {
     alerts,
@@ -74,6 +77,7 @@ export function AlertsPage() {
         alert={selected}
         onClose={() => setSelectedId(null)}
         onDecision={handleDecision}
+        evidenceApi={evidenceApi}
       />
     </>
   );

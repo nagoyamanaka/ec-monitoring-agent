@@ -20,3 +20,26 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 }
+
+/* 証拠が「到着ごとに積み上がる」演出（EvidencePanel・タスク8）。
+   各セクションを下から滑り込ませてフェードイン。reduced-motion では無効化する。 */
+@keyframes evidence-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.evidence-rise {
+  animation: evidence-rise 0.4s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evidence-rise {
+    animation: none;
+  }
+}
