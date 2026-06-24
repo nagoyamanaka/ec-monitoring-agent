@@ -132,20 +132,22 @@
 - [x] 検証：`tsc --noEmit` 緑 / frontend テスト 84 件緑（`EvidenceView`/`useEvidence`/`EvidencePanel` UT 追加）
 - シナリオ4の見せ場
 
-### タスク 9: リメディエーション（remediate 起票ボタン＋API配線＋結果反映）〔P1〕
+### タスク 9: リメディエーション（remediate 起票ボタン＋API配線＋結果反映）〔P1〕 ✅
 
 > **現状/前提**: backend は揃っている — `POST /alerts/:id/remediation/draft-pr`（起票トリガー＝**人間の承認アクション**・202）/ `GET /alerts/:id/remediation`（status・PR URL・vulnerabilityCount・reason）/ dispatch 経路の CI callback `POST /ingest/remediation-result`。調査レポートに `remediable`（AI が「コードで直せる」と判定）と `suggestedActions`（修正方針＝ROI判断材料）も載る（step4-2）。**フロントには remediation UI が未実装**＝本タスクで新設。
 > **設計原則（step4-1 §4 / step4-2）**: 調査(read)とリメディ(write)は分離。毎回 remediate するとコスト高・方針不一致なら無駄（ROI）なので**起票は人間が判断**。`remediable` は **ボタン活性/ROI提示の advisory** で、write 実行の最終ゲートは人間承認＋executor の deterministic 判定。
 > **状態の非同期性（重要）**: `advisory` モードは即 `drafted`（PR URL あり）。`dispatch` モードは `dispatched`（PR URL なし）で受付のみ→CI が実修正+UT後に callback で `drafted`/`failed` 確定。**この確定は現状 SSE push が無く、フロントは GET /remediation 再取得でしか気づけない**。
 
-- [ ] 【新規】`features/alerts/domain/RemediationView.ts`（`RemediationResponse` 契約→View 純関数。status `none|dispatched|drafted|skipped|failed`→表示状態・PR URL・件数・reason）＋ UT
-- [ ] 【新規】`infrastructure/remediationApi.ts`（`getRemediation(id)`=GET / `draftRemediation(id)`=POST draft-pr→202）/ `application/triggerRemediation.ts`
-- [ ] 【新規】`components/RemediationPanel.tsx`：`report.remediable` のときのみ「修正を起票」ボタンを活性（`suggestedActions`＝修正方針を ROI 材料として併記）。起票後は status バッジ＋PR リンク（drafted）/受付中（dispatched）/理由（failed・skipped）
-- [ ] 【配線】起票は **202＋mutation 後再取得**（共通原則）。`dispatched` の間は `GET /remediation` を**ポーリング**（タスク8の investigation/status と同方式）して `drafted`/`failed` 確定を反映
-- [ ] 【SSE通知・要 backend判断】dispatch callback の確定をリアルタイム化するなら `RecordRemediationResultUseCase` に `SSEAlertNotifier`（or 専用 remediation チャネル）を追加。**ポーリングで吸収するか push を足すかは要判断**（step4-3 へ波及）
+- [x] 【新規】`features/alerts/domain/RemediationView.ts`（wire→View 純関数。status `none|dispatched|drafted|skipped|failed`・`isRemediationUnstarted`/`isRemediationPending`/`hasPullRequest` 述語・`RemediationViewStatus` は backend を type-only 再利用）＋ UT
+- [x] 【新規】`infrastructure/remediationApi.ts`（`createRemediationApi(http)`：`getRemediation(id)`=GET / `draftRemediation(id)`=POST draft-pr→202）/ `application/triggerRemediation.ts`（write 起票の橋渡し）
+- [x] 【新規】`presentation/hooks/useRemediation.ts`（初回取得＋`dispatched` 間ポーリング＋`draft()` で 202 後再取得・submitting state）＋ UT
+- [x] 【新規】`components/RemediationPanel.tsx`：`report.remediable` のときのみ「修正を起票」ボタン活性（`suggestedActions`＝修正方針を ROI 材料として併記）。起票後は status 表示＝drafted（PR リンク＋件数）/dispatched（受付中・cyan パルス）/skipped・failed（理由）。非 remediable かつ未起票はパネル非表示
+- [x] 【配線】起票は **202＋mutation 後再取得**（`useRemediation.draft`）。`dispatched` の間は `GET /remediation` を**ポーリング**（タスク8と同方式）して確定を反映。`AlertDetailDrawer`（optional `remediationApi` prop）/ `AlertsPage`・`AlertDetailPage`（composition root で `createRemediationApi(http)` 生成）
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 97 件緑（`RemediationView`/`useRemediation`/`RemediationPanel` UT 追加）
+- [ ] 【SSE通知・要 backend判断】dispatch callback の確定をリアルタイム化するなら `RecordRemediationResultUseCase` に `SSEAlertNotifier`（or 専用 remediation チャネル）を追加。**今回はポーリングで吸収（push は未実装）**＝必要になれば追加（step4-3 へ波及）
 - **backend で何をやるか（step4-3）**:
   - [x] 既存で足りる: `POST /alerts/:id/remediation/draft-pr`・`GET /alerts/:id/remediation`・`POST /ingest/remediation-result`（CI callback）は配線済み。`remediable`/`suggestedActions` も調査レポートに載る（実装済み）
-  - [ ] **追加候補は SSE push のみ**: `RecordRemediationResultUseCase` に notifier 注入＋`BackofficeApp` 配線。ポーリングで足りるなら不要
+  - [ ] **追加候補は SSE push のみ**: `RecordRemediationResultUseCase` に notifier 注入＋`BackofficeApp` 配線。ポーリングで吸収済みのため未実施
 - シナリオ5の見せ場
 
 ### タスク 9b: 調査ステップ／推奨アクションのリンク化 〔P1〕

@@ -8,9 +8,11 @@ import { eventInfo, eventTitle } from "../domain/eventCatalog";
 import { categoryInfo } from "../domain/alertCategory";
 import type { FeedbackDecision } from "../application/submitFeedback";
 import type { EvidenceApi } from "../infrastructure/evidenceApi";
+import type { RemediationApi } from "../infrastructure/remediationApi";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { EvidencePanel } from "./EvidencePanel";
+import { RemediationPanel } from "./RemediationPanel";
 import { ExactMatchBadge } from "./ExactMatchBadge";
 
 export interface AlertDetailDrawerProps {
@@ -23,6 +25,8 @@ export interface AlertDetailDrawerProps {
   ) => void | Promise<void>;
   /** 渡された場合のみ証拠パネルを表示する（composition root で注入）。 */
   evidenceApi?: EvidenceApi;
+  /** 渡された場合のみリメディエーションパネルを表示する（composition root で注入）。 */
+  remediationApi?: RemediationApi;
 }
 
 function formatAbsoluteTime(iso: string): string {
@@ -41,6 +45,7 @@ export function AlertDetailDrawer({
   onClose,
   onDecision,
   evidenceApi,
+  remediationApi,
 }: AlertDetailDrawerProps) {
   useEffect(() => {
     if (!alert) return;
@@ -153,6 +158,9 @@ export function AlertDetailDrawer({
             </div>
           ) : null}
           <AlertCardExpanded alert={alert} onDecision={onDecision} />
+          {remediationApi && (
+            <RemediationPanel alert={alert} api={remediationApi} />
+          )}
           {evidenceApi && (
             <EvidencePanel api={evidenceApi} alertId={alert.id} />
           )}

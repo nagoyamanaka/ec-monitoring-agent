@@ -5,6 +5,7 @@ import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { createAlertsApi } from "../infrastructure/alertsApi";
 import { createEvidenceApi } from "../infrastructure/evidenceApi";
+import { createRemediationApi } from "../infrastructure/remediationApi";
 import { useAlert } from "../presentation/hooks/useAlert";
 import {
   submitFeedback,
@@ -12,6 +13,7 @@ import {
 } from "../application/submitFeedback";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { EvidencePanel } from "../components/EvidencePanel";
+import { RemediationPanel } from "../components/RemediationPanel";
 
 /**
  * アラート詳細ページ（DefaultLayout＝デモUI非侵食）。
@@ -22,6 +24,7 @@ export function AlertDetailPage() {
   const http = useMemo(() => new FetchHttpClient(), []);
   const api = useMemo(() => createAlertsApi(http), [http]);
   const evidenceApi = useMemo(() => createEvidenceApi(http), [http]);
+  const remediationApi = useMemo(() => createRemediationApi(http), [http]);
   const { alert, status, error, refresh } = useAlert(api, id);
 
   const handleDecision = useCallback(
@@ -72,6 +75,7 @@ export function AlertDetailPage() {
             </header>
 
             <AlertCardExpanded alert={alert} onDecision={handleDecision} />
+            <RemediationPanel alert={alert} api={remediationApi} />
             <EvidencePanel api={evidenceApi} alertId={alert.id} />
           </article>
         )}

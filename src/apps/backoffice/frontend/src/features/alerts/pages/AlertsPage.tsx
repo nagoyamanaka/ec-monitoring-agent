@@ -3,6 +3,7 @@ import { FetchHttpClient } from "@shared/api/FetchHttpClient";
 import { AlertsLayout } from "@shared/layouts/AlertsLayout";
 import { createAlertsApi } from "../infrastructure/alertsApi";
 import { createEvidenceApi } from "../infrastructure/evidenceApi";
+import { createRemediationApi } from "../infrastructure/remediationApi";
 import { SSEAlertStream } from "../infrastructure/SSEAlertStream";
 import { useAlerts } from "../presentation/hooks/useAlerts";
 import {
@@ -24,6 +25,7 @@ export function AlertsPage() {
   const http = useMemo(() => new FetchHttpClient(), []);
   const api = useMemo(() => createAlertsApi(http), [http]);
   const evidenceApi = useMemo(() => createEvidenceApi(http), [http]);
+  const remediationApi = useMemo(() => createRemediationApi(http), [http]);
   const stream = useMemo(() => new SSEAlertStream(), []);
   const {
     alerts,
@@ -78,6 +80,7 @@ export function AlertsPage() {
         onClose={() => setSelectedId(null)}
         onDecision={handleDecision}
         evidenceApi={evidenceApi}
+        remediationApi={remediationApi}
       />
     </>
   );
