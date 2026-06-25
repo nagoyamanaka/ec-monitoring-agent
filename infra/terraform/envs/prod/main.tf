@@ -52,6 +52,8 @@ module "cloud_run" {
   image                = local.image_backoffice
   vpc_connector_id     = module.networking.connector_id
   backbone_internal_ip = module.gce_backbone.internal_ip
+  min_instances        = 1
+  max_instances        = 1
 
   depends_on = [module.bootstrap]
 }
@@ -72,4 +74,11 @@ module "logging" {
   project_id = var.project_id
 
   depends_on = [module.bootstrap]
+}
+
+# GCE backbone SA に deploy bucket へのアクセス権限を付与
+resource "google_storage_bucket_iam_member" "backbone_deploy_reader" {
+  bucket = module.bootstrap.deploy_bucket
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${module.gce_backbone.vm_sa_email}"
 }

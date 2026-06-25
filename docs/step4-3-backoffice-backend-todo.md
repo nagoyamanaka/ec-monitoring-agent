@@ -113,11 +113,12 @@ subscriber は EC 自前 DomainEvent（CollectMonitoringEventOnECEventPublished�
 - POST `/alerts/:id/remediation/draft-pr`（承認＝手動POST→`RemediationPort.draftPullRequest`・draft起票）/ GET `/alerts/:id/remediation`（PR URL・状態）
 - application: `DraftRemediation`（UseCase/Command/Handler）＝ alert.payload.vulnerabilities[] を入力に AI で全CVEの修正方針を起草→草案PR起票→結果を `RemediationRepository` に保存 / `GetRemediation`（UseCase/Query/Handler/Response）＝状態読み取り（未起票は status="none"）
 - domain（`AIInvestigation/domain/remediation`）: `RemediationPlanner` ポート（追加）/ `RemediationRecord`+`RemediationRepository`（追加）。既存 `RemediationPort`/`RemediationPlan`/`GitHubPullRequestGateway` を再利用
-- infra: `LLMRemediationPlanner`（既存 `LLMTextClient` 再利用・LLM失敗/stub時は fixedVersion ベースの決定論フォールバック→`SECURITY_REMEDIATION.md` 草案）/ `MongoRemediationRepository`（collection=remediations・_id=alertId）
+- infra: `LLMRemediationPlanner`（既存 `LLMTextClient` 再利用・LLM失敗/stub時は fixedVersion ベースの決定論フォールバック→`SECURITY_REMEDIATION.md` 草案）/ `MongoRemediationRepository`（collection=remediations・\_id=alertId）
 - DI: `BackofficeApp` で planner（llmClient 共用）/ gateway（`config.github.remediationRepo` 明示）/ repo を new、Draft を commandBus・Get を queryBus に登録
 - config/env: `GITHUB_REMEDIATION_REPO`（未設定は `GITHUB_TARGET_REPO` フォールバック）を追加
 
 **実行戦略は2モード（`RemediationExecutor` で差し替え・`config.remediation.mode`）**:
+
 - **advisory**（既定・CI不要）: in-process で `LLMRemediationPlanner` が方針テキストのみ生成→ `SECURITY_REMEDIATION.md` の草案PR（実コードは直さない・人間が直す前提）。LLM はファイルパス/パッチ全文を生成しない（ハルシネーション防止の足場）。GitHub/CI 不在のローカル・デモ用フォールバック
 - **dispatch**（agentic・本命）: `GitHubActionsRemediationDispatcher` が `repository_dispatch(ai-remediation, {alertId, vulnerabilities})` を投げる→ ターゲットリポの `.github/workflows/ai-remediation.yml` が **ブランチ作成→AIエージェント(Gemini CLI/差し替え可)が実コード修正→trivy 再スキャン+UT/E2E が緑→draft PR**。**修正精度はランナーのテストゲートで担保**（APIサーバ内では実コードを書かない）
 - **結果 callback**: dispatch は非同期＝起票時は `dispatched`（PR URL 無し）。CI 完了時に `POST /ingest/remediation-result`（x-ingest-token）で `drafted`(PR URL)/`failed`(理由) に確定（`RecordRemediationResultUseCase`）。GET /remediation がそれを返す
@@ -192,6 +193,7 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 - 段階導入: ①app-code ターゲットの1イテレーション固定（既存 ai-remediation そのまま）→ ②検証ゲート＋自己修正ループ
   （maxAttempts）→ ③RemediationTargetRouter で iac/runbook 分岐を追加。env フラグ既定off・既存P0/P1は無傷。
 -->
+
 - 【新規(将来)】`RemediationTargetRouter`（root cause → app-code / iac / runbook 振り分け）＋ ターゲット別 `VerifiableRemediation`
 - 【新規(将来)】`application/RouteAndVerifyRemediation`（ルーティング→automatableなら検証ループ・`maxAttempts` 共有→結果取り込み）
 - 【再利用】`RemediationExecutor`/`ai-remediation.yml`/callback/`maxAttempts`。iac 用は別ジョブ＋`terraform plan` ゲートを追加
@@ -238,6 +240,8 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 - 証拠（`/alerts/:id/evidence`）は §10 のとおり pull on-demand 維持。重い外部収集の TTL キャッシュは任意（時間が余れば）
 
 ### タスク 19: worker / edge ロール分離 〔stretchⅠ〕
+
+メモ: ハッカソンスコープだと、wokerとapiを分離するのは過剰？roi低い？
 
 - 【修正】`BackofficeApp.ts`：`ROLE` で起動を分岐
   - `worker`：RabbitMQ Subscriber（EC ingest / AnalyzeAlert / InvestigateAlert）＋ projector（タスク18）＋ `RedisSSEAlertNotifier`(publish 側)。クエリ HTTP は health のみ

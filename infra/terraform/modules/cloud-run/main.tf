@@ -10,7 +10,6 @@ terraform {
 locals {
   # backbone へは VPC connector 越しに内部 IP で到達（§11.1）
   computed_env = {
-    PORT              = tostring(var.container_port)
     MONGO_URL         = "mongodb://${var.backbone_internal_ip}:27017/monitoring"
     ELASTICSEARCH_URL = "http://${var.backbone_internal_ip}:9200"
     REDIS_URL         = "redis://${var.backbone_internal_ip}:6379"
@@ -63,6 +62,16 @@ resource "google_cloud_run_v2_service" "edge" {
 
       ports {
         container_port = var.container_port
+      }
+
+      startup_probe {
+        timeout_seconds   = 120
+        period_seconds    = 10
+        failure_threshold = 12
+
+        tcp_socket {
+          port = var.container_port
+        }
       }
 
       dynamic "env" {

@@ -12,7 +12,7 @@
 
 ## Phase 0: デプロイ前コード修正（実機に上げる前に必須）
 
-### タスク T1: ingest コントローラの URL クエリトークン対応 〔P0〕
+### タスク T1: ingest コントローラの URL クエリトークン対応 〔P0〕✅
 
 > 移動元: step4-3 stretchⅠ タスク20（本 doc に集約）。
 > 前提: なし（純粋なコード修正・ローカルで完結）。**これが無いと Phase 1 の疎通が原理的に通らない**（§3.1）。
@@ -22,7 +22,7 @@
 - 【テスト】`ingest.int.test.ts` に `?token=` 経路の受理／不一致 401 ケースを追加（既存ヘッダ経路は維持）
 - 設計判断: トークン値は `INGEST_TOKEN`（既存 config）単一ソース。terraform の `secret_env` で Cloud Run に注入される値と一致させる（T6 で投入）
 
-### タスク T2: docker-compose.prod.yml を image 参照化 〔P0〕
+### タスク T2: docker-compose.prod.yml を image 参照化 〔P0〕✅
 
 > 前提: T1 と独立。Artifact Registry のパスが必要（`terraform output artifact_repo`）だが、変数化しておけば apply 前に書ける。
 
@@ -31,7 +31,7 @@
   - `IMAGE_EC` / `IMAGE_BACKOFFICE` / `GCP_PROJECT_ID` は startup-script が `.env` で渡す（`infra/terraform/README.md` の「apply 後にやること」3 と整合）
 - 【確認】`docker-compose.yml`（base）の `build:` はローカル用に残す。prod override 側だけ image 参照にする（base + prod の merge で image が build を上書きできるか要確認。できなければ prod 側で完結させる）
 
-### タスク T3: cloud-run module の env / secret 配線補完 〔P0〕
+### タスク T3: cloud-run module の env / secret 配線補完 〔P0〕✅
 
 > 前提: なし（terraform 編集のみ）。apply（T5）の前に埋める。
 
@@ -42,7 +42,7 @@
 
 ---
 
-## Phase 1: 初回デプロイ＆垂直疎通（#1）
+## Phase 1: 初回デプロイ＆垂直疎通（#1）✅
 
 ### タスク T4: 手動前提（tfstate / tfvars / Secret 箱）〔P0〕
 
@@ -54,15 +54,16 @@
 - `envs/prod/backend.hcl.example` → `backend.hcl`（`bucket` 記入）
 - `envs/prod/terraform.tfvars.example` → `terraform.tfvars`（`project_id` / `github_repository` / `deploy_bucket_name` 記入）
 
-### タスク T5: terraform apply（初回構築）〔P0〕
+### タスク T5: terraform apply（初回構築）〔P0〕✅
 
 > 前提: T2・T3・T4 完了。初回はローカル `terraform apply` で通すのが安全（CI 経由 apply は WIF 設定=T6 の後）。
 
 - `cd infra/terraform/envs/prod && terraform init -backend-config=backend.hcl && terraform plan` で差分確認 → `terraform apply`
+- ローカル検証メモ: sudo snap install terraform --classic でterraformをインストール
 - ゴール（README 記載のリソースが立つ）: bootstrap（API有効化/AR/deploy bucket/Secret 箱）/ networking（VPC/connector/firewall）/ iam（WIF/deployer SA）/ gce-backbone（VM）/ cloud-run（edge）/ monitoring（webhook channel + 5xx policy）/ logging（log-based metric）
 - 注意: **この時点では Cloud Run は起動失敗してよい**（イメージ未 push のため）。T6 で resolve する
 
-### タスク T6: apply 後の値注入・資材アップロード 〔P0〕
+### タスク T6: apply 後の値注入・資材アップロード 〔P0〕　✅
 
 > 前提: T5 完了。参照: README「apply 後にやること」。
 

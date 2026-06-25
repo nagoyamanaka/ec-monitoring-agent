@@ -21,7 +21,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      PORT: "3000"
       PAYMENT_MODE: ${PAYMENT_MODE:-success}
       DEMO_CONTROLS_ENABLED: ${DEMO_CONTROLS_ENABLED:-true}
       FEEDBACK_AUTO_PROMOTE_THRESHOLD: ${FEEDBACK_AUTO_PROMOTE_THRESHOLD:-3}
@@ -36,7 +35,6 @@ services:
     ports:
       - "3001:3001"
     environment:
-      PORT: "3001"
       DEMO_ENABLED: ${DEMO_ENABLED:-false}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
