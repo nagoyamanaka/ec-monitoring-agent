@@ -1,0 +1,2 @@
+bucket = "REPLACE_WITH_TFSTATE_BUCKET"
+prefix = "ec-monitoring-agent/prod"

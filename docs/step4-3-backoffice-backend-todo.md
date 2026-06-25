@@ -208,6 +208,49 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 
 ---
 
+## stretchⅠ: Cloud Run + Valkey ハイブリッド運用（SSE Pub/Sub ＋ read-model）
+
+> **着手条件**: タスク12（Cloud Run デプロイ）と並走。設計は `step4-1` §11.1/§11.3、IaC は `infra/terraform/`。
+> **原則**: Valkey は SoT でなく「**再構築可能な read-model projection ＋ Pub/Sub transport**」。Mongo SoT ＋ cache-aside fallback で **Valkey 障害を「障害」でなく「性能劣化」に縮める**。既存の `EventEmitterSSEAlertNotifier`（in-process）/ Mongo 直読は無傷のまま、interface 差し替え／前段追加で載せる（§10「スケールアウト時」と一致）。
+> （タスク番号は採番順。配置は優先度順で stretchⅠ < Ⅱ < Ⅲ）
+
+### タスク 16: Valkey クライアント ＋ config 〔stretchⅠ〕
+
+- 【新規】Valkey 接続（ioredis 等）。`REDIS_URL` 未設定時は **null object**（publish/subscribe no-op・read-model 無効）でフォールバックし、ローカル/テストは現状の in-process 動作のまま
+- 【修正】`config.ts`：`REDIS_URL`（既定空＝無効）/ `ROLE`（`all`|`worker`|`edge`・既定 `all`）追加（`REDIS_URL` は compose/Cloud Run に注入済み・アプリ未読込なら no-op）
+- 依存追加は pnpm `--filter` で backoffice backend のみに閉じる
+
+### タスク 17: RedisSSEAlertNotifier（SSE Pub/Sub fan-out・案1）〔stretchⅠ〕
+
+- 【新規】`AlertNotification/infrastructure/RedisSSEAlertNotifier.ts` implements `SSEAlertNotifier`（既存 IF をそのまま差し替え）
+  - worker 側 `notify()` / `notifyRemediation()` は Valkey channel に publish（名前付きイベント `alert` / `remediation` を payload に保持）
+  - edge 側は購読して **接続中の各 SSE クライアントへ fan-out**（既存 `AlertsStreamController` の EventEmitter を Valkey subscriber に接続）
+- **`SSEAlertNotifier` IF・`AnalyzeAlertUseCase`/`InvestigateAlertUseCase`/`AlertsStreamController` はノータッチ**（composition root の差し替えのみ）。多インスタンス SSE が壊れない＝案1 の必然性が成立
+- Valkey down 時：publish は握りつぶし、edge は frontend 再接続時の再フェッチでギャップを埋める（best-effort liveness・§11.3）
+
+### タスク 18: Alert read-model projection（CQRS read model in Redis・案②）〔stretchⅠ〕
+
+- 【新規】Alert ライフサイクル DomainEvent（生成 / 分析中 / 調査完了 / dedup 更新 / feedback）を購読する **projector** が、`GET /alerts` 一覧スナップショットと `/alerts/:id` 詳細を Valkey に **upsert（alert id キー・冪等）**
+  - **書き込み順序**: SoT（Mongo）保存後に projection を派生。cache を真実の前段にしない（§11.3）
+  - at-least-once ＋ 冪等 upsert で projector クラッシュ後も再投影で自己回復（結果整合）。projection は再構築可能（§7.9 ForecastMemory と同原則）
+- 【修正】読み取り経路を **cache-aside**：`GetAlertUseCase` / 一覧 Controller が **Valkey hit→返す／miss・down→Mongo にフォールバックして再投入**。`AlertRepository`（Mongo）が常に真実
+  - 設計判断: read-model は `AlertReadModelStore` IF の裏に隔離。`REDIS_URL` 無効時は素通しで Mongo 直読（現状動作を壊さない）
+- 証拠（`/alerts/:id/evidence`）は §10 のとおり pull on-demand 維持。重い外部収集の TTL キャッシュは任意（時間が余れば）
+
+### タスク 19: worker / edge ロール分離 〔stretchⅠ〕
+
+- 【修正】`BackofficeApp.ts`：`ROLE` で起動を分岐
+  - `worker`：RabbitMQ Subscriber（EC ingest / AnalyzeAlert / InvestigateAlert）＋ projector（タスク18）＋ `RedisSSEAlertNotifier`(publish 側)。クエリ HTTP は health のみ
+  - `edge`：クエリ / SSE ルートのみ。RabbitMQ Subscriber を起動しない。`RedisSSEAlertNotifier`(subscribe 側) ＋ read-model 読み取り
+  - `all`（既定・ローカル/現状）：両方を1プロセス（in-process notifier・Mongo 直読でも可）
+- **Cloud Run edge=`ROLE=edge` / GCE worker=`ROLE=worker`**（§11.1）。既存の単一プロセス（`all`）起動を壊さない段階移行
+
+### タスク 20: 検知 webhook トークン互換（B 残作業）〔stretchⅠ〕→ **step4-5 T1 へ移動**
+
+> デプロイ垂直疎通の前提条件のため `docs/step4-5-backoffice-infra.todo.md` タスク T1 に移動・集約した。内容はそちらを正とする。
+
+---
+
 ## stretchⅡ: 予兆ブリーフィング 配線
 
 > **着手条件**: P0 ＋ P1 ＋ 既存stretch 着地後。設計は `step4-3`「予兆ブリーフィング配線」節。既存配線は無傷で、ルート1系統＋DIを追加するだけ。

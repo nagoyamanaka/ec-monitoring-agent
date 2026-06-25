@@ -291,6 +291,21 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 
 ---
 
+## stretchⅠ: 検知ソース流入経路（push）と Cloud Monitoring 連携の仕上げ
+
+> **状況（2026-06 確認）**: 流入の**具象クラスは実装済み**——`CloudMonitoringAlertIngestController` + `CloudMonitoringAlertTranslator`（`POST /ingest/cloud-monitoring`）/ `SecurityScanIngestPostController` / EC 自前イベントは `CollectMonitoringEventOnECEventPublished`（RabbitMQ subscriber）。シナリオ4の証拠 Gateway（`CloudLoggingGateway` / `TerraformGateway` / `GitHubGateway` + `InfraInvestigationPort`）も実装済み。**新規 ingest クラスは不要**。本節は GCP 実機連携の仕上げ（`step4-1` §11.2）。
+> 経路の原則は `CollectMonitoringEventSubscriber` のクラスコメント（EC=バス購読 / 外部 push=HTTP ingest の peer アダプタ）どおり。
+
+### タスク 31: Cloud Monitoring webhook → INFRASTRUCTURE/CAPACITY 正規化の検証・拡張 〔stretchⅠ〕→ **step4-5 T7 へ移動**
+
+> translator 本体・UT は実装済み。残る「実機 payload での検証・fixture 追加」はデプロイ後作業のため `docs/step4-5-backoffice-infra.todo.md` タスク T7 に移動・集約した。内容はそちらを正とする。
+
+### タスク 32: CloudMonitoringGateway（pull・メトリクス相関）〔stretchⅠ / 次フェーズ〕→ **step4-5 T13 へ移動**
+
+> デプロイ着地後の任意タスクのため `docs/step4-5-backoffice-infra.todo.md` タスク T13 に移動・集約した。内容はそちらを正とする。
+
+---
+
 ## stretchⅡ: 予兆ブリーフィング（reactive → proactive）
 
 > **着手条件**: P0 ＋ P1 ＋ 既存stretch（タスク18）が**全部着地後**の capstone。設計は `step4-1` 7章＋`step4-2`「予兆ブリーフィング」節。突合キーは **(B) 構造化タグ**採用。**既存P0パイプラインは無傷**で横に生やす。
