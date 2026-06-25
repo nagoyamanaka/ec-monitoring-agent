@@ -5,6 +5,7 @@ import {
   type AlertView,
   type AlertSeverity,
   isAnalyzing,
+  hasAiInvestigation,
 } from "../domain/AlertView";
 import { alertConfidence } from "../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../domain/eventCatalog";
@@ -12,6 +13,7 @@ import { categoryInfo } from "../domain/alertCategory";
 import { alertReason } from "../domain/alertReason";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { ExactMatchBadge } from "./ExactMatchBadge";
+import { UnknownFaultBadge } from "./UnknownFaultBadge";
 
 export interface AlertCardProps {
   alert: AlertView;
@@ -105,8 +107,10 @@ export function AlertCard({
           )}
         </div>
 
-        {/* ② 従属メタ: 重要度（分析中は判定中）・category（人間語）・時刻 */}
+        {/* ② 従属メタ: 種別（未知障害）・重要度（分析中は判定中）・category（人間語）・時刻 */}
         <div className="flex min-w-0 items-center gap-2 text-sm text-slate-400">
+          {/* 未知障害は eventName だけでは伝わらないので種別バッジで明示する */}
+          {hasAiInvestigation(alert) && <UnknownFaultBadge />}
           {analyzing ? (
             <span className="inline-flex items-center rounded-full bg-slate-600/20 px-2.5 py-0.5 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-500/30">
               重要度 判定中

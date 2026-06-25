@@ -5,6 +5,8 @@ import { createAlertsApi } from "../infrastructure/alertsApi";
 import { createEvidenceApi } from "../infrastructure/evidenceApi";
 import { createRemediationApi } from "../infrastructure/remediationApi";
 import { SSEAlertStream } from "../infrastructure/SSEAlertStream";
+import { createDemoApi } from "@features/demo/infrastructure/demoApi";
+import { DemoDrawer } from "@features/demo/presentation/DemoDrawer";
 import { useAlerts } from "../presentation/hooks/useAlerts";
 import {
   submitFeedback,
@@ -27,6 +29,9 @@ export function AlertsPage() {
   const api = useMemo(() => createAlertsApi(http), [http]);
   const evidenceApi = useMemo(() => createEvidenceApi(http), [http]);
   const remediationApi = useMemo(() => createRemediationApi(http), [http]);
+  // デモ操作卓（タスク10）。DemoDrawer は AlertsLayout の slot にだけ差し込む＝
+  // プロダクション UI 非侵食。DEMO 無効なら DemoDrawer 自身が 404 を検知して何も描かない。
+  const demoApi = useMemo(() => createDemoApi(http), [http]);
   const stream = useMemo(() => new SSEAlertStream(), []);
   const {
     alerts,
@@ -86,6 +91,7 @@ export function AlertsPage() {
             onReconnect={reconnectStream}
           />
         }
+        demoDrawer={<DemoDrawer api={demoApi} />}
       >
         <AlertList
           alerts={alerts}

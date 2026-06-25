@@ -302,6 +302,9 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 - 【新規】`Schedule.ts`（`ScheduleWindow`）/ `ScheduleSource.ts`（interface・read-only）
 - 【新規】`Forecast/domain/ForecastSignalSource.ts`（IF・`collect(horizon): Promise<ForecastSignal[]>`）★Ⅱ→Ⅲ の継ぎ目（`step4-1` §7.9）。主シグナル源を源非依存に抽象化し、Handler に Gateway を名指しさせない
 
+> **相関（タスク9e）との共通化メモ（2026-06 調査）**: `RiskItem.citations`（引用＝根拠 id）と、step4-4 タスク9e で実装済みの AI 相関（`InvestigationReportPrimitives.relatedAlerts`：id・relation・rationale）は**同型のパターン**＝「LLM が *id + ラベル + 根拠* を副産物として出し、防御的に正規化してから実在レコードへ照合（引用検証 §7.3 ＝ 相関 id 解決）」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（タスク12）なので、相関 alertId と同じく実在 Alert に解決できる。
+> **ただし context を跨いだ型共有はしない**: 相関は Monitoring BC、引用は Forecast BC の別物。`RelatedAlertPrimitives` を Forecast から import すると BC 結合になるので避け、各 BC が自前の型を持つ。共通なのは*手順*（LLM 出力の防御的正規化＋citations 必須プロンプト＋実在照合）だけ。`GeminiForecastAdapter`（タスク22）の safeParse/clamp/fallback は `LLMOutputParser`/`InvestigationReportMapper`（タスク9e で relatedAlerts 対応済み）の実装を**参考にする**（コピー元）。frontend 側の共通化（`RelatedAlertsPanel`→`CitationList` の `shared/ui` 昇格）は step4-4 タスク13 のメモを正とする。
+
 ### タスク 20: ForecastMemory projection（突合キーB）〔stretchⅡ〕
 
 - 【新規】`Forecast/domain/ForecastMemory.ts`（`ForecastMemoryEntry`=incidentId/subject/trigger/outcome、`ForecastMemoryRepository`：warmUp/findBySubjects）

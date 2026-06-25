@@ -247,10 +247,15 @@
   - [x] **(c) AI 相関**: `InvestigationReportPrimitives` に `RelatedAlertPrimitives[]`（id・relation・根拠）を追加（domain `InvestigationReport` round-trip）。`InvestigationContext.candidateAlerts`（同時期の他アラート）を両 UseCase が best-effort で供給し、`InvestigationPromptBuilder`（schema＋候補注入）／`LLMOutputParser`（防御的正規化）／`InvestigationReportMapper` を拡張。seed は決済タイムアウト→注文処理失敗の層またぎ相関で確定データ提示
   - [x] 検証：root/frontend `tsc --noEmit` 緑 / 全テスト緑（root 515・frontend 128。`relatedAlerts` parser/round-trip・`relatedAlerts` domain・`RelatedAlertsPanel` UT 追加。既存の却下ボタン glyph `X`→`✗` の表記ズレも是正）
 
-### タスク 10: demo ドロワー 〔P1〕
+### タスク 10: demo ドロワー 〔P1〕 ✅
 
-- 【新規】`features/demo/infrastructure/demoApi.ts` ＋ `presentation/`: `DemoDrawer.tsx` / `ScenarioControls.tsx`（シナリオ1〜5）/ `PaymentModeToggle.tsx` / `SystemStatus.tsx` / `hooks/useDemoControls.ts`
+- [x] 【新規】`features/demo/infrastructure/demoApi.ts`（`createDemoApi(http)`＋`DemoApi` interface：GET /demo/status / POST /demo/scenario/:id/trigger〔202〕/ POST /demo/payment-mode / POST /demo/reset。`DemoStatus`/`ScenarioResult`/`ResetResult`/`PaymentMode` 型。HttpClient interface にのみ依存）
+- [x] 【新規】`presentation/hooks/useDemoControls.ts`（status 初回取得＋各 mutation 後の status 再取得・単一 `busy` で多重実行抑止・`paymentMode` ローカル state。**status 404＝DEMO_ENABLED=false を `available=false` として検知**しドロワーを伏せる＝プロダクション無侵食）＋ UT
+- [x] 【新規】`presentation/`: `DemoDrawer.tsx`（操作卓・`available=false` なら null）/ `ScenarioControls.tsx`（**backend が実際に注入できる3レシピ**＝決済タイムアウト/在庫不足/在庫競合のみ。証拠〔4〕・リメディ〔5〕は注入後の Alert ドロワー内体験＝独立 trigger エンドポイント無しなので偽ボタンを作らない）/ `PaymentModeToggle.tsx`（正常/ランダム/タイムアウト）/ `SystemStatus.tsx`（alert/パターン/昇格済み件数）＋ DemoDrawer UT
+- [x] 【配線】`AlertsPage`（composition root で `createDemoApi(http)` 生成→ `AlertsLayout` の `demoDrawer` slot へ `<DemoDrawer/>`）。**DemoDrawer を差し込むのは AlertsLayout だけ**＝プロダクションUI非侵食。`/demo` の vite proxy は既存
+- [x] 検証：frontend `tsc --noEmit` 緑 / frontend テスト 139 件緑（`useDemoControls`/`DemoDrawer` UT 9 件＋未知障害バッジ UT 2 件追加）
 - AlertsLayout のみに差し込む（プロダクションUI非侵食）
+- 補足: 設計の「シナリオ1〜5」のうち独立 trigger は backend に3つ（payment-timeout/inventory-insufficient/inventory-conflict）。SSE 接続数/RabbitMQ 状態は backend `/demo/status` が出さないので SystemStatus は出せる件数（alert/パターン/昇格）に限定。SSE ライブ状態は一覧ヘッダの `StreamStatusIndicator` が既に担う
 
 ### タスク 11: analytics 〔P1〕
 
@@ -291,6 +296,12 @@
 - 【修正】`App.tsx` に `/forecast` 追加（`FORECAST_ENABLED` off時はナビ非表示）
 - `shared/`（HttpClient/SeverityBadge/layouts）流用。`SeverityBadge` を RiskLevel に転用
 - デモシナリオ6（録画）: `/forecast` トリガー → 引用付きリスク降下演出
+
+> **共通化の継ぎ目（タスク9e 相関との共有・2026-06 調査）**: `CitationList`（引用＝根拠の id 提示）と タスク9e の `RelatedAlertsPanel`（相関アラートの id 提示）は**同型**＝「**LLM が出した *id + ラベル + 根拠* を、一覧 lookup で実在 Alert へ解決し、解決できれば詳細リンク付きカード／できなければ素のリンク＋ラベルへ degrade**」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（step4-2 タスク12）、相関 alertId も実在 Alert id なので、両者とも `/alerts/:id` へ解決でき引用検証（§7.3 偽引用を落とす）と同じ動線になる。
+>
+> - **本タスク着手時に共通化する**: `domain/relatedAlerts.ts` の `toRelatedAlertViews(refs, lookup)`（id→解決 or degrade）と `RelatedAlertsPanel` のカード描画を `shared/ui` へ昇格（例 `shared/ui/ReferencedAlertCard` ＋ resolver）し、`RelatedAlertsPanel` と `CitationList` の両方が消費する。`relationLabel`（既に `precursor:予兆` を含む）も同様に転用可。`SeverityBadge`/`RiskLevel` 転用は既述のとおり。
+> - **今は共通化しない（YAGNI）**: forecast は stretchⅡ で未実装＝**第二の消費者がまだ存在しない**。消費者が無いうちの抽出は投機的一般化（既存方針「死蔵スキャフォルドは作らない」と矛盾）。**本タスクで `CitationList` を実装する時に、上記 `RelatedAlertsPanel` を `shared/ui` へ引き上げて両者で共有**する＝そのタイミングが正しい抽出点。
+> - **backend は context を跨いで型共有しない**: 相関は Monitoring（`InvestigationReportPrimitives.relatedAlerts`）、引用は Forecast（`RiskItem.citations`）の別 BC。`RelatedAlertPrimitives` を Forecast から import すると BC 結合になるので**しない**。共通なのは「LLM 出力を防御的に正規化→実在 id 照合」という*パターン*だけ（型は各 BC に持つ）。
 
 ---
 
