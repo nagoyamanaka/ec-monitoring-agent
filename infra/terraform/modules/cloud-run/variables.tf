@@ -53,6 +53,7 @@ variable "plain_env" {
   type        = map(string)
   description = "非機密の環境変数（computed_env とマージ）"
   default = {
+    GEMINI_MODEL   = "gemini-2.0-flash"
     RABBITMQ_PORT  = "5672"
     RABBITMQ_USER  = "guest"
     RABBITMQ_PASS  = "guest"
