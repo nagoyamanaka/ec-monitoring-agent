@@ -68,7 +68,7 @@ describe("ingestRoutes (integration)", () => {
     expect(res.status).toBe(204);
   });
 
-  it("POST /ingest/cloud-monitoring は 202 で eventName を返す", async () => {
+  it("POST /ingest/cloud-monitoring は 202 で eventName を返す（ヘッダ認証）", async () => {
     const res = await request(app.httpApp)
       .post("/ingest/cloud-monitoring")
       .set("x-ingest-token", INGEST_TOKEN)
@@ -77,6 +77,24 @@ describe("ingestRoutes (integration)", () => {
     expect(res.status).toBe(202);
     expect(res.body.accepted).toBe(true);
     expect(typeof res.body.eventName).toBe("string");
+  });
+
+  it("POST /ingest/cloud-monitoring は 202 で eventName を返す（クエリ ?token= 認証）", async () => {
+    const res = await request(app.httpApp)
+      .post(`/ingest/cloud-monitoring?token=${INGEST_TOKEN}`)
+      .send({ incident: { incident_id: randomUUID(), condition_name: "High Memory", state: "open", severity: "Warning" } });
+
+    expect(res.status).toBe(202);
+    expect(res.body.accepted).toBe(true);
+    expect(typeof res.body.eventName).toBe("string");
+  });
+
+  it("POST /ingest/cloud-monitoring は ?token= 不一致で 401", async () => {
+    const res = await request(app.httpApp)
+      .post("/ingest/cloud-monitoring?token=wrong-token")
+      .send({ incident: { incident_id: randomUUID(), condition_name: "High CPU", state: "open", severity: "Critical" } });
+
+    expect(res.status).toBe(401);
   });
 
   it("POST /ingest/remediation-result は必須欠落で 400、正常で 202＋GET で読める", async () => {

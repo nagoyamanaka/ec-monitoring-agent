@@ -15,7 +15,7 @@ DC := docker compose $(COMPOSE_FILES_$(ENV))
 
 # ── Infra ─────────────────────────────────────────────────────
 infra-up:
-	$(DC) up -d mongo rabbitmq elasticsearch
+	$(DC) up -d --wait mongo rabbitmq elasticsearch
 
 infra-down:
 	$(DC) stop mongo rabbitmq elasticsearch

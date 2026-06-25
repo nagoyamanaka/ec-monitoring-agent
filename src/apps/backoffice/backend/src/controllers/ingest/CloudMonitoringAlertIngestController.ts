@@ -19,9 +19,15 @@ export class CloudMonitoringAlertIngestController {
 
   async run(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      if (this.ingestToken && req.header("x-ingest-token") !== this.ingestToken) {
-        res.status(401).json({ error: "invalid ingest token" });
-        return;
+      if (this.ingestToken) {
+        // Cloud Monitoring の webhook_tokenauth はトークンを URL クエリに付与するため、
+        // ヘッダ（CI 等）とクエリ（Cloud Monitoring）の両経路を受け付ける。
+        const headerToken = req.header("x-ingest-token");
+        const queryToken = typeof req.query["token"] === "string" ? req.query["token"] : undefined;
+        if (headerToken !== this.ingestToken && queryToken !== this.ingestToken) {
+          res.status(401).json({ error: "invalid ingest token" });
+          return;
+        }
       }
 
       const monitoringEvent = CloudMonitoringAlertTranslator.toMonitoringEvent(
