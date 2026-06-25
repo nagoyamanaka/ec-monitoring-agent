@@ -1,5 +1,21 @@
 services:
 
+  # ── GCE backbone のステートフル層 ─────────────────────────
+  # Cloud Run edge から VPC connector 越しに到達できるよう内部ポートを公開する。
+  # 公開先 IP は VM 内部 IP、到達範囲は firewall（subnet / connector CIDR）で絞る（step4-1-strategy §11.1）。
+  mongo:
+    ports:
+      - "27017:27017"
+
+  elasticsearch:
+    ports:
+      - "9200:9200"
+
+  valkey:
+    ports:
+      - "6379:6379"
+
+  # ── EC backend ───────────────────────────────────────────
   ec-backend:
     build:
       context: .
@@ -13,4 +29,36 @@ services:
       DEMO_CONTROLS_ENABLED: ${DEMO_CONTROLS_ENABLED:-true}
       FEEDBACK_AUTO_PROMOTE_THRESHOLD: ${FEEDBACK_AUTO_PROMOTE_THRESHOLD:-3}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+    restart: unless-stopped
+
+  # ── Monitoring worker（EDA subscriber + AI調査）─────────────
+  # backbone 側の常駐 worker。RabbitMQ 常駐 Subscriber を抱えるため Cloud Run でなく GCE に置く。
+  # クエリ/SSE の配信エッジは Cloud Run（cloud-run module）で別途。worker/edge のコード分離は後続作業。
+  backoffice-backend:
+    build:
+      context: .
+      dockerfile: src/apps/backoffice/backend/Dockerfile
+      target: prod
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      DEMO_ENABLED: ${DEMO_ENABLED:-false}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      # 検知 ingest（Cloud Monitoring webhook）認証トークン（§11.2）
+      INGEST_TOKEN: ${INGEST_TOKEN}
+      # SimilarPatternRule（graded confidence 分類）用
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      # read-model projection ＋ SSE Pub/Sub（base の REDIS_URL=redis://valkey:6379 を継承）
+    depends_on:
+      mongo:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
     restart: unless-stopped

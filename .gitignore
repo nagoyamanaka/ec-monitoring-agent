@@ -6,3 +6,22 @@ dist/
 *.log
 .claude
 out/
+
+
+# ==========================================
+# Terraform
+# ==========================================
+# 1. ローカルで作成した本番用の設定ファイル（絶対にGitに載せない）
+*.tfvars
+*.tfvars.json
+backend.hcl
+
+# 2. Terraformが作業用・内部状態の記憶に使う隠しフォルダとファイル
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# 3. 実行時の一時ファイルやクラッシュログ
+*.tfplan
+crash.log
+.terraform.lock.hcl

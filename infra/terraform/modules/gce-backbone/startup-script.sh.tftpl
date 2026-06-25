@@ -1,0 +1,37 @@
+#!/bin/bash
+# GCE backbone 起動スクリプト（Ubuntu LTS 前提）。
+# Docker + compose plugin を入れ、GCS の docker-compose.prod.yml を取得して up する。
+set -euxo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+
+# 1) Docker（compose plugin 同梱）
+if ! command -v docker >/dev/null 2>&1; then
+  curl -fsSL https://get.docker.com | sh
+fi
+
+mkdir -p /opt/app
+cd /opt/app
+
+# 2) VM の SA アクセストークン（cloud-platform scope）を metadata から取得
+TOKEN=$(curl -sf -H "Metadata-Flavor: Google" \
+  "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
+  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+
+# 3) Artifact Registry ログイン（gcloud/gsutil 不要）
+echo "$TOKEN" | docker login -u oauth2accesstoken --password-stdin "https://${artifact_host}"
+
+# 4) compose 定義を GCS Storage JSON API から取得（object 名はスラッシュを含まない前提）
+curl -fsS -H "Authorization: Bearer $TOKEN" \
+  -o /opt/app/docker-compose.yml \
+  "https://storage.googleapis.com/storage/v1/b/${compose_bucket}/o/${compose_object}?alt=media"
+
+# 5) イメージ参照とプロジェクトを .env に。シークレットは別途投入（Secret Manager → env）
+cat > /opt/app/.env <<EOF
+GCP_PROJECT_ID=${project_id}
+IMAGE_EC=${image_ec}
+IMAGE_BACKOFFICE=${image_backoffice}
+EOF
+
+# 6) 起動
+docker compose --env-file /opt/app/.env -f /opt/app/docker-compose.yml up -d
