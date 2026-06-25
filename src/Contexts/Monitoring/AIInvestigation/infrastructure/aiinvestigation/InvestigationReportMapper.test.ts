@@ -13,6 +13,7 @@ function output(overrides: Partial<LLMInvestigationOutput> = {}): LLMInvestigati
     suggestedActions: ["プール拡張"],
     suggestedPatternName: "DB_CONNECTION_EXHAUSTION",
     remediable: false,
+    relatedAlerts: [],
     ...overrides,
   };
 }

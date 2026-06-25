@@ -17,6 +17,7 @@ import { reinvestigate } from "../application/reinvestigate";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { EvidencePanel } from "../components/EvidencePanel";
 import { RemediationPanel } from "../components/RemediationPanel";
+import { RelatedAlertsPanel } from "../components/RelatedAlertsPanel";
 
 /**
  * アラート詳細ページ（DefaultLayout＝デモUI非侵食）。
@@ -96,6 +97,7 @@ export function AlertDetailPage() {
               onDecision={handleDecision}
               onReinvestigate={handleReinvestigate}
             />
+            <RelatedAlertsPanel alert={alert} />
             <RemediationPanel alert={alert} api={remediationApi} />
             {hasAiInvestigation(alert) && (
               <EvidencePanel api={evidenceApi} alert={alert} />

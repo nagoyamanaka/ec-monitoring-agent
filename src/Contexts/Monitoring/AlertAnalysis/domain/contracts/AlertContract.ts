@@ -68,6 +68,21 @@ export type InvestigationStepPrimitives = {
  */
 export type InvestigationItemPrimitives = string | InvestigationStepPrimitives;
 
+/**
+ * AI 調査が見つけた相関アラート（id・関係・根拠）。
+ * 検知層の dedup（同一 dedupKey の occurrenceCount＝同型の嵐の畳み込み）とは別軸で、
+ * 異なるアラート間の関係（例: DB 枯渇=infra と payment 失敗=app が同一根本原因）を示す。
+ * 相関エンジンは作らず、AI 調査の副産物（step4-1 §2.5(c)）として relation＋rationale を載せる。
+ */
+export type RelatedAlertPrimitives = {
+  readonly alertId: string;
+  // 関係種別（same_root_cause / downstream / upstream / precursor / similar 等の文字列）。
+  // 表示側は人間語ラベルへ写像し、未知文字列はそのまま出す。
+  readonly relation: string;
+  // なぜ関連と判断したか（AI の根拠・1 文）。
+  readonly rationale: string;
+};
+
 export type InvestigationReportPrimitives = {
   readonly summary: string;
   readonly confidence: number;
@@ -78,6 +93,8 @@ export type InvestigationReportPrimitives = {
   readonly reviewStatus: string;
   readonly investigatedAt: string;
   readonly isFallback: boolean;
+  // AI 調査が見つけた相関アラート。optional は旧データ・fallback 互換（未保存なら空配列扱い）。
+  readonly relatedAlerts?: RelatedAlertPrimitives[];
   // AI が「コードで直せる（PR で remediate 可能）」と判定したか。category 非依存の
   // 汎用シグナルで、フロントは remediate ボタンの活性／ROI 提示の判断に使う（advisory）。
   // 実際の write 実行ゲートは人間承認＋executor の deterministic 判定が握る。

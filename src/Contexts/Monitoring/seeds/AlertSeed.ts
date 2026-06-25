@@ -69,6 +69,16 @@ export const ALERT_SEEDS: Alert[] = [
       reviewStatus: ReviewStatus.pendingReview(),
       investigatedAt: ago(28),
       isFallback: false,
+      // AI 相関（タスク9e）: 決済タイムアウト（app）と注文処理失敗（...0004）は別アラートだが
+      // 同一の決済ゲートウェイ障害が根本原因＝異なる層をまたぐ相関を可視化するデモ。
+      relatedAlerts: [
+        {
+          alertId: "5eeda1e7-0004-4000-8000-000000000004",
+          relation: "downstream",
+          rationale:
+            "決済タイムアウトの結果、注文処理が UNKNOWN_GATEWAY_ERROR で連鎖失敗。同一の決済ゲートウェイ障害が根本原因。",
+        },
+      ],
     }),
   ),
 

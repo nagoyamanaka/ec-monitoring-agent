@@ -15,6 +15,16 @@ export type ReviewStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";
 export type { InvestigationLinkKind };
 
 /**
+ * AI 調査が見つけた相関アラートの参照（id・関係種別・根拠）。
+ * 表示の解決（日時/severity/タイトル）は `domain/relatedAlerts.ts` が alerts 一覧から行う。
+ */
+export type RelatedAlertRef = {
+  readonly alertId: string;
+  readonly relation: string;
+  readonly rationale: string;
+};
+
+/**
  * 調査ステップ／推奨アクションの表示用1項目。`href` があれば外部リンク化し `kind` でアイコン分け。
  * ワイヤは文字列も構造化オブジェクトも来るが、View では常にこの構造化形へ正規化済み。
  */
@@ -37,6 +47,8 @@ export type InvestigationReportView = {
   readonly isFallback: boolean;
   // AI が「コードで直せる」と判定したか。remediate ボタンの活性／ROI 提示に使う（未指定は false）。
   readonly remediable: boolean;
+  // AI 調査が見つけた相関アラート（id・関係・根拠）。未指定は空配列。
+  readonly relatedAlerts: RelatedAlertRef[];
 };
 
 /** ワイヤ要素（文字列 or 構造化）を表示用の構造化形へ正規化。 */
@@ -59,6 +71,11 @@ export function toInvestigationReportView(
     investigatedAt: dto.investigatedAt,
     isFallback: dto.isFallback,
     remediable: dto.remediable ?? false,
+    relatedAlerts: (dto.relatedAlerts ?? []).map((r) => ({
+      alertId: r.alertId,
+      relation: r.relation,
+      rationale: r.rationale,
+    })),
   };
 }
 

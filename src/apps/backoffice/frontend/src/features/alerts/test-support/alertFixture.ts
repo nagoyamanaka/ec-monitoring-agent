@@ -16,6 +16,7 @@ export function makeReport(
     investigatedAt: "2026-06-21T00:00:00.000Z",
     isFallback: false,
     remediable: false,
+    relatedAlerts: [],
     ...overrides,
   };
 }

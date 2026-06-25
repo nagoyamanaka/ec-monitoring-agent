@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { Card } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
 import { type AlertView } from "../domain/AlertView";
@@ -122,19 +121,8 @@ export function AlertCardExpanded({
             {known ? "該当パターン（既知）" : "AI 推定パターン"}
           </h4>
           <p className="text-slate-100">{reason.patternName}</p>
-          {/* 類似既知（SIMILARITY）は元の解決済み Alert へ内部ディープリンク。
-              「過去の同型障害をどう直したか」へ即移動できる動線。 */}
-          {alert.classification.type === "known" &&
-            alert.classification.source === "SIMILARITY" &&
-            alert.classification.sourceAlertId && (
-              <Link
-                to={`/alerts/${encodeURIComponent(alert.classification.sourceAlertId)}`}
-                className="inline-flex items-center gap-1 text-xs text-cyan-300 underline decoration-cyan-500/40 underline-offset-2 transition hover:text-cyan-200 hover:decoration-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-              >
-                <span aria-hidden>🔗</span>
-                <span>過去の同型障害を見る</span>
-              </Link>
-            )}
+          {/* 類似既知（SIMILARITY）の back-link は「関連アラート」パネル（RelatedAlertsPanel）に
+              AI 相関と統合して提示する（ドロワー/詳細でマウント・タスク9e）。 */}
         </section>
       )}
 
@@ -315,7 +303,7 @@ export function AlertCardExpanded({
                       : "bg-slate-800 text-slate-500 ring-1 ring-slate-700 hover:bg-slate-700",
                   )}
                 >
-                  {reviewState === "REJECTED" ? "X 却下済み" : "X 却下"}
+                  {reviewState === "REJECTED" ? "✗ 却下済み" : "✗ 却下"}
                 </button>
               </div>
             </div>

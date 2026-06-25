@@ -54,7 +54,7 @@ describe("AlertCardExpanded", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("類似既知（SIMILARITY）は元の解決済み Alert への内部リンクを出す", () => {
+  it("類似既知（SIMILARITY）の back-link はここには出さない（関連アラートパネルへ統合）", () => {
     render(
       <MemoryRouter>
         <AlertCardExpanded
@@ -74,31 +74,9 @@ describe("AlertCardExpanded", () => {
       </MemoryRouter>,
     );
 
-    const link = screen.getByRole("link", { name: /過去の同型障害/ });
-    expect(link).toHaveAttribute("href", "/alerts/alert-past-1");
-  });
-
-  it("sourceAlertId が無ければ内部リンクを出さない", () => {
-    render(
-      <MemoryRouter>
-        <AlertCardExpanded
-          alert={makeAlert({
-            report: null,
-            classification: {
-              type: "known",
-              source: "EXACT_MATCH",
-              patternId: "p-1",
-              patternName: "決済タイムアウト",
-              confidence: 0.9,
-              matchedConditions: [],
-            },
-          })}
-        />
-      </MemoryRouter>,
-    );
-
+    // back-link は RelatedAlertsPanel（ドロワー/詳細でマウント）へ移設済み。
     expect(
-      screen.queryByRole("link", { name: /過去の同型障害/ }),
+      screen.queryByRole("link", { name: /過去の同型障害|詳細を開く/ }),
     ).not.toBeInTheDocument();
   });
 

@@ -18,6 +18,7 @@ import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { EvidencePanel } from "./EvidencePanel";
 import { RemediationPanel } from "./RemediationPanel";
+import { RelatedAlertsPanel } from "./RelatedAlertsPanel";
 import { ExactMatchBadge } from "./ExactMatchBadge";
 
 export interface AlertDetailDrawerProps {
@@ -40,6 +41,8 @@ export interface AlertDetailDrawerProps {
   remediationApi?: RemediationApi;
   /** SSE で届いた選択中アラートのリメディ確定（live 反映用）。 */
   pushedRemediation?: RemediationView | null;
+  /** 関連アラートの alertId → AlertView 解決（一覧から渡す。関連の日時/severity 補完用）。 */
+  relatedLookup?: (id: string) => AlertView | undefined;
 }
 
 function formatAbsoluteTime(iso: string): string {
@@ -61,6 +64,7 @@ export function AlertDetailDrawer({
   evidenceApi,
   remediationApi,
   pushedRemediation,
+  relatedLookup,
 }: AlertDetailDrawerProps) {
   useEffect(() => {
     if (!alert) return;
@@ -177,6 +181,7 @@ export function AlertDetailDrawer({
             onDecision={onDecision}
             onReinvestigate={onReinvestigate}
           />
+          <RelatedAlertsPanel alert={alert} lookup={relatedLookup} />
           {remediationApi && (
             <RemediationPanel
               alert={alert}

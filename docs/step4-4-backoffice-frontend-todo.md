@@ -224,8 +224,10 @@
   - [ ] **差し戻し→再 dispatch**: `sent_back` で `GitHubActionsRemediationDispatcher` を再実行（dispatch の `maxAttempts` 自己修正ループと接続）
   - [ ] **コマンド分離**: 「却下（学習シグナル＝`SubmitFeedback`）」と「差し戻し（やり直し＝新 `SendBackRemediation` 等）」を別コマンドに（混ぜると学習が濁る）
 
-### タスク 9e: 相関アラートと詳細導線（関連の可視化）〔P1〕
+### タスク 9e: 相関アラートと詳細導線（関連の可視化）〔P1〕 ✅（(c) フル AI 相関を採用）
 
+> **着地（2026-06）**: スコープは **(c) フル AI 相関**を採用。調査の副産物として「異なるアラート間の相関（id・関係・根拠）」を AI が出し、(b) 類似既知 back-link（タスク9b）も同一パネルへ統合した。(a) occurrence 発生履歴は別軸（dedup 内訳）なので本タスクでは未着手。
+>
 > **背景（懸念3）**: いまアラートは単体表示。だが「該当アラート／相関の高いアラート」を**日付・情報つきで束ねて見たい・詳細へ飛びたい**。これは検知層の dedup（同一 dedupKey の occurrenceCount＝同型の嵐を1枚に畳む）とは別軸の、**異なるアラート間の相関**（例: DB枯渇=infra と payment失敗=app が同一根本原因）。step4-1 §2.5(c)「相関は AI 調査の副産物・エンジン化しない」に沿い、**調査が見つけた関連**を提示する。
 > **データ源の選択肢**:
 >
@@ -235,14 +237,15 @@
 >   **推奨**: まず (b)（既存土台）＋(a) の履歴展開、次に (c) を段階。
 >   **backend 依存**: (a) 発生履歴の保持 / (c) 調査出力に `relatedAlerts`（id・relation・根拠）追加（step4-2/4-3）。
 
-- [ ] 【設計】相関の出所（occurrence履歴 / back-link / AI相関）と最小スコープを決定
-- [ ] 【新規】`domain/relatedAlerts.ts`（関連アラート View・日時/severity/関係ラベル）＋ `components/RelatedAlertsPanel.tsx`（カード列→`/alerts/:id` 詳細導線）
-- [ ] 【改修】ドロワー/詳細に「関連アラート」セクション（日付・情報・詳細リンク）
-- [ ] 【内部リンク】(b) `sourceAlertId`（タスク9b と統合）で解決済み同型へ
+- [x] 【設計】**(c) フル AI 相関**を採用（出所＝AI 調査の副産物）。(b) back-link を同一パネルへ統合。(a) occurrence 履歴は別軸として見送り
+- [x] 【新規】`domain/relatedAlerts.ts`（`RelatedAlertView`・日時/severity/関係ラベル・`collectRelatedRefs`＝AI 相関＋SIMILARITY back-link 統合・自分/重複除外・`toRelatedAlertViews` で一覧 lookup から解決）＋ `components/RelatedAlertsPanel.tsx`（カード列→`/alerts/:id` 詳細導線・関係ラベル/根拠・未解決でも degrade してリンクは出す）＋ UT
+- [x] 【改修】ドロワー（`AlertDetailDrawer`＋`relatedLookup` を `AlertsPage` の一覧から注入）／詳細ページ（`AlertDetailPage`・lookup 無しで degrade）に「関連アラート」セクションを追加
+- [x] 【内部リンク】(b) `sourceAlertId`（タスク9b）を `RelatedAlertsPanel` へ統合（`AlertCardExpanded` のインライン back-link は撤去し UT も移設）＝関連を1か所に集約
 - **backend で何をやるか（step4-2/4-3）**:
-  - [ ] **(a) 発生履歴**: `occurrenceCount` だけでなく**発生日時列**を保持（dedup 加算は `AnalyzeAlertUseCase`・`AlertRepository.findOpenByDedupKey`）。Alert 集約＋`AlertContract` に履歴を追加
-  - [ ] **(b) back-link**: `SimilarPatternRule` が `best.incident.sourceAlertId` を分類結果へ載せる＋classification primitives に optional `sourceAlertId`（**タスク9b と同一作業**・`SimilarIncident`/`ResolvedIncident` は保持済み）
-  - [ ] **(c) AI 相関**: 調査出力（`InvestigationReport`/`AlertContract`）に `relatedAlerts`（id・relation・根拠）を追加。LLM プロンプト（`InvestigationPromptBuilder`）＋`LLMOutputParser`＋`InvestigationReportMapper` を拡張
+  - [ ] **(a) 発生履歴**: 別軸（dedup 内訳）として本タスクでは未着手
+  - [x] **(b) back-link**: `sourceAlertId` は分類結果に保持済み（タスク9b）。frontend で AI 相関と統合表示
+  - [x] **(c) AI 相関**: `InvestigationReportPrimitives` に `RelatedAlertPrimitives[]`（id・relation・根拠）を追加（domain `InvestigationReport` round-trip）。`InvestigationContext.candidateAlerts`（同時期の他アラート）を両 UseCase が best-effort で供給し、`InvestigationPromptBuilder`（schema＋候補注入）／`LLMOutputParser`（防御的正規化）／`InvestigationReportMapper` を拡張。seed は決済タイムアウト→注文処理失敗の層またぎ相関で確定データ提示
+  - [x] 検証：root/frontend `tsc --noEmit` 緑 / 全テスト緑（root 515・frontend 128。`relatedAlerts` parser/round-trip・`relatedAlerts` domain・`RelatedAlertsPanel` UT 追加。既存の却下ボタン glyph `X`→`✗` の表記ズレも是正）
 
 ### タスク 10: demo ドロワー 〔P1〕
 

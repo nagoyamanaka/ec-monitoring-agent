@@ -22,6 +22,17 @@ export interface InvestigationContext {
   }>;
   readonly infraEvidence?: InfraEvidence;
   /**
+   * 相関判定の候補＝同時期に開いている他のアラート。AI はこの中からのみ
+   * relatedAlerts を選ぶ（存在しない alertId を作らせない）。空・未設定なら相関なし。
+   */
+  readonly candidateAlerts?: Array<{
+    alertId: string;
+    eventName: string;
+    category: string;
+    occurredOn: string;
+    summary: string;
+  }>;
+  /**
    * 人間が再調査時に書き込んだ指摘（前回調査の誤り・どう直すか）。
    * 自動調査（unknown 分類時）では未設定。再調査トリガー（人手）でのみ載り、
    * AI は最優先の手がかりとして前回の結論を見直す。

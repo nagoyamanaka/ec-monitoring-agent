@@ -43,6 +43,7 @@ export function toInvestigationReport(
     investigatedAt: new Date(),
     isFallback: false,
     remediable: output.remediable,
+    relatedAlerts: output.relatedAlerts,
   });
 }
 

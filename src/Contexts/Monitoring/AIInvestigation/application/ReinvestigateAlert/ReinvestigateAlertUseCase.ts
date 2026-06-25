@@ -23,6 +23,9 @@ import { InfraEvidence } from "../../domain/InfraEvidence.js";
 // 類似インシデントは文脈強化用なので件数を絞る（トークン上限 3,500 を意識）
 const SIMILAR_INCIDENT_LIMIT = 5;
 
+// 相関判定の候補に渡す他アラートの上限（プロンプト水増し防御）
+const CANDIDATE_ALERT_LIMIT = 20;
+
 /**
  * 人間の指摘（operatorNote＝前回調査の誤り・どう直すか）を添えた AI 再調査（人手トリガー）。
  *
@@ -59,6 +62,7 @@ export class ReinvestigateAlertUseCase {
     const context = await this.buildInvestigationContext(
       reopened.monitoringEvent,
       operatorNote,
+      alertId,
     );
     const report = await this.investigate(context, alertId);
 
@@ -70,11 +74,14 @@ export class ReinvestigateAlertUseCase {
   private async buildInvestigationContext(
     monitoringEvent: MonitoringEvent,
     operatorNote: string,
+    selfId: AlertId,
   ): Promise<InvestigationContext> {
-    const [similarIncidents, infraEvidence] = await Promise.all([
-      this.findSimilarIncidents(monitoringEvent),
-      this.collectInfraEvidence(monitoringEvent),
-    ]);
+    const [similarIncidents, infraEvidence, candidateAlerts] =
+      await Promise.all([
+        this.findSimilarIncidents(monitoringEvent),
+        this.collectInfraEvidence(monitoringEvent),
+        this.collectCandidateAlerts(selfId),
+      ]);
 
     return {
       errorEvent: {
@@ -90,8 +97,40 @@ export class ReinvestigateAlertUseCase {
         resolvedNote: incident.resolvedNote,
       })),
       ...(infraEvidence ? { infraEvidence } : {}),
+      ...(candidateAlerts.length > 0 ? { candidateAlerts } : {}),
       operatorNote,
     };
+  }
+
+  // 相関判定の候補＝自分以外の他アラートをベストエフォートで収集する（失敗時は空配列）。
+  // AI はこの候補の中からのみ relatedAlerts を選ぶ（存在しない alertId を作らせない）。
+  private async collectCandidateAlerts(
+    selfId: AlertId,
+  ): Promise<NonNullable<InvestigationContext["candidateAlerts"]>> {
+    try {
+      const alerts = await this.alertRepository.findByCriteria(
+        new Criteria(new Filters([]), Order.none(), CANDIDATE_ALERT_LIMIT),
+      );
+      return alerts
+        .filter((alert) => alert.id.value !== selfId.value)
+        .map((alert) => {
+          const primitives = alert.toPrimitives();
+          return {
+            alertId: primitives.id,
+            eventName: primitives.monitoringEvent.eventName,
+            category: primitives.monitoringEvent.category,
+            occurredOn: primitives.monitoringEvent.occurredOn,
+            summary: primitives.investigationReport?.summary ?? "",
+          };
+        });
+    } catch (error) {
+      await this.logger.warn({
+        service: "backoffice-backend",
+        action: "candidate_alerts_collect_failed",
+        message: `相関候補アラートの収集に失敗しました（再調査継続）：${(error as Error).message}`,
+      });
+      return [];
+    }
   }
 
   // インフラ証拠をベストエフォートで収集する（失敗時は undefined で調査継続）

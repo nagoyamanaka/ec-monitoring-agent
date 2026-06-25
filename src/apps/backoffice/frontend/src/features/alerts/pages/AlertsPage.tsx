@@ -44,6 +44,11 @@ export function AlertsPage() {
     () => alerts.find((a) => a.id === selectedId) ?? null,
     [alerts, selectedId],
   );
+  // 関連アラート（タスク9e）の日時/severity 補完用。一覧から alertId を解決する。
+  const relatedLookup = useCallback(
+    (id: string) => alerts.find((a) => a.id === id),
+    [alerts],
+  );
 
   const handleDecision = useCallback(
     async (alertId: string, decision: FeedbackDecision, operatorNote?: string) => {
@@ -100,6 +105,7 @@ export function AlertsPage() {
         pushedRemediation={
           selectedId ? remediationByAlertId.get(selectedId) ?? null : null
         }
+        relatedLookup={relatedLookup}
       />
     </>
   );
