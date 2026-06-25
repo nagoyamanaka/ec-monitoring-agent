@@ -285,11 +285,20 @@ export function AlertCardExpanded({
                       : "bg-slate-800 text-slate-500 ring-1 ring-slate-700 hover:bg-slate-700",
                   )}
                 >
-                  {submitting === "approve"
-                    ? "送信中…"
-                    : reviewState === "APPROVED"
-                      ? "✓ 承認済み"
-                      : "✓ 承認"}
+                  {(() => {
+                    const label =
+                      submitting === "approve"
+                        ? "送信中…"
+                        : reviewState === "APPROVED"
+                          ? "✓ 承認済み"
+                          : "✓ 承認";
+                    // ラベルが変わるたびキーが変わり、ボタン→ステータス表記がフェード差し替わる。
+                    return (
+                      <span key={label} className="badge-fade-in inline-block">
+                        {label}
+                      </span>
+                    );
+                  })()}
                 </button>
                 <button
                   type="button"
@@ -303,7 +312,15 @@ export function AlertCardExpanded({
                       : "bg-slate-800 text-slate-500 ring-1 ring-slate-700 hover:bg-slate-700",
                   )}
                 >
-                  {reviewState === "REJECTED" ? "✗ 却下済み" : "✗ 却下"}
+                  {(() => {
+                    const label =
+                      reviewState === "REJECTED" ? "✗ 却下済み" : "✗ 却下";
+                    return (
+                      <span key={label} className="badge-fade-in inline-block">
+                        {label}
+                      </span>
+                    );
+                  })()}
                 </button>
               </div>
             </div>

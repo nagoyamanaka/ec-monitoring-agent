@@ -93,11 +93,11 @@ export function AlertDetailDrawer({
       aria-label="アラート詳細"
     >
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="drawer-overlay absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
-      <aside className="absolute inset-y-0 right-0 flex w-[clamp(480px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
+      <aside className="drawer-panel absolute inset-y-0 right-0 flex w-[clamp(480px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
         <header className="flex items-start gap-3 border-b border-slate-700/60 px-5 py-4">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -164,6 +164,7 @@ export function AlertDetailDrawer({
                 size="lg"
                 label="AI 確信度"
                 color="cyan"
+                animate
               />
             </div>
           ) : confidence.kind === "known" ? (
@@ -173,6 +174,7 @@ export function AlertDetailDrawer({
                 size="lg"
                 label="既知事例との類似度"
                 color="emerald"
+                animate
               />
             </div>
           ) : null}

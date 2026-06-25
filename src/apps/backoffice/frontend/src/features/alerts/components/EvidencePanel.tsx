@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "@shared/ui/cn";
 import type { AlertView } from "../domain/AlertView";
 import {
@@ -35,6 +36,29 @@ function formatTime(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
+/** stagger 1 ステップの遅延（秒）。証拠を 1 行ずつ積み上げる体感を作る。 */
+const RISE_STEP = 0.09;
+
+/** 証拠が「1 行ずつ到着する」演出ラッパ。index 順に遅延を載せてフェードインする。 */
+function Rise({
+  index,
+  className,
+  children,
+}: {
+  index: number;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn("evidence-rise", className)}
+      style={{ animationDelay: `${index * RISE_STEP}s` }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function SectionHeader({ kind }: { kind: EvidenceSection["kind"] }) {
   const meta = SOURCE_META[kind];
   return (
@@ -47,15 +71,35 @@ function SectionHeader({ kind }: { kind: EvidenceSection["kind"] }) {
   );
 }
 
-function EvidenceSectionView({ section }: { section: EvidenceSection }) {
+/** 1 セクションが占める stagger スロット数（ヘッダ 1 ＋ 行数）。次セクションの基点計算に使う。 */
+function sectionSlotCount(section: EvidenceSection): number {
+  if (section.kind === "logs") return 1 + section.logs.length;
+  if (section.kind === "terraform") return 1 + 1; // diff ブロック 1 つ
+  return 1 + section.commits.length;
+}
+
+/**
+ * 1 ソースの証拠ブロック。ヘッダ・各行を baseIndex からの連番で stagger フェードインさせ、
+ * パネル全体で「証拠が 1 行ずつ積み上がる」連続演出にする（タスク12・本命）。
+ */
+function EvidenceSectionView({
+  section,
+  baseIndex,
+}: {
+  section: EvidenceSection;
+  baseIndex: number;
+}) {
   if (section.kind === "logs") {
     return (
       <div className="space-y-2">
-        <SectionHeader kind="logs" />
+        <Rise index={baseIndex}>
+          <SectionHeader kind="logs" />
+        </Rise>
         <ul className="space-y-1.5">
           {section.logs.map((log, i) => (
-            <li
+            <Rise
               key={i}
+              index={baseIndex + 1 + i}
               className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
             >
               <div className="flex items-center gap-2">
@@ -77,7 +121,7 @@ function EvidenceSectionView({ section }: { section: EvidenceSection }) {
               <p className="mt-1 font-mono text-xs text-slate-100">
                 {log.message}
               </p>
-            </li>
+            </Rise>
           ))}
         </ul>
       </div>
@@ -87,8 +131,13 @@ function EvidenceSectionView({ section }: { section: EvidenceSection }) {
   if (section.kind === "terraform") {
     return (
       <div className="space-y-2">
-        <SectionHeader kind="terraform" />
-        <div className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60">
+        <Rise index={baseIndex}>
+          <SectionHeader kind="terraform" />
+        </Rise>
+        <Rise
+          index={baseIndex + 1}
+          className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+        >
           <p className="text-xs text-slate-100">{section.diff.summary}</p>
           {section.diff.changedResources.length > 0 && (
             <ul className="mt-2 flex flex-wrap gap-1.5">
@@ -102,18 +151,21 @@ function EvidenceSectionView({ section }: { section: EvidenceSection }) {
               ))}
             </ul>
           )}
-        </div>
+        </Rise>
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      <SectionHeader kind="commits" />
+      <Rise index={baseIndex}>
+        <SectionHeader kind="commits" />
+      </Rise>
       <ul className="space-y-1.5">
-        {section.commits.map((c) => (
-          <li
+        {section.commits.map((c, i) => (
+          <Rise
             key={c.sha}
+            index={baseIndex + 1 + i}
             className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
           >
             <div className="flex items-center gap-2">
@@ -126,7 +178,7 @@ function EvidenceSectionView({ section }: { section: EvidenceSection }) {
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-100">{c.message}</p>
-          </li>
+          </Rise>
         ))}
       </ul>
     </div>
@@ -166,15 +218,19 @@ export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
         <p className="text-xs text-slate-400">証拠は見つかりませんでした。</p>
       ) : (
         <div className="space-y-3">
-          {sections.map((section, i) => (
-            <div
-              key={section.kind}
-              className="evidence-rise"
-              style={{ animationDelay: `${i * 0.12}s` }}
-            >
-              <EvidenceSectionView section={section} />
-            </div>
-          ))}
+          {sections.map((section, i) => {
+            // 前セクションまでの累積スロット数を基点に、行単位で連続 stagger させる。
+            const baseIndex = sections
+              .slice(0, i)
+              .reduce((sum, s) => sum + sectionSlotCount(s), 0);
+            return (
+              <EvidenceSectionView
+                key={section.kind}
+                section={section}
+                baseIndex={baseIndex}
+              />
+            );
+          })}
         </div>
       )}
     </section>

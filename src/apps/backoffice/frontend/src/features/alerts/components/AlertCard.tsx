@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { ConfidenceChip } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { cn } from "@shared/ui/cn";
@@ -60,6 +61,15 @@ export function AlertCard({
   onSelect,
 }: AlertCardProps) {
   const analyzing = isAnalyzing(alert);
+  // ANALYZING→解決 の遷移を検出して行を一瞬フラッシュ（タスク12・自律性の可視化）。
+  // SSE で同一行が置き換わる（飛ばない）ため、前回の analyzing 状態と比較すれば検出できる。
+  const wasAnalyzing = useRef(analyzing);
+  const [justResolved, setJustResolved] = useState(false);
+  useEffect(() => {
+    if (wasAnalyzing.current && !analyzing) setJustResolved(true);
+    wasAnalyzing.current = analyzing;
+  }, [analyzing]);
+
   const confidence = alertConfidence(alert);
   // AI 調査が失敗した fallback レポートは confidence が当てにならない。
   const aiFallback = confidence.kind === "ai" && alert.report?.isFallback;
@@ -75,8 +85,10 @@ export function AlertCard({
       data-testid="alert-card"
       data-alert-id={alert.id}
       onClick={() => onSelect?.(alert.id)}
+      onAnimationEnd={() => justResolved && setJustResolved(false)}
       className={cn(
         "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition",
+        justResolved && "resolve-flash",
         selected
           ? "bg-slate-800/50 ring-cyan-500/50"
           : "bg-slate-900/30 ring-slate-700/60 hover:bg-slate-800/30 hover:ring-slate-600",
