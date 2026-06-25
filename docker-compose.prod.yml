@@ -17,10 +17,7 @@ services:
 
   # ── EC backend ───────────────────────────────────────────
   ec-backend:
-    build:
-      context: .
-      dockerfile: src/apps/ec/backend/Dockerfile
-      target: prod
+    image: ${IMAGE_EC}
     ports:
       - "3000:3000"
     environment:
@@ -35,10 +32,7 @@ services:
   # backbone 側の常駐 worker。RabbitMQ 常駐 Subscriber を抱えるため Cloud Run でなく GCE に置く。
   # クエリ/SSE の配信エッジは Cloud Run（cloud-run module）で別途。worker/edge のコード分離は後続作業。
   backoffice-backend:
-    build:
-      context: .
-      dockerfile: src/apps/backoffice/backend/Dockerfile
-      target: prod
+    image: ${IMAGE_BACKOFFICE}
     ports:
       - "3001:3001"
     environment:

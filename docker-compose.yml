@@ -48,6 +48,10 @@ services:
 
   # ── EC ────────────────────────────────────────────────────
   ec-backend:
+    build:
+      context: .
+      dockerfile: src/apps/ec/backend/Dockerfile
+      target: prod
     environment:
       MONGO_URL: mongodb://mongo:27017/ec
       RABBITMQ_HOST: rabbitmq
@@ -71,6 +75,10 @@ services:
 
   # ── Backoffice ────────────────────────────────────────────
   backoffice-backend:
+    build:
+      context: .
+      dockerfile: src/apps/backoffice/backend/Dockerfile
+      target: prod
     environment:
       PORT: "3001"
       MONGO_URL: mongodb://mongo:27017/monitoring
