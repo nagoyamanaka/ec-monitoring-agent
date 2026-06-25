@@ -257,20 +257,36 @@
 - AlertsLayout のみに差し込む（プロダクションUI非侵食）
 - 補足: 設計の「シナリオ1〜5」のうち独立 trigger は backend に3つ（payment-timeout/inventory-insufficient/inventory-conflict）。SSE 接続数/RabbitMQ 状態は backend `/demo/status` が出さないので SystemStatus は出せる件数（alert/パターン/昇格）に限定。SSE ライブ状態は一覧ヘッダの `StreamStatusIndicator` が既に担う
 
-### タスク 11: analytics 〔P1〕
+### タスク 11: analytics 〔P1〕 ✅
 
-- 【新規】`features/analytics/infrastructure/analyticsApi.ts` / `presentation/pages/AnalyticsPage.tsx`
+> **中身（backend は完成済み）**: `GET /analytics`（`AnalyticsResponse`）が全 Alert を集計した **AI 分類の精度トラッキング**を返す（`totalAlerts`/`knownCount`・`unknownCount`/`withFeedbackCount`/`correctCount`・`incorrectCount`/`accuracy`＝承認/却下フィードバックを母数にした正答率・母数0は null）。frontend は既存 api 流儀でこれを可視化するだけ。
+
+- [x] 【新規】`features/analytics/domain/AnalyticsView.ts`（`AnalyticsDto`→`AnalyticsView` 純関数・`accuracyPercent`/`knownRatio` 派生・null 安全）＋ UT。**analytics 専用 BC は contracts に wire 型を持たないため DTO はここに定義**（将来 contracts 昇格可）
+- [x] 【新規】`features/analytics/infrastructure/analyticsApi.ts`（`createAnalyticsApi(http)`＋`AnalyticsApi` IF・GET /analytics→View 写像）/ `presentation/hooks/useAnalytics.ts`（マウント時 fetch＋手動 refresh。集計は read モデル＝pull on-demand で SSE に乗せない・step4-1 §10）
+- [x] 【新規】`presentation/pages/AnalyticsPage.tsx`（**Tremor** で可視化：正答率ゲージ〔`ConfidenceGauge` 再利用・カウントアップ〕＋既知/未知 `DonutChart`＋件数カード。フィードバック未着/総数0 を degrade 表示）
+- [x] 【配線】`App.tsx` の `/analytics` プレースホルダを差し替え。composition root で `createAnalyticsApi(http)` 生成→prop 注入
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 142 件緑 / `vite build` 緑（`AnalyticsView` UT 3 件追加）
+
+#### 11b: アプリシェル統合（ナビ＋SSE 永続化）〔P1・UX/基盤〕 ✅
+
+> **背景**: (1) analytics/forecast がルートとして存在するのに**入口が無い**＋ AlertsLayout/DefaultLayout の**ヘッダが不統一**。(2) 各ページが `new SSEAlertStream()` を**ページ単位に生成**していたため、ルート遷移（ドロワー→詳細など）のたびに **EventSource 切断＆`GET /alerts` 全件再取得**が走っていた（接続ランプ点滅）。**観測コンソールは接続1本・ナビ常設が定石**なので両方まとめて解消。
+
+- [x] 【新規】`shared/ui/AppHeader.tsx`（ブランド＋**上タブ NavLink**〔Alerts/Analytics・active=cyan ピル〕＋ `rightSlot`。Forecast タブは `forecastEnabled` 既定 off＝本番非侵食。shared は features を import しないためライブ状態は slot 受け）
+- [x] 【改修】`AlertsLayout`/`DefaultLayout` を `AppHeader` に統一（`DefaultLayout` に `headerSlot` 追加・`/alerts/:id` でも `StreamStatusIndicator` を出せる）
+- [x] 【新規】`features/alerts/presentation/AlertsDataProvider.tsx`（`<Routes>` 直下のアプリシェル。`useAlerts(api, stream)` を**1回だけ**実行＝SSE 接続はセッション通じて1本・一覧 state を全ページ共有。`useAlertsData()` で読む）
+- [x] 【改修】`App.tsx`＝composition root：`http`/各 API/`SSEAlertStream` を**1度だけ**生成し `AlertsDataProvider` で配る。`AlertsPage`（`demoApi` を prop 注入）/`AlertDetailPage` は共有 state を消費
+- [x] 【改修】`AlertDetailPage`：自前 `GET /alerts/:id` を廃し**共有 alerts から id で引く**（即表示＋SSE ライブ反映）。`RelatedAlertsPanel` に一覧 lookup・`RemediationPanel` に `pushed`+`live` を注入＝詳細も一覧ドロワーと同挙動に向上。**404 は「ready かつ未発見」で判定**
+- [x] 【削除】`presentation/hooks/useAlert.ts`（詳細ページが共有 state 由来になり唯一の利用者が消滅＝死蔵コード削除・プロジェクト方針）
+- [x] 検証：`tsc --noEmit` 緑 / frontend テスト 142 件緑 / `vite build` 緑
 
 ---
 
 ## stretch
 
-### タスク 12: デモ演出の磨き込み 〔stretch〕
+### タスク 12: デモ演出の磨き込み 〔stretch〕　 ✅
 
 - 証拠到着アニメーション、confidenceゲージ、reviewStatus遷移のトランジション
 - 審査の体験価値（基準3・4）に直結。**設計よりここに時間を割く価値が高い**
-
-#### ROI の高い演出（master-detail 改訂を踏まえた優先順）
 
 > **意図**: 閲覧モデルを「一覧（マスター）＋右ドロワー（detail）」に改めたため、**演出の主舞台が2面に分かれた**。録画で効くのは「①一覧で“異変が起きる”→②ドロワーで“AIが調べる過程”が見える」の2段。下記は録画映え／実装コストの ROI 降順。
 
@@ -297,7 +313,7 @@
 - `shared/`（HttpClient/SeverityBadge/layouts）流用。`SeverityBadge` を RiskLevel に転用
 - デモシナリオ6（録画）: `/forecast` トリガー → 引用付きリスク降下演出
 
-> **共通化の継ぎ目（タスク9e 相関との共有・2026-06 調査）**: `CitationList`（引用＝根拠の id 提示）と タスク9e の `RelatedAlertsPanel`（相関アラートの id 提示）は**同型**＝「**LLM が出した *id + ラベル + 根拠* を、一覧 lookup で実在 Alert へ解決し、解決できれば詳細リンク付きカード／できなければ素のリンク＋ラベルへ degrade**」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（step4-2 タスク12）、相関 alertId も実在 Alert id なので、両者とも `/alerts/:id` へ解決でき引用検証（§7.3 偽引用を落とす）と同じ動線になる。
+> **共通化の継ぎ目（タスク9e 相関との共有・2026-06 調査）**: `CitationList`（引用＝根拠の id 提示）と タスク9e の `RelatedAlertsPanel`（相関アラートの id 提示）は**同型**＝「**LLM が出した _id + ラベル + 根拠_ を、一覧 lookup で実在 Alert へ解決し、解決できれば詳細リンク付きカード／できなければ素のリンク＋ラベルへ degrade**」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（step4-2 タスク12）、相関 alertId も実在 Alert id なので、両者とも `/alerts/:id` へ解決でき引用検証（§7.3 偽引用を落とす）と同じ動線になる。
 >
 > - **本タスク着手時に共通化する**: `domain/relatedAlerts.ts` の `toRelatedAlertViews(refs, lookup)`（id→解決 or degrade）と `RelatedAlertsPanel` のカード描画を `shared/ui` へ昇格（例 `shared/ui/ReferencedAlertCard` ＋ resolver）し、`RelatedAlertsPanel` と `CitationList` の両方が消費する。`relationLabel`（既に `precursor:予兆` を含む）も同様に転用可。`SeverityBadge`/`RiskLevel` 転用は既述のとおり。
 > - **今は共通化しない（YAGNI）**: forecast は stretchⅡ で未実装＝**第二の消費者がまだ存在しない**。消費者が無いうちの抽出は投機的一般化（既存方針「死蔵スキャフォルドは作らない」と矛盾）。**本タスクで `CitationList` を実装する時に、上記 `RelatedAlertsPanel` を `shared/ui` へ引き上げて両者で共有**する＝そのタイミングが正しい抽出点。

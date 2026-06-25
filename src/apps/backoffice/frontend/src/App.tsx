@@ -1,31 +1,49 @@
+import { useMemo } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { DefaultLayout } from "@shared/layouts/DefaultLayout";
+import { FetchHttpClient } from "@shared/api/FetchHttpClient";
+import { createAlertsApi } from "@features/alerts/infrastructure/alertsApi";
+import { createEvidenceApi } from "@features/alerts/infrastructure/evidenceApi";
+import { createRemediationApi } from "@features/alerts/infrastructure/remediationApi";
+import { SSEAlertStream } from "@features/alerts/infrastructure/SSEAlertStream";
+import { AlertsDataProvider } from "@features/alerts/presentation/AlertsDataProvider";
 import { AlertsPage } from "@features/alerts/pages/AlertsPage";
 import { AlertDetailPage } from "@features/alerts/pages/AlertDetailPage";
+import { createDemoApi } from "@features/demo/infrastructure/demoApi";
+import { createAnalyticsApi } from "@features/analytics/infrastructure/analyticsApi";
+import { AnalyticsPage } from "@features/analytics/presentation/pages/AnalyticsPage";
 
 /**
- * /analytics の暫定プレースホルダ（タスク11で AnalyticsPage に差し替える）。
- * ルートを今のうちに確保しておき、後続タスクは置換のみで済むようにする。
+ * バックオフィスの composition root。
+ * HttpClient・各 API・SSE ストリームをここで**1度だけ**生成し、`AlertsDataProvider` で
+ * 一覧 state と SSE 接続をアプリ全体に共有する（ルート遷移で接続が切れない／全件再取得しない）。
+ * 各ページが自前のレイアウトを持つためルーティングはフラット構成。
  */
-function AnalyticsPlaceholder() {
-  return (
-    <DefaultLayout>
-      <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-500 ring-1 ring-inset ring-slate-700/50">
-        Analytics は準備中です。
-      </div>
-    </DefaultLayout>
-  );
-}
-
-/** バックオフィスのルーティング。各ページが自前のレイアウトを持つためフラット構成。 */
 export function App() {
+  const http = useMemo(() => new FetchHttpClient(), []);
+  const api = useMemo(() => createAlertsApi(http), [http]);
+  const evidenceApi = useMemo(() => createEvidenceApi(http), [http]);
+  const remediationApi = useMemo(() => createRemediationApi(http), [http]);
+  const demoApi = useMemo(() => createDemoApi(http), [http]);
+  const analyticsApi = useMemo(() => createAnalyticsApi(http), [http]);
+  const stream = useMemo(() => new SSEAlertStream(), []);
+
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/alerts" replace />} />
-      <Route path="/alerts" element={<AlertsPage />} />
-      <Route path="/alerts/:id" element={<AlertDetailPage />} />
-      <Route path="/analytics" element={<AnalyticsPlaceholder />} />
-      <Route path="*" element={<Navigate to="/alerts" replace />} />
-    </Routes>
+    <AlertsDataProvider
+      api={api}
+      evidenceApi={evidenceApi}
+      remediationApi={remediationApi}
+      stream={stream}
+    >
+      <Routes>
+        <Route path="/" element={<Navigate to="/alerts" replace />} />
+        <Route path="/alerts" element={<AlertsPage demoApi={demoApi} />} />
+        <Route path="/alerts/:id" element={<AlertDetailPage />} />
+        <Route
+          path="/analytics"
+          element={<AnalyticsPage api={analyticsApi} />}
+        />
+        <Route path="*" element={<Navigate to="/alerts" replace />} />
+      </Routes>
+    </AlertsDataProvider>
   );
 }

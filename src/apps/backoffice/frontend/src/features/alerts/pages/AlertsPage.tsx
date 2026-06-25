@@ -1,13 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
-import { FetchHttpClient } from "@shared/api/FetchHttpClient";
 import { AlertsLayout } from "@shared/layouts/AlertsLayout";
-import { createAlertsApi } from "../infrastructure/alertsApi";
-import { createEvidenceApi } from "../infrastructure/evidenceApi";
-import { createRemediationApi } from "../infrastructure/remediationApi";
-import { SSEAlertStream } from "../infrastructure/SSEAlertStream";
-import { createDemoApi } from "@features/demo/infrastructure/demoApi";
+import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import { DemoDrawer } from "@features/demo/presentation/DemoDrawer";
-import { useAlerts } from "../presentation/hooks/useAlerts";
+import { useAlertsData } from "../presentation/AlertsDataProvider";
 import {
   submitFeedback,
   type FeedbackDecision,
@@ -17,22 +12,18 @@ import { AlertList } from "../components/AlertList";
 import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
 import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
 
+export interface AlertsPageProps {
+  /** デモ操作卓 API（composition root で生成して注入）。 */
+  demoApi: DemoApi;
+}
+
 /**
  * アラート一覧ページ（デモの舞台＝AlertsLayout）。
- * api/stream は composition root としてここで生成し、useMemo で安定参照にする
- * （毎レンダー再生成すると useAlerts/useAlertStream が再購読してしまうため）。
- * 一覧（マスター）＋ 行クリックで右オーバーレイ詳細ドロワー（detail）の master-detail。
- * 選択中 alert は alerts から都度引く＝SSE 更新がドロワーにもライブ反映される。
+ * 一覧 state / SSE は AlertsDataProvider（Router 直下）が保持＝遷移で切れない。本ページは
+ * 共有 state を `useAlertsData()` で読むだけ。一覧（マスター）＋行クリックで右ドロワー（detail）。
+ * 選択中 alert は共有 alerts から都度引く＝SSE 更新がドロワーにもライブ反映される。
  */
-export function AlertsPage() {
-  const http = useMemo(() => new FetchHttpClient(), []);
-  const api = useMemo(() => createAlertsApi(http), [http]);
-  const evidenceApi = useMemo(() => createEvidenceApi(http), [http]);
-  const remediationApi = useMemo(() => createRemediationApi(http), [http]);
-  // デモ操作卓（タスク10）。DemoDrawer は AlertsLayout の slot にだけ差し込む＝
-  // プロダクション UI 非侵食。DEMO 無効なら DemoDrawer 自身が 404 を検知して何も描かない。
-  const demoApi = useMemo(() => createDemoApi(http), [http]);
-  const stream = useMemo(() => new SSEAlertStream(), []);
+export function AlertsPage({ demoApi }: AlertsPageProps) {
   const {
     alerts,
     status,
@@ -42,7 +33,10 @@ export function AlertsPage() {
     refreshAlert,
     reconnectStream,
     remediationByAlertId,
-  } = useAlerts(api, stream);
+    api,
+    evidenceApi,
+    remediationApi,
+  } = useAlertsData();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(

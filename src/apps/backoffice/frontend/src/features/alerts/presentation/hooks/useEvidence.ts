@@ -16,7 +16,7 @@ export type UseEvidenceResult = {
  * 証拠の取得 hook。調査の「完了」判定は **SSE で更新される alert.status** から導出し、
  * status エンドポイントのポーリングはしない（同じ事実を二重に持たない・段階1の設計統一）。
  * 分析中（ANALYZING）の間は証拠未着、done（OPEN=既知 or 調査レポート添付）になった瞬間に
- * 証拠を 1 回だけ fetch する。alert は親が SSE ライブで渡す（ドロワー＝alerts.find / 詳細＝useAlert+stream）。
+ * 証拠を 1 回だけ fetch する。alert は親が SSE ライブで渡す（一覧 state の alerts.find 由来＝ドロワー/詳細とも共有 store）。
  *
  * 証拠は外部 API（Cloud Logging/Terraform/GitHub）を叩く重い pull なので、
  * 全クライアントへ broadcast せず「ドロワーを開いた人が done になった時だけ」取得する。
