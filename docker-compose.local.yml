@@ -1,5 +1,4 @@
 services:
-
   mongo:
     ports:
       - "27017:27017"
@@ -44,11 +43,15 @@ services:
       - /app/node_modules
     ports:
       - "3001:3001"
+    env_file:
+      - path: .env.local
+        required: false
     environment:
       PORT: "3001"
       DEMO_ENABLED: "true"
       # ローカルE2E: AI調査の LLM を Stub に差し替え（Gemini課金・非決定性なし）
-      AI_INVESTIGATION_STUB: "true"
+      # AI_INVESTIGATION_STUB: "true"
+      AI_INVESTIGATION_STUB: "false"
       # demo シナリオ facade が EC backend を叩く接続先
       EC_BACKEND_URL: http://ec-backend:3000
       # payment-timeout シナリオで在庫予約を通すため有効な UUID 商品を使う（global-setup が seed）

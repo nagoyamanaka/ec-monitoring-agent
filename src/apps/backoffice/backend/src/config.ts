@@ -12,7 +12,7 @@ export const config = {
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY ?? "",
-    model: process.env.GEMINI_MODEL ?? "gemini-1.5-flash",
+    model: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
   },
   ai: {
     // true で AI調査の LLM を StubLLMClient に差し替える（ローカルE2E用・Gemini課金なし）
@@ -21,7 +21,7 @@ export const config = {
   demo: {
     enabled: process.env.DEMO_ENABLED === "true",
     feedbackAutoPromoteThreshold: parseInt(
-      process.env.FEEDBACK_AUTO_PROMOTE_THRESHOLD ?? "3"
+      process.env.FEEDBACK_AUTO_PROMOTE_THRESHOLD ?? "3",
     ),
     // demo シナリオ facade が EC backend を叩くための接続先と、注文投入に使う商品
     ecBackendUrl: process.env.EC_BACKEND_URL ?? "http://localhost:3000",
@@ -39,12 +39,18 @@ export const config = {
   remediation: {
     // "dispatch" = CI(GitHub Actions)のAIエージェントへ repository_dispatch（実修正+UT/E2E）。
     // "advisory" = in-process で SECURITY_REMEDIATION.md の方針PRを起票（CI不要・既定）。
-    mode: (process.env.REMEDIATION_MODE ?? "advisory") as "dispatch" | "advisory",
+    mode: (process.env.REMEDIATION_MODE ?? "advisory") as
+      | "dispatch"
+      | "advisory",
     // dispatch 経路で起動する repository_dispatch のイベント種別（ターゲットリポの workflow と一致させる）。
-    dispatchEventType: process.env.REMEDIATION_DISPATCH_EVENT_TYPE ?? "ai-remediation",
+    dispatchEventType:
+      process.env.REMEDIATION_DISPATCH_EVENT_TYPE ?? "ai-remediation",
     // AI修正→検証→再修正の自己修正ループ上限。通らないと延々リトライして課金暴走するのを防ぐ安全弁。
     // CI 側ループ（ai-remediation.yml）と将来の調査検証ループ（タスク16）の両方が従う単一ソース。
-    maxAttempts: Math.max(1, parseInt(process.env.REMEDIATION_MAX_ATTEMPTS ?? "2")),
+    maxAttempts: Math.max(
+      1,
+      parseInt(process.env.REMEDIATION_MAX_ATTEMPTS ?? "2"),
+    ),
   },
   elasticsearch: {
     // 空なら InMemory にフォールバック（SimilarPatternRule は無効）。設定すると ES バックエンド＋graded confidence 分類が有効化される。

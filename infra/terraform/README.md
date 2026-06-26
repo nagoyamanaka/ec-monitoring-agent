@@ -3,6 +3,7 @@
 ec-monitoring-agent の GCP インフラ（IaC）。設計は [docs/step4-1-strategy.md §11](../../docs/step4-1-strategy.md) を参照。
 
 トポロジ（§11.1）: **ハイブリッド**。
+
 - **GCE backbone**（常駐の脳）= RabbitMQ / MongoDB / Elasticsearch / Valkey / EDA worker。`docker-compose.prod.yml` を VM 上で起動。
 - **Cloud Run edge**（配信エッジ）= クエリ/SSE をステートレスに。VPC connector 越しに backbone の Valkey/Mongo/ES へ到達。
 - **Cloud Monitoring** → Webhook 通知チャネル → Cloud Run `/ingest/cloud-monitoring`（§11.2・Cloud Function は挟まない）。
@@ -44,7 +45,7 @@ terraform apply
 
 1. **Secret の値を投入**（tf には平文を置かない）:
    ```bash
-   printf '%s' "<gemini-api-key>" | gcloud secrets versions add GEMINI_API_KEY  --data-file=-
+   printf '%s' "AQ.Ab8RN6JEe_yLDFLmtXv-Gnw7MHysUass4cvRWRE7dzEVmgAheQ" | gcloud secrets versions add GEMINI_API_KEY  --data-file=-
    printf '%s' "<ingest-token>"   | gcloud secrets versions add INGEST_TOKEN    --data-file=-
    ```
 2. **イメージを Artifact Registry に push**（`terraform output artifact_repo` のパスへ `ec-backend` / `backoffice-backend`）。
@@ -52,6 +53,7 @@ terraform apply
    ```bash
    gcloud storage cp docker-compose.prod.yml gs://$(terraform output -raw deploy_bucket)/docker-compose.prod.yml
    ```
+
    - GCE startup は `IMAGE_EC` / `IMAGE_BACKOFFICE` / `GCP_PROJECT_ID` を `.env` で渡す。compose 側で `image: ${IMAGE_EC}` 等を参照するか、build を image 参照に置き換える運用に寄せる。
 4. **GitHub Actions に WIF を設定**: `terraform output workload_identity_provider` と `deployer_sa_email` を repo の Variables（`WIF_PROVIDER` / `DEPLOYER_SA`）に登録（`.github/workflows/terraform.yml` 参照）。
 

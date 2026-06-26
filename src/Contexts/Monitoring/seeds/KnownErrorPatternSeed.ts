@@ -22,14 +22,7 @@ export const KNOWN_ERROR_PATTERN_SEEDS: KnownErrorPattern[] = [
     suggestedAction: "在庫を補充するか、該当商品を販売停止にしてください。",
     createdAt: new Date("2026-01-01T00:00:01.000Z"),
   }),
-  KnownErrorPattern.create({
-    id: "c3d4e5f6-3456-4c7d-abce-e3f4a5b6c7d8",
-    name: "INVENTORY_CONCURRENT_CONFLICT",
-    description: "同時アクセスによる競合で在庫の予約に失敗しました。",
-    eventNamePattern: "ec.inventory.reservation_failed",
-    payloadConditions: [{ field: "reason", value: "CONCURRENT_CONFLICT" }],
-    severity: AlertSeverity.warning(),
-    suggestedAction: "リトライロジックを確認し、必要であれば在庫予約の競合対策を見直してください。",
-    createdAt: new Date("2026-01-01T00:00:02.000Z"),
-  }),
+  // INVENTORY_CONCURRENT_CONFLICT はあえて未seed。
+  // デモで「在庫競合」を注入すると既知に一致せず未知分類 → AI（Gemini）が生で調査する経路を見せ、
+  // オペレータが承認すれば新しい既知パターンへ昇格する学習ループを実演するため。
 ];
