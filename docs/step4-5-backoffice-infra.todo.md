@@ -105,7 +105,7 @@
 > **採用方式: 方式A（nginx static + リバースプロキシを独立 Cloud Run サービス）に決定。**
 > ローカルの `vite.config.ts` proxy と同型で、ブラウザは frontend オリジンのみと通信＝SSE 同一オリジン。frontend と backend(edge) を別 Cloud Run サービスとして関心分離する。
 
-### タスク T8.6: frontend Dockerfile に prod（nginx）ステージ追加 〔P0〕
+### タスク T8.6: frontend Dockerfile に prod（nginx）ステージ追加 〔P0〕✅
 
 > 前提: Phase 1（backend が Cloud Run で稼働・URL 確定）。
 
