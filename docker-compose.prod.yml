@@ -7,6 +7,10 @@ services:
     ports:
       - "27017:27017"
 
+  rabbitmq:
+    ports:
+      - "5672:5672"
+
   elasticsearch:
     ports:
       - "9200:9200"

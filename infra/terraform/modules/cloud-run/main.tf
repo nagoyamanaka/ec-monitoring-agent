@@ -65,9 +65,9 @@ resource "google_cloud_run_v2_service" "edge" {
       }
 
       startup_probe {
-        timeout_seconds   = 120
+        timeout_seconds   = 10
         period_seconds    = 10
-        failure_threshold = 12
+        failure_threshold = 24
 
         tcp_socket {
           port = var.container_port

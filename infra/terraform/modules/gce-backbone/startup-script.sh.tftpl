@@ -10,6 +10,10 @@ if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
 
+# Elasticsearch が必要とする vm.max_map_count を設定（未設定だと ES が起動しない）
+sysctl -w vm.max_map_count=262144
+echo "vm.max_map_count=262144" >> /etc/sysctl.conf
+
 mkdir -p /opt/app
 cd /opt/app
 
@@ -21,9 +25,13 @@ TOKEN=$(curl -sf -H "Metadata-Flavor: Google" \
 # 3) Artifact Registry ログイン（gcloud/gsutil 不要）
 echo "$TOKEN" | docker login -u oauth2accesstoken --password-stdin "https://${artifact_host}"
 
-# 4) compose 定義を GCS Storage JSON API から取得（object 名はスラッシュを含まない前提）
+# 4) compose 定義を GCS Storage JSON API から取得（base + override）
 curl -fsS -H "Authorization: Bearer $TOKEN" \
-  -o /opt/app/docker-compose.yml \
+  -o /opt/app/docker-compose.base.yml \
+  "https://storage.googleapis.com/storage/v1/b/${compose_bucket}/o/docker-compose.yml?alt=media"
+
+curl -fsS -H "Authorization: Bearer $TOKEN" \
+  -o /opt/app/docker-compose.prod.yml \
   "https://storage.googleapis.com/storage/v1/b/${compose_bucket}/o/${compose_object}?alt=media"
 
 # 5) イメージ参照とプロジェクトを .env に。シークレットは別途投入（Secret Manager → env）
@@ -33,5 +41,5 @@ IMAGE_EC=${image_ec}
 IMAGE_BACKOFFICE=${image_backoffice}
 EOF
 
-# 6) 起動
-docker compose --env-file /opt/app/.env -f /opt/app/docker-compose.yml up -d
+# 6) 起動（base + prod override）。イメージはpush済みなのでビルドをスキップ
+docker compose --env-file /opt/app/.env -f /opt/app/docker-compose.base.yml -f /opt/app/docker-compose.prod.yml up -d --no-build
