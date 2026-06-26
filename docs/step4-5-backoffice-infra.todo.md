@@ -35,7 +35,7 @@
 
 > 前提: なし（terraform 編集のみ）。apply（T5）の前に埋める。
 
-- 【確認/修正】`infra/terraform/modules/cloud-run/variables.tf` の `plain_env` 既定に **`GEMINI_MODEL`**（既定 `gemini-2.0-flash`）を追加。`DEMO_ENABLED` は既存
+- 【確認/修正】`infra/terraform/modules/cloud-run/variables.tf` の `plain_env` 既定に **`GEMINI_MODEL`**（既定 `gemini-2.5-pro`）を追加。`DEMO_ENABLED` は既存
 - 【確認】`secret_env` 既定（`GEMINI_API_KEY` / `INGEST_TOKEN`）は OK。値は T6 で投入
 - 【確認】`computed_env`（MONGO/ES/REDIS/RABBITMQ ホスト）が backbone 内部 IP を指すこと（実装済み）。`ELASTICSEARCH_URL` / `REDIS_URL` は SimilarPatternRule / 将来 RedisSSE 用。**現状アプリは REDIS_URL 未読込なので no-op**（#3 着手まで害なし）
 - 設計判断: 機密は `secret_env`（Secret Manager 参照）、非機密は `plain_env`。tf に平文を書かない原則を維持
@@ -186,13 +186,15 @@
 #### failover ドレイン（切断中の取りこぼしゼロ化）✅ 実装済み
 
 **なぜ必要か（仕組みの解説）**:
+
 - publish 時に RabbitMQ へ送れないと、`RabbitMQEventBus.publish` は例外を握って [`DomainEventFailoverPublisher`](../src/Contexts/Shared/infrastructure/EventBus/DomainEventFailoverPublisher/DomainEventFailoverPublisher.ts) 経由で **Mongo `DomainEvents` コレクションにイベントを退避**する（= イベント自体は消えない）。
 - ところが**退避したものを後で読み出して再送するコードが無かった**（`consume()` は実装済みだが呼び出し側ゼロ）。結果、切断中に発生したイベントは Mongo に**永久に滞留**し、再接続後の新規イベントだけが流れる＝**切断ウィンドウ分のアラートが恒久的に欠落**していた（実際に 62 件滞留していた）。
 - 「再接続」だけでは "今後" は直るが "切断中に取りこぼした分" は戻らない。これを戻すのが **ドレイン（drain＝退避分の再送）**。
 
 **実装**:
+
 - [`DomainEventFailoverPublisher`](../src/Contexts/Shared/infrastructure/EventBus/DomainEventFailoverPublisher/DomainEventFailoverPublisher.ts)：`pending()`（退避イベントを生のまま取得）＋ `remove(eventId)`（再送成功分を削除）を追加。
-  - 設計上の罠: **deserialize は使わない**。退避するのは publish 側アプリで、その `DomainEventDeserializer` は自分が *subscribe* するイベントしか知らない（例: EC は `ec.payment.timeout` を publish するが subscribe しないので deserialize 不可）。なので保存済みの serialized 文字列を**そのまま再送**し、routingKey に使う `eventName` だけを JSON の `data.type` から抜き出す。
+  - 設計上の罠: **deserialize は使わない**。退避するのは publish 側アプリで、その `DomainEventDeserializer` は自分が _subscribe_ するイベントしか知らない（例: EC は `ec.payment.timeout` を publish するが subscribe しないので deserialize 不可）。なので保存済みの serialized 文字列を**そのまま再送**し、routingKey に使う `eventName` だけを JSON の `data.type` から抜き出す。
 - [`RabbitMQEventBus.drainFailover()`](../src/Contexts/Shared/infrastructure/EventBus/RabbitMq/RabbitMqEventBus.ts)：退避分を順に再送し、**成功した分だけ** failover から削除。1 件でも失敗（＝まだ未接続）したらそこで中断し残りは次回へ。at-least-once（messageId=eventId なので重複は下流の dedup で吸収）。
 - [`EcBackendApp`](../src/apps/ec/backend/src/EcBackendApp.ts) / [`BackofficeApp`](../src/apps/backoffice/backend/src/BackofficeApp.ts)：`setupEventBus`（configure→addSubscribers→`drainFailover`）を **起動時と再接続成功直後の両方**で実行。起動時ドレインにより「前回プロセスが退避したまま落ちた分」も回収できる。
 - 【テスト】[`RabbitMqEventBus.test.ts`](../src/Contexts/Shared/infrastructure/EventBus/RabbitMq/RabbitMqEventBus.test.ts)：生 content のまま再送・eventName→routingKey・成功分のみ削除・途中失敗で中断し残置・空なら no-op を UT（fake connection/failover 注入）。

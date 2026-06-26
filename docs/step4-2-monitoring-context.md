@@ -6,12 +6,12 @@
 >
 > **Step4 ファミリー（進める順番＝ファイル番号順）**
 >
-> | 順 | スコープ            | 設計ドキュメント                      | TODO                                       |
-> | -- | ------------------- | ------------------------------------- | ------------------------------------------ |
-> | 1  | 戦略設計            | `docs/step4-1-strategy.md`            | `docs/step4-1-strategy-todo.md`            |
-> | 2  | context/Monitoring  | `docs/step4-2-monitoring-context.md`  | `docs/step4-2-monitoring-context-todo.md`  |
-> | 3  | backoffice/backend  | `docs/step4-3-backoffice-backend.md`  | `docs/step4-3-backoffice-backend-todo.md`  |
-> | 4  | backoffice/frontend | `docs/step4-4-backoffice-frontend.md` | `docs/step4-4-backoffice-frontend-todo.md` |
+> | 順  | スコープ            | 設計ドキュメント                      | TODO                                       |
+> | --- | ------------------- | ------------------------------------- | ------------------------------------------ |
+> | 1   | 戦略設計            | `docs/step4-1-strategy.md`            | `docs/step4-1-strategy-todo.md`            |
+> | 2   | context/Monitoring  | `docs/step4-2-monitoring-context.md`  | `docs/step4-2-monitoring-context-todo.md`  |
+> | 3   | backoffice/backend  | `docs/step4-3-backoffice-backend.md`  | `docs/step4-3-backoffice-backend-todo.md`  |
+> | 4   | backoffice/frontend | `docs/step4-4-backoffice-frontend.md` | `docs/step4-4-backoffice-frontend-todo.md` |
 >
 > 前提となる設計:
 >
@@ -36,21 +36,21 @@
 
 ## 設計判断メモ（本ドキュメント確定時の議論）
 
-| 判断項目                                  | 決定内容                                                                                                                                                    | 理由                                                                                                                                                                              |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MonitoringEventの型粒度                   | 単一の `MonitoringEvent` 型にすべてのECイベントをマッピング                                                                                                 | ECイベント種別ごとにサブクラスを作ると、MonitoringコンテキストがECの型構造に引っ張られる。Monitoringは「観測データ」として均質に扱うのが責務上自然                                |
-| 障害レイヤーの表現方法                    | サブクラス分けではなく `MonitoringEvent.category`（APPLICATION / INFRASTRUCTURE / CAPACITY / SECURITY）の弁別子フィールドで表現                              | payload を均質に保つ原則を崩さない。`category` は InfraInvestigation の証拠源選択と、将来の調査担当ルーティング（in-process / a2a 委譲）の**ディスパッチキー**になり、a2aの有無に依存しない前方互換を持つ |
-| VO粒度の判断基準                          | `ClassificationConfidence` のみクラス化。`MatchedCondition` / `UnmatchedCondition` は `interface` のまま                                                    | VOにする価値はドメイン制約と振る舞いの有無で判断する。`Confidence` は範囲制約 + 将来の `isHighConfidence()` が明確。`MatchedCondition` は構造体でしかなく制約も振る舞いも薄い     |
-| AlertClassificationのOCP + Strategy適用   | `KnownAlertClassification` VOは「何が根拠か」の構造のみ定義。重み・スコア計算はClassifier実装クラスの内部ロジックとしてVOに露出しない                       | スコアリング戦略が変わるたびにVOスキーマが変わるとOCP違反。「どう計算したか」はClassifierが知り、「何が根拠か」だけをVOが永続記録する責務分離                                     |
-| 分類の構造（Classifier/Policy/Rule）      | `AlertClassifier`（トップIF）→ `ClassificationPolicy`（category単位）→ `ClassificationRule`（最小単位・依存を内包）の3層。強化は「Classifier丸ごと差し替え」でなく「Policyに Rule を足す」 | 各 Rule が repository / port / 外部検索を自分で持てるので、InMemory完全一致・Elasticスコアリング・AI推論を同一IFの裏で共存できる。`match(event, patterns[])` を強制する単一アルゴリズム抽象は Elastic/AI に噛み合わず廃止した |
-| AlertClassifierのマッチング戦略（今回）   | EVENT_NAME 完全一致 + payload 部分マッチ（first-match）。`KnownAlertClassification.confidence: 1.0` 固定。`KnownPatternRule` 1個を `ApplicationClassificationPolicy` に載せる              | ハッカソンスコープとして十分。`AlertClassifier` インターフェースは維持し、Rule追加で将来スコアリングへ拡張可能にする                                                              |
-| AlertClassifierのマッチング戦略（将来）   | スコアリングベース（複数パターンへの重み付けスコア合算）。`confidence` が閾値未満の場合は未知扱い。`SimilarPatternRule`(Elastic) を Policy に追加する形で実現                            | 「未知障害の推測精度向上」と「作業員の意思決定支援」が本来の目的。部分一致の度合いをスコアで表現することで、複数パターンへの可能性を並列提示できる                                |
-| AlertClassification への confidence 配置  | `AlertClassification` に `confidence: number \| null` を持たせる。既知一致は `1.0`、未知は `null`（AI分析後は `InvestigationReport.confidence` が別途存在） | 将来のスコアリング移行後も同一フィールドに `0.87` 等を格納できる。UIが `classification.confidence` を参照するだけで両世代のデータを扱える                                         |
-| 既知パターン昇格トリガー                  | 手動（Promoteボタン）+ 自動（correctフィードバックがN回到達で自動昇格）                                                                                     | デモシナリオ3の「次回同じ障害が1秒以内に既知分類される」を自動で示せる。手動はオペレーターの明示的な判断も残す                                                                    |
-| InvestigationReportの配置                 | Alert集約に直接埋め込む（別集約にしない）。**ファイルも `AlertAnalysis/domain/` に置く**（`AIInvestigation/domain/` ではない）                                                                                                                   | Alert IDで常にセットで参照される。ライフサイクルも同一。分離のメリット（独立した集約操作）がない。**集約の構成要素（サブエンティティ）は集約と同じモジュールが所有する**。`AIInvestigation` 側に置くと `Alert(AlertAnalysis)→InvestigationReport(AIInvestigation)→AlertSeverity(AlertAnalysis)` のモジュール循環依存が発生する。所有を `AlertAnalysis` に寄せると依存は `AIInvestigation → AlertAnalysis` の一方向となり、Reportを生成する補助モジュール（Port/Adapter）が集約の型に依存する自然な向きになる |
-| SSEAlertNotifierの実装                    | Node.js EventEmitterオンメモリ（シングルプロセス前提）                                                                                                      | e2-medium単一プロセス構成。Redis追加はインフラコストと複雑性を上げる。スケールアウトが必要になった時点でRedis Pub/Subに差し替える（SSEAlertNotifierインターフェースで抽象化済み） |
-| PaymentTimeoutDomainEvent受信時のorderId  | MonitoringEventに `orderId?: string` として保持し、Alertレベルで「注文未確定の決済障害」として分類する                                                      | OrderがDBに存在しない段階のイベント。Monitoringが無理にOrderを引きに行かない設計にする                                                                                            |
-| SimilarIncidentRepositoryのウォームアップ | 起動時にMongoDBから既存ResolvedIncidentを読み込んでインメモリ構築                                                                                           | ハッカソン規模では再起動頻度が低い。コールドスタート時の1〜2秒は許容範囲                                                                                                          |
+| 判断項目                                  | 決定内容                                                                                                                                                                                   | 理由                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| MonitoringEventの型粒度                   | 単一の `MonitoringEvent` 型にすべてのECイベントをマッピング                                                                                                                                | ECイベント種別ごとにサブクラスを作ると、MonitoringコンテキストがECの型構造に引っ張られる。Monitoringは「観測データ」として均質に扱うのが責務上自然                                                                                                                                                                                                                                                                                                                                                           |
+| 障害レイヤーの表現方法                    | サブクラス分けではなく `MonitoringEvent.category`（APPLICATION / INFRASTRUCTURE / CAPACITY / SECURITY）の弁別子フィールドで表現                                                            | payload を均質に保つ原則を崩さない。`category` は InfraInvestigation の証拠源選択と、将来の調査担当ルーティング（in-process / a2a 委譲）の**ディスパッチキー**になり、a2aの有無に依存しない前方互換を持つ                                                                                                                                                                                                                                                                                                    |
+| VO粒度の判断基準                          | `ClassificationConfidence` のみクラス化。`MatchedCondition` / `UnmatchedCondition` は `interface` のまま                                                                                   | VOにする価値はドメイン制約と振る舞いの有無で判断する。`Confidence` は範囲制約 + 将来の `isHighConfidence()` が明確。`MatchedCondition` は構造体でしかなく制約も振る舞いも薄い                                                                                                                                                                                                                                                                                                                                |
+| AlertClassificationのOCP + Strategy適用   | `KnownAlertClassification` VOは「何が根拠か」の構造のみ定義。重み・スコア計算はClassifier実装クラスの内部ロジックとしてVOに露出しない                                                      | スコアリング戦略が変わるたびにVOスキーマが変わるとOCP違反。「どう計算したか」はClassifierが知り、「何が根拠か」だけをVOが永続記録する責務分離                                                                                                                                                                                                                                                                                                                                                                |
+| 分類の構造（Classifier/Policy/Rule）      | `AlertClassifier`（トップIF）→ `ClassificationPolicy`（category単位）→ `ClassificationRule`（最小単位・依存を内包）の3層。強化は「Classifier丸ごと差し替え」でなく「Policyに Rule を足す」 | 各 Rule が repository / port / 外部検索を自分で持てるので、InMemory完全一致・Elasticスコアリング・AI推論を同一IFの裏で共存できる。`match(event, patterns[])` を強制する単一アルゴリズム抽象は Elastic/AI に噛み合わず廃止した                                                                                                                                                                                                                                                                                |
+| AlertClassifierのマッチング戦略（今回）   | EVENT_NAME 完全一致 + payload 部分マッチ（first-match）。`KnownAlertClassification.confidence: 1.0` 固定。`KnownPatternRule` 1個を `ApplicationClassificationPolicy` に載せる              | ハッカソンスコープとして十分。`AlertClassifier` インターフェースは維持し、Rule追加で将来スコアリングへ拡張可能にする                                                                                                                                                                                                                                                                                                                                                                                         |
+| AlertClassifierのマッチング戦略（将来）   | スコアリングベース（複数パターンへの重み付けスコア合算）。`confidence` が閾値未満の場合は未知扱い。`SimilarPatternRule`(Elastic) を Policy に追加する形で実現                              | 「未知障害の推測精度向上」と「作業員の意思決定支援」が本来の目的。部分一致の度合いをスコアで表現することで、複数パターンへの可能性を並列提示できる                                                                                                                                                                                                                                                                                                                                                           |
+| AlertClassification への confidence 配置  | `AlertClassification` に `confidence: number \| null` を持たせる。既知一致は `1.0`、未知は `null`（AI分析後は `InvestigationReport.confidence` が別途存在）                                | 将来のスコアリング移行後も同一フィールドに `0.87` 等を格納できる。UIが `classification.confidence` を参照するだけで両世代のデータを扱える                                                                                                                                                                                                                                                                                                                                                                    |
+| 既知パターン昇格トリガー                  | 手動（Promoteボタン）+ 自動（correctフィードバックがN回到達で自動昇格）                                                                                                                    | デモシナリオ3の「次回同じ障害が1秒以内に既知分類される」を自動で示せる。手動はオペレーターの明示的な判断も残す                                                                                                                                                                                                                                                                                                                                                                                               |
+| InvestigationReportの配置                 | Alert集約に直接埋め込む（別集約にしない）。**ファイルも `AlertAnalysis/domain/` に置く**（`AIInvestigation/domain/` ではない）                                                             | Alert IDで常にセットで参照される。ライフサイクルも同一。分離のメリット（独立した集約操作）がない。**集約の構成要素（サブエンティティ）は集約と同じモジュールが所有する**。`AIInvestigation` 側に置くと `Alert(AlertAnalysis)→InvestigationReport(AIInvestigation)→AlertSeverity(AlertAnalysis)` のモジュール循環依存が発生する。所有を `AlertAnalysis` に寄せると依存は `AIInvestigation → AlertAnalysis` の一方向となり、Reportを生成する補助モジュール（Port/Adapter）が集約の型に依存する自然な向きになる |
+| SSEAlertNotifierの実装                    | Node.js EventEmitterオンメモリ（シングルプロセス前提）                                                                                                                                     | e2-medium単一プロセス構成。Redis追加はインフラコストと複雑性を上げる。スケールアウトが必要になった時点でRedis Pub/Subに差し替える（SSEAlertNotifierインターフェースで抽象化済み）                                                                                                                                                                                                                                                                                                                            |
+| PaymentTimeoutDomainEvent受信時のorderId  | MonitoringEventに `orderId?: string` として保持し、Alertレベルで「注文未確定の決済障害」として分類する                                                                                     | OrderがDBに存在しない段階のイベント。Monitoringが無理にOrderを引きに行かない設計にする                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| SimilarIncidentRepositoryのウォームアップ | 起動時にMongoDBから既存ResolvedIncidentを読み込んでインメモリ構築                                                                                                                          | ハッカソン規模では再起動頻度が低い。コールドスタート時の1〜2秒は許容範囲                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ---
 
@@ -188,14 +188,14 @@ export class MonitoringEventCategory extends EnumValueObject<MonitoringEventCate
 
 ### ECDomainEvent → MonitoringEvent 変換規則
 
-| ECDomainEvent                           | eventName                         | category      | source      | aggregateId        | payloadのキー（`toPrimitives()` の実体）                            |
-| --------------------------------------- | --------------------------------- | ------------- | ----------- | ------------------ | ------------------------------------------------------------------ |
-| `OrderPlacedDomainEvent`                | `ec.order.placed`                 | `APPLICATION` | `order`     | orderId            | customerId, items, subtotalAmount                                  |
-| `InventoryReservationFailedDomainEvent` | `ec.inventory.reservation_failed` | `APPLICATION` | `inventory` | productId          | orderId, requestedQuantity, currentStock, reason, reservedProductIds |
-| `PaymentTimeoutDomainEvent`             | `ec.payment.timeout`              | `APPLICATION` | `payment`   | paymentAttemptId   | orderId, customerId, amount                                        |
-| （将来）RabbitMQ Connection Lost        | `infra.rabbitmq.disconnected`     | `INFRASTRUCTURE` | `rabbitmq`  | connectionId       | （拡張ポイント。同一 MonitoringEvent 経路に流す）                  |
-| （将来）Traffic Spike Detected          | `capacity.traffic_spike`          | `CAPACITY`    | `traffic`   | -                  | （拡張ポイント）                                                   |
-| （将来）Critical Vulnerability Detected | `security.vulnerability_detected` | `SECURITY`    | `npm_audit` | -                  | （拡張ポイント。GitHub Actions → npm audit から発火）             |
+| ECDomainEvent                           | eventName                         | category         | source      | aggregateId      | payloadのキー（`toPrimitives()` の実体）                             |
+| --------------------------------------- | --------------------------------- | ---------------- | ----------- | ---------------- | -------------------------------------------------------------------- |
+| `OrderPlacedDomainEvent`                | `ec.order.placed`                 | `APPLICATION`    | `order`     | orderId          | customerId, items, subtotalAmount                                    |
+| `InventoryReservationFailedDomainEvent` | `ec.inventory.reservation_failed` | `APPLICATION`    | `inventory` | productId        | orderId, requestedQuantity, currentStock, reason, reservedProductIds |
+| `PaymentTimeoutDomainEvent`             | `ec.payment.timeout`              | `APPLICATION`    | `payment`   | paymentAttemptId | orderId, customerId, amount                                          |
+| （将来）RabbitMQ Connection Lost        | `infra.rabbitmq.disconnected`     | `INFRASTRUCTURE` | `rabbitmq`  | connectionId     | （拡張ポイント。同一 MonitoringEvent 経路に流す）                    |
+| （将来）Traffic Spike Detected          | `capacity.traffic_spike`          | `CAPACITY`       | `traffic`   | -                | （拡張ポイント）                                                     |
+| （将来）Critical Vulnerability Detected | `security.vulnerability_detected` | `SECURITY`       | `npm_audit` | -                | （拡張ポイント。GitHub Actions → npm audit から発火）                |
 
 > **コード整合の注記**:
 >
@@ -211,11 +211,11 @@ export class MonitoringEventCategory extends EnumValueObject<MonitoringEventCate
 
 `MonitoringEvent` への変換境界は検知ソースごとに複数あり、すべて `CollectMonitoringEventUseCase`（→ `AnalyzeAlert`）の同じ観測パイプラインに合流する peer。源固有の型に触れるのはこの境界だけ。
 
-| 検知ソース | ingest アダプタ | category | 種別 |
-| --- | --- | --- | --- |
-| EC 自前 DomainEvent | `CollectMonitoringEventOnECEventPublished`（RabbitMQ Subscriber） | APPLICATION | 実装済み（Datadog 不在のデモ stand-in） |
-| Cloud Monitoring（Alerting Policy 発火） | `CloudMonitoringAlertIngestController` ＋ `CloudMonitoringAlertTranslator`（`POST /ingest/cloud-monitoring`） | INFRASTRUCTURE / CAPACITY | 実装済み |
-| CI / Trivy | `SecurityScanIngestController`（`POST /ingest/security-scan`） | SECURITY | 設計 |
+| 検知ソース                               | ingest アダプタ                                                                                               | category                  | 種別                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------------------------------- |
+| EC 自前 DomainEvent                      | `CollectMonitoringEventOnECEventPublished`（RabbitMQ Subscriber）                                             | APPLICATION               | 実装済み（Datadog 不在のデモ stand-in） |
+| Cloud Monitoring（Alerting Policy 発火） | `CloudMonitoringAlertIngestController` ＋ `CloudMonitoringAlertTranslator`（`POST /ingest/cloud-monitoring`） | INFRASTRUCTURE / CAPACITY | 実装済み                                |
+| CI / Trivy                               | `SecurityScanIngestController`（`POST /ingest/security-scan`）                                                | SECURITY                  | 設計                                    |
 
 > **category オーナーシップ（被り対策の主防御）**: APPLICATION は EC イベント、INFRASTRUCTURE/CAPACITY は Cloud Monitoring が権威。同じものを両ソースに監視させない＝検知の被りを構造的に消す。残る同一シグナルの重複は `dedupKey`（§MonitoringEvent）で畳む。詳細は `docs/step4-1-strategy.md` §2.5。
 >
@@ -266,20 +266,20 @@ PaymentTimeout発生時はOrderがDBに存在しない（決済が注文確定�
 
 ### プロパティ
 
-| プロパティ             | 型                            | 説明                                         |
-| ---------------------- | ----------------------------- | -------------------------------------------- |
-| `id`                   | `AlertId`                     | 集約識別子                                   |
-| `monitoringEvent`      | `MonitoringEvent`             | 原因となったECイベント                       |
-| `severity`             | `AlertSeverity`               | CRITICAL / WARNING / INFO                    |
-| `status`               | `AlertStatus`                 | OPEN / ANALYZING / RESOLVED                  |
-| `classification`       | `AlertClassification`         | 既知/未知の分類結果                          |
-| `investigationReport`  | `InvestigationReport \| null` | AI分析結果（未知障害時のみ）                 |
-| `feedback`             | `AlertFeedback \| null`       | オペレーターのフィードバック                 |
-| `correctFeedbackCount` | `number`                      | 正解フィードバック累計（自動昇格判定に使用） |
+| プロパティ             | 型                            | 説明                                                                               |
+| ---------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
+| `id`                   | `AlertId`                     | 集約識別子                                                                         |
+| `monitoringEvent`      | `MonitoringEvent`             | 原因となったECイベント                                                             |
+| `severity`             | `AlertSeverity`               | CRITICAL / WARNING / INFO                                                          |
+| `status`               | `AlertStatus`                 | OPEN / ANALYZING / RESOLVED                                                        |
+| `classification`       | `AlertClassification`         | 既知/未知の分類結果                                                                |
+| `investigationReport`  | `InvestigationReport \| null` | AI分析結果（未知障害時のみ）                                                       |
+| `feedback`             | `AlertFeedback \| null`       | オペレーターのフィードバック                                                       |
+| `correctFeedbackCount` | `number`                      | 正解フィードバック累計（自動昇格判定に使用）                                       |
 | `dedupKey`             | `string`                      | `monitoringEvent.dedupKey()` を materialize（クエリ容易性のため Alert に非正規化） |
-| `occurrenceCount`      | `number`                      | 同一 dedupKey の重複観測をまとめた発生回数（初期1・UI は「×N」表示） |
-| `createdAt`            | `Date`                        |                                              |
-| `updatedAt`            | `Date`                        |                                              |
+| `occurrenceCount`      | `number`                      | 同一 dedupKey の重複観測をまとめた発生回数（初期1・UI は「×N」表示）               |
+| `createdAt`            | `Date`                        |                                                                                    |
+| `updatedAt`            | `Date`                        |                                                                                    |
 
 ### ファクトリメソッド
 
@@ -462,7 +462,9 @@ UIは `classification.confidence` と `matchedConditions` / `unmatchedConditions
 // domain/classification/AlertClassifier.ts
 // AnalyzeAlertCommandHandler はこの抽象にのみ依存する
 interface AlertClassifier {
-  classify(monitoringEvent: MonitoringEvent): Promise<AlertClassificationResult>;
+  classify(
+    monitoringEvent: MonitoringEvent,
+  ): Promise<AlertClassificationResult>;
 }
 
 // 戻り値はシンプルに保つ。根拠の詳細は KnownAlertClassification VO が持つ責務
@@ -474,7 +476,9 @@ type AlertClassificationResult =
 // 監視領域（category）ごとの分類戦略。配下の Rule 群を束ねる
 interface ClassificationPolicy {
   supports(monitoringEvent: MonitoringEvent): boolean; // 通常は category 一致
-  classify(monitoringEvent: MonitoringEvent): Promise<AlertClassificationResult>;
+  classify(
+    monitoringEvent: MonitoringEvent,
+  ): Promise<AlertClassificationResult>;
 }
 
 // domain/classification/ClassificationRule.ts
@@ -482,7 +486,9 @@ interface ClassificationPolicy {
 // kind は「証拠の性質」を表す属性。優先順位は ClassificationRuleSorter が kind を見て決める
 interface ClassificationRule {
   readonly kind: ClassificationRuleKind; // EXACT_MATCH | SIMILARITY | INFERENCE
-  classify(monitoringEvent: MonitoringEvent): Promise<KnownAlertClassification | null>;
+  classify(
+    monitoringEvent: MonitoringEvent,
+  ): Promise<KnownAlertClassification | null>;
 }
 
 // domain/classification/ClassificationRuleSorter.ts
@@ -498,23 +504,23 @@ class ClassificationRuleSorter {
 
 **構成クラス**:
 
-| ファイル | 役割 |
-| -------- | ---- |
-| `domain/classification/PolicyBasedAlertClassifier.ts` | `MonitoringEvent.category` で担当 Policy にディスパッチするドメインサービス（`AlertClassifier` 実装） |
-| `domain/classification/policies/ApplicationClassificationPolicy.ts` | APPLICATION 領域の Policy。`ClassificationRuleSorter` で Rule を優先度順に並べ、最初に発火した結果を採用（first-match） |
-| `domain/classification/ClassificationRuleSorter.ts` | Rule を kind 優先順位で並べ替えるドメインサービス（exact > similarity > inference） |
-| `domain/classification/ClassificationRuleKind.ts` | Rule の証拠の性質（`EXACT_MATCH` / `SIMILARITY` / `INFERENCE`） |
-| `domain/classification/rules/KnownPatternRule.ts` | 既知パターン完全一致 Rule（kind=`EXACT_MATCH`）。`KnownErrorPatternRepository` を内包・confidence 1.0 固定 |
+| ファイル                                                            | 役割                                                                                                                         |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `domain/classification/PolicyBasedAlertClassifier.ts`               | `MonitoringEvent.category` で担当 Policy にディスパッチするドメインサービス（`AlertClassifier` 実装）                        |
+| `domain/classification/policies/ApplicationClassificationPolicy.ts` | APPLICATION 領域の Policy。`ClassificationRuleSorter` で Rule を優先度順に並べ、最初に発火した結果を採用（first-match）      |
+| `domain/classification/ClassificationRuleSorter.ts`                 | Rule を kind 優先順位で並べ替えるドメインサービス（exact > similarity > inference）                                          |
+| `domain/classification/ClassificationRuleKind.ts`                   | Rule の証拠の性質（`EXACT_MATCH` / `SIMILARITY` / `INFERENCE`）                                                              |
+| `domain/classification/rules/KnownPatternRule.ts`                   | 既知パターン完全一致 Rule（kind=`EXACT_MATCH`）。`KnownErrorPatternRepository` を内包・confidence 1.0 固定                   |
 | `infrastructure/persistence/InMemoryKnownErrorPatternRepository.ts` | `KnownErrorPatternRepository` のオンメモリ実装。分類器グラフの組み立て（依存注入）は step4-3 の DI（composition root）が行う |
 
 ### ルール優先度の決定箇所
 
 優先度には2軸あり、決定箇所を分離する：
 
-| 軸 | 決定箇所 | 仕組み |
-| --- | --- | --- |
-| **ルール間**（exact → similarity → inference のどの戦略が勝つか） | `ClassificationRuleSorter`（domain） | Rule の **kind 優先順位**で確定的に並べ替える（配列順に依存しない） |
-| **パターン間**（`KnownPatternRule` 内でどのパターンが先に当たるか） | `KnownErrorPatternRepository.findAll()` | **createdAt ASC**（seed順 / 昇格時刻） |
+| 軸                                                                  | 決定箇所                                | 仕組み                                                              |
+| ------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------- |
+| **ルール間**（exact → similarity → inference のどの戦略が勝つか）   | `ClassificationRuleSorter`（domain）    | Rule の **kind 優先順位**で確定的に並べ替える（配列順に依存しない） |
+| **パターン間**（`KnownPatternRule` 内でどのパターンが先に当たるか） | `KnownErrorPatternRepository.findAll()` | **createdAt ASC**（seed順 / 昇格時刻）                              |
 
 **設計判断**:
 
@@ -637,13 +643,13 @@ interface PayloadCondition {
 
 ### 依存関係
 
-| 依存                          | 種別      | 理由                                  |
-| ----------------------------- | --------- | ------------------------------------- |
-| `AlertRepository`             | interface | Alert永続化                           |
-| `AlertClassifier`             | interface | 既知/未知分類                         |
-| `EventBus`                    | interface | InvestigateAlertDomainEvent発行（未知時） |
-| `SSEAlertNotifier`            | interface | フロントへの即時push                  |
-| `Logger`                      | interface | 構造化ログ                            |
+| 依存               | 種別      | 理由                                      |
+| ------------------ | --------- | ----------------------------------------- |
+| `AlertRepository`  | interface | Alert永続化                               |
+| `AlertClassifier`  | interface | 既知/未知分類                             |
+| `EventBus`         | interface | InvestigateAlertDomainEvent発行（未知時） |
+| `SSEAlertNotifier` | interface | フロントへの即時push                      |
+| `Logger`           | interface | 構造化ログ                                |
 
 > **注**: 既知パターンの取得（`KnownErrorPatternRepository.findAll()`）は `KnownPatternRule` が内包するため、Handler は `KnownErrorPatternRepository` に依存しない。Handler は `classify(monitoringEvent)` を呼ぶだけで、パターン取得・照合の内部実装を知らない。
 
@@ -708,14 +714,14 @@ interface AnalyzeAlertCommand {
 
 ### 依存関係
 
-| 依存                        | 種別      | 理由                                          |
-| --------------------------- | --------- | --------------------------------------------- |
-| `AlertRepository`           | interface | Alert取得・更新                               |
-| `SimilarIncidentRepository` | interface | 類似インシデント検索                          |
+| 依存                        | 種別      | 理由                                                        |
+| --------------------------- | --------- | ----------------------------------------------------------- |
+| `AlertRepository`           | interface | Alert取得・更新                                             |
+| `SimilarIncidentRepository` | interface | 類似インシデント検索                                        |
 | `InfraInvestigationPort`    | interface | インフラ横断証拠収集（Cloud Logging/Terraform/GitHub。v12） |
-| `AIInvestigationPort`       | interface | Gemini API呼び出し                            |
-| `SSEAlertNotifier`          | interface | 分析結果のpush                                |
-| `Logger`                    | interface | 構造化ログ                                    |
+| `AIInvestigationPort`       | interface | Gemini API呼び出し                                          |
+| `SSEAlertNotifier`          | interface | 分析結果のpush                                              |
+| `Logger`                    | interface | 構造化ログ                                                  |
 
 ### 購読する DomainEvent（InvestigateAlertDomainEvent）
 
@@ -920,6 +926,7 @@ AIInvestigationPort（インターフェース）← Application層が依存す�
 ### LLMInvestigationAdapter ＋ GeminiLLMClient（Infrastructure実装・フェーズ0）
 
 **ファイルパス**（すべて `infrastructure/aiinvestigation/`）:
+
 - `LLMInvestigationAdapter.ts`（`AIInvestigationPort` 実装。薄いオーケストレーション）
 - `InvestigationPromptBuilder.ts`（プロンプト構築＋トークン予算）
 - `LLMOutputParser.ts`（LLM生テキストのパース＆検証）
@@ -928,19 +935,19 @@ AIInvestigationPort（インターフェース）← Application層が依存す�
 
 **責務分割（SRP）**: オーケストレーションは3つの純関数モジュールに分離し、各モジュールを直接ユニットテストする。
 
-| 担当 | モジュール/クラス | 内容 |
-| --- | --- | --- |
-| プロバイダ非依存（統括） | `LLMInvestigationAdapter` | 下記3モジュール＋`LLMTextClient`を組み合わせる薄い`investigate()`のみ |
-| プロバイダ非依存（純関数） | `InvestigationPromptBuilder` | プロンプト構築（トークン3,500予算管理） |
-| プロバイダ非依存（純関数） | `LLMOutputParser` | ```json フェンス抽出＋スキーマ検証（`parseLLMOutput`） |
-| プロバイダ非依存（純関数） | `InvestigationReportMapper` | `confidence`クランプ・`severity`マッピング／`InvestigationReport`生成・fallback生成 |
-| プロバイダ固有 | `GeminiLLMClient` | `@google/generative-ai` のSDK初期化・`generateContent`呼び出し・本文抽出／30sタイムアウト・1回リトライ |
+| 担当                       | モジュール/クラス            | 内容                                                                                                   |
+| -------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ |
+| プロバイダ非依存（統括）   | `LLMInvestigationAdapter`    | 下記3モジュール＋`LLMTextClient`を組み合わせる薄い`investigate()`のみ                                  |
+| プロバイダ非依存（純関数） | `InvestigationPromptBuilder` | プロンプト構築（トークン3,500予算管理）                                                                |
+| プロバイダ非依存（純関数） | `LLMOutputParser`            | ```json フェンス抽出＋スキーマ検証（`parseLLMOutput`）                                                 |
+| プロバイダ非依存（純関数） | `InvestigationReportMapper`  | `confidence`クランプ・`severity`マッピング／`InvestigationReport`生成・fallback生成                    |
+| プロバイダ固有             | `GeminiLLMClient`            | `@google/generative-ai` のSDK初期化・`generateContent`呼び出し・本文抽出／30sタイムアウト・1回リトライ |
 
 > **テスト方針**: このアダプタ群は薄い疎通リポジトリと違い分岐ロジック（トークン超過削減・JSON抽出・severity丸め・confidenceクランプ・2種のfallback経路）が厚いため、E2Eでなく**ユニットテスト**で担保する。純関数3モジュールは直接、`LLMInvestigationAdapter` はfakeの`LLMTextClient`を注入して全分岐（正常／例外→fallback／パース不能→fallback）を検証する（Gemini不要）。
 
 ```typescript
 // GeminiLLMClient の依存: @google/generative-ai
-// モデル: gemini-2.0-flash 系（環境変数 GEMINI_MODEL で切り替え可能。コスト/レイテンシ優先）
+// モデル: gemini-2.5-pro 系（環境変数 GEMINI_MODEL で切り替え可能。コスト/レイテンシ優先）
 
 // systemInstruction（LLMInvestigationAdapter が保持。JSON返却を強制）
 const SYSTEM_INSTRUCTION = `
@@ -1006,12 +1013,12 @@ interface InfraInvestigationPort {
 
 **`category` による証拠源の出し分け**（実装は各Gatewayの呼び出し有無で制御）:
 
-| category         | 厚めに収集する証拠源                                  |
-| ---------------- | ---------------------------------------------------- |
-| `APPLICATION`    | Cloud Logging（アプリログ）中心                      |
-| `INFRASTRUCTURE` | Terraform差分 + Cloud Logging                        |
-| `SECURITY`       | GitHub（npm audit結果・依存更新PR）                  |
-| `CAPACITY`       | Cloud Monitoring メトリクス（次フェーズGateway）     |
+| category         | 厚めに収集する証拠源                             |
+| ---------------- | ------------------------------------------------ |
+| `APPLICATION`    | Cloud Logging（アプリログ）中心                  |
+| `INFRASTRUCTURE` | Terraform差分 + Cloud Logging                    |
+| `SECURITY`       | GitHub（npm audit結果・依存更新PR）              |
+| `CAPACITY`       | Cloud Monitoring メトリクス（次フェーズGateway） |
 
 ### InfraEvidence（ドメイン型）
 
@@ -1096,12 +1103,12 @@ InvestigationCoordinator（オーケストレータ）
       Synthesizer → InvestigationReport（reviewStatus = PENDING_REVIEW）
 ```
 
-| エージェント               | 責務                                       | tool / 依存                                  |
-| -------------------------- | ------------------------------------------ | -------------------------------------------- |
-| `InvestigationCoordinator` | ルーティング・サブエージェント統括・統合   | 各サブエージェント                           |
-| `EvidenceCollectorAgent`   | 証拠の横断収集（read-only・ベストエフォート） | `InfraInvestigationPort` 配下の各Gateway     |
-| `RootCauseAnalystAgent`    | 原因仮説の生成・確信度算出・追加収集の判断 | Gemini（category別プロンプト）               |
-| `RemediationPlannerAgent`  | 推奨アクション・修正方針・PR草案の生成     | Gemini / `RemediationPort`（SECURITY時）     |
+| エージェント               | 責務                                          | tool / 依存                              |
+| -------------------------- | --------------------------------------------- | ---------------------------------------- |
+| `InvestigationCoordinator` | ルーティング・サブエージェント統括・統合      | 各サブエージェント                       |
+| `EvidenceCollectorAgent`   | 証拠の横断収集（read-only・ベストエフォート） | `InfraInvestigationPort` 配下の各Gateway |
+| `RootCauseAnalystAgent`    | 原因仮説の生成・確信度算出・追加収集の判断    | Gemini（category別プロンプト）           |
+| `RemediationPlannerAgent`  | 推奨アクション・修正方針・PR草案の生成        | Gemini / `RemediationPort`（SECURITY時） |
 
 ### トークン設計
 
@@ -1175,8 +1182,8 @@ GitHub Actions（CIパイプライン）
 
 ### MonitoringEvent への直接マッピング（SECURITY）
 
-| 発生源        | eventName                         | category   | source      | payloadのキー                                  |
-| ------------- | --------------------------------- | ---------- | ----------- | ---------------------------------------------- |
+| 発生源          | eventName                         | category   | source      | payloadのキー                                   |
+| --------------- | --------------------------------- | ---------- | ----------- | ----------------------------------------------- |
 | Trivy/npm audit | `security.vulnerability_detected` | `SECURITY` | `npm_audit` | cveId, severity, package, version, fixedVersion |
 
 ### RemediationPort（人間承認ゲート付きの write 操作）
@@ -1499,24 +1506,24 @@ interface KnownErrorPatternRepository {
 
 ## ログ出力ポイント一覧
 
-| 出力箇所                                           | severity | action                       | message                                                |
-| -------------------------------------------------- | -------- | ---------------------------- | ------------------------------------------------------ |
-| `CollectMonitoringEventOnECEventPublished` 受信       | DEBUG    | `monitoring_event_collected` | ECイベントをMonitoringEventに変換：{eventName}         |
-| `AnalyzeAlertCommandHandler` 既知分類              | INFO     | `alert_classified_known`     | 既知パターン一致：{alertId}, pattern={patternName}     |
-| `AnalyzeAlertCommandHandler` 未知分類              | WARN     | `alert_classified_unknown`   | 未知パターン：{alertId}, eventName={eventName}         |
-| `InvestigateAlertOnAlertClassifiedUnknown` 完了              | INFO     | `alert_investigated`         | AI分析完了：{alertId}, confidence={confidence}         |
-| `InvestigateAlertOnAlertClassifiedUnknown` Geminiエラー      | ERROR    | `ai_investigation_failed`    | Gemini APIエラー（fallback使用）：{alertId}            |
-| `SubmitFeedbackCommandHandler` 完了                | INFO     | `feedback_submitted`         | フィードバック受付：{alertId}, isCorrect={isCorrect}   |
-| `SubmitFeedbackCommandHandler` 自動昇格            | INFO     | `pattern_auto_promoted`      | 未知パターン自動昇格：{alertId}, pattern={patternName} |
-| `InMemorySimilarIncidentRepository` ウォームアップ | INFO     | `similar_incident_warmup`    | ウォームアップ完了：{count}件                          |
+| 出力箇所                                                | severity | action                       | message                                                |
+| ------------------------------------------------------- | -------- | ---------------------------- | ------------------------------------------------------ |
+| `CollectMonitoringEventOnECEventPublished` 受信         | DEBUG    | `monitoring_event_collected` | ECイベントをMonitoringEventに変換：{eventName}         |
+| `AnalyzeAlertCommandHandler` 既知分類                   | INFO     | `alert_classified_known`     | 既知パターン一致：{alertId}, pattern={patternName}     |
+| `AnalyzeAlertCommandHandler` 未知分類                   | WARN     | `alert_classified_unknown`   | 未知パターン：{alertId}, eventName={eventName}         |
+| `InvestigateAlertOnAlertClassifiedUnknown` 完了         | INFO     | `alert_investigated`         | AI分析完了：{alertId}, confidence={confidence}         |
+| `InvestigateAlertOnAlertClassifiedUnknown` Geminiエラー | ERROR    | `ai_investigation_failed`    | Gemini APIエラー（fallback使用）：{alertId}            |
+| `SubmitFeedbackCommandHandler` 完了                     | INFO     | `feedback_submitted`         | フィードバック受付：{alertId}, isCorrect={isCorrect}   |
+| `SubmitFeedbackCommandHandler` 自動昇格                 | INFO     | `pattern_auto_promoted`      | 未知パターン自動昇格：{alertId}, pattern={patternName} |
+| `InMemorySimilarIncidentRepository` ウォームアップ      | INFO     | `similar_incident_warmup`    | ウォームアップ完了：{count}件                          |
 
 ---
 
 ## アプリケーション層のエラー定義（Monitoringコンテキスト）
 
-| エラークラス            | 継承元                | 発生箇所                                          | errorHandlerの応答                                     |
-| ----------------------- | --------------------- | ------------------------------------------------- | ------------------------------------------------------ |
-| `ResourceNotFoundError` | `ApplicationError`    | `SubmitFeedbackCommandHandler`（Alert未存在時）   | 404                                                    |
+| エラークラス            | 継承元                | 発生箇所                                               | errorHandlerの応答                                                                              |
+| ----------------------- | --------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `ResourceNotFoundError` | `ApplicationError`    | `SubmitFeedbackCommandHandler`（Alert未存在時）        | 404                                                                                             |
 | `AIInvestigationError`  | `InfrastructureError` | `GeminiLLMClient`（API呼び出し失敗・リトライ後に送出） | ※ LLMInvestigationAdapter がcatchしfallback生成。さらにCommandHandlerでもcatch（500を返さない） |
 
 `AIInvestigationError` はCommandHandler内でcatchしてfallbackレポートを生成するため、HTTP 500にはならない。障害分析AIの失敗がバックオフィスAPIの失敗に波及しない設計。
@@ -1571,14 +1578,14 @@ SubmitFeedbackCommandHandler
 
 ## 将来の拡張ポイント（設計上の配慮）
 
-| 拡張ポイント                           | 今回の設計                                                   | 将来の差し替え                                                                                                                                                                                                                                                                 |
-| -------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SSEAlertNotifier`                     | EventEmitterオンメモリ                                       | `RedisSSEAlertNotifier`（プロセス複数化時）。インターフェースは維持                                                                                                                                                                                                            |
-| `SimilarIncidentRepository`            | InMemory + InMemoryCriteriaConverter                         | `ElasticSearchSimilarIncidentRepository`（大規模化時）。Criteria共通インターフェースは維持                                                                                                                                                                                     |
-| `AIInvestigationPort`                  | LLMInvestigationAdapter ＋ GeminiLLMClient（gemini-2.0-flash系・Gemini API直接） | `LLMTextClient` を `VertexLLMClient`（Vertex AI SDK経由・推奨）へ差し替え → `ADKAgentInvestigationAdapter`（ADK/A2A構成・Port直接実装）への段階移行。DI差し替え1箇所のみでApplication層・アダプタノータッチ（project-prompt v10）                                                                                       |
-| `InfraInvestigationPort`               | CloudLogging/Terraform/GitHub の3Gateway（読み取り専用）     | `CloudMonitoringGateway` / `CloudTraceGateway` を追加（次フェーズ）。`InfraEvidence` の正規化スキーマは維持（project-prompt v12）                                                                                                                                              |
+| 拡張ポイント                           | 今回の設計                                                                                                                                                            | 将来の差し替え                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SSEAlertNotifier`                     | EventEmitterオンメモリ                                                                                                                                                | `RedisSSEAlertNotifier`（プロセス複数化時）。インターフェースは維持                                                                                                                                                                                                                                                                                                                                                       |
+| `SimilarIncidentRepository`            | InMemory + InMemoryCriteriaConverter                                                                                                                                  | `ElasticSearchSimilarIncidentRepository`（大規模化時）。Criteria共通インターフェースは維持                                                                                                                                                                                                                                                                                                                                |
+| `AIInvestigationPort`                  | LLMInvestigationAdapter ＋ GeminiLLMClient（gemini-2.0-flash系・Gemini API直接）                                                                                      | `LLMTextClient` を `VertexLLMClient`（Vertex AI SDK経由・推奨）へ差し替え → `ADKAgentInvestigationAdapter`（ADK/A2A構成・Port直接実装）への段階移行。DI差し替え1箇所のみでApplication層・アダプタノータッチ（project-prompt v10）                                                                                                                                                                                         |
+| `InfraInvestigationPort`               | CloudLogging/Terraform/GitHub の3Gateway（読み取り専用）                                                                                                              | `CloudMonitoringGateway` / `CloudTraceGateway` を追加（次フェーズ）。`InfraEvidence` の正規化スキーマは維持（project-prompt v12）                                                                                                                                                                                                                                                                                         |
 | `AlertClassifier`                      | `PolicyBasedAlertClassifier`（`ApplicationClassificationPolicy` + `KnownPatternRule`、first-match・confidence 1.0固定）。組み立ては step4-3 の DI（composition root） | `ApplicationClassificationPolicy` に `SimilarPatternRule`（Elastic hybrid search・kind=SIMILARITY）→ `AiInferenceRule`（kind=INFERENCE）を追加。`ClassificationRuleSorter` が kind 優先順位で並べる。`AlertClassificationResult` の型は変わらず、`KnownAlertClassification` VOに `unmatchedConditions` の反証情報が入るようになる。移行トリガー: 自動昇格パターンが10件超 or 誤分類率が計測可能になった時点（ADR Step 5） |
-| `recentEvents` in InvestigationContext | 省略（将来拡張ポイント）                                     | AlertRepository.findByCriteria で直近30分のAlertを収集し追加                                                                                                                                                                                                                   |
+| `recentEvents` in InvestigationContext | 省略（将来拡張ポイント）                                                                                                                                              | AlertRepository.findByCriteria で直近30分のAlertを収集し追加                                                                                                                                                                                                                                                                                                                                                              |
 
 ---
 
@@ -1591,14 +1598,14 @@ SubmitFeedbackCommandHandler
 
 ### 設計判断メモ（予兆）
 
-| 判断項目 | 決定内容 | 理由 |
-| -------- | -------- | ---- |
-| Alertに相乗りさせない | `RiskForecast` を独立した read-model にする | 予報は起点MonitoringEventが無く・未発生で・reviewStatusの意味も違う。Alert集約に混ぜると不変条件が壊れる |
-| 突合（join）の実装場所 | 自前ルールエンジンを作らず **LLMに委譲**。人間は「正規化／引用縛り／引用検証」の3点足場のみ | コンポーネント分類体系＋相関ロジックはブリットル。joinはモデルの得意領域 |
-| 突合キーの構造化 | (B) 過去インシデントに `subject`（コンポーネントラベル）を構造化付与（`ForecastMemory` projection） | テキストjoin(A)より引用検証が安定。将来移行の物語もADR化できる |
-| 入力源の抽象化（Ⅱ→Ⅲ継ぎ目） | `ForecastSignalSource` IF を切り、Handler は `ForecastSignalSource[]` を回す（3 Gateway を名指ししない） | stretchⅢで `EventLogPrecursorSource` を1個足すだけにする。Ⅱ→Ⅲが再設計でなく追加（`step4-1` §7.9） |
-| 予測の構成 | 統計MLでなく **既知未来シグナル × 記憶 のLLM推論** | データ大量を要さず、デモ規模で成立。レッドオーシャン回避 |
-| write境界 | 予兆も read-only。リメディエーションが要る場合は既存 `RemediationPort`（人間承認ゲート）を再利用 | 「AIが調査・人間が承認」の構造を予兆でも崩さない |
+| 判断項目                    | 決定内容                                                                                                 | 理由                                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Alertに相乗りさせない       | `RiskForecast` を独立した read-model にする                                                              | 予報は起点MonitoringEventが無く・未発生で・reviewStatusの意味も違う。Alert集約に混ぜると不変条件が壊れる |
+| 突合（join）の実装場所      | 自前ルールエンジンを作らず **LLMに委譲**。人間は「正規化／引用縛り／引用検証」の3点足場のみ              | コンポーネント分類体系＋相関ロジックはブリットル。joinはモデルの得意領域                                 |
+| 突合キーの構造化            | (B) 過去インシデントに `subject`（コンポーネントラベル）を構造化付与（`ForecastMemory` projection）      | テキストjoin(A)より引用検証が安定。将来移行の物語もADR化できる                                           |
+| 入力源の抽象化（Ⅱ→Ⅲ継ぎ目） | `ForecastSignalSource` IF を切り、Handler は `ForecastSignalSource[]` を回す（3 Gateway を名指ししない） | stretchⅢで `EventLogPrecursorSource` を1個足すだけにする。Ⅱ→Ⅲが再設計でなく追加（`step4-1` §7.9）        |
+| 予測の構成                  | 統計MLでなく **既知未来シグナル × 記憶 のLLM推論**                                                       | データ大量を要さず、デモ規模で成立。レッドオーシャン回避                                                 |
+| write境界                   | 予兆も read-only。リメディエーションが要る場合は既存 `RemediationPort`（人間承認ゲート）を再利用         | 「AIが調査・人間が承認」の構造を予兆でも崩さない                                                         |
 
 ### ドメイン型（完全新規・既存無傷）
 
@@ -1607,45 +1614,45 @@ SubmitFeedbackCommandHandler
 ```typescript
 // ForecastSignal.ts ── 異種ソースを共通の突合軸に正規化する器
 interface ForecastSignal {
-  readonly id: string;            // "chg-1" / "sch-1" / "inc-7"（citationsで参照される）
+  readonly id: string; // "chg-1" / "sch-1" / "inc-7"（citationsで参照される）
   readonly kind: ForecastSignalKind; // FUTURE_CHANGE | SCHEDULE | MEMORY
-  readonly subject: string;       // 突合キー（例: "db.connection_pool" / "checkout"）
-  readonly when: string;          // 時間窓（例: "Fri merge予定" / "Sat 20:00-23:00"）
-  readonly desc: string;          // 要約（例: "max_connections 100→40に縮小"）
-  readonly source: string;        // "github.pr#123" / "schedule.seed" / "incident.7"
+  readonly subject: string; // 突合キー（例: "db.connection_pool" / "checkout"）
+  readonly when: string; // 時間窓（例: "Fri merge予定" / "Sat 20:00-23:00"）
+  readonly desc: string; // 要約（例: "max_connections 100→40に縮小"）
+  readonly source: string; // "github.pr#123" / "schedule.seed" / "incident.7"
 }
 
 const ForecastSignalKind = {
   FUTURE_CHANGE: "FUTURE_CHANGE", // 未マージPR / 未適用plan
-  SCHEDULE: "SCHEDULE",           // 業務/負荷スケジュール
-  MEMORY: "MEMORY",               // 過去インシデント（ForecastMemory由来）
+  SCHEDULE: "SCHEDULE", // 業務/負荷スケジュール
+  MEMORY: "MEMORY", // 過去インシデント（ForecastMemory由来）
 } as const;
 
 // RiskForecast.ts ── 出力（read-model）。Alertではない
 interface RiskItem {
-  readonly window: string;        // "Sat 20:00"
-  readonly subject: string;       // "db.connection_pool"
-  readonly level: RiskLevel;      // HIGH | MEDIUM | LOW
-  readonly confidence: number;    // 0.0〜1.0（クランプ）
-  readonly citations: string[];   // 使ったForecastSignal.id（空は不正＝検証で落とす）
-  readonly reasoning: string;     // 引用を踏まえた根拠文
+  readonly window: string; // "Sat 20:00"
+  readonly subject: string; // "db.connection_pool"
+  readonly level: RiskLevel; // HIGH | MEDIUM | LOW
+  readonly confidence: number; // 0.0〜1.0（クランプ）
+  readonly citations: string[]; // 使ったForecastSignal.id（空は不正＝検証で落とす）
+  readonly reasoning: string; // 引用を踏まえた根拠文
 }
 
 interface RiskForecast {
   readonly forecastId: string;
   readonly generatedAt: Date;
-  readonly horizon: string;       // "今週末" など対象期間
-  readonly risks: RiskItem[];     // level降順
-  readonly isFallback: boolean;   // 生成失敗時の縮退
+  readonly horizon: string; // "今週末" など対象期間
+  readonly risks: RiskItem[]; // level降順
+  readonly isFallback: boolean; // 生成失敗時の縮退
 }
 ```
 
 ```typescript
 // Schedule.ts ── 現状どこにも無い概念（完全新規）
 interface ScheduleWindow {
-  readonly subject: string;       // "checkout"
-  readonly when: string;          // "Sat 20:00-23:00"
-  readonly load: string;          // "x5 (セール)"
+  readonly subject: string; // "checkout"
+  readonly when: string; // "Sat 20:00-23:00"
+  readonly load: string; // "x5 (セール)"
 }
 // ScheduleSource.ts（domain interface・read-only）
 interface ScheduleSource {
@@ -1674,12 +1681,12 @@ interface ForecastSignalSource {
 ```typescript
 interface ForecastMemoryEntry {
   readonly incidentId: string;
-  readonly subject: string;       // ★突合キー（例: "db.connection_pool"）
-  readonly trigger: string;       // "pool縮小+高負荷"
-  readonly outcome: string;       // "接続枯渇 502"
+  readonly subject: string; // ★突合キー（例: "db.connection_pool"）
+  readonly trigger: string; // "pool縮小+高負荷"
+  readonly outcome: string; // "接続枯渇 502"
 }
 interface ForecastMemoryRepository {
-  warmUp(): Promise<void>;            // 起動時に Resolved から投影
+  warmUp(): Promise<void>; // 起動時に Resolved から投影
   findBySubjects(subjects: string[]): Promise<ForecastMemoryEntry[]>;
 }
 ```
@@ -1708,7 +1715,7 @@ interface TerraformGateway {
 ```typescript
 interface ForecastContext {
   readonly horizon: string;
-  readonly signals: ForecastSignal[];  // FUTURE_CHANGE + SCHEDULE + MEMORY を正規化済み
+  readonly signals: ForecastSignal[]; // FUTURE_CHANGE + SCHEDULE + MEMORY を正規化済み
 }
 interface ForecastPort {
   forecast(context: ForecastContext): Promise<RiskForecast>;
@@ -1750,13 +1757,13 @@ interface ForecastPort {
 
 ### 設計判断メモ（stretchⅢ）
 
-| 判断項目 | 決定内容 | 理由 |
-| -------- | -------- | ---- |
-| 基盤の性質 | 全 DomainEvent を **append-only** に貯める一次資料（障害専用でない）。新規 `EventLog/` コンテキスト | DDIA「データベースの解体」。状態スナップショットでは予兆につながる経緯が失われる |
-| 予知の入力 | event log の直近イベント列を **LLM の追加 context** にする（統計MLでない） | stretchⅡ と同機構＝相関の検出。因果推論は研究フロンティアとして ADR に切り出す |
-| 既存への接続 | `EventLogPrecursorSource implements ForecastSignalSource` を1個足す（§7.9 継ぎ目） | Handler / ForecastPort / 引用検証ノータッチ＝再設計でなく追加 |
-| ForecastMemory 上流 | Mongo(Resolved) → event log に差し替え。consumer（`findBySubjects`）は不変 | projection は再構築可能であるべき。上流差し替えは追加作業 |
-| 前提作業 | EC ドメインイベント拡張（正常系業務イベントを増やす） | 現行4イベント・半分障害寄りでは予兆の母集団が薄く moat が崩れる（`step4-1` §7.10 留意点） |
+| 判断項目            | 決定内容                                                                                            | 理由                                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 基盤の性質          | 全 DomainEvent を **append-only** に貯める一次資料（障害専用でない）。新規 `EventLog/` コンテキスト | DDIA「データベースの解体」。状態スナップショットでは予兆につながる経緯が失われる          |
+| 予知の入力          | event log の直近イベント列を **LLM の追加 context** にする（統計MLでない）                          | stretchⅡ と同機構＝相関の検出。因果推論は研究フロンティアとして ADR に切り出す            |
+| 既存への接続        | `EventLogPrecursorSource implements ForecastSignalSource` を1個足す（§7.9 継ぎ目）                  | Handler / ForecastPort / 引用検証ノータッチ＝再設計でなく追加                             |
+| ForecastMemory 上流 | Mongo(Resolved) → event log に差し替え。consumer（`findBySubjects`）は不変                          | projection は再構築可能であるべき。上流差し替えは追加作業                                 |
+| 前提作業            | EC ドメインイベント拡張（正常系業務イベントを増やす）                                               | 現行4イベント・半分障害寄りでは予兆の母集団が薄く moat が崩れる（`step4-1` §7.10 留意点） |
 
 ### ドメイン型（追加・既存無傷）
 
@@ -1764,7 +1771,7 @@ interface ForecastPort {
 // EventLog/domain/EventLogEntry.ts ── 全 DomainEvent の追記レコード（正規化）
 interface EventLogEntry {
   readonly eventId: string;
-  readonly eventName: string;     // 'ec.order.placed' / 'ec.cart.item_added' 等（拡張後）
+  readonly eventName: string; // 'ec.order.placed' / 'ec.cart.item_added' 等（拡張後）
   readonly aggregateId: string;
   readonly occurredOn: Date;
   readonly payload: Record<string, unknown>;

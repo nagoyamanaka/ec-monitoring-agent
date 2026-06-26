@@ -238,7 +238,7 @@
 
 - 【完了】`infrastructure/adk/`: `ADKAgentInvestigationAdapter.ts`（`AIInvestigationPort`実装）/ `ADKInvestigationAgentRunner.ts`（ADKグラフ構築＋`InMemoryRunner`実行）/ `InvestigationAgentRunner.ts`（IF・text-in/out）/ `agents/InvestigationCoordinator.ts`・`EvidenceCollectorAgent.ts`・`RootCauseAnalystAgent.ts`・`RemediationPlannerAgent.ts` / `tools/investigationTools.ts`（read-only Gateway を ADK FunctionTool 化）
 - 【完了】公式 `@google/adk`（TS版・1.3.0）を採用。a2a不使用・in-process。hub-and-spoke: Coordinator(hub) が `AgentTool` 経由で3専門agent(spoke)に委譲し、「分析→（不足なら）証拠追加収集→再分析」を自律反復（＝自律的証拠追加収集ループ）してから最終 JSON を出力
-- 【完了】モデル経路は **Vertex AI 共用**（`GOOGLE_GENAI_USE_VERTEXAI` で ADK が自動選択＝Part1 の無料クレジット経路）。`gemini-2.0-flash`。トークン暴走の安全弁＝`maxLlmCalls`（env `AI_INVESTIGATION_ADK_MAX_LLM_CALLS` 既定8）＋ウォールクロック上限
+- 【完了】モデル経路は **Vertex AI 共用**（`GOOGLE_GENAI_USE_VERTEXAI` で ADK が自動選択＝Part1 の無料クレジット経路）。`gemini-2.5-pro`。トークン暴走の安全弁＝`maxLlmCalls`（env `AI_INVESTIGATION_ADK_MAX_LLM_CALLS` 既定8）＋ウォールクロック上限
 - 【完了】**`AIInvestigationPort` の DI 差し替え1点**で載る（`BackofficeApp`・優先度 stub > ADK > 単一Gemini・`AI_INVESTIGATION_ADK=true`）。`InvestigateAlertUseCase` はノータッチ
 - 【完了】**プロンプト構築/出力パース/マッピング/fallback は単一Gemini版と共通化**（`buildUserPrompt`/`parseLLMOutput`/`toInvestigationReport`/`buildFallbackReport`/`buildEvidenceLinks` を再利用＝DRY）。アダプタは `InvestigationAgentRunner` を注入で受け、fake 注入で UT（正常→マッピング／例外→fallback／パース不能→fallback／証拠リンク追記 の4ケース）
 - 設計判断（SRP・テスト容易性）: ADK 依存（グラフ構築＋Runner）を `ADKInvestigationAgentRunner` に隔離し、`ADKAgentInvestigationAdapter` は薄いオーケストレーションに保つ（`GeminiLLMClient`↔`LLMInvestigationAdapter` と同型）。ADK 部は疎通主体なので UT せず、分岐はアダプタ側 UT で担保
@@ -293,6 +293,7 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
   本体の正しさには寄与しない（相互運用性の獲得が目的）。よってコア外・stretch 据え置き。
 - 採用判断は Bootcamp 受講後でよい。不採用でもコア（①②）は完結している。
 -->
+
 - 【新規(将来)】`infrastructure/a2a/`: `A2AInvestigationFacade`（`AIInvestigationPort`/read-only Query をスキルとして公開）＋ Agent Card ＋ Protocol Endpoint
 - read-only 能力のみ公開（write=PR起票/apply は非公開＝人間承認ゲートの内側に閉じる）。A2A Inspector で疎通確認
 - コア（①ADK in-process / ②dispatch+callback）はノータッチ。採用可否は Elastic 連携の見せ場価値で独立判断
@@ -325,7 +326,7 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 - 【新規】`Schedule.ts`（`ScheduleWindow`）/ `ScheduleSource.ts`（interface・read-only）
 - 【新規】`Forecast/domain/ForecastSignalSource.ts`（IF・`collect(horizon): Promise<ForecastSignal[]>`）★Ⅱ→Ⅲ の継ぎ目（`step4-1` §7.9）。主シグナル源を源非依存に抽象化し、Handler に Gateway を名指しさせない
 
-> **相関（タスク9e）との共通化メモ（2026-06 調査）**: `RiskItem.citations`（引用＝根拠 id）と、step4-4 タスク9e で実装済みの AI 相関（`InvestigationReportPrimitives.relatedAlerts`：id・relation・rationale）は**同型のパターン**＝「LLM が *id + ラベル + 根拠* を副産物として出し、防御的に正規化してから実在レコードへ照合（引用検証 §7.3 ＝ 相関 id 解決）」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（タスク12）なので、相関 alertId と同じく実在 Alert に解決できる。
+> **相関（タスク9e）との共通化メモ（2026-06 調査）**: `RiskItem.citations`（引用＝根拠 id）と、step4-4 タスク9e で実装済みの AI 相関（`InvestigationReportPrimitives.relatedAlerts`：id・relation・rationale）は**同型のパターン**＝「LLM が _id + ラベル + 根拠_ を副産物として出し、防御的に正規化してから実在レコードへ照合（引用検証 §7.3 ＝ 相関 id 解決）」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（タスク12）なので、相関 alertId と同じく実在 Alert に解決できる。
 > **ただし context を跨いだ型共有はしない**: 相関は Monitoring BC、引用は Forecast BC の別物。`RelatedAlertPrimitives` を Forecast から import すると BC 結合になるので避け、各 BC が自前の型を持つ。共通なのは*手順*（LLM 出力の防御的正規化＋citations 必須プロンプト＋実在照合）だけ。`GeminiForecastAdapter`（タスク22）の safeParse/clamp/fallback は `LLMOutputParser`/`InvestigationReportMapper`（タスク9e で relatedAlerts 対応済み）の実装を**参考にする**（コピー元）。frontend 側の共通化（`RelatedAlertsPanel`→`CitationList` の `shared/ui` 昇格）は step4-4 タスク13 のメモを正とする。
 
 ### タスク 20: ForecastMemory projection（突合キーB）〔stretchⅡ〕
