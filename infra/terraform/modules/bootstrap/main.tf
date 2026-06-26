@@ -25,7 +25,9 @@ locals {
   ]
 
   # Secret コンテナ（値=version は tf に置かず gcloud で投入する。§11.5）
-  secret_ids = ["GEMINI_API_KEY", "INGEST_TOKEN"]
+  # Gemini は Vertex AI 経由（ADC 認証）なので API キー Secret は不要。
+  # AI Studio フォールバックを使う場合のみ手動で GEMINI_API_KEY Secret を足す。
+  secret_ids = ["INGEST_TOKEN"]
 }
 
 resource "google_project_service" "this" {
@@ -58,7 +60,7 @@ resource "google_storage_bucket" "deploy" {
 }
 
 # Secret は「箱」だけ作る。平文（version）は tf に置かない:
-#   echo -n "<value>" | gcloud secrets versions add GEMINI_API_KEY --data-file=-
+#   echo -n "<value>" | gcloud secrets versions add INGEST_TOKEN --data-file=-
 resource "google_secret_manager_secret" "this" {
   for_each  = toset(local.secret_ids)
   project   = var.project_id

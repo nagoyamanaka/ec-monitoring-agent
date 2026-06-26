@@ -1,5 +1,4 @@
 services:
-
   mongo:
     ports:
       - "27017:27017"
@@ -42,18 +41,31 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
     ports:
       - "3001:3001"
+    env_file:
+      - path: .env.local
+        required: false
     environment:
       PORT: "3001"
       DEMO_ENABLED: "true"
       # ローカルE2E: AI調査の LLM を Stub に差し替え（Gemini課金・非決定性なし）
-      AI_INVESTIGATION_STUB: "true"
+      # AI_INVESTIGATION_STUB: "true"
+      AI_INVESTIGATION_STUB: "false"
       # demo シナリオ facade が EC backend を叩く接続先
       EC_BACKEND_URL: http://ec-backend:3000
       # payment-timeout シナリオで在庫予約を通すため有効な UUID 商品を使う（global-setup が seed）
       DEMO_PRODUCT_ID: "11111111-1111-4111-8111-111111111111"
       GCP_PROJECT_ID: local
+      # ローカルで実 Gemini を無料クレジット（Vertex AI）で叩く場合は .env.local に:
+      #   GOOGLE_GENAI_USE_VERTEXAI=true
+      #   GOOGLE_CLOUD_PROJECT=<実プロジェクトID>
+      #   GOOGLE_CLOUD_LOCATION=global
+      # を置き、ホストで `gcloud auth application-default login` 済みの ADC を下記のように
+      # マウントする（volumes に追記）:
+      #   - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
+      # ADC を用意できない / E2E では AI_INVESTIGATION_STUB=true で Stub に回避するのが手軽。
       # SimilarIncident を ES に永続し SimilarPatternRule（graded confidence 分類）を有効化する
       ELASTICSEARCH_URL: http://elasticsearch:9200
     depends_on:

@@ -14,6 +14,8 @@ locals {
     ELASTICSEARCH_URL = "http://${var.backbone_internal_ip}:9200"
     REDIS_URL         = "redis://${var.backbone_internal_ip}:6379"
     RABBITMQ_HOST     = var.backbone_internal_ip
+    # Vertex AI（ADC）が課金紐付けに使う project。GEMINI_API_KEY は不要。
+    GOOGLE_CLOUD_PROJECT = var.project_id
   }
   all_env = merge(local.computed_env, var.plain_env)
 }
@@ -82,7 +84,7 @@ resource "google_cloud_run_v2_service" "edge" {
         }
       }
 
-      # Secret Manager 参照（GEMINI_API_KEY / INGEST_TOKEN）
+      # Secret Manager 参照（INGEST_TOKEN）
       dynamic "env" {
         for_each = var.secret_env
         content {
