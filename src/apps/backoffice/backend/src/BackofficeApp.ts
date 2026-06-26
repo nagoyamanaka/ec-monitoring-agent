@@ -109,6 +109,7 @@ export class BackofficeApp {
         vhost: config.rabbitmq.vhost,
         connection: { secure: false, hostname: config.rabbitmq.host, port: config.rabbitmq.port },
       },
+      logger,
     });
     await this.connection.connect();
 
@@ -275,11 +276,15 @@ export class BackofficeApp {
       logger,
     );
 
-    await this.configureEventBus(
-      eventBus,
-      queueNameFormatter,
-      buildBackofficeSubscribers(collectMonitoringEventUseCase, investigateAlertUseCase),
+    const subscribers = buildBackofficeSubscribers(
+      collectMonitoringEventUseCase,
+      investigateAlertUseCase,
     );
+    // 切断→再接続時に exchange/queue/consumer を張り直す（張り直さないと購読が永久停止する）。
+    this.connection.onReestablished(() =>
+      this.configureEventBus(eventBus, queueNameFormatter, subscribers),
+    );
+    await this.configureEventBus(eventBus, queueNameFormatter, subscribers);
 
     const ecDemoGateway =
       this.overrides.ecDemoGateway ?? new HttpEcDemoGateway(config.demo.ecBackendUrl);

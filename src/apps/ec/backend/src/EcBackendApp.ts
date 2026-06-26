@@ -40,6 +40,7 @@ export class EcBackendApp {
         vhost: config.rabbitmq.vhost,
         connection: { secure: false, hostname: config.rabbitmq.host, port: config.rabbitmq.port },
       },
+      logger,
     });
     await this.connection.connect();
 
@@ -70,11 +71,12 @@ export class EcBackendApp {
       new QueryHandlers([new GetOrderQueryHandler(getOrderUseCase)]),
     );
 
-    await this.configureEventBus(
-      eventBus,
-      queueNameFormatter,
-      buildEcSubscribers(reserveInventoryUseCase, compensateOrderUseCase),
+    const subscribers = buildEcSubscribers(reserveInventoryUseCase, compensateOrderUseCase);
+    // 切断→再接続時に exchange/queue/consumer を張り直す（張り直さないと購読が永久停止する）。
+    this.connection.onReestablished(() =>
+      this.configureEventBus(eventBus, queueNameFormatter, subscribers),
     );
+    await this.configureEventBus(eventBus, queueNameFormatter, subscribers);
 
     this.server = new Server(config.port);
     registerRoutes(this.server.router, commandBus, queryBus, paymentGateway, inventoryRepository);

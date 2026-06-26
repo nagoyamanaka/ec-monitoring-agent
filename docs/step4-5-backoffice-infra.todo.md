@@ -95,6 +95,38 @@
 
 ---
 
+## Phase 1.5: フロントエンドのデプロイ（ハッカソン発表に必須）
+
+> 背景: backend（Cloud Run edge）と GCE backbone までは上がっているが、**`src/apps/backoffice/frontend` は本番デプロイ先が無い**。
+> `frontend/Dockerfile` は `dev` ステージ（`vite dev` + volume mount）しか無く、prod 用の static build/serve ステージが無い。`docker-compose.prod.yml` にも frontend サービスが無く、terraform にも hosting リソースが無い。
+> **このままだと審査員が触れる URL が出せない**＝デモ不能。Phase 1 の疎通が通った直後にここを埋める。
+> 重要な制約: アラート一覧は **SSE（EventSource）**で流れる。SSE はクロスオリジンだと CORS/credentials が面倒なので、**ブラウザから見て frontend と API を同一オリジンにする**のが最優先（ローカルの vite proxy と同じ構図を本番でも作る）。
+
+> **採用方式: 方式A（nginx static + リバースプロキシを独立 Cloud Run サービス）に決定。**
+> ローカルの `vite.config.ts` proxy と同型で、ブラウザは frontend オリジンのみと通信＝SSE 同一オリジン。frontend と backend(edge) を別 Cloud Run サービスとして関心分離する。
+
+### タスク T8.6: frontend Dockerfile に prod（nginx）ステージ追加 〔P0〕
+
+> 前提: Phase 1（backend が Cloud Run で稼働・URL 確定）。
+
+- `frontend/Dockerfile` に `build`（既存 deps を流用し `pnpm run build`→`dist`）→ `runner`（`nginx:alpine` に `dist` と `nginx.conf` を COPY）ステージを追加
+- `nginx.conf`：
+  - `location / { try_files $uri /index.html; }`（SPA fallback）
+  - `location ~ ^/(alerts|analytics|demo|patterns|forecast|health) { proxy_pass <BACKEND_EDGE_URL>; }`（`vite.config.ts` の proxy 対象と一致させる）
+  - **SSE 用に `/alerts/stream` 系には `proxy_buffering off;` と `proxy_read_timeout` を長め**に（EventSource が途切れない）
+  - backend URL はビルド時固定でなく **起動時 env**（`envsubst` で nginx.conf に注入）にして、Cloud Run の env で差し替えられるようにする
+- 【確認】frontend は相対パスのまま（`FetchHttpClient` の baseURL 空・現状維持）。`VITE_` の埋め込み URL は不要（同一オリジン proxy 前提）
+
+### タスク T8.7: frontend のデプロイ結線（terraform / CI） 〔P0〕
+
+> 前提: T8.6。
+
+- `modules/cloud-run` を service 名でパラメータ化し、frontend 用にもう1サービスを定義（public・SSE は backend 側が張るので frontend は **scale-to-zero 可**＝`min=max=1` 不要）。env に backend(edge) URL を渡す
+- 【CI】`.github/workflows` に frontend イメージ（nginx ステージ）の build & push を追加
+- 【DoD】審査員に渡せる **frontend 公開 URL** にアクセス→アラート一覧が表示され、DEMO_ENABLED 時は fault injection ボタンで SSE 経由のライブ更新が見える
+
+---
+
 ## Phase 2: エラーログ起点の自動発報（#4）
 
 ### タスク T9: FATAL ログベースメトリクス＋アラートポリシー 〔P1〕
@@ -137,6 +169,20 @@
 
 - Cloud Logging の任意エラーログをクリック→「関連トレース」で対応する Cloud Trace へ 1 クリックジャンプできることを確認（Phase 3 DoD）
 - 出ない場合の切り分け: `GCP_PROJECT_ID` 環境変数が Cloud Run / GCE 両方に渡っているか（trace リソース名の projects/ 部分に必須）
+
+---
+
+## 信頼性バグ: RabbitMQ 切断後に自動再接続しない 〔P0〕✅ 修正済み
+
+> 発見経緯: ローカルで fault injection ボタンを押してもアラートが増えない現象を調査。RabbitMQ が（再起動等で）一度切断されると、`RabbitMqConnection` に再接続ロジックが無いため **アプリは永久に未接続のまま**になっていた。
+> 症状: `rabbitmqctl list_consumers` が 0・`list_connections` が空。EC の publish は `DomainEventFailoverPublisher` 経由で Mongo `DomainEvents` コレクションに退避され**例外を投げない**ため、`place_order_payment_failed` ログは出るのに backoffice 側が一切 consume せず、新規 Alert が生成されない（Mongo `ec.DomainEvents` に 62 件の未配信イベントが滞留していた）。
+> **これは Cloud Run / scale-to-zero でさらに悪化する**（インスタンス入れ替えのたびに購読が死ぬ）＝ Q3「subscriber を Cloud Run に置くのは筋が悪い」の実証。worker は GCE 常駐が正しい（`docker-compose.prod.yml` の方針通り）。
+
+- 【済】`src/Contexts/Shared/infrastructure/EventBus/RabbitMq/RabbitMqConnection.ts`：`connection.on("close")` で切断検知→**指数バックオフ（1s→最大30s）で再接続**→ `onReestablished` フックで exchange/queue 再宣言＋consumer 再登録。`stop()` 由来の意図的クローズは `closing` フラグで除外。`on("error")` は握り潰しをやめ WARN ログ化
+- 【済】`EcBackendApp` / `BackofficeApp`：`connection.onReestablished(() => configureEventBus(...))` を登録。再接続時に新しい channel へ購読を張り直す（張り直さないと購読が永久停止する）
+- 【検証済】RabbitMQ コンテナのみ再起動 → アプリは再起動せず ~15s（4 回目の試行）で自動復旧し consumer=2 に回復、その後 fault injection で alert が 5→6 に増加。`pnpm typecheck` / `pnpm test`（529 件）green
+- 【残・任意】Mongo `DomainEvents`（failover 退避）を起動時/定期に再 publish するドレイン処理を入れると切断中の取りこぼしもゼロにできる（`DomainEventFailoverPublisher.consume()` は実装済み・呼び出し側が無い）
+- 【残・任意】RabbitMQ を落とす→上げる→publish が backoffice に届く、の結合テスト自動化（`make test-integration`）
 
 ---
 
