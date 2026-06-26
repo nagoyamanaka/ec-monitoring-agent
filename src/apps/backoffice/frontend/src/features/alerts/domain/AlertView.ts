@@ -42,6 +42,8 @@ export type AlertClassificationView =
       readonly confidence: number;
       /** 既知パターン一致の根拠（どの条件が一致したか）。ドロワーで「なぜ」を見せる。 */
       readonly matchedConditions: MatchedConditionView[];
+      /** 類似既知（SIMILARITY）のとき、元の解決済み Alert への内部リンク先 id（任意）。 */
+      readonly sourceAlertId?: string;
     }
   | { readonly type: "unknown"; readonly confidence: null };
 
@@ -84,6 +86,9 @@ function toClassificationView(
         expectedValue: c.expectedValue,
         actualValue: c.actualValue,
       })),
+      ...(dto.sourceAlertId !== undefined
+        ? { sourceAlertId: dto.sourceAlertId }
+        : {}),
     };
   }
   return { type: "unknown", confidence: null };
@@ -114,4 +119,13 @@ export function toAlertView(dto: AlertPrimitives): AlertView {
 /** 分析中（未知障害の調査待ち）か。SSE の ANALYZING→OPEN 演出で使う純関数。 */
 export function isAnalyzing(alert: AlertView): boolean {
   return alert.status === "ANALYZING";
+}
+
+/**
+ * AI のインフラ証拠調査の対象か。未知（unknown）アラートだけが調査パイプラインを通り、
+ * Cloud Logging/Terraform/GitHub の証拠を持つ。既知（完全一致/類似）は即時分類で調査しないため
+ * 証拠パネル（「AI が証拠を解析しています…」含む）を出さない。
+ */
+export function hasAiInvestigation(alert: AlertView): boolean {
+  return alert.classification.type === "unknown";
 }

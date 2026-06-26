@@ -16,6 +16,14 @@ suggestedActions には「どう直すか」の具体的な修正方針を含め
 実行するか判断する材料になります。
 remediable は「自社コードの変更（依存更新・設定/コード修正）で直せ、PR 起票で対処可能」と
 判断できる場合のみ true。インフラ手動対応・外部要因・運用対応が必要なものは false。
+operatorFeedback が含まれる場合は、人間オペレータによる再調査依頼です。前回調査の誤りの指摘や
+修正方針が書かれているので、これを最優先の手がかりとして結論（summary・severity・アクション）を
+見直してください。
+candidateAlerts は同時期に発生している他のアラート一覧です。今回の障害と根本原因を共有する・
+波及関係にある等、関連すると判断したものだけを relatedAlerts に載せてください。必ず candidateAlerts に
+実在する alertId を参照し、存在しない ID を作らないこと。関連が無ければ空配列にしてください。
+relation は same_root_cause（同一根本原因）/ downstream（波及・下流）/ upstream（起因・上流）/
+precursor（予兆）/ similar（同型）から選び、rationale に関連と判断した根拠を1文で書いてください。
 {
   "summary": "障害の説明（日本語・1〜2文）",
   "confidence": 0.87,
@@ -23,7 +31,8 @@ remediable は「自社コードの変更（依存更新・設定/コード修�
   "investigationSteps": ["調べたこと1", "調べたこと2"],
   "suggestedActions": ["対応アクション1（具体的な修正方針）", "対応アクション2"],
   "suggestedPatternName": "自動昇格候補のパターン名（例: DB_CONNECTION_EXHAUSTION）",
-  "remediable": true | false
+  "remediable": true | false,
+  "relatedAlerts": [{ "alertId": "...", "relation": "same_root_cause", "rationale": "関連の根拠（1文）" }]
 }`;
 
 const MAX_ESTIMATED_TOKENS = 3500;
@@ -33,12 +42,24 @@ function estimateTokens(text: string): number {
 }
 
 export function buildUserPrompt(context: InvestigationContext): string {
+  // 人間の指摘は再調査の最重要シグナル。トークン削減時も落とさない。
+  const operatorFeedback = context.operatorNote
+    ? { operatorFeedback: context.operatorNote }
+    : {};
+
+  // 相関候補は alertId 参照に必要なため、トークン削減時も落とさない（件数自体は use case 側で上限制御）。
+  const candidateAlerts = context.candidateAlerts?.length
+    ? { candidateAlerts: context.candidateAlerts }
+    : {};
+
   const full = JSON.stringify(
     {
       errorEvent: context.errorEvent,
       knownPatterns: context.knownPatterns,
       similarIncidents: context.similarIncidents,
       ...(context.infraEvidence ? { infraEvidence: context.infraEvidence } : {}),
+      ...candidateAlerts,
+      ...operatorFeedback,
     },
     null,
     2,
@@ -54,6 +75,8 @@ export function buildUserPrompt(context: InvestigationContext): string {
       knownPatterns: context.knownPatterns,
       similarIncidents: [],
       ...(context.infraEvidence ? { infraEvidence: context.infraEvidence } : {}),
+      ...candidateAlerts,
+      ...operatorFeedback,
     },
     null,
     2,

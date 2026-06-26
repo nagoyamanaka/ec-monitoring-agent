@@ -517,3 +517,133 @@ Monitoring（Bounded Context ＝ 観測フレームを画定する。フレー�
 > - G. Bateson, _The Logical Categories of Learning and Communication_ — context / context of context（メタメッセージの階層＝論理型）
 
 ---
+
+## §10. リアルタイム配信の境界：SSE push（broadcast）と frontend pull の使い分け
+
+> **決定（2026-06 確定）**: フロント↔backend のリアルタイム反映を「SSE か ポーリングか」で事象ごとにアドホックに決めず、**1本の軸**で割る。実装の根拠（コードベースでの確認）は step4-3/step4-4 に対応。
+
+### 原則（一文）
+
+> **小さくて全クライアント共通の "事実" は broadcast（SSE）／ 大きい・外部依存・特定ユーザーが見ている時だけ要る "詳細" は pull on-demand。**
+
+### 適用
+
+| 事象 | 手段 | 理由 |
+| ---- | ---- | ---- |
+| アラート集約のライフサイクル（生成・分析中・調査完了・dedup 更新） | **SSE push（既定イベント）** | 小さく・一覧の全員が関心・既に domain で emit 済み（`AnalyzeAlertUseCase`/`InvestigateAlertUseCase` の `SSEAlertNotifier.notify`） |
+| リメディ確定（dispatched→drafted/failed・skipped） | **SSE push（名前付きイベント `remediation`）** | 小さい（status/PR URL/件数）。CI callback は非同期でクライアント操作が起点に無い＝push が最も素直。`RecordRemediationResultUseCase`/`DraftRemediationUseCase` が `SSEAlertNotifier.notifyRemediation` |
+| インフラ証拠（Cloud Logging / Terraform / GitHub） | **pull on-demand**（ドロワーを開いた人が done になった時だけ GET /evidence） | 大きく・外部 API を毎回叩く重い収集。全クライアントへ broadcast すると「1アラート×N クライアント分の再収集」が走る事故。done 判定は **SSE で届く alert.status から導出**し、status 専用ポーリングは廃止（同じ事実を二重に持たない） |
+
+### この決定で消えたもの / 足したもの
+
+- **消えた**: `GET /alerts/:id/investigation/status` エンドポイント（＋ `GetInvestigationStatus` UseCase 一式）。証拠の done 判定は SSE で更新される alert.status から導出できるため、status を別エンドポイントでポーリングするのは冗長（二重ソース）だった。frontend は `useEvidence(api, alert)` が alert を受け取り status を読む。
+- **足した**: SSE の**名前付きイベント**多重化（`EventEmitterSSEAlertNotifier` が `event: remediation` 行を出し分け、frontend `SSEAlertStream` が `addEventListener("remediation")`）。1本の EventSource 接続で alert と remediation の両ライフサイクルを配る。`RemediationResponsePrimitives` を契約の単一ソース（GET レスポンス＝SSE payload＝frontend View 入力）に統一。
+
+### トレードオフと UX 保証
+
+- **「アラートが出来たら即表示」は SSE push で無条件に保証**される（どのポーリング設計とも独立）。ポーリング/pull が効くのは証拠・リメディ確定＝**ドロワーを開いている時だけ問題になる二次情報**なので、ベースライン UX は崩れない。
+- **負荷観点**: 社内オペレーションコンソールで同時オペレータ数が少ない＝同時に開くドロワー数が pull 負荷の上限。pull 負荷は誤差で、選択軸は「一貫性とレイテンシ」。
+- **detail ページ（`/alerts/:id`）**: alert は `useAlert(api, id, stream)` で SSE ライブ化（証拠の done 判定が一覧ドロワーと同挙動）。リメディは現状ポーリングのフォールバック（`live=false`）＝主舞台のドロワーは push、deep-link の detail は poll、という許容した非対称（必要なら detail も `live` に寄せられる）。
+- **スケールアウト時**: `EventEmitterSSEAlertNotifier`（in-process）は同 interface のまま `RedisSSEAlertNotifier` へ差し替え（複数プロセス間の fan-out）。
+
+---
+
+## §11. デプロイ・トポロジと IaC（2026-06 確定）
+
+> **決定**: §4「デプロイ」を具体化する。検知ソース ingest（§2.5）・Cloud Run 配信エッジ・Valkey の役割・キャッシュ耐障害性・IaC 構成を1本化。実装は step4-3（backend 配線）/ `infra/terraform/`（IaC）に対応。
+
+### 11.1 トポロジ：ハイブリッド（GCE=常駐の脳 / Cloud Run=ステートレス配信エッジ）
+
+```
+                       ┌─────────── Cloud Run（とどける・スケールする）───────────┐
+ブラウザ ◀── SSE ──────│  backoffice query/SSE API（ステートレス・min=0〜N）        │
+   ▲                   │   ・GET /alerts, /alerts/:id/evidence  → Valkey 読む       │
+   │ TanStack          │   ・GET /alerts/stream (SSE)           → Valkey Sub 購読   │
+   │                   └───────────────▲───────────────────────┬──────────────────┘
+   │                                   │ Pub/Sub(deltas)         │ VPC connector
+   │                                   │ + read-model(snapshot)  ▼
+   │                   ┌───────────────┴──── GCE（常駐の脳）───────────────────────┐
+Cloud Monitoring ──webhook──▶ /ingest/cloud-monitoring                              │
+CI(Trivy) ─────────webhook──▶ /ingest/security-scan                                 │
+                   │  RabbitMQ ・ MongoDB ・ Elasticsearch ・ Valkey ・ EDA worker  │
+                   │                              （EC + Monitoring subs + AI調査） │
+                   └───────────────────────────────────────────────────────────────┘
+                                  Gemini / Vertex（API）
+```
+
+- **GCE（e2-standard-2 想定・無料クレジット充当）= ステートフル backbone**: RabbitMQ / MongoDB / **Elasticsearch（GCE 自前ホスト）** / Valkey / EDA worker（EC + Monitoring subscribers + AI調査）。RabbitMQ 常駐 Subscriber は Cloud Run の stateless/scale-to-zero と本質的に噛み合わないため、worker は GCE に置く。
+- **Cloud Run = 配信エッジ（「とどける」見せ場・スケールする）**: backoffice の **クエリ API ＋ SSE** をステートレスに出す（min=0）。Valkey を VPC connector 越しに読む／購読する。
+- **Elasticsearch は Elastic Cloud でなく GCE 同居に変更**（2026-06 決定）。無料クレジットで賄い外部課金を回避するため。`SimilarPatternRule`（Step2）用。メモリは ES heap を絞る（`-Xms512m -Xmx512m`）。8GB で逼迫するなら e2-standard-4 に上げる（クレジット内）。
+- RabbitMQ は ADR どおり維持（Pub/Sub に替えない＝ローカル E2E 速度。Step5 ADR「なぜ Pub/Sub でなく RabbitMQ か」）。
+
+> コスト感（無料クレジット充当前提）: GCE e2-standard-2 ~$50/月 ＋ Serverless VPC Access connector ~$10/月 ＋ Cloud Run/Gemini は無料枠内。ES の外部課金 $0。予算をさらに絞るなら「全部 GCE・Cloud Run 無し」も成立するが、Valkey + Cloud Run のスケール訴求を捨てるので非推奨。
+
+### 11.2 検知ソース ingest：Cloud Monitoring → Webhook channel（Cloud Function を挟まない）
+
+- Cloud Monitoring Alerting Policy 発火 → **Webhook 通知チャネル** → Cloud Run `POST /ingest/cloud-monitoring`（`x-ingest-token` 認証）→ `CloudMonitoringAlertIngestController`（§2.5）→ `CollectMonitoringEventUseCase.run()`。
+- **Cloud Function は挟まない**（2026-06 決定）: Cloud Run が公開 HTTPS を提供するため、中継 Function はホップが増えるだけで旨味が薄い。Pub/Sub ＋ Function でのバッファリング/リトライは「本番 hardening」として ADR にのみ記載する。
+- 経路の根拠は `CollectMonitoringEventSubscriber` のクラスコメント（EC 自前イベント＝バス購読 / 外部 push 源＝HTTP ingest コントローラの peer アダプタ）に一致。category オーナーシップ（INFRASTRUCTURE/CAPACITY = Cloud Monitoring 権威）で EC 自前イベントと被らない（§2.5）。
+
+### 11.3 Valkey の2役と「SoT を in-memory に置かない」原則
+
+Valkey は**同一インスタンスで2役**を兼ねる。だが**どちらも SoT ではない**——ここが耐障害性の肝。
+
+| 役 | 用途 | 案 |
+| --- | --- | --- |
+| ① Pub/Sub（transport） | worker→Cloud Run の SSE delta fan-out。多インスタンス SSE の必然性そのもの | 案1（最優先） |
+| ② read-model（projection） | `GET /alerts`・`/alerts/:id/evidence` のスナップショットを保持し、Cloud Run が Mongo を叩かず読む（CQRS read model in Redis） | あなたの案（①と同格） |
+
+> AI 進捗（案2）は①の中身（思考 step 列を Valkey に置き、完了時のみ Mongo 永続化）。案4（外部API障害/Circuit Breaker）は時間が余れば着手（CB 状態のインスタンス間共有が Valkey 紐付け・既存シナリオ1と差別化）。案3（LLM rate limiter）はデモで不可視＝後回し（INCR/EXPIRE で安価に「本番考慮」として添える程度）。
+
+**「Valkey が落ちたら終わり」への解（write-through を真実経路にしない）**:
+
+懸念は正しいが、それは **Valkey を SoT にした場合**の話。本設計は **Mongo = SoT（耐久）、Valkey = 再構築可能な projection ＋ transport** に徹し、Valkey を真実の経路から外すことで構造的に解消する。
+
+- **書き込み順序**: writer（EDA projector）は **まず SoT（Mongo）に書き**、その後 Valkey に projection を派生させる。「先に cache に書く write-through（cache を真実の前段にする）」は採らない。
+- **読み取り経路（cache-aside fallback）**: Cloud Run は Valkey hit→返す、**miss/down→Mongo にフォールバックして再投入**。∴ **Valkey down = 性能劣化（Mongo 負荷増）であって障害ではない**。
+- **projection は再構築可能**（§7.9 の ForecastMemory と同原則「projection は再構築可能であるべき」）。alert id をキーにした **冪等 upsert ＋ at-least-once のイベント配送**で、projector がクラッシュしても再投影で自己回復（結果整合）。
+- **SSE delta は best-effort**: Valkey down 中の delta は失われるが、frontend は再接続時に現在状態を再フェッチ（TanStack invalidate）してギャップを埋める。correctness は reads（cache-aside）が担保し、SSE は liveness 層。
+- 配線は §10 既述の interface 差し替え（`EventEmitterSSEAlertNotifier` → `RedisSSEAlertNotifier`）に一致。
+
+> **要点**: 弊害は「SoT を in-memory に置くこと」そのものであって、in-memory を「**捨てても真実が残り自己回復する派生ビュー＋transport**」に限定すれば出ない。Valkey は SoT ではなく projection／transport の位置に置く。
+
+### 11.4 フロント：SSR 不採用・TanStack Query 採用（依存は infrastructure に隔離）
+
+- **SSR は採らない**: realtime dashboard は SSE が主で、SSR の初期描画は直後に SSE で上書きされ旨味が薄い。サーバ近接フェッチの利点は「Cloud Run API が Valkey を読む」で既に充足。docs の CSR 方針も維持。
+- **TanStack Query は採る**: CSR で都度取得していた `/alerts/:id/evidence` 等を `staleTime` キャッシュ＋SSE 受信で `setQueryData`/`invalidateQueries`（push 更新）。二層キャッシュが合成される（**Valkey = Mongo オフロード / TanStack = Cloud Run API オフロード**）。
+- **層の規律（必ず守る）**: TanStack はサーバ状態のクライアントキャッシュ＝**インフラの関心事**。`@tanstack/react-query` 依存は frontend の **infrastructure 層（API クライアント／フックアダプタ）に閉じ込め、domain/application 層に import しない**。ロジックは TanStack 非依存に保ち、フックは薄いアダプタにする。
+
+### 11.5 IaC フォルダ構成（`infra/terraform/`・`src/` の外）
+
+`src/` の外に `infra/` を切る（turbo/pnpm のビルド対象に混ぜない）。ハッカソン2週間スコープなので **modules ＋ prod 単一 env ＋ GCS remote state ＋ WIF（キーレス）** に絞る（multi-env は過剰）。
+
+```
+infra/terraform/
+├── versions.tf            # provider pin (google, google-beta)
+├── modules/
+│   ├── bootstrap/         # API有効化(run,compute,monitoring,logging,aiplatform,secretmanager,vpcaccess) + Secret Manager(GEMINI_API_KEY,INGEST_TOKEN)
+│   ├── networking/        # VPC, firewall, Serverless VPC Access connector
+│   ├── gce-backbone/      # COS VM + startup-script で docker-compose.prod 起動（rabbitmq/mongo/es/valkey/worker）
+│   ├── cloud-run/         # backoffice query/SSE service（VPC connector経由でValkey到達, min=0）
+│   ├── monitoring/        # Alerting Policy + Notification Channel(webhook → /ingest/cloud-monitoring) + uptime check
+│   ├── logging/           # log-based metrics, log sink
+│   └── iam/               # service accounts + WIF(GitHub OIDC) + secret accessor
+├── envs/prod/
+│   ├── main.tf  variables.tf  terraform.tfvars  backend.tf(GCS)
+└── README.md
+```
+
+- GitHub Actions に `terraform-plan`(PR時) / `terraform-apply`(main・手動承認) を追加。**WIF（Workload Identity Federation・GitHub OIDC）でキーレス認証**にし、長期 SA キーを排除（DevOps 面の加点）。
+- Gemini は Terraform では「API 有効化＋SA(`aiplatform.user`)＋Secret Manager にキー」を作るのみ（モデルは provision 対象外）。
+- Cloud Function module は初手では作らない（§11.2・§11.3 のとおり webhook 直結＋worker write-through で不要）。
+
+### 11.6 ADR種（Step5・追加）
+
+- ハイブリッド（GCE 常駐 worker ＋ Cloud Run 配信エッジ）にし、RabbitMQ 常駐 Subscriber を Cloud Run に載せない理由（EDA とステートレスのトレードオフ）
+- Elasticsearch を Elastic Cloud でなく **GCE 自前ホスト**にする理由（無料クレジット充当・外部課金回避と、運用/メモリ負担とのトレードオフ）
+- 検知 ingest を Cloud Monitoring **Webhook 直結**にし Cloud Function 中継を挟まない理由（Pub/Sub＋Function は本番 hardening として線引き）
+- Valkey を SoT にせず「**再構築可能な read-model projection ＋ Pub/Sub transport**」に限定し、Mongo SoT＋cache-aside fallback で Valkey 障害を性能劣化に縮める理由（write-through を真実経路にしない判断）
+- SSR を採らず TanStack Query でクライアントキャッシュする理由と、TanStack 依存を **infrastructure 層に隔離**する理由（domain/application を汚さない）
+- IaC を **WIF キーレス・modules＋単一 prod env・GCS remote state** で構成する理由
+
+---

@@ -1,6 +1,7 @@
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
 import { AlertSeverity, AlertSeverities } from "../../../Shared/domain/AlertSeverity.js";
+import type { InvestigationStepPrimitives } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
 /**
@@ -25,18 +26,24 @@ function parseSeverity(value: string): AlertSeverity {
   return AlertSeverity.warning();
 }
 
-export function toInvestigationReport(output: LLMInvestigationOutput): InvestigationReport {
+export function toInvestigationReport(
+  output: LLMInvestigationOutput,
+  // evidence から決定的に導出した外部リンク（LLM はテキストのみ・URL は作らせない）。
+  // 「証拠を見るべき場所」として調査ステップ末尾へ追記する。
+  evidenceLinks: InvestigationStepPrimitives[] = [],
+): InvestigationReport {
   return new InvestigationReport({
     summary: output.summary,
     confidence: clampConfidence(output.confidence),
     severity: parseSeverity(output.severity),
-    investigationSteps: output.investigationSteps,
+    investigationSteps: [...output.investigationSteps, ...evidenceLinks],
     suggestedActions: output.suggestedActions,
     suggestedPatternName: output.suggestedPatternName,
     reviewStatus: ReviewStatus.pendingReview(),
     investigatedAt: new Date(),
     isFallback: false,
     remediable: output.remediable,
+    relatedAlerts: output.relatedAlerts,
   });
 }
 

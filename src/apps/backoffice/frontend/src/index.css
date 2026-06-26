@@ -20,3 +20,96 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 }
+
+/* 証拠が「到着ごとに積み上がる」演出（EvidencePanel・タスク8）。
+   各セクションを下から滑り込ませてフェードイン。reduced-motion では無効化する。 */
+@keyframes evidence-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.evidence-rise {
+  animation: evidence-rise 0.4s ease-out both;
+}
+
+/* 詳細ドロワーのスライドイン＋背景 dim（タスク12・最優先）。
+   行クリックで右から滑り込む＝master-detail を「気持ちよさ」として体験させる。 */
+@keyframes drawer-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-panel-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.drawer-overlay {
+  animation: drawer-overlay-in 0.2s ease-out both;
+}
+
+.drawer-panel {
+  animation: drawer-panel-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 一覧行の ANALYZING→OPEN 遷移演出（タスク12・高 ROI）。
+   解決時に行が一瞬フラッシュ＝「勝手に解決していく」自律性の可視化。 */
+@keyframes resolve-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+    background-color: rgba(34, 211, 238, 0);
+  }
+  25% {
+    box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.55);
+    background-color: rgba(34, 211, 238, 0.08);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+    background-color: rgba(34, 211, 238, 0);
+  }
+}
+
+.resolve-flash {
+  animation: resolve-flash 1.3s ease-out;
+}
+
+/* reviewStatus トランジション（タスク12・低コスト）。
+   承認/却下の押下でラベル→ステータス表示へフェード差し替え。 */
+@keyframes badge-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.badge-fade-in {
+  animation: badge-fade-in 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evidence-rise,
+  .drawer-overlay,
+  .drawer-panel,
+  .resolve-flash,
+  .badge-fade-in {
+    animation: none;
+  }
+}

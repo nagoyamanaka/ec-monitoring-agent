@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { ConfidenceChip } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { cn } from "@shared/ui/cn";
@@ -5,6 +6,7 @@ import {
   type AlertView,
   type AlertSeverity,
   isAnalyzing,
+  hasAiInvestigation,
 } from "../domain/AlertView";
 import { alertConfidence } from "../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../domain/eventCatalog";
@@ -12,6 +14,7 @@ import { categoryInfo } from "../domain/alertCategory";
 import { alertReason } from "../domain/alertReason";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { ExactMatchBadge } from "./ExactMatchBadge";
+import { UnknownFaultBadge } from "./UnknownFaultBadge";
 
 export interface AlertCardProps {
   alert: AlertView;
@@ -58,6 +61,15 @@ export function AlertCard({
   onSelect,
 }: AlertCardProps) {
   const analyzing = isAnalyzing(alert);
+  // ANALYZING→解決 の遷移を検出して行を一瞬フラッシュ（タスク12・自律性の可視化）。
+  // SSE で同一行が置き換わる（飛ばない）ため、前回の analyzing 状態と比較すれば検出できる。
+  const wasAnalyzing = useRef(analyzing);
+  const [justResolved, setJustResolved] = useState(false);
+  useEffect(() => {
+    if (wasAnalyzing.current && !analyzing) setJustResolved(true);
+    wasAnalyzing.current = analyzing;
+  }, [analyzing]);
+
   const confidence = alertConfidence(alert);
   // AI 調査が失敗した fallback レポートは confidence が当てにならない。
   const aiFallback = confidence.kind === "ai" && alert.report?.isFallback;
@@ -73,8 +85,10 @@ export function AlertCard({
       data-testid="alert-card"
       data-alert-id={alert.id}
       onClick={() => onSelect?.(alert.id)}
+      onAnimationEnd={() => justResolved && setJustResolved(false)}
       className={cn(
         "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition",
+        justResolved && "resolve-flash",
         selected
           ? "bg-slate-800/50 ring-cyan-500/50"
           : "bg-slate-900/30 ring-slate-700/60 hover:bg-slate-800/30 hover:ring-slate-600",
@@ -105,8 +119,10 @@ export function AlertCard({
           )}
         </div>
 
-        {/* ② 従属メタ: 重要度（分析中は判定中）・category（人間語）・時刻 */}
+        {/* ② 従属メタ: 種別（未知障害）・重要度（分析中は判定中）・category（人間語）・時刻 */}
         <div className="flex min-w-0 items-center gap-2 text-sm text-slate-400">
+          {/* 未知障害は eventName だけでは伝わらないので種別バッジで明示する */}
+          {hasAiInvestigation(alert) && <UnknownFaultBadge />}
           {analyzing ? (
             <span className="inline-flex items-center rounded-full bg-slate-600/20 px-2.5 py-0.5 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-500/30">
               重要度 判定中

@@ -15,10 +15,10 @@ DC := docker compose $(COMPOSE_FILES_$(ENV))
 
 # ── Infra ─────────────────────────────────────────────────────
 infra-up:
-	$(DC) up -d mongo rabbitmq elasticsearch
+	$(DC) up -d --wait mongo rabbitmq elasticsearch valkey
 
 infra-down:
-	$(DC) stop mongo rabbitmq elasticsearch
+	$(DC) stop mongo rabbitmq elasticsearch valkey
 
 # ── EC ────────────────────────────────────────────────────────
 ec-up: infra-up
@@ -71,6 +71,7 @@ front-build:
 	$(DC) build backoffice-frontend
 
 # ── All ───────────────────────────────────────────────────────
+# seedのデータ変更後は再度make seedしないとサービスに反映されないリスク
 up: ec-up bo-up front-up
 
 down:

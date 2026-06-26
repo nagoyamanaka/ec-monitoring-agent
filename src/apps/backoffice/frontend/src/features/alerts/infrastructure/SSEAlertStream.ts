@@ -1,6 +1,7 @@
 import type { AlertPrimitives } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
+import type { RemediationResponsePrimitives } from "@monitoring/AIInvestigation/domain/contracts/RemediationContract";
 import { type AlertView, toAlertView } from "../domain/AlertView";
-import type { AlertStream, StreamStatus } from "./AlertStream";
+import type { AlertStream, RemediationPushed, StreamStatus } from "./AlertStream";
 
 const DEFAULT_URL = "/alerts/stream";
 const RECONNECT_DELAY_MS = 3_000;
@@ -30,6 +31,7 @@ export class SSEAlertStream implements AlertStream {
   subscribe(
     onAlert: (alert: AlertView) => void,
     onStatus?: (status: StreamStatus) => void,
+    onRemediation?: (remediation: RemediationPushed) => void,
   ): () => void {
     let source: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -44,6 +46,16 @@ export class SSEAlertStream implements AlertStream {
         onAlert(toAlertView(primitives));
       } catch {
         // 壊れた1行で購読全体を落とさない（黙って捨てる）
+      }
+    };
+
+    // 名前付きイベント "remediation"（リメディ確定）。既定の alert イベントとは別ハンドラ。
+    const handleRemediation = (event: MessageEvent<string>) => {
+      if (!event.data || !onRemediation) return;
+      try {
+        onRemediation(JSON.parse(event.data) as RemediationResponsePrimitives);
+      } catch {
+        // 壊れた1行は黙って捨てる
       }
     };
 
@@ -74,6 +86,7 @@ export class SSEAlertStream implements AlertStream {
       source = new EventSource(this.url);
       source.onopen = () => emitStatus("open");
       source.onmessage = handleMessage;
+      source.addEventListener("remediation", handleRemediation);
       source.onerror = handleError;
     };
 

@@ -153,6 +153,34 @@ describe("Alert.submitFeedback()", () => {
     expect(alert.correctFeedbackCount).toBe(0);
     expect(alert.investigationReport?.reviewStatus.isPendingReview()).toBe(true);
   });
+
+  it("再レビューで承認→却下→承認に遷移できる（feedback と reviewStatus が上書きされる）", () => {
+    const base = Alert.createAsUnknown({
+      id: new AlertId(Uuid.random().value),
+      monitoringEvent: testEvent,
+    }).attachInvestigationReport(testReport);
+
+    // 承認（誤承認のつもり）
+    const approved = base.submitFeedback({ isCorrect: true });
+    expect(approved.feedback?.isCorrect).toBe(true);
+    expect(approved.investigationReport?.reviewStatus.isApproved()).toBe(true);
+
+    // 却下し直し（誤承認の訂正）
+    const rejected = approved.submitFeedback({
+      isCorrect: false,
+      operatorNote: "誤承認だった",
+    });
+    expect(rejected.feedback).toEqual({
+      isCorrect: false,
+      operatorNote: "誤承認だった",
+    });
+    expect(rejected.investigationReport?.reviewStatus.isRejected()).toBe(true);
+
+    // フィードバック後に正しくなったので再承認
+    const reapproved = rejected.submitFeedback({ isCorrect: true });
+    expect(reapproved.feedback?.isCorrect).toBe(true);
+    expect(reapproved.investigationReport?.reviewStatus.isApproved()).toBe(true);
+  });
 });
 
 describe("Alert toPrimitives/fromPrimitives", () => {

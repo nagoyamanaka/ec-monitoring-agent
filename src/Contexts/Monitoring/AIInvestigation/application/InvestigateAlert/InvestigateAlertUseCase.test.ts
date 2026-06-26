@@ -54,6 +54,7 @@ const makeSpyNotifier = () => {
     notify: (p) => {
       notified.push(p);
     },
+    notifyRemediation: () => {},
     addConnection: () => {},
     removeConnection: () => {},
   };
@@ -65,6 +66,7 @@ const makeSimilarRepo = (
 ): SimilarIncidentRepository => ({
   findSimilar: async () => incidents,
   index: async () => {},
+  removeByAlertId: async () => {},
   search: async () => [],
 });
 

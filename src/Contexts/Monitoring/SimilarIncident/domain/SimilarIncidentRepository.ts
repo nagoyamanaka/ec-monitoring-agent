@@ -31,6 +31,9 @@ export interface SimilarIncidentRepository {
   findSimilar(criteria: Criteria): Promise<SimilarIncident[]>;
   // 解決済みインシデントを追記する。
   index(incident: ResolvedIncident): Promise<void>;
+  // 指定 Alert 由来の解決済みインシデントを撤回する（sourceAlertId 一致を全削除）。
+  // 承認のやり直し（承認→却下/取消）で誤った学習を残さないために使う。該当なしは no-op。
+  removeByAlertId(sourceAlertId: string): Promise<void>;
   // graded confidence 分類用のスコア付き検索（SimilarPatternRule が利用）。
   search(query: SimilarSearchQuery): Promise<ScoredIncident[]>;
 }

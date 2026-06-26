@@ -1,0 +1,9 @@
+project_id         = "your-gcp-project-id"
+region             = "asia-northeast1"
+zone               = "asia-northeast1-a"
+github_repository  = "shigeyasushimamura/ec-monitoring-agent"
+deploy_bucket_name = "your-gcp-project-id-ec-monitoring-deploy"
+
+# 省略時は <region>-docker.pkg.dev/<project>/apps/<name>:latest を使う
+# image_ec         = "asia-northeast1-docker.pkg.dev/your-gcp-project-id/apps/ec-backend:latest"
+# image_backoffice = "asia-northeast1-docker.pkg.dev/your-gcp-project-id/apps/backoffice-backend:latest"

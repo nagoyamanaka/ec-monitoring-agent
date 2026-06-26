@@ -2,13 +2,23 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ConfidenceGauge } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
-import { type AlertView, isAnalyzing } from "../domain/AlertView";
+import {
+  type AlertView,
+  isAnalyzing,
+  hasAiInvestigation,
+} from "../domain/AlertView";
 import { alertConfidence } from "../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../domain/eventCatalog";
 import { categoryInfo } from "../domain/alertCategory";
 import type { FeedbackDecision } from "../application/submitFeedback";
+import type { EvidenceApi } from "../infrastructure/evidenceApi";
+import type { RemediationApi } from "../infrastructure/remediationApi";
+import type { RemediationView } from "../domain/RemediationView";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertStatusBadge } from "./AlertStatusBadge";
+import { EvidencePanel } from "./EvidencePanel";
+import { RemediationPanel } from "./RemediationPanel";
+import { RelatedAlertsPanel } from "./RelatedAlertsPanel";
 import { ExactMatchBadge } from "./ExactMatchBadge";
 
 export interface AlertDetailDrawerProps {
@@ -18,7 +28,21 @@ export interface AlertDetailDrawerProps {
   onDecision?: (
     alertId: string,
     decision: FeedbackDecision,
+    operatorNote?: string,
   ) => void | Promise<void>;
+  /** 「却下して AI 再調査」。人間の指摘を AI に返して再調査させる。 */
+  onReinvestigate?: (
+    alertId: string,
+    operatorNote: string,
+  ) => void | Promise<void>;
+  /** 渡された場合のみ証拠パネルを表示する（composition root で注入）。 */
+  evidenceApi?: EvidenceApi;
+  /** 渡された場合のみリメディエーションパネルを表示する（composition root で注入）。 */
+  remediationApi?: RemediationApi;
+  /** SSE で届いた選択中アラートのリメディ確定（live 反映用）。 */
+  pushedRemediation?: RemediationView | null;
+  /** 関連アラートの alertId → AlertView 解決（一覧から渡す。関連の日時/severity 補完用）。 */
+  relatedLookup?: (id: string) => AlertView | undefined;
 }
 
 function formatAbsoluteTime(iso: string): string {
@@ -36,6 +60,11 @@ export function AlertDetailDrawer({
   alert,
   onClose,
   onDecision,
+  onReinvestigate,
+  evidenceApi,
+  remediationApi,
+  pushedRemediation,
+  relatedLookup,
 }: AlertDetailDrawerProps) {
   useEffect(() => {
     if (!alert) return;
@@ -64,11 +93,11 @@ export function AlertDetailDrawer({
       aria-label="アラート詳細"
     >
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="drawer-overlay absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
-      <aside className="absolute inset-y-0 right-0 flex w-[clamp(360px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
+      <aside className="drawer-panel absolute inset-y-0 right-0 flex w-[clamp(480px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
         <header className="flex items-start gap-3 border-b border-slate-700/60 px-5 py-4">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -135,6 +164,7 @@ export function AlertDetailDrawer({
                 size="lg"
                 label="AI 確信度"
                 color="cyan"
+                animate
               />
             </div>
           ) : confidence.kind === "known" ? (
@@ -144,10 +174,27 @@ export function AlertDetailDrawer({
                 size="lg"
                 label="既知事例との類似度"
                 color="emerald"
+                animate
               />
             </div>
           ) : null}
-          <AlertCardExpanded alert={alert} onDecision={onDecision} />
+          <AlertCardExpanded
+            alert={alert}
+            onDecision={onDecision}
+            onReinvestigate={onReinvestigate}
+          />
+          <RelatedAlertsPanel alert={alert} lookup={relatedLookup} />
+          {remediationApi && (
+            <RemediationPanel
+              alert={alert}
+              api={remediationApi}
+              pushed={pushedRemediation}
+              live
+            />
+          )}
+          {evidenceApi && hasAiInvestigation(alert) && (
+            <EvidencePanel api={evidenceApi} alert={alert} />
+          )}
         </div>
 
         <footer className="border-t border-slate-700/60 px-5 py-3">

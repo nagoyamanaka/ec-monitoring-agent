@@ -54,6 +54,20 @@ describe("LLMOutputParser", () => {
       expect(parseLLMOutput(notBool)?.remediable).toBe(false);
     });
 
+    it("steps/actions の非文字列要素は落とす（防御的正規化）", () => {
+      const mixed = JSON.stringify({
+        summary: "x",
+        confidence: 0.5,
+        severity: "INFO",
+        investigationSteps: ["ログ確認", { text: "obj" }, 42, "メトリクス相関"],
+        suggestedActions: ["対応", null],
+        suggestedPatternName: "",
+      });
+      const out = parseLLMOutput(mixed);
+      expect(out?.investigationSteps).toEqual(["ログ確認", "メトリクス相関"]);
+      expect(out?.suggestedActions).toEqual(["対応"]);
+    });
+
     it("型不一致(confidenceが文字列)ではnullを返す", () => {
       const badType = JSON.stringify({
         summary: "x",
@@ -64,6 +78,42 @@ describe("LLMOutputParser", () => {
         suggestedPatternName: "",
       });
       expect(parseLLMOutput(badType)).toBeNull();
+    });
+
+    it("relatedAlerts は欠落で空配列・3フィールド揃った要素のみ残す", () => {
+      // 欠落（旧スキーマ互換）
+      expect(parseLLMOutput(validJson)?.relatedAlerts).toEqual([]);
+
+      const withRelated = JSON.stringify({
+        summary: "x",
+        confidence: 0.5,
+        severity: "INFO",
+        investigationSteps: [],
+        suggestedActions: [],
+        suggestedPatternName: "",
+        relatedAlerts: [
+          { alertId: "a1", relation: "same_root_cause", rationale: "同根" },
+          { alertId: "a2", relation: "downstream" }, // rationale 欠落 → 落とす
+          "not-an-object", // 型不正 → 落とす
+          { alertId: 3, relation: "x", rationale: "y" }, // alertId 非文字列 → 落とす
+        ],
+      });
+      expect(parseLLMOutput(withRelated)?.relatedAlerts).toEqual([
+        { alertId: "a1", relation: "same_root_cause", rationale: "同根" },
+      ]);
+    });
+
+    it("relatedAlerts が配列でなければ空配列に丸める", () => {
+      const notArray = JSON.stringify({
+        summary: "x",
+        confidence: 0.5,
+        severity: "INFO",
+        investigationSteps: [],
+        suggestedActions: [],
+        suggestedPatternName: "",
+        relatedAlerts: "oops",
+      });
+      expect(parseLLMOutput(notArray)?.relatedAlerts).toEqual([]);
     });
   });
 });

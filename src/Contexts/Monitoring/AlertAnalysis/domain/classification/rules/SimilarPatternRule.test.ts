@@ -25,6 +25,7 @@ class FakeSearchPort implements SimilarIncidentRepository {
     return [];
   }
   async index(_incident: ResolvedIncident): Promise<void> {}
+  async removeByAlertId(_sourceAlertId: string): Promise<void> {}
 }
 
 function makeIncident(params: {
@@ -32,6 +33,7 @@ function makeIncident(params: {
   eventName?: string;
   resolvedNote?: string;
   severity?: AlertSeverity;
+  sourceAlertId?: string;
 }): SimilarIncident {
   return {
     id: params.id ?? "inc-001",
@@ -40,6 +42,9 @@ function makeIncident(params: {
     resolvedNote: params.resolvedNote ?? "在庫枯渇により失敗",
     resolvedAt: new Date("2026-01-02T00:00:00.000Z"),
     severity: params.severity ?? AlertSeverity.warning(),
+    ...(params.sourceAlertId !== undefined
+      ? { sourceAlertId: params.sourceAlertId }
+      : {}),
   };
 }
 
@@ -143,6 +148,28 @@ describe("SimilarPatternRule", () => {
     const result = await rule.classify(makeEvent());
 
     expect(result?.severity.isCritical()).toBe(true);
+  });
+
+  it("マッチしたインシデントの sourceAlertId を back-link として分類結果へ載せる", async () => {
+    const rule = new SimilarPatternRule(
+      new FakeSearchPort([
+        { incident: makeIncident({ sourceAlertId: "alert-past-1" }), score: 0.9 },
+      ]),
+    );
+
+    const result = await rule.classify(makeEvent());
+
+    expect(result?.sourceAlertId).toBe("alert-past-1");
+  });
+
+  it("sourceAlertId 未保持のインシデントは back-link を載せない", async () => {
+    const rule = new SimilarPatternRule(
+      new FakeSearchPort([{ incident: makeIncident({}), score: 0.9 }]),
+    );
+
+    const result = await rule.classify(makeEvent());
+
+    expect(result?.sourceAlertId).toBeUndefined();
   });
 
   it("クエリは eventName と payload から組み立てる", async () => {

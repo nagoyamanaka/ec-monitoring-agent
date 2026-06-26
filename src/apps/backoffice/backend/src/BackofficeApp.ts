@@ -22,10 +22,10 @@ import { ClassificationRule } from "../../../../Contexts/Monitoring/AlertAnalysi
 import { MongoAlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoAlertRepository.js";
 import { MongoKnownErrorPatternRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoKnownErrorPatternRepository.js";
 import { InvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.js";
+import { ReinvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/ReinvestigateAlert/ReinvestigateAlertUseCase.js";
+import { ReinvestigateAlertCommandHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/ReinvestigateAlert/ReinvestigateAlertCommandHandler.js";
 import { GetInfraEvidenceUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceUseCase.js";
 import { GetInfraEvidenceQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceQueryHandler.js";
-import { GetInvestigationStatusUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInvestigationStatus/GetInvestigationStatusUseCase.js";
-import { GetInvestigationStatusQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInvestigationStatus/GetInvestigationStatusQueryHandler.js";
 import { DraftRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/DraftRemediation/DraftRemediationUseCase.js";
 import { DraftRemediationCommandHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/DraftRemediation/DraftRemediationCommandHandler.js";
 import { GetRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationUseCase.js";
@@ -178,6 +178,18 @@ export class BackofficeApp {
       logger,
       infraInvestigationPort,
     );
+    // 人手トリガーの再調査（タスク9c）。自動調査とは別 UseCase（やり直しの独立ライフサイクル）。
+    const reinvestigateAlertUseCase = new ReinvestigateAlertUseCase(
+      alertRepository,
+      similarIncidentRepository,
+      aiInvestigationPort,
+      sseNotifier,
+      logger,
+      infraInvestigationPort,
+    );
+    const reinvestigateAlertCommandHandler = new ReinvestigateAlertCommandHandler(
+      reinvestigateAlertUseCase,
+    );
 
     const getAlertReportUseCase = new GetAlertReportUseCase(alertRepository);
     const getAlertReportQueryHandler = new GetAlertReportQueryHandler(getAlertReportUseCase);
@@ -198,11 +210,6 @@ export class BackofficeApp {
       logger,
     );
     const getInfraEvidenceQueryHandler = new GetInfraEvidenceQueryHandler(getInfraEvidenceUseCase);
-
-    const getInvestigationStatusUseCase = new GetInvestigationStatusUseCase(alertRepository, logger);
-    const getInvestigationStatusQueryHandler = new GetInvestigationStatusQueryHandler(
-      getInvestigationStatusUseCase,
-    );
 
     // リメディエーション（シナリオ5の出口）。実行戦略は config.remediation.mode で差し替える:
     //   dispatch = CI(GitHub Actions)のAIエージェントへ投げ、実コード修正+UT/E2E をランナーで回す（精度はテストゲートで担保）
@@ -228,6 +235,7 @@ export class BackofficeApp {
       alertRepository,
       remediationExecutor,
       remediationRepository,
+      sseNotifier,
       logger,
     );
     const draftRemediationCommandHandler = new DraftRemediationCommandHandler(draftRemediationUseCase);
@@ -238,6 +246,7 @@ export class BackofficeApp {
     // CI(dispatch経路)からの結果 callback（POST /ingest/remediation-result）の受け口。
     const recordRemediationResultUseCase = new RecordRemediationResultUseCase(
       remediationRepository,
+      sseNotifier,
       logger,
     );
 
@@ -247,6 +256,7 @@ export class BackofficeApp {
         submitFeedbackCommandHandler,
         promotePatternCommandHandler,
         draftRemediationCommandHandler,
+        reinvestigateAlertCommandHandler,
       ]),
     );
     const queryBus = new InMemoryQueryBus(
@@ -256,7 +266,6 @@ export class BackofficeApp {
         getKnownErrorPatternsQueryHandler,
         getAnalyticsQueryHandler,
         getInfraEvidenceQueryHandler,
-        getInvestigationStatusQueryHandler,
         getRemediationQueryHandler,
       ]),
     );

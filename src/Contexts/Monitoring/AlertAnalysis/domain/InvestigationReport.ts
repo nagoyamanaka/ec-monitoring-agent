@@ -1,16 +1,29 @@
 import { AlertSeverity } from "../../Shared/domain/AlertSeverity.js";
 import { ReviewStatus } from "./ReviewStatus.js";
-import type { InvestigationReportPrimitives } from "./contracts/AlertContract.js";
+import type {
+  InvestigationReportPrimitives,
+  InvestigationItemPrimitives,
+  RelatedAlertPrimitives,
+} from "./contracts/AlertContract.js";
 
 // シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
-export type { InvestigationReportPrimitives };
+export type {
+  InvestigationReportPrimitives,
+  InvestigationItemPrimitives,
+  RelatedAlertPrimitives,
+};
+
+/** 調査ステップ／推奨アクション項目から表示・学習用のプレーンテキストを取り出す。 */
+export function investigationItemText(item: InvestigationItemPrimitives): string {
+  return typeof item === "string" ? item : item.text;
+}
 
 export class InvestigationReport {
   readonly summary: string;
   readonly confidence: number;
   readonly severity: AlertSeverity;
-  readonly investigationSteps: string[];
-  readonly suggestedActions: string[];
+  readonly investigationSteps: InvestigationItemPrimitives[];
+  readonly suggestedActions: InvestigationItemPrimitives[];
   readonly suggestedPatternName: string;
   readonly reviewStatus: ReviewStatus;
   readonly investigatedAt: Date;
@@ -18,18 +31,21 @@ export class InvestigationReport {
   // AI が「コードで直せる（PR で remediate 可能）」と判定したか。UI の remediate ゲート＋
   // ROI 提示用の advisory シグナル。未指定は false（旧データ・fallback 互換）。
   readonly remediable: boolean;
+  // AI 調査が見つけた相関アラート（id・関係・根拠）。未指定は空配列（旧データ・fallback 互換）。
+  readonly relatedAlerts: RelatedAlertPrimitives[];
 
   constructor(params: {
     summary: string;
     confidence: number;
     severity: AlertSeverity;
-    investigationSteps: string[];
-    suggestedActions: string[];
+    investigationSteps: InvestigationItemPrimitives[];
+    suggestedActions: InvestigationItemPrimitives[];
     suggestedPatternName: string;
     reviewStatus: ReviewStatus;
     investigatedAt: Date;
     isFallback: boolean;
     remediable?: boolean;
+    relatedAlerts?: RelatedAlertPrimitives[];
   }) {
     this.summary = params.summary;
     this.confidence = params.confidence;
@@ -41,6 +57,7 @@ export class InvestigationReport {
     this.investigatedAt = params.investigatedAt;
     this.isFallback = params.isFallback;
     this.remediable = params.remediable ?? false;
+    this.relatedAlerts = params.relatedAlerts ?? [];
   }
 
   withReviewStatus(reviewStatus: ReviewStatus): InvestigationReport {
@@ -59,6 +76,7 @@ export class InvestigationReport {
       investigatedAt: this.investigatedAt.toISOString(),
       isFallback: this.isFallback,
       remediable: this.remediable,
+      relatedAlerts: [...this.relatedAlerts],
     };
   }
 
@@ -74,6 +92,7 @@ export class InvestigationReport {
       investigatedAt: new Date(primitives.investigatedAt),
       isFallback: primitives.isFallback,
       remediable: primitives.remediable ?? false,
+      relatedAlerts: primitives.relatedAlerts ?? [],
     });
   }
 }

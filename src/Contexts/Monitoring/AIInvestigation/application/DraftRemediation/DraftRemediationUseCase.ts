@@ -2,10 +2,12 @@ import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { AlertId } from "../../../AlertAnalysis/domain/AlertId.js";
 import { AlertRepository } from "../../../AlertAnalysis/domain/AlertRepository.js";
 import { MonitoringResourceNotFoundError } from "../../../AlertAnalysis/application/errors/MonitoringResourceNotFoundError.js";
+import { SSEAlertNotifier } from "../../../AlertNotification/domain/SSEAlertNotifier.js";
 import { RemediationExecutor } from "../../domain/remediation/RemediationExecutor.js";
 import { vulnerabilitiesFromPayload } from "../../domain/remediation/RemediationInput.js";
 import { RemediationRecord } from "../../domain/remediation/RemediationRecord.js";
 import { RemediationRepository } from "../../domain/remediation/RemediationRepository.js";
+import { remediationRecordToPrimitives } from "../../domain/contracts/RemediationContract.js";
 
 /**
  * security-scan アラートの payload.vulnerabilities[] を入力に修正を実行する。
@@ -22,6 +24,7 @@ export class DraftRemediationUseCase {
     private readonly alertRepository: AlertRepository,
     private readonly executor: RemediationExecutor,
     private readonly remediationRepository: RemediationRepository,
+    private readonly sseNotifier: SSEAlertNotifier,
     private readonly logger: Logger,
   ) {}
 
@@ -104,6 +107,11 @@ export class DraftRemediationUseCase {
   }
 
   private async persist(record: Omit<RemediationRecord, "createdAt">): Promise<void> {
-    await this.remediationRepository.save({ ...record, createdAt: new Date() });
+    const saved: RemediationRecord = { ...record, createdAt: new Date() };
+    await this.remediationRepository.save(saved);
+    // 起票結果（drafted/dispatched/skipped/failed）を即 push して全クライアントの表示を揃える。
+    this.sseNotifier.notifyRemediation(
+      remediationRecordToPrimitives(saved.alertId, saved),
+    );
   }
 }

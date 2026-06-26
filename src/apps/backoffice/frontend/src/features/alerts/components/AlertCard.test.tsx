@@ -56,4 +56,31 @@ describe("AlertCard", () => {
     // makeReport の confidence 0.82 → 82%
     expect(screen.getByText("82%")).toBeInTheDocument();
   });
+
+  it("未知障害（unknown 分類）は未知障害バッジを出す", () => {
+    render(
+      <AlertCard
+        alert={makeAlert({ classification: { type: "unknown", confidence: null } })}
+      />,
+    );
+    expect(screen.getByText("未知障害")).toBeInTheDocument();
+  });
+
+  it("既知パターン一致（known 分類）は未知障害バッジを出さない", () => {
+    render(
+      <AlertCard
+        alert={makeAlert({
+          classification: {
+            type: "known",
+            source: "EXACT_MATCH",
+            patternId: "PAYMENT_TIMEOUT",
+            patternName: "決済タイムアウト",
+            confidence: 1,
+            matchedConditions: [],
+          },
+        })}
+      />,
+    );
+    expect(screen.queryByText("未知障害")).not.toBeInTheDocument();
+  });
 });

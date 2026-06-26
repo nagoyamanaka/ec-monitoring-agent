@@ -74,6 +74,11 @@ export class SimilarPatternRule implements ClassificationRule {
       confidence: ClassificationConfidence.of(confidenceValue),
       matchedConditions,
       unmatchedConditions: [],
+      // 元になった解決済み Alert への back-link（あれば）。フロントは「過去の同型障害」へ
+      // 内部遷移（/alerts/:id）する動線に使う。古い索引には未保持なこともあるので任意。
+      ...(best.incident.sourceAlertId !== undefined
+        ? { sourceAlertId: best.incident.sourceAlertId }
+        : {}),
     };
   }
 

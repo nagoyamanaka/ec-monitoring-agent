@@ -13,6 +13,7 @@ function output(overrides: Partial<LLMInvestigationOutput> = {}): LLMInvestigati
     suggestedActions: ["プール拡張"],
     suggestedPatternName: "DB_CONNECTION_EXHAUSTION",
     remediable: false,
+    relatedAlerts: [],
     ...overrides,
   };
 }
@@ -44,6 +45,22 @@ describe("InvestigationReportMapper", () => {
 
     it("未知のseverityはWARNINGに丸める", () => {
       expect(toInvestigationReport(output({ severity: "FATAL" })).severity.value).toBe(AlertSeverities.WARNING);
+    });
+
+    it("evidence リンクを LLM ステップの末尾へ追記する", () => {
+      const report = toInvestigationReport(output({ investigationSteps: ["ログ確認"] }), [
+        { text: "コミット abc: m", href: "https://github.com/o/r/commit/abc", kind: "code" },
+      ]);
+
+      expect(report.investigationSteps).toEqual([
+        "ログ確認",
+        { text: "コミット abc: m", href: "https://github.com/o/r/commit/abc", kind: "code" },
+      ]);
+    });
+
+    it("evidence リンク未指定なら LLM ステップのみ", () => {
+      const report = toInvestigationReport(output({ investigationSteps: ["ログ確認"] }));
+      expect(report.investigationSteps).toEqual(["ログ確認"]);
     });
   });
 

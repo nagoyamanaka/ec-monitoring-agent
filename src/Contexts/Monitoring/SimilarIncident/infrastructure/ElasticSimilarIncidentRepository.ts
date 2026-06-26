@@ -84,6 +84,17 @@ export class ElasticSimilarIncidentRepository
     await client.index({ index: this.indexName, id, body: doc, refresh: true });
   }
 
+  // 指定 Alert 由来の解決済みインシデントを撤回する（sourceAlertId 一致を delete_by_query）。
+  // 承認のやり直し（承認→却下/取消）で誤った類似学習を残さないために使う。
+  async removeByAlertId(sourceAlertId: string): Promise<void> {
+    const client = await this.client;
+    await client.deleteByQuery({
+      index: this.indexName,
+      refresh: true,
+      body: { query: { term: { sourceAlertId } } },
+    });
+  }
+
   // eventName 厳密一致＋resolvedAt 降順で取得（AI調査の文脈強化用・件数のみ）。
   async findSimilar(criteria: Criteria): Promise<SimilarIncident[]> {
     const client = await this.client;

@@ -291,6 +291,21 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 
 ---
 
+## stretchⅠ: 検知ソース流入経路（push）と Cloud Monitoring 連携の仕上げ
+
+> **状況（2026-06 確認）**: 流入の**具象クラスは実装済み**——`CloudMonitoringAlertIngestController` + `CloudMonitoringAlertTranslator`（`POST /ingest/cloud-monitoring`）/ `SecurityScanIngestPostController` / EC 自前イベントは `CollectMonitoringEventOnECEventPublished`（RabbitMQ subscriber）。シナリオ4の証拠 Gateway（`CloudLoggingGateway` / `TerraformGateway` / `GitHubGateway` + `InfraInvestigationPort`）も実装済み。**新規 ingest クラスは不要**。本節は GCP 実機連携の仕上げ（`step4-1` §11.2）。
+> 経路の原則は `CollectMonitoringEventSubscriber` のクラスコメント（EC=バス購読 / 外部 push=HTTP ingest の peer アダプタ）どおり。
+
+### タスク 31: Cloud Monitoring webhook → INFRASTRUCTURE/CAPACITY 正規化の検証・拡張 〔stretchⅠ〕→ **step4-5 T7 へ移動**
+
+> translator 本体・UT は実装済み。残る「実機 payload での検証・fixture 追加」はデプロイ後作業のため `docs/step4-5-backoffice-infra.todo.md` タスク T7 に移動・集約した。内容はそちらを正とする。
+
+### タスク 32: CloudMonitoringGateway（pull・メトリクス相関）〔stretchⅠ / 次フェーズ〕→ **step4-5 T13 へ移動**
+
+> デプロイ着地後の任意タスクのため `docs/step4-5-backoffice-infra.todo.md` タスク T13 に移動・集約した。内容はそちらを正とする。
+
+---
+
 ## stretchⅡ: 予兆ブリーフィング（reactive → proactive）
 
 > **着手条件**: P0 ＋ P1 ＋ 既存stretch（タスク18）が**全部着地後**の capstone。設計は `step4-1` 7章＋`step4-2`「予兆ブリーフィング」節。突合キーは **(B) 構造化タグ**採用。**既存P0パイプラインは無傷**で横に生やす。
@@ -301,6 +316,9 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 - 【新規】`RiskForecast.ts`（forecastId/generatedAt/horizon/risks[]/isFallback、`RiskItem`=window/subject/level/confidence/**citations**/reasoning）
 - 【新規】`Schedule.ts`（`ScheduleWindow`）/ `ScheduleSource.ts`（interface・read-only）
 - 【新規】`Forecast/domain/ForecastSignalSource.ts`（IF・`collect(horizon): Promise<ForecastSignal[]>`）★Ⅱ→Ⅲ の継ぎ目（`step4-1` §7.9）。主シグナル源を源非依存に抽象化し、Handler に Gateway を名指しさせない
+
+> **相関（タスク9e）との共通化メモ（2026-06 調査）**: `RiskItem.citations`（引用＝根拠 id）と、step4-4 タスク9e で実装済みの AI 相関（`InvestigationReportPrimitives.relatedAlerts`：id・relation・rationale）は**同型のパターン**＝「LLM が *id + ラベル + 根拠* を副産物として出し、防御的に正規化してから実在レコードへ照合（引用検証 §7.3 ＝ 相関 id 解決）」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（タスク12）なので、相関 alertId と同じく実在 Alert に解決できる。
+> **ただし context を跨いだ型共有はしない**: 相関は Monitoring BC、引用は Forecast BC の別物。`RelatedAlertPrimitives` を Forecast から import すると BC 結合になるので避け、各 BC が自前の型を持つ。共通なのは*手順*（LLM 出力の防御的正規化＋citations 必須プロンプト＋実在照合）だけ。`GeminiForecastAdapter`（タスク22）の safeParse/clamp/fallback は `LLMOutputParser`/`InvestigationReportMapper`（タスク9e で relatedAlerts 対応済み）の実装を**参考にする**（コピー元）。frontend 側の共通化（`RelatedAlertsPanel`→`CitationList` の `shared/ui` 昇格）は step4-4 タスク13 のメモを正とする。
 
 ### タスク 20: ForecastMemory projection（突合キーB）〔stretchⅡ〕
 

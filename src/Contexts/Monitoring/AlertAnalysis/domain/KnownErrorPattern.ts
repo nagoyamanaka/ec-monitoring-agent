@@ -17,6 +17,9 @@ export type KnownErrorPatternPrimitives = {
   isPromoted: boolean;
   promotedAt: string | null;
   createdAt: string;
+  // 自動昇格（結晶化）の由来 Alert。承認のやり直しで結晶化を撤回するための back-link。
+  // 手動作成・シードのパターンには無い（optional）。
+  sourceAlertId?: string;
 };
 
 export class KnownErrorPattern extends AggregateRoot {
@@ -30,6 +33,8 @@ export class KnownErrorPattern extends AggregateRoot {
   readonly isPromoted: boolean;
   readonly promotedAt: Date | null;
   readonly createdAt: Date;
+  // 自動昇格の由来 Alert（手動作成・シードは null）。承認撤回時の結晶化撤回に使う。
+  readonly sourceAlertId: string | null;
 
   private constructor(params: {
     id: string;
@@ -42,6 +47,7 @@ export class KnownErrorPattern extends AggregateRoot {
     isPromoted: boolean;
     promotedAt: Date | null;
     createdAt: Date;
+    sourceAlertId: string | null;
   }) {
     super();
     this.id = params.id;
@@ -54,6 +60,7 @@ export class KnownErrorPattern extends AggregateRoot {
     this.isPromoted = params.isPromoted;
     this.promotedAt = params.promotedAt;
     this.createdAt = params.createdAt;
+    this.sourceAlertId = params.sourceAlertId;
   }
 
   static create(params: {
@@ -65,12 +72,14 @@ export class KnownErrorPattern extends AggregateRoot {
     severity: AlertSeverity;
     suggestedAction: string;
     createdAt?: Date;
+    sourceAlertId?: string;
   }): KnownErrorPattern {
     return new KnownErrorPattern({
       ...params,
       isPromoted: false,
       promotedAt: null,
       createdAt: params.createdAt ?? new Date(),
+      sourceAlertId: params.sourceAlertId ?? null,
     });
   }
 
@@ -86,6 +95,7 @@ export class KnownErrorPattern extends AggregateRoot {
       isPromoted: true,
       promotedAt: new Date(),
       createdAt: this.createdAt,
+      sourceAlertId: this.sourceAlertId,
     });
   }
 
@@ -104,6 +114,7 @@ export class KnownErrorPattern extends AggregateRoot {
       isPromoted: this.isPromoted,
       promotedAt: this.promotedAt?.toISOString() ?? null,
       createdAt: this.createdAt.toISOString(),
+      ...(this.sourceAlertId ? { sourceAlertId: this.sourceAlertId } : {}),
     };
   }
 
@@ -123,6 +134,7 @@ export class KnownErrorPattern extends AggregateRoot {
         ? new Date(primitives.promotedAt)
         : null,
       createdAt: new Date(primitives.createdAt),
+      sourceAlertId: primitives.sourceAlertId ?? null,
     });
   }
 }

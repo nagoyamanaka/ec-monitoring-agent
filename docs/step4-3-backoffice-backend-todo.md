@@ -83,13 +83,13 @@
 
 ### タスク 9: evidence ルート 〔P1〕　✅ 完了済み
 
-- 【新規】`routes/evidenceRoutes.ts` ＋ `AlertEvidenceGetController`（evidence/status の2メソッド）
-- GET /alerts/:id/evidence（InfraEvidence）/ GET /alerts/:id/investigation/status（collecting/analyzing/done）
+- 【新規】`routes/evidenceRoutes.ts` ＋ `AlertEvidenceGetController`（evidence メソッド）
+- GET /alerts/:id/evidence（InfraEvidence）
 - 委譲先（application 層・AIInvestigation コンテキスト新規）
   - `GetInfraEvidenceQuery` → `GetInfraEvidenceUseCase`：alert を findById → `InfraInvestigationPort.collect()` で**証拠を再収集**（調査時の証拠は永続化していないため。全 Gateway は read-only）→ `InfraEvidenceResponse`（Date を ISO 正規化）
-  - `GetInvestigationStatusQuery` → `GetInvestigationStatusUseCase`：alert から status を導出（report 添付 or 既知パターン→done / 未知・未添付→analyzing。`collecting` は永続フェーズ未追跡のため契約上予約）
 - `InfraEvidencePrimitives` を `AIInvestigation/domain/InfraEvidence.ts` に追加（ワイヤ契約）
-- UT: 両 UseCase（not-found / 再収集・正規化 / status 導出4分岐）。BackofficeApp の queryBus に2ハンドラ登録
+- UT: GetInfraEvidence（not-found / 再収集・正規化）。BackofficeApp の queryBus にハンドラ登録
+- 【改訂 2026-06・step4-1 §10】`GET /alerts/:id/investigation/status`（＋ `GetInvestigationStatus` UseCase 一式）は**削除**。証拠の done 判定は SSE で更新される alert.status から frontend が導出するため、status 専用エンドポイントは冗長（二重ソース）だった。証拠は「broadcast する小さな事実 / pull する重い詳細」の後者＝外部 API を叩く重い収集なので pull on-demand に残す（push しない）
 
 ### タスク 10: security-scan ingest 〔P1〕　✅ 完了済み
 
@@ -113,14 +113,16 @@ subscriber は EC 自前 DomainEvent（CollectMonitoringEventOnECEventPublished�
 - POST `/alerts/:id/remediation/draft-pr`（承認＝手動POST→`RemediationPort.draftPullRequest`・draft起票）/ GET `/alerts/:id/remediation`（PR URL・状態）
 - application: `DraftRemediation`（UseCase/Command/Handler）＝ alert.payload.vulnerabilities[] を入力に AI で全CVEの修正方針を起草→草案PR起票→結果を `RemediationRepository` に保存 / `GetRemediation`（UseCase/Query/Handler/Response）＝状態読み取り（未起票は status="none"）
 - domain（`AIInvestigation/domain/remediation`）: `RemediationPlanner` ポート（追加）/ `RemediationRecord`+`RemediationRepository`（追加）。既存 `RemediationPort`/`RemediationPlan`/`GitHubPullRequestGateway` を再利用
-- infra: `LLMRemediationPlanner`（既存 `LLMTextClient` 再利用・LLM失敗/stub時は fixedVersion ベースの決定論フォールバック→`SECURITY_REMEDIATION.md` 草案）/ `MongoRemediationRepository`（collection=remediations・_id=alertId）
+- infra: `LLMRemediationPlanner`（既存 `LLMTextClient` 再利用・LLM失敗/stub時は fixedVersion ベースの決定論フォールバック→`SECURITY_REMEDIATION.md` 草案）/ `MongoRemediationRepository`（collection=remediations・\_id=alertId）
 - DI: `BackofficeApp` で planner（llmClient 共用）/ gateway（`config.github.remediationRepo` 明示）/ repo を new、Draft を commandBus・Get を queryBus に登録
 - config/env: `GITHUB_REMEDIATION_REPO`（未設定は `GITHUB_TARGET_REPO` フォールバック）を追加
 
 **実行戦略は2モード（`RemediationExecutor` で差し替え・`config.remediation.mode`）**:
+
 - **advisory**（既定・CI不要）: in-process で `LLMRemediationPlanner` が方針テキストのみ生成→ `SECURITY_REMEDIATION.md` の草案PR（実コードは直さない・人間が直す前提）。LLM はファイルパス/パッチ全文を生成しない（ハルシネーション防止の足場）。GitHub/CI 不在のローカル・デモ用フォールバック
 - **dispatch**（agentic・本命）: `GitHubActionsRemediationDispatcher` が `repository_dispatch(ai-remediation, {alertId, vulnerabilities})` を投げる→ ターゲットリポの `.github/workflows/ai-remediation.yml` が **ブランチ作成→AIエージェント(Gemini CLI/差し替え可)が実コード修正→trivy 再スキャン+UT/E2E が緑→draft PR**。**修正精度はランナーのテストゲートで担保**（APIサーバ内では実コードを書かない）
 - **結果 callback**: dispatch は非同期＝起票時は `dispatched`（PR URL 無し）。CI 完了時に `POST /ingest/remediation-result`（x-ingest-token）で `drafted`(PR URL)/`failed`(理由) に確定（`RecordRemediationResultUseCase`）。GET /remediation がそれを返す
+- **結果の SSE push（改訂 2026-06・step4-1 §10）**: 確定はクライアント操作が起点に無い非同期更新なので、`RecordRemediationResultUseCase`・`DraftRemediationUseCase` が `SSEAlertNotifier.notifyRemediation()` で**名前付きイベント `remediation` を push** する（`RemediationResponsePrimitives` 契約・GET と同形）。frontend は dispatched 表示のままポーリングせず push で確定を反映。`EventEmitterSSEAlertNotifier` は既定 alert イベントと `event: remediation` を1接続に多重化
 - 過去のローカル版（Trivyローカルスキャン+Copilot Agent プロンプト）の CI/CD 化に相当。Gemini は Vertex AI 認証で GCP 無料クレジット内、品質不足なら workflow の1ステップを `claude-code-action` に差し替え
 - **自己修正ループ上限（課金安全弁）**: CI は「AI修正→検証（trivy再スキャン+typecheck+test）→赤ならログをフィードバックして再修正」を `REMEDIATION_MAX_ATTEMPTS`（既定2）回まで回し**必ず打ち切る**（無限リトライ＝課金暴走を防ぐ）。上限は `config.remediation.maxAttempts` が単一ソースで、dispatch の `client_payload.maxAttempts` として CI に渡す。上限超過は `failed`（PR起票なし）で callback
 
@@ -191,6 +193,7 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 - 段階導入: ①app-code ターゲットの1イテレーション固定（既存 ai-remediation そのまま）→ ②検証ゲート＋自己修正ループ
   （maxAttempts）→ ③RemediationTargetRouter で iac/runbook 分岐を追加。env フラグ既定off・既存P0/P1は無傷。
 -->
+
 - 【新規(将来)】`RemediationTargetRouter`（root cause → app-code / iac / runbook 振り分け）＋ ターゲット別 `VerifiableRemediation`
 - 【新規(将来)】`application/RouteAndVerifyRemediation`（ルーティング→automatableなら検証ループ・`maxAttempts` 共有→結果取り込み）
 - 【再利用】`RemediationExecutor`/`ai-remediation.yml`/callback/`maxAttempts`。iac 用は別ジョブ＋`terraform plan` ゲートを追加
@@ -204,6 +207,51 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 
 - backoffice（or 調査API）をコンテナ化して Cloud Run へ（「とどける」見せ場）
 - EDA常駐Subscriber部分はCEに残す折衷（戦略ADR）
+
+---
+
+## stretchⅠ: Cloud Run + Valkey ハイブリッド運用（SSE Pub/Sub ＋ read-model）
+
+> **着手条件**: タスク12（Cloud Run デプロイ）と並走。設計は `step4-1` §11.1/§11.3、IaC は `infra/terraform/`。
+> **原則**: Valkey は SoT でなく「**再構築可能な read-model projection ＋ Pub/Sub transport**」。Mongo SoT ＋ cache-aside fallback で **Valkey 障害を「障害」でなく「性能劣化」に縮める**。既存の `EventEmitterSSEAlertNotifier`（in-process）/ Mongo 直読は無傷のまま、interface 差し替え／前段追加で載せる（§10「スケールアウト時」と一致）。
+> （タスク番号は採番順。配置は優先度順で stretchⅠ < Ⅱ < Ⅲ）
+
+### タスク 16: Valkey クライアント ＋ config 〔stretchⅠ〕
+
+- 【新規】Valkey 接続（ioredis 等）。`REDIS_URL` 未設定時は **null object**（publish/subscribe no-op・read-model 無効）でフォールバックし、ローカル/テストは現状の in-process 動作のまま
+- 【修正】`config.ts`：`REDIS_URL`（既定空＝無効）/ `ROLE`（`all`|`worker`|`edge`・既定 `all`）追加（`REDIS_URL` は compose/Cloud Run に注入済み・アプリ未読込なら no-op）
+- 依存追加は pnpm `--filter` で backoffice backend のみに閉じる
+
+### タスク 17: RedisSSEAlertNotifier（SSE Pub/Sub fan-out・案1）〔stretchⅠ〕
+
+- 【新規】`AlertNotification/infrastructure/RedisSSEAlertNotifier.ts` implements `SSEAlertNotifier`（既存 IF をそのまま差し替え）
+  - worker 側 `notify()` / `notifyRemediation()` は Valkey channel に publish（名前付きイベント `alert` / `remediation` を payload に保持）
+  - edge 側は購読して **接続中の各 SSE クライアントへ fan-out**（既存 `AlertsStreamController` の EventEmitter を Valkey subscriber に接続）
+- **`SSEAlertNotifier` IF・`AnalyzeAlertUseCase`/`InvestigateAlertUseCase`/`AlertsStreamController` はノータッチ**（composition root の差し替えのみ）。多インスタンス SSE が壊れない＝案1 の必然性が成立
+- Valkey down 時：publish は握りつぶし、edge は frontend 再接続時の再フェッチでギャップを埋める（best-effort liveness・§11.3）
+
+### タスク 18: Alert read-model projection（CQRS read model in Redis・案②）〔stretchⅠ〕
+
+- 【新規】Alert ライフサイクル DomainEvent（生成 / 分析中 / 調査完了 / dedup 更新 / feedback）を購読する **projector** が、`GET /alerts` 一覧スナップショットと `/alerts/:id` 詳細を Valkey に **upsert（alert id キー・冪等）**
+  - **書き込み順序**: SoT（Mongo）保存後に projection を派生。cache を真実の前段にしない（§11.3）
+  - at-least-once ＋ 冪等 upsert で projector クラッシュ後も再投影で自己回復（結果整合）。projection は再構築可能（§7.9 ForecastMemory と同原則）
+- 【修正】読み取り経路を **cache-aside**：`GetAlertUseCase` / 一覧 Controller が **Valkey hit→返す／miss・down→Mongo にフォールバックして再投入**。`AlertRepository`（Mongo）が常に真実
+  - 設計判断: read-model は `AlertReadModelStore` IF の裏に隔離。`REDIS_URL` 無効時は素通しで Mongo 直読（現状動作を壊さない）
+- 証拠（`/alerts/:id/evidence`）は §10 のとおり pull on-demand 維持。重い外部収集の TTL キャッシュは任意（時間が余れば）
+
+### タスク 19: worker / edge ロール分離 〔stretchⅠ〕
+
+メモ: ハッカソンスコープだと、wokerとapiを分離するのは過剰？roi低い？
+
+- 【修正】`BackofficeApp.ts`：`ROLE` で起動を分岐
+  - `worker`：RabbitMQ Subscriber（EC ingest / AnalyzeAlert / InvestigateAlert）＋ projector（タスク18）＋ `RedisSSEAlertNotifier`(publish 側)。クエリ HTTP は health のみ
+  - `edge`：クエリ / SSE ルートのみ。RabbitMQ Subscriber を起動しない。`RedisSSEAlertNotifier`(subscribe 側) ＋ read-model 読み取り
+  - `all`（既定・ローカル/現状）：両方を1プロセス（in-process notifier・Mongo 直読でも可）
+- **Cloud Run edge=`ROLE=edge` / GCE worker=`ROLE=worker`**（§11.1）。既存の単一プロセス（`all`）起動を壊さない段階移行
+
+### タスク 20: 検知 webhook トークン互換（B 残作業）〔stretchⅠ〕→ **step4-5 T1 へ移動**
+
+> デプロイ垂直疎通の前提条件のため `docs/step4-5-backoffice-infra.todo.md` タスク T1 に移動・集約した。内容はそちらを正とする。
 
 ---
 

@@ -57,4 +57,48 @@ describe("LLMInvestigationAdapter", () => {
 
     expect(report.isFallback).toBe(true);
   });
+
+  it("infraEvidence と linkConfig から証拠リンクを調査ステップへ追記する（LLMはテキストのみ）", async () => {
+    const adapter = new LLMInvestigationAdapter(new StubLLMTextClient({ text: validJson }), {
+      githubRepo: "example-org/ec-backend",
+    });
+
+    const report = await adapter.investigate({
+      ...context,
+      infraEvidence: {
+        appLogs: [],
+        collectedAt: new Date("2026-06-20T00:00:00.000Z"),
+        recentCommits: [
+          { sha: "abc1234", message: "fix", author: "a", committedAt: new Date() },
+        ],
+      },
+    });
+
+    // LLM の "ログ確認"（文字列）＋ evidence 由来のコミットリンク（構造化）
+    expect(report.investigationSteps).toEqual([
+      "ログ確認",
+      {
+        text: "コミット abc1234: fix",
+        href: "https://github.com/example-org/ec-backend/commit/abc1234",
+        kind: "code",
+      },
+    ]);
+  });
+
+  it("linkConfig 空なら証拠リンクは付かない（LLM ステップのみ）", async () => {
+    const adapter = new LLMInvestigationAdapter(new StubLLMTextClient({ text: validJson }), {});
+
+    const report = await adapter.investigate({
+      ...context,
+      infraEvidence: {
+        appLogs: [],
+        collectedAt: new Date("2026-06-20T00:00:00.000Z"),
+        recentCommits: [
+          { sha: "abc1234", message: "fix", author: "a", committedAt: new Date() },
+        ],
+      },
+    });
+
+    expect(report.investigationSteps).toEqual(["ログ確認"]);
+  });
 });

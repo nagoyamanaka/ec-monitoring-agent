@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AlertView } from "../../domain/AlertView";
 import { mergeAlert, mergeAlerts } from "../../domain/alertMerge";
+import { type RemediationView, toRemediationView } from "../../domain/RemediationView";
 import type { AlertsApi } from "../../infrastructure/alertsApi";
 import type { AlertStream, StreamStatus } from "../../infrastructure/AlertStream";
 import { useAlertStream } from "./useAlertStream";
@@ -19,6 +20,8 @@ export type UseAlertsResult = {
   readonly refreshAlert: (id: string) => Promise<void>;
   /** SSE が切断状態のとき、自動タイマーを待たず即時再接続する。 */
   readonly reconnectStream: () => void;
+  /** SSE "remediation" イベントで届いた最新のリメディ確定（alertId→View）。ドロワーへ live 反映する。 */
+  readonly remediationByAlertId: ReadonlyMap<string, RemediationView>;
 };
 
 /**
@@ -34,6 +37,9 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
   const [error, setError] = useState<Error | null>(null);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("connecting");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [remediationByAlertId, setRemediationByAlertId] = useState<
+    ReadonlyMap<string, RemediationView>
+  >(new Map());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -69,6 +75,15 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
       setLastUpdatedAt(new Date());
     },
     (s) => setStreamStatus(s),
+    (remediation) => {
+      const view = toRemediationView(remediation);
+      setRemediationByAlertId((prev) => {
+        const next = new Map(prev);
+        next.set(view.alertId, view);
+        return next;
+      });
+      setLastUpdatedAt(new Date());
+    },
   );
 
   const refreshAlert = useCallback(
@@ -82,5 +97,14 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
 
   const reconnectStream = useCallback(() => stream.reconnect?.(), [stream]);
 
-  return { alerts, status, error, streamStatus, lastUpdatedAt, refreshAlert, reconnectStream };
+  return {
+    alerts,
+    status,
+    error,
+    streamStatus,
+    lastUpdatedAt,
+    refreshAlert,
+    reconnectStream,
+    remediationByAlertId,
+  };
 }

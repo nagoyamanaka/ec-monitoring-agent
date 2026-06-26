@@ -51,6 +51,21 @@ describe("InvestigationReport toPrimitives / fromPrimitives", () => {
     expect(restored.severity).toBeInstanceOf(AlertSeverity);
     expect(restored.reviewStatus).toBeInstanceOf(ReviewStatus);
   });
+
+  it("relatedAlerts は既定で空配列・指定時はラウンドトリップで復元される", () => {
+    expect(new InvestigationReport(baseParams).relatedAlerts).toEqual([]);
+
+    const related = [
+      { alertId: "a2", relation: "downstream", rationale: "波及した" },
+    ];
+    const restored = InvestigationReport.fromPrimitives(
+      new InvestigationReport({
+        ...baseParams,
+        relatedAlerts: related,
+      }).toPrimitives(),
+    );
+    expect(restored.relatedAlerts).toEqual(related);
+  });
 });
 
 describe("InvestigationReport.withReviewStatus()", () => {

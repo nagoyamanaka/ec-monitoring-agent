@@ -225,4 +225,68 @@ describe("SubmitFeedbackUseCase", () => {
 
     expect(await patternRepo.findAll()).toHaveLength(0);
   });
+
+  describe("再レビュー（判定のやり直し）と類似学習の整合", () => {
+    it("誤承認→却下し直すと、承認時に積んだ類似学習を撤回する", async () => {
+      const alert = Alert.createAsUnknown({
+        id: new AlertId(ALERT_ID),
+        monitoringEvent: makeEvent(),
+      }).attachInvestigationReport(makeReport());
+      await alertRepo.save(alert);
+
+      // 誤承認 → index される
+      await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
+      expect(await findAllSimilar()).toHaveLength(1);
+
+      // 却下し直し → 撤回される（学習を残さない）
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        isCorrect: false,
+        operatorNote: "誤承認だった",
+      });
+      expect(await findAllSimilar()).toHaveLength(0);
+    });
+
+    it("自動昇格後に却下し直すと、結晶化した KnownErrorPattern も撤回する", async () => {
+      const base = Alert.createAsUnknown({
+        id: new AlertId(ALERT_ID),
+        monitoringEvent: makeEvent(),
+      }).attachInvestigationReport(makeReport());
+      // しきい値直前まで積んでおき、今回の承認で自動昇格させる
+      await alertRepo.save(withCorrectFeedback(base, AUTO_PROMOTE_THRESHOLD - 1));
+
+      await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
+      const promoted = await patternRepo.findAll();
+      expect(promoted).toHaveLength(1);
+      expect(promoted[0].sourceAlertId).toBe(ALERT_ID);
+
+      // 誤承認だったとして却下し直す → 結晶化を撤回
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        isCorrect: false,
+        operatorNote: "誤承認だった",
+      });
+      expect(await patternRepo.findAll()).toHaveLength(0);
+    });
+
+    it("誤却下→承認し直すと index され、トグルしても重複しない（承認時1件）", async () => {
+      const alert = Alert.createAsUnknown({
+        id: new AlertId(ALERT_ID),
+        monitoringEvent: makeEvent(),
+      }).attachInvestigationReport(makeReport());
+      await alertRepo.save(alert);
+
+      // 却下（index しない）
+      await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: false });
+      expect(await findAllSimilar()).toHaveLength(0);
+
+      // 承認し直し → 1件 index
+      await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
+      expect(await findAllSimilar()).toHaveLength(1);
+
+      // 再承認（トグル）でも二重 index しない
+      await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
+      expect(await findAllSimilar()).toHaveLength(1);
+    });
+  });
 });

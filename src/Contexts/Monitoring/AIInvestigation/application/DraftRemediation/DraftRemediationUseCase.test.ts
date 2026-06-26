@@ -10,8 +10,18 @@ import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/Console
 import { MonitoringResourceNotFoundError } from "../../../AlertAnalysis/application/errors/MonitoringResourceNotFoundError.js";
 import { RemediationExecutor } from "../../domain/remediation/RemediationExecutor.js";
 import { InMemoryRemediationRepository } from "../../infrastructure/remediation/InMemoryRemediationRepository.js";
+import { SSEAlertNotifier } from "../../../AlertNotification/domain/SSEAlertNotifier.js";
 
 const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";
+
+function fakeNotifier(): SSEAlertNotifier {
+  return {
+    notify: vi.fn(),
+    notifyRemediation: vi.fn(),
+    addConnection: vi.fn(),
+    removeConnection: vi.fn(),
+  };
+}
 
 const VULNS = [
   { cveId: "CVE-2024-AAAA", severity: "HIGH", package: "axios", version: "1.6.0", fixedVersion: "1.7.4" },
@@ -47,7 +57,7 @@ describe("DraftRemediationUseCase", () => {
 
   it("アラートが存在しなければ MonitoringResourceNotFoundError を投げる", async () => {
     const executor: RemediationExecutor = { execute: vi.fn() };
-    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, logger);
+    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, fakeNotifier(), logger);
 
     await expect(useCase.run(new AlertId(ALERT_ID))).rejects.toBeInstanceOf(
       MonitoringResourceNotFoundError,
@@ -58,7 +68,7 @@ describe("DraftRemediationUseCase", () => {
   it("脆弱性が無ければ実行せず skipped を記録する", async () => {
     await alertRepo.save(makeAlert({ foo: "bar" }));
     const executor: RemediationExecutor = { execute: vi.fn() };
-    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, logger);
+    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, fakeNotifier(), logger);
 
     await useCase.run(new AlertId(ALERT_ID));
 
@@ -77,7 +87,7 @@ describe("DraftRemediationUseCase", () => {
         .fn()
         .mockResolvedValue({ kind: "drafted", pullRequestUrl: "https://github.com/owner/repo/pull/1" }),
     };
-    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, logger);
+    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, fakeNotifier(), logger);
 
     await useCase.run(new AlertId(ALERT_ID));
 
@@ -103,7 +113,7 @@ describe("DraftRemediationUseCase", () => {
     const executor: RemediationExecutor = {
       execute: vi.fn().mockResolvedValue({ kind: "dispatched" }),
     };
-    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, logger);
+    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, fakeNotifier(), logger);
 
     await useCase.run(new AlertId(ALERT_ID));
 
@@ -122,7 +132,7 @@ describe("DraftRemediationUseCase", () => {
         .fn()
         .mockResolvedValue({ kind: "failed", reason: "GITHUB_TOKEN is not configured" }),
     };
-    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, logger);
+    const useCase = new DraftRemediationUseCase(alertRepo, executor, remediationRepo, fakeNotifier(), logger);
 
     await useCase.run(new AlertId(ALERT_ID));
 

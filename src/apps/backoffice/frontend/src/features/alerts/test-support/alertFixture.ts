@@ -9,13 +9,14 @@ export function makeReport(
     summary: "未知のレイテンシ急増を検知",
     confidence: 0.82,
     severity: "CRITICAL",
-    investigationSteps: ["ログ確認", "メトリクス相関"],
-    suggestedActions: ["ロールバック", "スケールアウト"],
+    investigationSteps: [{ text: "ログ確認" }, { text: "メトリクス相関" }],
+    suggestedActions: [{ text: "ロールバック" }, { text: "スケールアウト" }],
     suggestedPatternName: "latency-spike",
     reviewStatus: "PENDING_REVIEW",
     investigatedAt: "2026-06-21T00:00:00.000Z",
     isFallback: false,
     remediable: false,
+    relatedAlerts: [],
     ...overrides,
   };
 }

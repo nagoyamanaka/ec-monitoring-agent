@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { Outlet } from "react-router-dom";
 import { cn } from "../ui/cn";
-import { BrandMark } from "../ui/BrandMark";
+import { AppHeader } from "../ui/AppHeader";
 
 export interface AlertsLayoutProps {
   /**
@@ -26,15 +26,7 @@ export function AlertsLayout({
 }: AlertsLayoutProps) {
   return (
     <div className="min-h-screen bg-[#0B0E14] text-tremor-content-emphasis">
-      <header className="sticky top-0 z-10 border-b border-[#232A36] bg-[#0B0E14]/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3">
-          <BrandMark />
-          <h1 className="text-sm font-semibold tracking-wide text-slate-100">
-            EC Monitoring · Alerts
-          </h1>
-          {headerSlot && <div className="ml-auto">{headerSlot}</div>}
-        </div>
-      </header>
+      <AppHeader rightSlot={headerSlot} />
 
       <div
         className={cn(

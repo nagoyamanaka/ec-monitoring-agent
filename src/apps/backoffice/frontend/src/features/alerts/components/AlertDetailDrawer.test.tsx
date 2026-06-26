@@ -42,6 +42,36 @@ describe("AlertDetailDrawer", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("未知（AI調査対象）アラートは証拠パネルを出す", () => {
+    const evidenceApi = { getEvidence: vi.fn().mockResolvedValue(null) };
+    renderDrawer({ alert: makeAlert(), onClose: vi.fn(), evidenceApi });
+    expect(screen.getByText("収集した証拠")).toBeInTheDocument();
+  });
+
+  it("既知（完全一致）アラートは証拠パネルを出さない（解析中表示も出さない）", () => {
+    const evidenceApi = { getEvidence: vi.fn().mockResolvedValue(null) };
+    renderDrawer({
+      alert: makeAlert({
+        report: null,
+        classification: {
+          type: "known",
+          source: "EXACT_MATCH",
+          patternId: "p-1",
+          patternName: "決済タイムアウト",
+          confidence: 0.9,
+          matchedConditions: [],
+        },
+      }),
+      onClose: vi.fn(),
+      evidenceApi,
+    });
+    expect(screen.queryByText("収集した証拠")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/証拠を解析しています/),
+    ).not.toBeInTheDocument();
+    expect(evidenceApi.getEvidence).not.toHaveBeenCalled();
+  });
+
   it("onDecision を alert id・decision 付きで呼ぶ", async () => {
     const onDecision = vi.fn().mockResolvedValue(undefined);
     renderDrawer({
@@ -50,7 +80,7 @@ describe("AlertDetailDrawer", () => {
       onDecision,
     });
     await userEvent.click(screen.getByRole("button", { name: /承認/ }));
-    expect(onDecision).toHaveBeenCalledWith("a-9", "approve");
+    expect(onDecision).toHaveBeenCalledWith("a-9", "approve", undefined);
   });
 
   it("詳細ページへのリンクを出す", () => {

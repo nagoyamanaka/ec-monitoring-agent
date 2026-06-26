@@ -32,6 +32,10 @@ export type KnownAlertClassificationPrimitives = {
   readonly confidence: number;
   readonly matchedConditions: MatchedCondition[];
   readonly unmatchedConditions: UnmatchedCondition[];
+  // 類似既知（SIMILARITY）分類のとき、元になった解決済み Alert への back-link。
+  // 「過去の同型障害をどう直したか」へ内部遷移（/alerts/:id）する動線に使う。
+  // optional は EXACT_MATCH / INFERENCE では未設定・旧データ互換のため（dedupKey と同じ規約）。
+  readonly sourceAlertId?: string;
 };
 
 export type UnknownAlertClassificationPrimitives = {
@@ -43,16 +47,54 @@ export type AlertClassificationPrimitives =
   | KnownAlertClassificationPrimitives
   | UnknownAlertClassificationPrimitives;
 
+// 外部サービスへのディープリンク種別。表示側はアイコンを出し分ける（log=Cloud Logging,
+// code=GitHub, runbook=手順書, console=Cloud Console 等）。
+export type InvestigationLinkKind = "log" | "code" | "runbook" | "console";
+
+/**
+ * 調査ステップ／推奨アクションの1項目。`href` があればフロントは外部リンク化し、
+ * `kind` でアイコンを出し分ける。`text` は人間が読む説明。
+ */
+export type InvestigationStepPrimitives = {
+  readonly text: string;
+  readonly href?: string;
+  readonly kind?: InvestigationLinkKind;
+};
+
+/**
+ * 調査ステップ／推奨アクションの配列要素。LLM 出力・旧データは素の文字列、
+ * seed／将来の構造化配信は {text, href?, kind?} を載せる後方互換ユニオン。
+ * フロントは `toInvestigationReportView` で常に構造化形へ正規化する。
+ */
+export type InvestigationItemPrimitives = string | InvestigationStepPrimitives;
+
+/**
+ * AI 調査が見つけた相関アラート（id・関係・根拠）。
+ * 検知層の dedup（同一 dedupKey の occurrenceCount＝同型の嵐の畳み込み）とは別軸で、
+ * 異なるアラート間の関係（例: DB 枯渇=infra と payment 失敗=app が同一根本原因）を示す。
+ * 相関エンジンは作らず、AI 調査の副産物（step4-1 §2.5(c)）として relation＋rationale を載せる。
+ */
+export type RelatedAlertPrimitives = {
+  readonly alertId: string;
+  // 関係種別（same_root_cause / downstream / upstream / precursor / similar 等の文字列）。
+  // 表示側は人間語ラベルへ写像し、未知文字列はそのまま出す。
+  readonly relation: string;
+  // なぜ関連と判断したか（AI の根拠・1 文）。
+  readonly rationale: string;
+};
+
 export type InvestigationReportPrimitives = {
   readonly summary: string;
   readonly confidence: number;
   readonly severity: string;
-  readonly investigationSteps: string[];
-  readonly suggestedActions: string[];
+  readonly investigationSteps: InvestigationItemPrimitives[];
+  readonly suggestedActions: InvestigationItemPrimitives[];
   readonly suggestedPatternName: string;
   readonly reviewStatus: string;
   readonly investigatedAt: string;
   readonly isFallback: boolean;
+  // AI 調査が見つけた相関アラート。optional は旧データ・fallback 互換（未保存なら空配列扱い）。
+  readonly relatedAlerts?: RelatedAlertPrimitives[];
   // AI が「コードで直せる（PR で remediate 可能）」と判定したか。category 非依存の
   // 汎用シグナルで、フロントは remediate ボタンの活性／ROI 提示の判断に使う（advisory）。
   // 実際の write 実行ゲートは人間承認＋executor の deterministic 判定が握る。

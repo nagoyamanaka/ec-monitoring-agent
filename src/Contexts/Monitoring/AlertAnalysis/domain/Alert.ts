@@ -179,6 +179,29 @@ export class Alert extends AggregateRoot {
     });
   }
 
+  /**
+   * 人間の指摘を受けた再調査の開始。状態を ANALYZING に戻し、過去のレビュー（feedback）を
+   * クリアする＝再調査後の新しいレポートを白紙で承認/却下できるようにする。
+   * 既存の分類・レポートは新レポート到着まで表示用に保持する（待機中の文脈を失わない）。
+   * 「却下＝二値学習」とは別概念（やり直し）のため、correctFeedbackCount は減らさない。
+   */
+  reopenForReinvestigation(): Alert {
+    return new Alert({
+      id: this.id,
+      monitoringEvent: this._monitoringEvent,
+      severity: this._severity,
+      status: AlertStatus.analyzing(),
+      classification: this._classification,
+      investigationReport: this._investigationReport,
+      feedback: null,
+      correctFeedbackCount: this._correctFeedbackCount,
+      dedupKey: this._dedupKey,
+      occurrenceCount: this._occurrenceCount,
+      createdAt: this.createdAt,
+      updatedAt: new Date(),
+    });
+  }
+
   attachInvestigationReport(report: InvestigationReport): Alert {
     return new Alert({
       id: this.id,
