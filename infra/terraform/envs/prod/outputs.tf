@@ -3,6 +3,11 @@ output "cloud_run_url" {
   value       = module.cloud_run.service_uri
 }
 
+output "frontend_url" {
+  description = "フロントエンド公開 URL（審査員に渡す）"
+  value       = module.cloud_run_frontend.service_uri
+}
+
 output "ingest_webhook_url" {
   value = "${module.cloud_run.service_uri}/ingest/cloud-monitoring"
 }

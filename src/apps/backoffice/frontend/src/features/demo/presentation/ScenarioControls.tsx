@@ -45,7 +45,6 @@ export function ScenarioControls({ busy, onTrigger }: ScenarioControlsProps) {
       </h3>
       <ul className="space-y-1.5">
         {SCENARIOS.map((s) => {
-          const running = busy === `scenario:${s.id}`;
           return (
             <li key={s.id}>
               <button

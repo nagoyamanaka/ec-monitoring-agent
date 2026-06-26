@@ -117,7 +117,7 @@
   - backend URL はビルド時固定でなく **起動時 env**（`envsubst` で nginx.conf に注入）にして、Cloud Run の env で差し替えられるようにする
 - 【確認】frontend は相対パスのまま（`FetchHttpClient` の baseURL 空・現状維持）。`VITE_` の埋め込み URL は不要（同一オリジン proxy 前提）
 
-### タスク T8.7: frontend のデプロイ結線（terraform / CI） 〔P0〕
+### タスク T8.7: frontend のデプロイ結線（terraform / CI） 〔P0〕✅ 実装済み
 
 > 前提: T8.6。
 

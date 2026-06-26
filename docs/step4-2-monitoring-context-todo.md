@@ -300,7 +300,7 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 
 ---
 
-## stretchⅠ: 検知ソース流入経路（push）と Cloud Monitoring 連携の仕上げ
+## stretchⅠ: 検知ソース流入経路（push）と Cloud Monitoring 連携の仕上げ　✅
 
 > **状況（2026-06 確認）**: 流入の**具象クラスは実装済み**——`CloudMonitoringAlertIngestController` + `CloudMonitoringAlertTranslator`（`POST /ingest/cloud-monitoring`）/ `SecurityScanIngestPostController` / EC 自前イベントは `CollectMonitoringEventOnECEventPublished`（RabbitMQ subscriber）。シナリオ4の証拠 Gateway（`CloudLoggingGateway` / `TerraformGateway` / `GitHubGateway` + `InfraInvestigationPort`）も実装済み。**新規 ingest クラスは不要**。本節は GCP 実機連携の仕上げ（`step4-1` §11.2）。
 > 経路の原則は `CollectMonitoringEventSubscriber` のクラスコメント（EC=バス購読 / 外部 push=HTTP ingest の peer アダプタ）どおり。
