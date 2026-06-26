@@ -97,6 +97,94 @@ describe("ingestRoutes (integration)", () => {
     expect(res.status).toBe(401);
   });
 
+  /**
+   * 垂直疎通（T8）: cloud-monitoring open → CollectMonitoringEvent → AnalyzeAlert → Mongo → /alerts
+   * GCP cloud_run_5xx ポリシーの実機ペイロード形式（version 1.2 フル構造）を使用。
+   */
+  it("POST /ingest/cloud-monitoring（open）→ Alert が /alerts に登録される（全ライン疎通）", async () => {
+    const incidentId = randomUUID();
+    const payload = {
+      version: "1.2",
+      incident: {
+        incident_id: incidentId,
+        scoping_project_id: "my-gcp-project",
+        url: "https://console.cloud.google.com/monitoring/alerting/incidents/0.xyz",
+        started_at: Math.floor(Date.now() / 1000),
+        ended_at: null,
+        state: "open",
+        resource_name: "my-gcp-project",
+        resource: {
+          type: "cloud_run_revision",
+          labels: { service_name: "backoffice-edge", location: "asia-northeast1" },
+        },
+        metric: {
+          type: "run.googleapis.com/request_count",
+          displayName: "Request count",
+          labels: { response_code_class: "5xx" },
+        },
+        metadata: { system_labels: {}, user_labels: {} },
+        policy_name: "Cloud Run 5xx 増加 (backoffice-edge)",
+        policy_user_labels: {},
+        documentation: { content: "", mime_type: "text/markdown", links: [] },
+        condition_name: "5xx request rate",
+        threshold_value: "0.1",
+        observed_value: "0.52",
+        severity: "Warning",
+      },
+    };
+
+    const ingestRes = await request(app.httpApp)
+      .post(`/ingest/cloud-monitoring?token=${INGEST_TOKEN}`)
+      .send(payload);
+
+    expect(ingestRes.status).toBe(202);
+    expect(ingestRes.body.eventName).toBe("gcp.monitoring.5xx_request_rate");
+
+    const alertsRes = await request(app.httpApp).get("/alerts");
+    expect(alertsRes.status).toBe(200);
+    expect(
+      alertsRes.body.alerts.some(
+        (a: { monitoringEvent: { eventName: string; source: string } }) =>
+          a.monitoringEvent.eventName === "gcp.monitoring.5xx_request_rate" &&
+          a.monitoringEvent.source === "cloud-monitoring",
+      ),
+    ).toBe(true);
+  });
+
+  /**
+   * 垂直疎通（T8）: cloud-monitoring closed → 202 受理だが isAlertable=false → Alert は生成されない。
+   * 回復通知がノイズにならない（観測のみ）ことの疎通確認。
+   */
+  it("POST /ingest/cloud-monitoring（closed）→ 202 だが /alerts に Alert は追加されない", async () => {
+    const alertsBeforeRes = await request(app.httpApp).get("/alerts");
+    const countBefore = (alertsBeforeRes.body.alerts as unknown[]).length;
+
+    const closedPayload = {
+      version: "1.2",
+      incident: {
+        incident_id: randomUUID(),
+        started_at: Math.floor(Date.now() / 1000) - 3600,
+        ended_at: Math.floor(Date.now() / 1000),
+        state: "closed",
+        resource: { type: "cloud_run_revision", labels: {} },
+        metric: { type: "run.googleapis.com/request_count", labels: {} },
+        policy_name: "Cloud Run 5xx 増加 (backoffice-edge)",
+        condition_name: "5xx request rate",
+        severity: "Warning",
+      },
+    };
+
+    const ingestRes = await request(app.httpApp)
+      .post(`/ingest/cloud-monitoring?token=${INGEST_TOKEN}`)
+      .send(closedPayload);
+
+    expect(ingestRes.status).toBe(202);
+
+    const alertsAfterRes = await request(app.httpApp).get("/alerts");
+    const countAfter = (alertsAfterRes.body.alerts as unknown[]).length;
+    expect(countAfter).toBe(countBefore); // closed は Alert を生成しない
+  });
+
   it("POST /ingest/remediation-result は必須欠落で 400、正常で 202＋GET で読める", async () => {
     const bad = await request(app.httpApp)
       .post("/ingest/remediation-result")

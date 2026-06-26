@@ -75,7 +75,7 @@
 - **WIF vars 登録**: `terraform output workload_identity_provider` / `deployer_sa_email` を GitHub repo Variables（`WIF_PROVIDER` / `DEPLOYER_SA`）＋ `TF_STATE_BUCKET` に登録 → 以降の apply は `terraform.yml` CI（main push + 承認ゲート）経由に移行できる
 - **Cloud Run 暫定運用**: SSE 破綻回避のため `min_instances=max_instances=1` で apply（§3.2）。`infra/terraform/envs/prod` で `cloud_run` module に `min_instances=1 / max_instances=1` を渡す
 
-### タスク T7: 検知正規化の実機検証（CloudMonitoringAlertTranslator）〔P0〕
+### タスク T7: 検知正規化の実機検証（CloudMonitoringAlertTranslator）〔P0〕✅
 
 > 移動元: step4-2 stretchⅠ タスク31（translator 本体・UT は実装済みなので**実機 payload での検証が残**）。
 > 前提: T6 完了（Cloud Run 稼働）。
@@ -84,7 +84,7 @@
 - 【必要なら追記】実 payload を fixture 化して `CloudMonitoringAlertTranslator.test.ts` に入出力 UT を追加（GCP の実バージョン差分を吸収）
 - これで以降のシナリオ4（インフラ起因）起点アラートが既存 `AnalyzeAlert → InvestigateAlert`（InfraInvestigation 証拠収集）に**合流するだけ**＝新規配線不要
 
-### タスク T8: 垂直疎通テスト（監視 → ingest）〔P0〕
+### タスク T8: 垂直疎通テスト（監視 → ingest）〔P0〕✅
 
 > 前提: T1・T6・T7 完了。**Phase 1 の DoD**（§5）。
 
