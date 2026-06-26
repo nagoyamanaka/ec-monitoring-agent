@@ -41,7 +41,11 @@ services:
     environment:
       DEMO_ENABLED: ${DEMO_ENABLED:-false}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      # Gemini は Vertex AI 経由（ADC＝GCE VM のアタッチ SA・roles/aiplatform.user）。
+      # 無料クレジットが適用され、API キーは不要。
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-true}
+      GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT_ID}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
       # 検知 ingest（Cloud Monitoring webhook）認証トークン（§11.2）
       INGEST_TOKEN: ${INGEST_TOKEN}

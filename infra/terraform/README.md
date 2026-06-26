@@ -45,9 +45,11 @@ terraform apply
 
 1. **Secret の値を投入**（tf には平文を置かない）:
    ```bash
-   printf '%s' "AQ.Ab8RN6JEe_yLDFLmtXv-Gnw7MHysUass4cvRWRE7dzEVmgAheQ" | gcloud secrets versions add GEMINI_API_KEY  --data-file=-
-   printf '%s' "<ingest-token>"   | gcloud secrets versions add INGEST_TOKEN    --data-file=-
+   printf '%s' "<ingest-token>" | gcloud secrets versions add INGEST_TOKEN --data-file=-
    ```
+
+   - **Gemini は API キー不要**。Vertex AI 経由（`GOOGLE_GENAI_USE_VERTEXAI=true`）で呼び、認証は Cloud Run / GCE の SA（`roles/aiplatform.user` 付与済み）＝ADC。課金は GCP プロジェクト（＝$300 無料クレジット）に乗る。`GEMINI_API_KEY` Secret は作らない（AI Studio フォールバックを使う場合のみ手動で追加）。
+   - モデルのリージョンは `GOOGLE_CLOUD_LOCATION`（既定 `global`）。リージョン固定したい場合は `asia-northeast1` 等に変更。
 2. **イメージを Artifact Registry に push**（`terraform output artifact_repo` のパスへ `ec-backend` / `backoffice-backend`）。
 3. **compose を deploy bucket にアップロード**（GCE startup-script が pull する）:
    ```bash

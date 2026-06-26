@@ -11,12 +11,26 @@ export const config = {
     exchangeName: process.env.EXCHANGE_NAME ?? "ec-domain-events",
   },
   gemini: {
+    // true で Vertex AI 経由（ADC 認証・GCP 無料クレジット対象・本番既定）、false で AI Studio（APIキー課金）。
+    useVertexAI: process.env.GOOGLE_GENAI_USE_VERTEXAI === "true",
+    project:
+      process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCP_PROJECT_ID ?? "",
+    location: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
+    // AI Studio フォールバック用（useVertexAI=false のときのみ使用）。
     apiKey: process.env.GEMINI_API_KEY ?? "",
     model: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
   },
   ai: {
-    // true で AI調査の LLM を StubLLMClient に差し替える（ローカルE2E用・Gemini課金なし）
+    // true で AI調査の LLM を StubLLMClient に差し替える（ローカルE2E用・Gemini課金なし）。最優先。
     useStubInvestigation: process.env.AI_INVESTIGATION_STUB === "true",
+    // true で AIInvestigationPort を ADK マルチエージェント版（タスク18）に差し替える（Vertex 必須）。
+    // stub が優先。未設定なら単一Gemini版（LLMInvestigationAdapter）。
+    useAdk: process.env.AI_INVESTIGATION_ADK === "true",
+    // ADK 自律ループの LLM 呼び出し上限（トークン暴走の安全弁。dispatch ループの maxAttempts と同思想）。
+    adkMaxLlmCalls: Math.max(
+      1,
+      parseInt(process.env.AI_INVESTIGATION_ADK_MAX_LLM_CALLS ?? "8"),
+    ),
   },
   demo: {
     enabled: process.env.DEMO_ENABLED === "true",
