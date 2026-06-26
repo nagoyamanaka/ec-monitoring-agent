@@ -6,6 +6,8 @@ import { PaymentModeToggle } from "./PaymentModeToggle";
 
 export interface DemoDrawerProps {
   api: DemoApi;
+  /** reset 完了後に呼ばれるコールバック。アラート一覧の全件再取得に使う。 */
+  onAfterReset?: () => void;
 }
 
 /**
@@ -13,7 +15,7 @@ export interface DemoDrawerProps {
  * DEMO_ENABLED=false の本番では /demo/status が 404 → available=false で**何も描画しない**。
  * シナリオ注入→一覧に SSE で障害が流れる、という「デモの舞台裏の操作卓」。
  */
-export function DemoDrawer({ api }: DemoDrawerProps) {
+export function DemoDrawer({ api, onAfterReset }: DemoDrawerProps) {
   const {
     available,
     loading,
@@ -24,7 +26,7 @@ export function DemoDrawer({ api }: DemoDrawerProps) {
     triggerScenario,
     setPaymentMode,
     reset,
-  } = useDemoControls(api);
+  } = useDemoControls(api, { onAfterReset });
 
   // デモ無効（本番）なら丸ごと出さない。
   if (!available) return null;

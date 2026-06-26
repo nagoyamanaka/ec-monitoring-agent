@@ -18,6 +18,8 @@ export type UseAlertsResult = {
   readonly lastUpdatedAt: Date | null;
   /** 1 件を再取得して一覧へマージする。フィードバック送信後の即時反映に使う（SSE push が無いため）。 */
   readonly refreshAlert: (id: string) => Promise<void>;
+  /** 全件を再取得して一覧を置き換える。デモリセット後など全件変わる操作の後に使う。 */
+  readonly refreshAlerts: () => void;
   /** SSE が切断状態のとき、自動タイマーを待たず即時再接続する。 */
   readonly reconnectStream: () => void;
   /** SSE "remediation" イベントで届いた最新のリメディ確定（alertId→View）。ドロワーへ live 反映する。 */
@@ -40,12 +42,17 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
   const [remediationByAlertId, setRemediationByAlertId] = useState<
     ReadonlyMap<string, RemediationView>
   >(new Map());
+  const [fetchKey, setFetchKey] = useState(0);
+
+  const refreshAlerts = useCallback(() => setFetchKey((k) => k + 1), []);
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
     setStatus("loading");
     setError(null);
+    // リセット時は既存一覧をクリアして再取得開始であることを明示する
+    if (fetchKey > 0) setAlerts([]);
 
     api
       .getAlerts(controller.signal)
@@ -66,7 +73,8 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
       active = false;
       controller.abort();
     };
-  }, [api]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, fetchKey]);
 
   useAlertStream(
     stream,
@@ -104,6 +112,7 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
     streamStatus,
     lastUpdatedAt,
     refreshAlert,
+    refreshAlerts,
     reconnectStream,
     remediationByAlertId,
   };

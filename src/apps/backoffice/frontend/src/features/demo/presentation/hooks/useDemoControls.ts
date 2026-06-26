@@ -29,7 +29,10 @@ export interface UseDemoControls {
  * - 各 mutation は backend が件数のみ更新するので、**成功後に status を再取得**して件数へ反映する。
  * - 単一の busy で多重実行を抑止（デモ操作は同時押し不要なので1本に集約）。
  */
-export function useDemoControls(api: DemoApi): UseDemoControls {
+export function useDemoControls(
+  api: DemoApi,
+  { onAfterReset }: { onAfterReset?: () => void } = {},
+): UseDemoControls {
   const [available, setAvailable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<DemoStatus | null>(null);
@@ -120,8 +123,9 @@ export function useDemoControls(api: DemoApi): UseDemoControls {
     () =>
       runAction("reset", async () => {
         await api.reset();
+        onAfterReset?.();
       }),
-    [api, runAction],
+    [api, runAction, onAfterReset],
   );
 
   return {
