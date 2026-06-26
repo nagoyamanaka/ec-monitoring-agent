@@ -31,9 +31,10 @@ services:
       - es-data:/usr/share/elasticsearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
 
   # Valkey: SSE Pub/Sub（worker→Cloud Run edge の fan-out）＋ read-model projection（CQRS read model）。
   # SoT ではない＝再構築可能な派生ビュー/transport なので永続化しない（step4-1-strategy §11.3）。Redis 互換。

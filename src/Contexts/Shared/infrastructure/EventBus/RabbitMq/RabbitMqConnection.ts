@@ -1,14 +1,40 @@
 import amqplib, { ConsumeMessage } from "amqplib";
+import { Logger } from "../../../domain/logging/Logger.js";
 import { ConnectionSettings } from "./ConnectionSettings.js";
 import { RabbitMQExchangeNameFormatter } from "./RabbitMQExchangeNameFormatter.js";
 
 export class RabbitMqConnection {
+  private static readonly SERVICE = "rabbitmq-connection";
+  private static readonly RECONNECT_BASE_MS = 1_000;
+  private static readonly RECONNECT_MAX_MS = 30_000;
+
   private connectionSettings: ConnectionSettings;
   private channel?: amqplib.ConfirmChannel;
   private connection?: amqplib.ChannelModel;
+  private logger?: Logger;
 
-  constructor(params: { connectionSettings: ConnectionSettings }) {
+  /** stop() による意図的クローズか。true の間は再接続しない。 */
+  private closing = false;
+  /** 再接続ループが走行中か（多重起動防止）。 */
+  private reconnecting = false;
+  /**
+   * 再接続成功後に呼ぶ再セットアップ（exchange/queue 再宣言 + consumer 再登録）。
+   * 切断時は channel ごと作り直されるため、購読は必ず張り直す必要がある。
+   */
+  private reestablish?: () => Promise<void>;
+
+  constructor(params: { connectionSettings: ConnectionSettings; logger?: Logger }) {
     this.connectionSettings = params.connectionSettings;
+    this.logger = params.logger;
+  }
+
+  /**
+   * 再接続成功後に実行する再セットアップ手順を登録する。
+   * 典型的には RabbitMQConfigurer.configure（exchange/queue 再宣言）＋ eventBus.addSubscribers（consumer 再登録）。
+   * 切断後に新しい channel には consumer が一切載っていないため、これを張り直さないと購読が永久に止まる。
+   */
+  onReestablished(handler: () => Promise<void>) {
+    this.reestablish = handler;
   }
 
   async connect() {
@@ -89,11 +115,87 @@ export class RabbitMqConnection {
       vhost,
     });
 
+    // "error" は close の直前に出ることが多い。ここでは記録のみ（再接続は "close" で駆動）。
     connection.on("error", (err: Error) => {
-      Promise.reject(err);
+      void this.logger?.warn({
+        service: RabbitMqConnection.SERVICE,
+        action: "rabbitmq_connection_error",
+        message: `RabbitMQ 接続エラー：${err.message}`,
+        stack_trace: err.stack,
+      });
+    });
+
+    // 切断（RabbitMQ 再起動・ネットワーク断など）を検知して再接続ループを起動する。
+    // これが無いと一度の瞬断で publish は failover(Mongo) に落ち続け、consumer は永久に 0 になる。
+    connection.on("close", () => {
+      if (this.closing) return; // stop() 由来の意図的クローズ
+      void this.logger?.warn({
+        service: RabbitMqConnection.SERVICE,
+        action: "rabbitmq_connection_closed",
+        message: "RabbitMQ 接続が切断されました。再接続を試みます。",
+      });
+      this.scheduleReconnect();
     });
 
     return connection;
+  }
+
+  /** 切断検知時に一度だけ再接続ループを起動する（多重起動はガード）。 */
+  private scheduleReconnect() {
+    if (this.reconnecting || this.closing) return;
+    this.reconnecting = true;
+    void this.reconnectLoop();
+  }
+
+  /** 指数バックオフで再接続し、成功したら再セットアップ（exchange/queue/consumer）を張り直す。 */
+  private async reconnectLoop() {
+    let delay = RabbitMqConnection.RECONNECT_BASE_MS;
+    let attempt = 0;
+
+    while (!this.closing) {
+      await this.sleep(delay);
+      if (this.closing) break;
+      attempt += 1;
+
+      try {
+        await this.connect();
+        await this.reestablish?.();
+        await this.logger?.info({
+          service: RabbitMqConnection.SERVICE,
+          action: "rabbitmq_reconnected",
+          message: `RabbitMQ へ再接続し購読を復旧しました（${attempt} 回目で成功）。`,
+          retry_count: attempt,
+        });
+        this.reconnecting = false;
+        return;
+      } catch (err) {
+        await this.logger?.warn({
+          service: RabbitMqConnection.SERVICE,
+          action: "rabbitmq_reconnect_failed",
+          message: `RabbitMQ 再接続に失敗（${attempt} 回目）。${delay}ms 後に再試行します。`,
+          retry_count: attempt,
+          stack_trace: err instanceof Error ? err.stack : String(err),
+        });
+        // 部分的に張った接続が残っていれば破棄してから次の試行へ（接続リーク防止）。
+        await this.discardConnectionQuietly();
+        delay = Math.min(delay * 2, RabbitMqConnection.RECONNECT_MAX_MS);
+      }
+    }
+
+    this.reconnecting = false;
+  }
+
+  /** 再試行前に中途半端な接続を静かに閉じる。close() のフラグは触らない。 */
+  private async discardConnectionQuietly() {
+    try {
+      await this.connection?.close();
+    } catch {
+      // 既に死んでいる接続を閉じる際のエラーは無視する。
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async amqpChannel(): Promise<amqplib.ConfirmChannel> {
@@ -129,6 +231,8 @@ export class RabbitMqConnection {
   }
 
   async close() {
+    // 意図的クローズ。"close" イベント由来の再接続を抑止する。
+    this.closing = true;
     await this.channel?.close();
     return await this.connection?.close();
   }

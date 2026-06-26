@@ -124,49 +124,9 @@ export const ALERT_SEEDS: Alert[] = [
     }),
   ),
 
-  Alert.createFromKnownPattern({
-    id: new AlertId("5eeda1e7-0003-4000-8000-000000000003"),
-    monitoringEvent: new MonitoringEvent({
-      eventId: "seed-event-0003-0000-0000-000000000003",
-      eventName: "ec.inventory.reservation_failed",
-      aggregateId: "product-seed-0099",
-      occurredOn: ago(5),
-      payload: { productId: "product-seed-0099", reason: "CONCURRENT_CONFLICT", retryCount: 3 },
-      category: MonitoringEventCategory.application(),
-      severity: AlertSeverity.warning(),
-      source: "ec-backend",
-    }),
-    classification: {
-      type: "known",
-      source: ClassificationRuleKind.SIMILARITY,
-      patternId: "c3d4e5f6-3456-4c7d-abce-e3f4a5b6c7d8",
-      patternName: "INVENTORY_CONCURRENT_CONFLICT",
-      severity: AlertSeverity.warning(),
-      confidence: ClassificationConfidence.of(0.87),
-      matchedConditions: [{ field: "reason", expectedValue: "CONCURRENT_CONFLICT", actualValue: "CONCURRENT_CONFLICT" }],
-      unmatchedConditions: [],
-      // 類似既知（SIMILARITY）の back-link。過去の同型在庫障害（...0002）へ内部遷移できる動線を見せる。
-      sourceAlertId: "5eeda1e7-0002-4000-8000-000000000002",
-    },
-  }).attachInvestigationReport(
-    new InvestigationReport({
-      summary: "商品 product-seed-0099 の在庫予約で同時アクセスによる競合が3回連続発生しました。",
-      confidence: 0.88,
-      severity: AlertSeverity.warning(),
-      investigationSteps: [
-        "在庫予約処理の同時リクエスト数を確認",
-        "楽観的ロックの競合頻度ログを確認",
-      ],
-      suggestedActions: [
-        "リトライロジックを確認し、必要であれば在庫予約の競合対策を見直してください。",
-      ],
-      suggestedPatternName: "INVENTORY_CONCURRENT_CONFLICT",
-      reviewStatus: ReviewStatus.pendingReview(),
-      investigatedAt: ago(3),
-      isFallback: false,
-    }),
-  ),
-
+  // 未知障害を AI が調査し終え、レビュー待ちになった状態の例。
+  // （旧 seed では report 未添付のまま ANALYZING で固定され「分析中…」が永久に止まって見えたため、
+  //  調査完了レポートを添付して "AI 調査済み・承認待ち" の正しい姿に直した。）
   Alert.createAsUnknown({
     id: new AlertId("5eeda1e7-0004-4000-8000-000000000004"),
     monitoringEvent: new MonitoringEvent({
@@ -179,5 +139,32 @@ export const ALERT_SEEDS: Alert[] = [
       severity: AlertSeverity.pending(),
       source: "ec-backend",
     }),
-  }),
+  }).attachInvestigationReport(
+    new InvestigationReport({
+      summary:
+        "注文処理が UNKNOWN_GATEWAY_ERROR で失敗しました。直前の決済タイムアウト（同一の決済ゲートウェイ障害）が連鎖した結果と推定されます。",
+      confidence: 0.82,
+      severity: AlertSeverity.critical(),
+      investigationSteps: [
+        "同時刻帯の決済タイムアウト発生有無を確認",
+        "決済ゲートウェイのエラーレスポンスを Cloud Logging で照会",
+      ],
+      suggestedActions: [
+        "決済ゲートウェイの復旧を確認し、失敗した注文を再処理してください。",
+      ],
+      suggestedPatternName: "ORDER_GATEWAY_FAILURE（推定）",
+      reviewStatus: ReviewStatus.pendingReview(),
+      investigatedAt: ago(1),
+      isFallback: false,
+      // AI 相関（タスク9e）: 決済タイムアウト（...0001）が根本原因の上流。異なる層をまたぐ相関を可視化する。
+      relatedAlerts: [
+        {
+          alertId: "5eeda1e7-0001-4000-8000-000000000001",
+          relation: "upstream",
+          rationale:
+            "決済タイムアウトが先行し、その結果この注文処理が連鎖失敗。同一の決済ゲートウェイ障害が根本原因。",
+        },
+      ],
+    }),
+  ),
 ];

@@ -40,6 +40,7 @@ export class EcBackendApp {
         vhost: config.rabbitmq.vhost,
         connection: { secure: false, hostname: config.rabbitmq.host, port: config.rabbitmq.port },
       },
+      logger,
     });
     await this.connection.connect();
 
@@ -70,11 +71,23 @@ export class EcBackendApp {
       new QueryHandlers([new GetOrderQueryHandler(getOrderUseCase)]),
     );
 
-    await this.configureEventBus(
-      eventBus,
-      queueNameFormatter,
-      buildEcSubscribers(reserveInventoryUseCase, compensateOrderUseCase),
-    );
+    const subscribers = buildEcSubscribers(reserveInventoryUseCase, compensateOrderUseCase);
+    // 切断→再接続時に exchange/queue/consumer を張り直し、切断中に failover 退避したイベントを再送する。
+    // 起動時にも同じ手順を踏むので、前回プロセスが退避したまま落ちた分もここで回収できる。
+    const setupEventBus = async () => {
+      await this.configureEventBus(eventBus, queueNameFormatter, subscribers);
+      const { drained } = await eventBus.drainFailover();
+      if (drained > 0) {
+        await logger.info({
+          service: "ec-backend",
+          action: "failover_events_drained",
+          message: `failover 退避イベントを RabbitMQ へ再送：${drained}件`,
+          retry_count: drained,
+        });
+      }
+    };
+    this.connection.onReestablished(setupEventBus);
+    await setupEventBus();
 
     this.server = new Server(config.port);
     registerRoutes(this.server.router, commandBus, queryBus, paymentGateway, inventoryRepository);

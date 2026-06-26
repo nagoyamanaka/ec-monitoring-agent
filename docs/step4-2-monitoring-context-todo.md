@@ -234,11 +234,19 @@
 
 ## stretch: ポートフォリオ（フェーズ3）
 
-### タスク 18: ADKマルチエージェント 〔stretch〕
+### タスク 18: ADKマルチエージェント 〔stretch〕✅ 試走実装済み
 
-- 【新規】`infrastructure/adk/`: `ADKAgentInvestigationAdapter.ts` / `InvestigationCoordinator.ts` / `EvidenceCollectorAgent.ts` / `RootCauseAnalystAgent.ts` / `RemediationPlannerAgent.ts`
-- a2a不使用・in-process。自律的証拠追加収集ループを実装
-- `AIInvestigationPort` のDI差し替えのみ。参考: 「ADKマルチエージェント実装」節
+- 【完了】`infrastructure/adk/`: `ADKAgentInvestigationAdapter.ts`（`AIInvestigationPort`実装）/ `ADKInvestigationAgentRunner.ts`（ADKグラフ構築＋`InMemoryRunner`実行）/ `InvestigationAgentRunner.ts`（IF・text-in/out）/ `agents/InvestigationCoordinator.ts`・`EvidenceCollectorAgent.ts`・`RootCauseAnalystAgent.ts`・`RemediationPlannerAgent.ts` / `tools/investigationTools.ts`（read-only Gateway を ADK FunctionTool 化）
+- 【完了】公式 `@google/adk`（TS版・1.3.0）を採用。a2a不使用・in-process。hub-and-spoke: Coordinator(hub) が `AgentTool` 経由で3専門agent(spoke)に委譲し、「分析→（不足なら）証拠追加収集→再分析」を自律反復（＝自律的証拠追加収集ループ）してから最終 JSON を出力
+- 【完了】モデル経路は **Vertex AI 共用**（`GOOGLE_GENAI_USE_VERTEXAI` で ADK が自動選択＝Part1 の無料クレジット経路）。`gemini-2.0-flash`。トークン暴走の安全弁＝`maxLlmCalls`（env `AI_INVESTIGATION_ADK_MAX_LLM_CALLS` 既定8）＋ウォールクロック上限
+- 【完了】**`AIInvestigationPort` の DI 差し替え1点**で載る（`BackofficeApp`・優先度 stub > ADK > 単一Gemini・`AI_INVESTIGATION_ADK=true`）。`InvestigateAlertUseCase` はノータッチ
+- 【完了】**プロンプト構築/出力パース/マッピング/fallback は単一Gemini版と共通化**（`buildUserPrompt`/`parseLLMOutput`/`toInvestigationReport`/`buildFallbackReport`/`buildEvidenceLinks` を再利用＝DRY）。アダプタは `InvestigationAgentRunner` を注入で受け、fake 注入で UT（正常→マッピング／例外→fallback／パース不能→fallback／証拠リンク追記 の4ケース）
+- 設計判断（SRP・テスト容易性）: ADK 依存（グラフ構築＋Runner）を `ADKInvestigationAgentRunner` に隔離し、`ADKAgentInvestigationAdapter` は薄いオーケストレーションに保つ（`GeminiLLMClient`↔`LLMInvestigationAdapter` と同型）。ADK 部は疎通主体なので UT せず、分岐はアダプタ側 UT で担保
+- 設計判断（証拠の二重収集回避）: `InvestigateAlertUseCase` が広く事前収集する seed 証拠はそのまま seed プロンプトに載せ、エージェントの FunctionTool は「サービス名×時間窓×検索語」で絞った**狙い撃ち追加収集**に限定（依存は全て AIInvestigation 内＝循環依存なし）
+- 設計判断（write 隔離不変）: `RemediationPlannerAgent` は修正方針の**起案のみ**。実 PR 起票/apply は既存 `RemediationPort`（人間承認ゲート内）に閉じる
+- 設計判断（zod 版整合）: ADK は zod@4 依存。FunctionTool の型を合わせるため root zod を v4 に上げ `zod/v4` から import（root `zod` だと nominal 型が別宣言で代入不可）
+- 既知の限界（試走ゆえ）: ライブ疎通（実 Vertex でのループ動作・トークン実測）は未検証＝デプロイ/ADC設定後に確認。E2E は stub 経路のまま無傷
+- 参考: 「ADKマルチエージェント実装」節
 
 <!--
 【マルチエージェント統合の3パターン整理（A2A 判断のADR種・2026-06-23 確定）】

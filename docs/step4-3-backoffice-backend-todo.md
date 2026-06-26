@@ -203,7 +203,7 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 
 ## stretch
 
-### タスク 12: Cloud Run デプロイ 〔stretch〕
+### タスク 12: Cloud Run デプロイ 〔stretch〕✅ 完了済み
 
 - backoffice（or 調査API）をコンテナ化して Cloud Run へ（「とどける」見せ場）
 - EDA常駐Subscriber部分はCEに残す折衷（戦略ADR）

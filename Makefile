@@ -70,6 +70,11 @@ front-logs:
 front-build:
 	$(DC) build backoffice-frontend
 
+
+# ── Backoffice backend ───────────────────────────────────────
+back-logs:
+	$(DC) logs -f backoffice-backend
+
 # ── All ───────────────────────────────────────────────────────
 # seedのデータ変更後は再度make seedしないとサービスに反映されないリスク
 up: ec-up bo-up front-up

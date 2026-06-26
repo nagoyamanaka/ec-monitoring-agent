@@ -43,6 +43,9 @@ import { LLMInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInves
 import { GeminiLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/GeminiLLMClient.js";
 import { StubLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/StubLLMClient.js";
 import { LLMTextClient } from "../../../../Contexts/Monitoring/AIInvestigation/domain/LLMTextClient.js";
+import { AIInvestigationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/AIInvestigationPort.js";
+import { ADKAgentInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKAgentInvestigationAdapter.js";
+import { ADKInvestigationAgentRunner } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKInvestigationAgentRunner.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
 import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/TerraformGatewayImpl.js";
@@ -109,6 +112,7 @@ export class BackofficeApp {
         vhost: config.rabbitmq.vhost,
         connection: { secure: false, hostname: config.rabbitmq.host, port: config.rabbitmq.port },
       },
+      logger,
     });
     await this.connection.connect();
 
@@ -136,17 +140,45 @@ export class BackofficeApp {
       new ApplicationClassificationPolicy(rules, new ClassificationRuleSorter()),
     ]);
 
-    // ★差し替えポイント: ローカルE2E では Stub に切替え（Gemini課金・非決定性を排除）
+    // read-only 証拠ゲートウェイは単一Gemini版（InfraInvestigationPort 経由の事前収集）と
+    // ADK版（エージェントの狙い撃ちツール）で共有する。
+    const cloudLoggingGateway = new CloudLoggingGatewayImpl();
+    const terraformGateway = new TerraformGatewayImpl();
+    const githubGateway = new GitHubGatewayImpl(
+      config.github.token,
+      config.github.targetRepo,
+    );
+
+    // 単一 LLMTextClient（stub 時は決定論）。AI調査の既定経路＋リメディ起案(planner)で共有する。
     const llmClient: LLMTextClient = config.ai.useStubInvestigation
       ? new StubLLMClient()
       : new GeminiLLMClient();
-    const aiInvestigationPort = new LLMInvestigationAdapter(llmClient);
+
+    // ★差し替えポイント（AIInvestigationPort）: 優先度 stub > ADK > 単一Gemini。
+    //  - stub: ローカルE2E（Gemini課金・非決定性を排除）
+    //  - ADK : マルチエージェント自律調査（タスク18・Vertex 必須）
+    //  - 既定: 単一Gemini（LLMInvestigationAdapter）
+    let aiInvestigationPort: AIInvestigationPort;
+    if (config.ai.useAdk && !config.ai.useStubInvestigation) {
+      aiInvestigationPort = new ADKAgentInvestigationAdapter(
+        new ADKInvestigationAgentRunner({
+          model: config.gemini.model,
+          maxLlmCalls: config.ai.adkMaxLlmCalls,
+          cloudLoggingGateway,
+          terraformGateway,
+          githubGateway,
+          similarIncidentRepository,
+        }),
+      );
+    } else {
+      aiInvestigationPort = new LLMInvestigationAdapter(llmClient);
+    }
     const infraInvestigationPort =
       this.overrides.infraInvestigationPort ??
       new DefaultInfraInvestigationAdapter(
-        new CloudLoggingGatewayImpl(),
-        new TerraformGatewayImpl(),
-        new GitHubGatewayImpl(config.github.token, config.github.targetRepo),
+        cloudLoggingGateway,
+        terraformGateway,
+        githubGateway,
       );
     const sseNotifier = new EventEmitterSSEAlertNotifier();
 
@@ -275,11 +307,26 @@ export class BackofficeApp {
       logger,
     );
 
-    await this.configureEventBus(
-      eventBus,
-      queueNameFormatter,
-      buildBackofficeSubscribers(collectMonitoringEventUseCase, investigateAlertUseCase),
+    const subscribers = buildBackofficeSubscribers(
+      collectMonitoringEventUseCase,
+      investigateAlertUseCase,
     );
+    // 切断→再接続時に exchange/queue/consumer を張り直し、切断中に failover 退避したイベントを再送する。
+    // 起動時にも同じ手順を踏むので、前回プロセスが退避したまま落ちた分もここで回収できる。
+    const setupEventBus = async () => {
+      await this.configureEventBus(eventBus, queueNameFormatter, subscribers);
+      const { drained } = await eventBus.drainFailover();
+      if (drained > 0) {
+        await logger.info({
+          service: "backoffice-backend",
+          action: "failover_events_drained",
+          message: `failover 退避イベントを RabbitMQ へ再送：${drained}件`,
+          retry_count: drained,
+        });
+      }
+    };
+    this.connection.onReestablished(setupEventBus);
+    await setupEventBus();
 
     const ecDemoGateway =
       this.overrides.ecDemoGateway ?? new HttpEcDemoGateway(config.demo.ecBackendUrl);

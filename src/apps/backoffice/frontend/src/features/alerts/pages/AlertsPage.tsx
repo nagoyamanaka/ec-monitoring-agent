@@ -31,6 +31,7 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
     streamStatus,
     lastUpdatedAt,
     refreshAlert,
+    refreshAlerts,
     reconnectStream,
     remediationByAlertId,
     api,
@@ -85,7 +86,7 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
             onReconnect={reconnectStream}
           />
         }
-        demoDrawer={<DemoDrawer api={demoApi} />}
+        demoDrawer={<DemoDrawer api={demoApi} onAfterReset={refreshAlerts} />}
       >
         <AlertList
           alerts={alerts}
