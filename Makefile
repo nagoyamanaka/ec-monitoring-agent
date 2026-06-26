@@ -22,7 +22,7 @@ infra-down:
 
 # ── EC ────────────────────────────────────────────────────────
 ec-up: infra-up
-	$(DC) up -d ec-backend
+	$(DC) up -d --build --renew-anon-volumes ec-backend
 
 ec-down:
 	$(DC) stop ec-backend
@@ -38,7 +38,7 @@ ec-build:
 
 # ── Backoffice backend ────────────────────────────────────────
 bo-up: infra-up
-	$(DC) up -d backoffice-backend
+	$(DC) up -d --build --renew-anon-volumes backoffice-backend
 
 bo-down:
 	$(DC) stop backoffice-backend
@@ -55,7 +55,7 @@ bo-build:
 # ── Backoffice frontend ───────────────────────────────────────
 # depends_on で ec-backend → backoffice-backend まで連鎖起動する
 front-up:
-	$(DC) up -d backoffice-frontend
+	$(DC) up -d --build --renew-anon-volumes backoffice-frontend
 	@echo "Backoffice UI: http://localhost:5173"
 
 front-down:
