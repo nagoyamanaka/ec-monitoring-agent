@@ -280,11 +280,22 @@ export class BackofficeApp {
       collectMonitoringEventUseCase,
       investigateAlertUseCase,
     );
-    // 切断→再接続時に exchange/queue/consumer を張り直す（張り直さないと購読が永久停止する）。
-    this.connection.onReestablished(() =>
-      this.configureEventBus(eventBus, queueNameFormatter, subscribers),
-    );
-    await this.configureEventBus(eventBus, queueNameFormatter, subscribers);
+    // 切断→再接続時に exchange/queue/consumer を張り直し、切断中に failover 退避したイベントを再送する。
+    // 起動時にも同じ手順を踏むので、前回プロセスが退避したまま落ちた分もここで回収できる。
+    const setupEventBus = async () => {
+      await this.configureEventBus(eventBus, queueNameFormatter, subscribers);
+      const { drained } = await eventBus.drainFailover();
+      if (drained > 0) {
+        await logger.info({
+          service: "backoffice-backend",
+          action: "failover_events_drained",
+          message: `failover 退避イベントを RabbitMQ へ再送：${drained}件`,
+          retry_count: drained,
+        });
+      }
+    };
+    this.connection.onReestablished(setupEventBus);
+    await setupEventBus();
 
     const ecDemoGateway =
       this.overrides.ecDemoGateway ?? new HttpEcDemoGateway(config.demo.ecBackendUrl);

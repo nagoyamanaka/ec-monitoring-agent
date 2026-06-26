@@ -180,9 +180,23 @@
 
 - 【済】`src/Contexts/Shared/infrastructure/EventBus/RabbitMq/RabbitMqConnection.ts`：`connection.on("close")` で切断検知→**指数バックオフ（1s→最大30s）で再接続**→ `onReestablished` フックで exchange/queue 再宣言＋consumer 再登録。`stop()` 由来の意図的クローズは `closing` フラグで除外。`on("error")` は握り潰しをやめ WARN ログ化
 - 【済】`EcBackendApp` / `BackofficeApp`：`connection.onReestablished(() => configureEventBus(...))` を登録。再接続時に新しい channel へ購読を張り直す（張り直さないと購読が永久停止する）
-- 【検証済】RabbitMQ コンテナのみ再起動 → アプリは再起動せず ~15s（4 回目の試行）で自動復旧し consumer=2 に回復、その後 fault injection で alert が 5→6 に増加。`pnpm typecheck` / `pnpm test`（529 件）green
-- 【残・任意】Mongo `DomainEvents`（failover 退避）を起動時/定期に再 publish するドレイン処理を入れると切断中の取りこぼしもゼロにできる（`DomainEventFailoverPublisher.consume()` は実装済み・呼び出し側が無い）
+- 【検証済】RabbitMQ コンテナのみ再起動 → アプリは再起動せず ~15s（4 回目の試行）で自動復旧し consumer=2 に回復、その後 fault injection で alert が 5→6 に増加。`pnpm typecheck` / `pnpm test`（533 件）green
 - 【残・任意】RabbitMQ を落とす→上げる→publish が backoffice に届く、の結合テスト自動化（`make test-integration`）
+
+#### failover ドレイン（切断中の取りこぼしゼロ化）✅ 実装済み
+
+**なぜ必要か（仕組みの解説）**:
+- publish 時に RabbitMQ へ送れないと、`RabbitMQEventBus.publish` は例外を握って [`DomainEventFailoverPublisher`](../src/Contexts/Shared/infrastructure/EventBus/DomainEventFailoverPublisher/DomainEventFailoverPublisher.ts) 経由で **Mongo `DomainEvents` コレクションにイベントを退避**する（= イベント自体は消えない）。
+- ところが**退避したものを後で読み出して再送するコードが無かった**（`consume()` は実装済みだが呼び出し側ゼロ）。結果、切断中に発生したイベントは Mongo に**永久に滞留**し、再接続後の新規イベントだけが流れる＝**切断ウィンドウ分のアラートが恒久的に欠落**していた（実際に 62 件滞留していた）。
+- 「再接続」だけでは "今後" は直るが "切断中に取りこぼした分" は戻らない。これを戻すのが **ドレイン（drain＝退避分の再送）**。
+
+**実装**:
+- [`DomainEventFailoverPublisher`](../src/Contexts/Shared/infrastructure/EventBus/DomainEventFailoverPublisher/DomainEventFailoverPublisher.ts)：`pending()`（退避イベントを生のまま取得）＋ `remove(eventId)`（再送成功分を削除）を追加。
+  - 設計上の罠: **deserialize は使わない**。退避するのは publish 側アプリで、その `DomainEventDeserializer` は自分が *subscribe* するイベントしか知らない（例: EC は `ec.payment.timeout` を publish するが subscribe しないので deserialize 不可）。なので保存済みの serialized 文字列を**そのまま再送**し、routingKey に使う `eventName` だけを JSON の `data.type` から抜き出す。
+- [`RabbitMQEventBus.drainFailover()`](../src/Contexts/Shared/infrastructure/EventBus/RabbitMq/RabbitMqEventBus.ts)：退避分を順に再送し、**成功した分だけ** failover から削除。1 件でも失敗（＝まだ未接続）したらそこで中断し残りは次回へ。at-least-once（messageId=eventId なので重複は下流の dedup で吸収）。
+- [`EcBackendApp`](../src/apps/ec/backend/src/EcBackendApp.ts) / [`BackofficeApp`](../src/apps/backoffice/backend/src/BackofficeApp.ts)：`setupEventBus`（configure→addSubscribers→`drainFailover`）を **起動時と再接続成功直後の両方**で実行。起動時ドレインにより「前回プロセスが退避したまま落ちた分」も回収できる。
+- 【テスト】[`RabbitMqEventBus.test.ts`](../src/Contexts/Shared/infrastructure/EventBus/RabbitMq/RabbitMqEventBus.test.ts)：生 content のまま再送・eventName→routingKey・成功分のみ削除・途中失敗で中断し残置・空なら no-op を UT（fake connection/failover 注入）。
+- 【検証済】(1) 起動時ドレインで滞留 62 件→0（`failover_events_drained: 62件`）。(2) RabbitMQ 停止中に fault → Mongo に 1 件退避 → RabbitMQ 復帰 → 自動再接続(5回目)＋ドレインで 1 件→0。`pnpm test` 533 件 green
 
 ---
 

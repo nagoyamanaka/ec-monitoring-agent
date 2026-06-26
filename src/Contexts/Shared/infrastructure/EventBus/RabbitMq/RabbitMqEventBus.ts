@@ -56,6 +56,39 @@ export class RabbitMQEventBus implements EventBus {
     }
   }
 
+  /**
+   * 切断中に failover(Mongo) へ退避したイベントを RabbitMQ へ再送する。
+   * 起動時と再接続成功直後に呼ぶことで「切断中に publish できなかったイベント」を取りこぼさない。
+   * - 再送成功した分だけ failover から削除する（at-least-once：messageId=eventId なので重複は下流で dedup 可能）
+   * - 1件でも再送に失敗したら（＝まだ繋がっていない）そこで止め、残りは次回ドレインに回す
+   */
+  async drainFailover(): Promise<{ drained: number; remaining: number }> {
+    const pending = await this.failoverPublisher.pending();
+    let drained = 0;
+
+    for (const item of pending) {
+      try {
+        await this.connection.publish({
+          exchange: this.exchange,
+          routingKey: item.eventName,
+          content: Buffer.from(item.content),
+          options: {
+            messageId: item.eventId,
+            contentType: "application/json",
+            contentEncoding: "utf-8",
+          },
+        });
+        await this.failoverPublisher.remove(item.eventId);
+        drained += 1;
+      } catch {
+        // まだ RabbitMQ に繋がっていない。残りは退避したまま次回に委ねる。
+        break;
+      }
+    }
+
+    return { drained, remaining: pending.length - drained };
+  }
+
   private options(event: DomainEvent) {
     return {
       messageId: event.eventId,
