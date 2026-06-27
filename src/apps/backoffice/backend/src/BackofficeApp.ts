@@ -20,6 +20,9 @@ import { KnownPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/
 import { SimilarPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/rules/SimilarPatternRule.js";
 import { ClassificationRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/ClassificationRule.js";
 import { MongoAlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoAlertRepository.js";
+import { ReadModelCachingAlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/ReadModelCachingAlertRepository.js";
+import { RedisAlertReadModelStore } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/readmodel/RedisAlertReadModelStore.js";
+import { AlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/AlertRepository.js";
 import { MongoKnownErrorPatternRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoKnownErrorPatternRepository.js";
 import { InvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.js";
 import { ReinvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/ReinvestigateAlert/ReinvestigateAlertUseCase.js";
@@ -51,6 +54,10 @@ import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInves
 import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/TerraformGatewayImpl.js";
 import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/GitHubGatewayImpl.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
+import { RedisSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/RedisSSEAlertNotifier.js";
+import { SSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/domain/SSEAlertNotifier.js";
+import { createValkeyConnection } from "../../../../Contexts/Shared/infrastructure/valkey/ValkeyConnectionFactory.js";
+import { ValkeyConnection } from "../../../../Contexts/Shared/infrastructure/valkey/ValkeyConnection.js";
 import { InMemorySimilarIncidentRepository } from "../../../../Contexts/Monitoring/SimilarIncident/infrastructure/InMemorySimilarIncidentRepository.js";
 import {
   ElasticSimilarIncidentRepository,
@@ -97,6 +104,7 @@ export type BackofficeAppOverrides = {
 export class BackofficeApp {
   private server!: Server;
   private connection!: RabbitMqConnection;
+  private valkey?: ValkeyConnection;
 
   constructor(private readonly overrides: BackofficeAppOverrides = {}) {}
 
@@ -104,6 +112,11 @@ export class BackofficeApp {
   async build(): Promise<void> {
     const mongoClient = await MongoClientFactory.createClient("backoffice", { url: config.mongoUrl });
     const logger = new GcpCloudLoggingLogger();
+
+    // Valkey 接続（stretchⅠ）。REDIS_URL 無効時は null object（read-model 無効・SSE は in-process）。
+    // SSE Pub/Sub（task17）と read-model projection（task18）で共有する。
+    const valkey = createValkeyConnection({ url: config.valkey.url });
+    this.valkey = valkey;
 
     this.connection = new RabbitMqConnection({
       connectionSettings: {
@@ -126,7 +139,14 @@ export class BackofficeApp {
       maxRetries: 3,
     });
 
-    const alertRepository = new MongoAlertRepository(mongoClient);
+    // read-model（案②）: Valkey 有効時のみ cache-aside デコレータで包む。
+    // 無効時は MongoAlertRepository を素通し＝現状動作（Mongo 直読）を一切変えない。
+    const alertRepository: AlertRepository = valkey.enabled
+      ? new ReadModelCachingAlertRepository(
+          new MongoAlertRepository(mongoClient),
+          new RedisAlertReadModelStore(valkey),
+        )
+      : new MongoAlertRepository(mongoClient);
     const knownErrorPatternRepository = new MongoKnownErrorPatternRepository(mongoClient);
 
     // 完全一致は常時。ES 設定時のみ類似度（graded confidence）の SimilarPatternRule を足す。
@@ -180,7 +200,21 @@ export class BackofficeApp {
         terraformGateway,
         githubGateway,
       );
-    const sseNotifier = new EventEmitterSSEAlertNotifier();
+    // SSE 通知の差し替え（stretchⅠ・案1）。REDIS_URL 設定時のみ Valkey Pub/Sub 版に載せ替える。
+    //  - worker: publish のみ（SSE クライアントを持たないので fan-out 購読は張らない）
+    //  - edge/all: publish ＋ 購読して接続中クライアントへ fan-out
+    // REDIS_URL 未設定（ローカル/テスト/all 既定）は従来の in-process notifier のまま。
+    const serveSse = config.role !== "worker";
+    let sseNotifier: SSEAlertNotifier;
+    if (valkey.enabled) {
+      const redisNotifier = new RedisSSEAlertNotifier(valkey);
+      if (serveSse) {
+        await redisNotifier.startFanOut();
+      }
+      sseNotifier = redisNotifier;
+    } else {
+      sseNotifier = new EventEmitterSSEAlertNotifier();
+    }
 
     const analyzeAlertUseCase = new AnalyzeAlertUseCase(
       alertRepository,
@@ -311,10 +345,20 @@ export class BackofficeApp {
       collectMonitoringEventUseCase,
       investigateAlertUseCase,
     );
+    // ロール分離（stretchⅠ）: edge は RabbitMQ consumer を張らない（GCE worker と購読を取り合わない）。
+    // ただし exchange は宣言し publish は可能に保つ（ingest→AnalyzeAlert が InvestigateAlert を
+    // worker へ流すため）。worker/all は従来どおり購読する。これにより Cloud Run edge を min-instances=0
+    // にしても worker（GCE 常駐）がイベント処理を担保する。
+    const consumeEvents = config.role !== "edge";
     // 切断→再接続時に exchange/queue/consumer を張り直し、切断中に failover 退避したイベントを再送する。
     // 起動時にも同じ手順を踏むので、前回プロセスが退避したまま落ちた分もここで回収できる。
     const setupEventBus = async () => {
-      await this.configureEventBus(eventBus, queueNameFormatter, subscribers);
+      await this.configureEventBus(
+        eventBus,
+        queueNameFormatter,
+        subscribers,
+        consumeEvents,
+      );
       const { drained } = await eventBus.drainFailover();
       if (drained > 0) {
         await logger.info({
@@ -370,6 +414,7 @@ export class BackofficeApp {
 
   async stop(): Promise<void> {
     await this.connection?.close();
+    await this.valkey?.close();
     await this.server?.stop();
   }
 
@@ -408,9 +453,16 @@ export class BackofficeApp {
     eventBus: RabbitMQEventBus,
     queueNameFormatter: RabbitMQQueueNameFormatter,
     subscribers: DomainEventSubscribers,
+    consume: boolean,
   ): Promise<void> {
     const configurer = new RabbitMQConfigurer(this.connection, queueNameFormatter, config.rabbitmq.retryTtl);
-    await configurer.configure({ exchange: config.rabbitmq.exchangeName, subscribers: subscribers.items });
-    await eventBus.addSubscribers(subscribers);
+    // edge（consume=false）は exchange だけ宣言して publish 可能にし、queue/consumer は張らない。
+    await configurer.configure({
+      exchange: config.rabbitmq.exchangeName,
+      subscribers: consume ? subscribers.items : [],
+    });
+    if (consume) {
+      await eventBus.addSubscribers(subscribers);
+    }
   }
 }

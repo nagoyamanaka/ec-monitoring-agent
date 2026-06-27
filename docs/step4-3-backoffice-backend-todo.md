@@ -214,32 +214,43 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 
 > **着手条件**: タスク12（Cloud Run デプロイ）と並走。設計は `step4-1` §11.1/§11.3、IaC は `infra/terraform/`。
 > **原則**: Valkey は SoT でなく「**再構築可能な read-model projection ＋ Pub/Sub transport**」。Mongo SoT ＋ cache-aside fallback で **Valkey 障害を「障害」でなく「性能劣化」に縮める**。既存の `EventEmitterSSEAlertNotifier`（in-process）/ Mongo 直読は無傷のまま、interface 差し替え／前段追加で載せる（§10「スケールアウト時」と一致）。
+> **配置決定（ハッカソン）**: Valkey は **GCE worker VM 同居の単一コンテナ（最小構成）**。HA・永続化・クラスタは張らない（落ちたら cache-aside で Mongo 直読 → frontend 再接続で再フェッチ＝劣化に縮む）。**Memorystore for Valkey は採用しない**：本設計では Valkey が SoT でなく HA 不要なのでマネージドの利点が効かず、常時課金（scale-to-zero 不可）＋ VPC 配線の重さだけ増える。Memorystore は `REDIS_URL` 1点差し替えのみで載る**本番移行先**として記録に留める（コード無傷）。Cloud Run edge → Valkey は Direct VPC egress＋`min-instances>=1`。
 > （タスク番号は採番順。配置は優先度順で stretchⅠ < Ⅱ < Ⅲ）
 
-### タスク 16: Valkey クライアント ＋ config 〔stretchⅠ〕
+### タスク 16: Valkey クライアント ＋ config 〔stretchⅠ〕　✅ 完了済み
 
-- 【新規】Valkey 接続（ioredis 等）。`REDIS_URL` 未設定時は **null object**（publish/subscribe no-op・read-model 無効）でフォールバックし、ローカル/テストは現状の in-process 動作のまま
-- 【修正】`config.ts`：`REDIS_URL`（既定空＝無効）/ `ROLE`（`all`|`worker`|`edge`・既定 `all`）追加（`REDIS_URL` は compose/Cloud Run に注入済み・アプリ未読込なら no-op）
-- 依存追加は pnpm `--filter` で backoffice backend のみに閉じる
+- 【新規】`Contexts/Shared/infrastructure/valkey/`：`ValkeyConnection`（IF・KV〔get/set/del〕＋ Pub/Sub〔publish/subscribe〕を1抽象に）/ `IoRedisValkeyConnection`（ioredis・command 接続と subscribe 接続を分離・best-effort で投げない）/ `DisabledValkeyConnection`（null object）/ `createValkeyConnection(config)`（生成口）。`REDIS_URL` 未設定時は null object（no-op・read-model は常に miss=null）でフォールバックし、ローカル/テストは現状の in-process 動作のまま。UT は factory の2分岐（無効＝null object／有効＝実接続〔lazyConnect〕）
+- 【修正】`config.ts`：`valkey.url`（`REDIS_URL`・既定空＝無効）/ `role`（`ROLE`＝`all`|`worker`|`edge`・既定 `all`）追加（`REDIS_URL` は compose/Cloud Run に注入済み・アプリ未読込なら no-op）
+- 依存：`ioredis` は **root package.json** に追加（`Contexts/Shared` は root パッケージから相対 import で消費され、Mongo/Elastic ファクトリと同じ。task17 の `RedisSSEAlertNotifier` も `Contexts/Monitoring` 配下＝root なので backoffice backend には閉じない）
 
-### タスク 17: RedisSSEAlertNotifier（SSE Pub/Sub fan-out・案1）〔stretchⅠ〕
+### タスク 17: RedisSSEAlertNotifier（SSE Pub/Sub fan-out・案1）〔stretchⅠ〕　✅ 完了済み
 
-- 【新規】`AlertNotification/infrastructure/RedisSSEAlertNotifier.ts` implements `SSEAlertNotifier`（既存 IF をそのまま差し替え）
-  - worker 側 `notify()` / `notifyRemediation()` は Valkey channel に publish（名前付きイベント `alert` / `remediation` を payload に保持）
-  - edge 側は購読して **接続中の各 SSE クライアントへ fan-out**（既存 `AlertsStreamController` の EventEmitter を Valkey subscriber に接続）
+- 【新規】`AlertNotification/infrastructure/RedisSSEAlertNotifier.ts` implements `SSEAlertNotifier`（既存 IF をそのまま差し替え・UT 6件）
+  - `notify()` / `notifyRemediation()` は Valkey channel（`monitoring:sse:alert` / `monitoring:sse:remediation`）に publish。**ローカルへ直接書かず必ず publish し、購読ループを唯一の配信点にする**（worker/edge/all で配信経路が一貫）
+  - `startFanOut()`（edge/all で呼ぶ）が両 channel を購読し、受信を **接続中の各 SSE クライアントへ fan-out**（接続管理・SSE 書き込み・heartbeat は既存 `EventEmitterSSEAlertNotifier` に委譲＝composition で再利用）。worker は SSE クライアントを持たないので呼ばない（publish だけ）
+  - 受信時に既定イベント `alert` / 名前付き `remediation` を出し分け。壊れた非JSONは捨てる（best-effort）
+- 【修正】`BackofficeApp.ts`：notifier 選択を composition root に追加。`REDIS_URL` 設定時のみ `RedisSSEAlertNotifier` に載せ替え（`config.role !== "worker"` で `startFanOut`）。未設定（ローカル/テスト/all 既定）は従来 `EventEmitterSSEAlertNotifier` のまま。`stop()` で Valkey 接続を close
 - **`SSEAlertNotifier` IF・`AnalyzeAlertUseCase`/`InvestigateAlertUseCase`/`AlertsStreamController` はノータッチ**（composition root の差し替えのみ）。多インスタンス SSE が壊れない＝案1 の必然性が成立
-- Valkey down 時：publish は握りつぶし、edge は frontend 再接続時の再フェッチでギャップを埋める（best-effort liveness・§11.3）
+- Valkey down 時：publish は握りつぶし（`void`）、edge は frontend 再接続時の再フェッチでギャップを埋める（best-effort liveness・§11.3）
 
-### タスク 18: Alert read-model projection（CQRS read model in Redis・案②）〔stretchⅠ〕
+> **タスク19 の先取り（min-instances=0 化のため同時実装）**: edge を scale-to-zero にするには「edge が RabbitMQ consumer を張らない」ことが前提（GCE worker と購読を取り合わない）。そのため `BackofficeApp` の **subscriber 配線を `config.role !== "edge"` でゲート**した（edge は exchange だけ宣言して publish は可・consumer は張らない＝ingest→AnalyzeAlert が InvestigateAlert を worker へ流せる）。**IaC を `min_instances=1→0` ／ Cloud Run `ROLE=edge`＋`timeout=3600s`（SSE 長時間接続）／ GCE compose `ROLE=worker` に更新**。タスク19 の残り（edge のクエリ HTTP を health のみに絞る等の厳密化・projector 配線）は タスク18 と合流。
 
-- 【新規】Alert ライフサイクル DomainEvent（生成 / 分析中 / 調査完了 / dedup 更新 / feedback）を購読する **projector** が、`GET /alerts` 一覧スナップショットと `/alerts/:id` 詳細を Valkey に **upsert（alert id キー・冪等）**
-  - **書き込み順序**: SoT（Mongo）保存後に projection を派生。cache を真実の前段にしない（§11.3）
-  - at-least-once ＋ 冪等 upsert で projector クラッシュ後も再投影で自己回復（結果整合）。projection は再構築可能（§7.9 ForecastMemory と同原則）
-- 【修正】読み取り経路を **cache-aside**：`GetAlertUseCase` / 一覧 Controller が **Valkey hit→返す／miss・down→Mongo にフォールバックして再投入**。`AlertRepository`（Mongo）が常に真実
-  - 設計判断: read-model は `AlertReadModelStore` IF の裏に隔離。`REDIS_URL` 無効時は素通しで Mongo 直読（現状動作を壊さない）
-- 証拠（`/alerts/:id/evidence`）は §10 のとおり pull on-demand 維持。重い外部収集の TTL キャッシュは任意（時間が余れば）
+### タスク 18: Alert read-model projection（CQRS read model in Redis・案②）〔stretchⅠ〕　✅ 完了済み
 
-### タスク 19: worker / edge ロール分離 〔stretchⅠ〕
+- 【新規】`AlertAnalysis/infrastructure/readmodel/`：`AlertReadModelStore`（IF・read-model を隔離）/ `RedisAlertReadModelStore`（Valkey 実装・per-id `monitoring:readmodel:alert:<id>` ＋ 一覧 `monitoring:readmodel:alerts:all`・壊れJSONは miss 扱い）。UT 5件
+- 【新規】`AlertAnalysis/infrastructure/persistence/ReadModelCachingAlertRepository.ts`：**`AlertRepository` の cache-aside デコレータ**。UT 7件
+  - **書き込み順序**: `save` は inner(Mongo=SoT) 保存後に projection を派生（per-id upsert ＋ 一覧 invalidate）。cache を真実の前段にしない（§11.3）。一覧は incremental せず invalidate＝次回読み取りで Mongo から再構築（冪等・自己回復・再構築可能／§7.9 ForecastMemory と同原則）
+  - **読み取り cache-aside**: `findById` / `findByCriteria(フィルタ無し＝一覧)` は Valkey hit→返す／miss・down→Mongo にフォールバックして再投入。`findByCriteria(フィルタ付き)`・`findOpenByDedupKey` は書き込み経路の真実が要るので常に Mongo 直読
+  - Valkey 障害は `guard()` で握りつぶし、SoT(Mongo) 経路を壊さない（best-effort・「障害」でなく「性能劣化」）
+- 【修正】`BackofficeApp.ts`：`valkey.enabled` のときだけ `MongoAlertRepository` をデコレータで包む。無効時は素通し＝現状動作（Mongo 直読）を一切変えない
+- 証拠（`/alerts/:id/evidence`）は §10 のとおり pull on-demand 維持。重い外部収集の TTL キャッシュは任意（未実装）
+
+> **設計判断（todo からの変更）**: 当初案の「Alert ライフサイクル DomainEvent を購読する独立 projector」ではなく、**`AlertRepository` のキャッシュ・デコレータ**で実現した。既存コードは SSE も `sseNotifier.notify()` を UseCase から直接呼ぶ方式（DomainEvent 投影ではない）で、read-model だけ別途 RabbitMQ projector＋新キュー＋順序保証を足すのは過剰。デコレータなら **全 UseCase / Controller / `GetAlertUseCase` はノータッチ**（composition root の差し替えのみ＝タスク17 と同じ原則）で「SoT 保存後 projection / cache-aside / best-effort」を1箇所に隔離でき、`AlertReadModelStore` IF の裏に read-model を閉じ込められる。worker の `save` が Valkey を投影し、edge の読み取りが同じ Valkey を cache-aside でヒットする（共有 Valkey）。
+
+### タスク 19: worker / edge ロール分離 〔stretchⅠ〕　🟡 一部完了（subscriber ゲート＋IaC は タスク17 と同時着地）
+
+> **済**: `ROLE` による subscriber 配線ゲート（edge は consumer 非起動・publish 可）＋ notifier 出し分け（タスク17）＋ IaC（Cloud Run `ROLE=edge`/min0/timeout・GCE `ROLE=worker`）。
+> **残**: edge のクエリ HTTP を health のみに絞る厳密化、projector（タスク18）の worker 配線。
 
 - 【修正】`BackofficeApp.ts`：`ROLE` で起動を分岐
   - `worker`：RabbitMQ Subscriber（EC ingest / AnalyzeAlert / InvestigateAlert）＋ projector（タスク18）＋ `RedisSSEAlertNotifier`(publish 側)。クエリ HTTP は health のみ

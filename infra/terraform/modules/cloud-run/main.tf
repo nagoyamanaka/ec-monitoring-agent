@@ -18,6 +18,10 @@ locals {
     GOOGLE_CLOUD_PROJECT = var.project_id
     # デモシナリオが EC backend を叩く接続先（VPC connector 経由で GCE 内部 IP に到達）
     EC_BACKEND_URL = "http://${var.backbone_internal_ip}:3000"
+    # 配信エッジ役（クエリ/SSE）。RabbitMQ consumer は張らず（GCE worker が担う）、
+    # SSE は Valkey Pub/Sub を購読して fan-out する（RedisSSEAlertNotifier・task17/19）。
+    # これにより min-instances=0（scale-to-zero）にしても worker 側でイベント処理が継続する。
+    ROLE = "edge"
   }
   all_env = merge(local.computed_env, var.plain_env)
 }
@@ -40,7 +44,8 @@ resource "google_project_iam_member" "run" {
   member  = "serviceAccount:${google_service_account.run.email}"
 }
 
-# 配信エッジ（クエリ/SSE）。worker/edge のコード分離が入るまでは同一イメージを min/max=1 で運用する想定（§11.3 注記）。
+# 配信エッジ（クエリ/SSE）。worker/edge をコード分離（ROLE）した後は edge は RabbitMQ consumer を
+# 持たず GCE worker が常駐処理を担うため、min-instances=0（scale-to-zero）で運用できる（§11.3）。
 resource "google_cloud_run_v2_service" "edge" {
   project             = var.project_id
   name                = var.service_name
@@ -50,6 +55,10 @@ resource "google_cloud_run_v2_service" "edge" {
 
   template {
     service_account = google_service_account.run.email
+
+    # SSE 長時間接続のためリクエストタイムアウトを延長（Cloud Run v2 上限 3600s）。
+    # heartbeat 30s（AlertsStreamController）はアイドル切断を防ぐが、最大リクエスト時間の上限とは別。
+    timeout = "3600s"
 
     scaling {
       min_instance_count = var.min_instances

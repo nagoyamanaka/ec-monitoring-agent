@@ -81,5 +81,15 @@ export const config = {
       process.env.ELASTICSEARCH_SIMILAR_MIN_CONFIDENCE ?? 0.6,
     ),
   },
+  valkey: {
+    // 空なら無効＝null object でフォールバックし、in-process notifier（EventEmitterSSEAlertNotifier）/
+    // Mongo 直読のまま（現状動作を壊さない）。設定すると SSE Pub/Sub fan-out（task17）と
+    // read-model projection（task18）が有効化される。compose/Cloud Run に注入されていてもアプリ未読込なら no-op。
+    url: process.env.REDIS_URL ?? "",
+  },
+  // プロセスの起動ロール（task19 で分岐）。
+  // all = 単一プロセス（既定・ローカル/現状。Subscriber+クエリ+SSE を1プロセス）、
+  // worker = RabbitMQ Subscriber+projector+publish 側、edge = クエリ/SSE+subscribe 側。
+  role: (process.env.ROLE ?? "all") as "all" | "worker" | "edge",
   ingestToken: process.env.INGEST_TOKEN ?? "",
 } as const;
