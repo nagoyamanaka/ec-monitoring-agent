@@ -70,6 +70,8 @@ export function useEvidence(
     return () => {
       cancelled = true;
       controller.abort();
+      // キャンセル時は次回マウント（StrictMode 二重実行含む）で再取得できるよう null に戻す。
+      fetchedFor.current = null;
     };
   }, [api, alertId, done]);
 

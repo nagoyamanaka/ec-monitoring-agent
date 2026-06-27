@@ -18,7 +18,7 @@ export const config = {
     location: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
     // AI Studio フォールバック用（useVertexAI=false のときのみ使用）。
     apiKey: process.env.GEMINI_API_KEY ?? "",
-    model: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
+    model: process.env.GEMINI_MODEL ?? "gemini-2.5-pro",
   },
   ai: {
     // true で AI調査の LLM を StubLLMClient に差し替える（ローカルE2E用・Gemini課金なし）。最優先。

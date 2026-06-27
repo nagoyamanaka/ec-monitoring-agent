@@ -1,7 +1,10 @@
 locals {
-  ar_host          = "${var.region}-docker.pkg.dev"
-  image_ec         = coalesce(var.image_ec, "${local.ar_host}/${var.project_id}/${var.artifact_repo_id}/ec-backend:latest")
-  image_backoffice = coalesce(var.image_backoffice, "${local.ar_host}/${var.project_id}/${var.artifact_repo_id}/backoffice-backend:latest")
+  ar_host           = "${var.region}-docker.pkg.dev"
+  image_ec          = coalesce(var.image_ec, "${local.ar_host}/${var.project_id}/${var.artifact_repo_id}/ec-backend:latest")
+  image_backoffice  = coalesce(var.image_backoffice, "${local.ar_host}/${var.project_id}/${var.artifact_repo_id}/backoffice-backend:latest")
+  # 初回 apply 時は AR にイメージが存在しないため nginx:alpine をフォールバックに使用。
+  # 実イメージは CI（build-push-frontend）が push 後に `gcloud run services update` で差し替える。
+  image_frontend    = coalesce(var.image_frontend, "nginx:alpine")
 }
 
 # API 有効化 / Artifact Registry / deploy bucket / Secret 箱
@@ -56,6 +59,17 @@ module "cloud_run" {
   max_instances        = 1
 
   depends_on = [module.bootstrap]
+}
+
+# フロントエンド（nginx static + API リバースプロキシ）
+module "cloud_run_frontend" {
+  source           = "../../modules/cloud-run-frontend"
+  project_id       = var.project_id
+  region           = var.region
+  image            = local.image_frontend
+  backend_edge_url = module.cloud_run.service_uri
+
+  depends_on = [module.bootstrap, module.cloud_run]
 }
 
 # Cloud Monitoring webhook チャネル + サンプル Alerting Policy

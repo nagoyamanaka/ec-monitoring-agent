@@ -38,7 +38,6 @@ export function PaymentModeToggle({
       >
         {MODES.map((m) => {
           const selected = m.value === mode;
-          const running = busy === `payment:${m.value}`;
           return (
             <button
               key={m.value}

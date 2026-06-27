@@ -44,20 +44,51 @@ terraform apply
 ## apply 後にやること（値の注入・資材アップロード）
 
 1. **Secret の値を投入**（tf には平文を置かない）:
+
    ```bash
    printf '%s' "<ingest-token>" | gcloud secrets versions add INGEST_TOKEN --data-file=-
    ```
 
    - **Gemini は API キー不要**。Vertex AI 経由（`GOOGLE_GENAI_USE_VERTEXAI=true`）で呼び、認証は Cloud Run / GCE の SA（`roles/aiplatform.user` 付与済み）＝ADC。課金は GCP プロジェクト（＝$300 無料クレジット）に乗る。`GEMINI_API_KEY` Secret は作らない（AI Studio フォールバックを使う場合のみ手動で追加）。
    - モデルのリージョンは `GOOGLE_CLOUD_LOCATION`（既定 `global`）。リージョン固定したい場合は `asia-northeast1` 等に変更。
+
 2. **イメージを Artifact Registry に push**（`terraform output artifact_repo` のパスへ `ec-backend` / `backoffice-backend`）。
 3. **compose を deploy bucket にアップロード**（GCE startup-script が pull する）:
+
    ```bash
    gcloud storage cp docker-compose.prod.yml gs://$(terraform output -raw deploy_bucket)/docker-compose.prod.yml
    ```
 
    - GCE startup は `IMAGE_EC` / `IMAGE_BACKOFFICE` / `GCP_PROJECT_ID` を `.env` で渡す。compose 側で `image: ${IMAGE_EC}` 等を参照するか、build を image 参照に置き換える運用に寄せる。
+
 4. **GitHub Actions に WIF を設定**: `terraform output workload_identity_provider` と `deployer_sa_email` を repo の Variables（`WIF_PROVIDER` / `DEPLOYER_SA`）に登録（`.github/workflows/terraform.yml` 参照）。
+
+## デプロイフロー
+
+Terraform はインフラ（サービス設定・IAM・スケーリング）を管理し、**コンテナイメージの更新は CI または手動コマンドが担う**。
+
+| サービス | ランタイム | イメージ名 | CI ジョブ |
+|---|---|---|---|
+| ec-backend | GCE backbone（docker compose） | `ec-backend` | ※ CI 未整備・手動 |
+| backoffice-backend | GCE backbone + Cloud Run edge | `backoffice-backend` | ※ CI 未整備・手動 |
+| backoffice-frontend | Cloud Run（nginx） | `backoffice-frontend` | `build-push-frontend`（main push 自動） |
+
+**初回 `terraform apply` にイメージは不要**（frontend は `nginx:alpine` プレースホルダで起動、backbone はイメージプッシュ後に compose pull）。
+
+### 手動デプロイ（CI がない / 緊急時）
+
+[`manual_deploy.sh`](manual_deploy.sh) を使う。repo ルートからでも `infra/terraform/` からでも実行できる。
+デプロイ後は AR の untagged イメージを自動削除する。
+
+```bash
+# 単一サービス
+infra/terraform/manual_deploy.sh backoffice-frontend
+
+# 全サービス
+infra/terraform/manual_deploy.sh all
+```
+
+引数: `ec-backend` | `backoffice-backend` | `backoffice-frontend` | `all`
 
 ## 既知の wiring 注意点（コード側の後続作業）
 

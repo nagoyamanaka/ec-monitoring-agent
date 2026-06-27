@@ -1,5 +1,4 @@
 services:
-
   # ── GCE backbone のステートフル層 ─────────────────────────
   # Cloud Run edge から VPC connector 越しに到達できるよう内部ポートを公開する。
   # 公開先 IP は VM 内部 IP、到達範囲は firewall（subnet / connector CIDR）で絞る（step4-1-strategy §11.1）。
@@ -46,7 +45,7 @@ services:
       GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-true}
       GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT_ID}
       GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-pro}
       # 検知 ingest（Cloud Monitoring webhook）認証トークン（§11.2）
       INGEST_TOKEN: ${INGEST_TOKEN}
       # SimilarPatternRule（graded confidence 分類）用

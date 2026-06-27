@@ -24,7 +24,7 @@ export class GeminiLLMClient implements LLMTextClient {
   private readonly modelName: string;
 
   constructor() {
-    this.modelName = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+    this.modelName = process.env.GEMINI_MODEL ?? "gemini-2.5-pro";
 
     if (process.env.GOOGLE_GENAI_USE_VERTEXAI === "true") {
       const project =

@@ -241,8 +241,6 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 
 ### タスク 19: worker / edge ロール分離 〔stretchⅠ〕
 
-メモ: ハッカソンスコープだと、wokerとapiを分離するのは過剰？roi低い？
-
 - 【修正】`BackofficeApp.ts`：`ROLE` で起動を分岐
   - `worker`：RabbitMQ Subscriber（EC ingest / AnalyzeAlert / InvestigateAlert）＋ projector（タスク18）＋ `RedisSSEAlertNotifier`(publish 側)。クエリ HTTP は health のみ
   - `edge`：クエリ / SSE ルートのみ。RabbitMQ Subscriber を起動しない。`RedisSSEAlertNotifier`(subscribe 側) ＋ read-model 読み取り

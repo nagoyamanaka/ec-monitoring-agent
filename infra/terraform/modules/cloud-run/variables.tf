@@ -53,7 +53,7 @@ variable "plain_env" {
   type        = map(string)
   description = "非機密の環境変数（computed_env とマージ）"
   default = {
-    GEMINI_MODEL = "gemini-2.0-flash"
+    GEMINI_MODEL = "gemini-2.5-pro"
     # Gemini を Vertex AI 経由（ADC 認証＝アタッチ SA、無料クレジット適用）で呼ぶ。
     # project は computed_env の GOOGLE_CLOUD_PROJECT、認証は run SA の roles/aiplatform.user。
     GOOGLE_GENAI_USE_VERTEXAI = "true"
@@ -63,7 +63,8 @@ variable "plain_env" {
     RABBITMQ_PASS             = "guest"
     RABBITMQ_VHOST            = "/"
     EXCHANGE_NAME             = "ec-domain-events"
-    DEMO_ENABLED              = "false"
+    DEMO_ENABLED              = "true"
+    DEMO_PRODUCT_ID           = "11111111-1111-4111-8111-111111111111"
   }
 }
 

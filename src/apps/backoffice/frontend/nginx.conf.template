@@ -1,0 +1,64 @@
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SSE: proxy_buffering off + 長めの read timeout で EventSource が途切れない
+    location ~ ^/alerts/stream {
+        proxy_pass ${BACKEND_EDGE_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400s;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_ssl_server_name on;
+    }
+
+    # SPA ルートと衝突するパス: ブラウザナビゲーション（Accept: text/html）は index.html へ
+    # fetch / EventSource はそのままバックエンドへ転送（vite proxy の bypass と同じ挙動）
+    #
+    # 同一 URL を Accept で出し分けるため、ブラウザ HTTP キャッシュが HTML と JSON を
+    # 取り違えないよう no-store を必ず付与する（Vary: Accept は値の揺れに弱く不十分）。
+    # これが無いと、/alerts ページのリロードで index.html がこの URL でキャッシュされ、
+    # 直後の fetch('/alerts') がそのキャッシュ（HTML）を読んで res.alerts が undefined になる。
+    location ~ ^/(alerts|analytics) {
+        proxy_hide_header Cache-Control;
+        add_header Cache-Control "no-store" always;
+        if ($http_accept ~* "text/html") {
+            rewrite ^ /index.html last;
+        }
+        proxy_pass ${BACKEND_EDGE_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_ssl_server_name on;
+    }
+
+    # API 専用パス（対応する SPA ルートなし）
+    location ~ ^/(demo|patterns|forecast|health) {
+        proxy_pass ${BACKEND_EDGE_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $proxy_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_ssl_server_name on;
+    }
+
+    # SPA シェルはキャッシュさせない（ハッシュ付き assets は別途キャッシュ可）。
+    # 上の rewrite ^ /index.html last もこの exact location に着地するため、
+    # ナビゲーション応答の index.html が /alerts URL でキャッシュされるのを防ぐ。
+    location = /index.html {
+        add_header Cache-Control "no-store" always;
+    }
+
+    # SPA fallback
+    location / {
+        try_files $uri /index.html;
+    }
+}

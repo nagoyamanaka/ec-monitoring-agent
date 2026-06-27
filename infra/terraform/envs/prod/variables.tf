@@ -37,3 +37,8 @@ variable "image_backoffice" {
   type    = string
   default = null
 }
+
+variable "image_frontend" {
+  type    = string
+  default = null
+}
