@@ -1,10 +1,10 @@
 locals {
-  ar_host           = "${var.region}-docker.pkg.dev"
-  image_ec          = coalesce(var.image_ec, "${local.ar_host}/${var.project_id}/${var.artifact_repo_id}/ec-backend:latest")
-  image_backoffice  = coalesce(var.image_backoffice, "${local.ar_host}/${var.project_id}/${var.artifact_repo_id}/backoffice-backend:latest")
+  ar_host          = "${var.region}-docker.pkg.dev"
+  image_ec         = coalesce(var.image_ec, "${local.ar_host}/${var.project_id}/${var.artifact_repo_id}/ec-backend:latest")
+  image_backoffice = coalesce(var.image_backoffice, "${local.ar_host}/${var.project_id}/${var.artifact_repo_id}/backoffice-backend:latest")
   # 初回 apply 時は AR にイメージが存在しないため nginx:alpine をフォールバックに使用。
   # 実イメージは CI（build-push-frontend）が push 後に `gcloud run services update` で差し替える。
-  image_frontend    = coalesce(var.image_frontend, "nginx:alpine")
+  image_frontend = coalesce(var.image_frontend, "nginx:alpine")
 }
 
 # API 有効化 / Artifact Registry / deploy bucket / Secret 箱
