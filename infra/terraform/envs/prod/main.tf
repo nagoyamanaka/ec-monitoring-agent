@@ -55,8 +55,10 @@ module "cloud_run" {
   image                = local.image_backoffice
   vpc_connector_id     = module.networking.connector_id
   backbone_internal_ip = module.gce_backbone.internal_ip
-  min_instances        = 1
-  max_instances        = 1
+  # edge は ROLE=edge（consumer を張らない）＋ Valkey Pub/Sub fan-out なので scale-to-zero 可。
+  # 常駐 RabbitMQ Subscriber は GCE worker（ROLE=worker）が担う。
+  min_instances = 0
+  max_instances = 2
 
   depends_on = [module.bootstrap]
 }
