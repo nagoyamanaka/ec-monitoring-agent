@@ -63,7 +63,8 @@ variable "plain_env" {
     RABBITMQ_PASS             = "guest"
     RABBITMQ_VHOST            = "/"
     EXCHANGE_NAME             = "ec-domain-events"
-    DEMO_ENABLED              = "false"
+    DEMO_ENABLED              = "true"
+    DEMO_PRODUCT_ID           = "11111111-1111-4111-8111-111111111111"
   }
 }
 

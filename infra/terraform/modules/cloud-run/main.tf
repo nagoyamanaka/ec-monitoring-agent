@@ -16,6 +16,8 @@ locals {
     RABBITMQ_HOST     = var.backbone_internal_ip
     # Vertex AI（ADC）が課金紐付けに使う project。GEMINI_API_KEY は不要。
     GOOGLE_CLOUD_PROJECT = var.project_id
+    # デモシナリオが EC backend を叩く接続先（VPC connector 経由で GCE 内部 IP に到達）
+    EC_BACKEND_URL = "http://${var.backbone_internal_ip}:3000"
   }
   all_env = merge(local.computed_env, var.plain_env)
 }
