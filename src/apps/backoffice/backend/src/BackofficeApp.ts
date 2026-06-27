@@ -382,24 +382,30 @@ export class BackofficeApp {
     );
 
     this.server = new Server(config.port);
-    registerRoutes(
-      this.server.router,
-      commandBus,
-      queryBus,
-      sseNotifier,
-      {
-        ecDemoGateway,
-        triggerScenarioUseCase,
-        demoResetUseCase,
-      },
-      {
-        // Cloud Monitoring 等の検知ソースからの ingest（EC イベントと同じ観測パイプラインに合流）。
-        collectMonitoringEventUseCase,
-        // CI(AIリメディジョブ)からの結果 callback。
-        recordRemediationResultUseCase,
-        ingestToken: config.ingestToken,
-      },
-    );
+    // ロール分離（stretchⅠ・タスク19）: worker は HTTP のクエリ/SSE/ingest を提供せず、
+    // RabbitMQ consume ＋ read-model projection（alertRepository.save 経由＝タスク18 のデコレータ）に
+    // 専念する。`/health`（server.ts で常時登録）だけ生かして Cloud Run/GCE の healthcheck に応える。
+    // edge/all は従来どおり全ルートを登録する（edge=公開 HTTP・all=単一プロセス）。
+    if (config.role !== "worker") {
+      registerRoutes(
+        this.server.router,
+        commandBus,
+        queryBus,
+        sseNotifier,
+        {
+          ecDemoGateway,
+          triggerScenarioUseCase,
+          demoResetUseCase,
+        },
+        {
+          // Cloud Monitoring 等の検知ソースからの ingest（EC イベントと同じ観測パイプラインに合流）。
+          collectMonitoringEventUseCase,
+          // CI(AIリメディジョブ)からの結果 callback。
+          recordRemediationResultUseCase,
+          ingestToken: config.ingestToken,
+        },
+      );
+    }
   }
 
   async start(): Promise<void> {

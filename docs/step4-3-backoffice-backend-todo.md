@@ -247,20 +247,27 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 
 > **設計判断（todo からの変更）**: 当初案の「Alert ライフサイクル DomainEvent を購読する独立 projector」ではなく、**`AlertRepository` のキャッシュ・デコレータ**で実現した。既存コードは SSE も `sseNotifier.notify()` を UseCase から直接呼ぶ方式（DomainEvent 投影ではない）で、read-model だけ別途 RabbitMQ projector＋新キュー＋順序保証を足すのは過剰。デコレータなら **全 UseCase / Controller / `GetAlertUseCase` はノータッチ**（composition root の差し替えのみ＝タスク17 と同じ原則）で「SoT 保存後 projection / cache-aside / best-effort」を1箇所に隔離でき、`AlertReadModelStore` IF の裏に read-model を閉じ込められる。worker の `save` が Valkey を投影し、edge の読み取りが同じ Valkey を cache-aside でヒットする（共有 Valkey）。
 
-### タスク 19: worker / edge ロール分離 〔stretchⅠ〕　🟡 一部完了（subscriber ゲート＋IaC は タスク17 と同時着地）
+### タスク 19: worker / edge ロール分離 〔stretchⅠ〕　✅ 完了済み
 
-> **済**: `ROLE` による subscriber 配線ゲート（edge は consumer 非起動・publish 可）＋ notifier 出し分け（タスク17）＋ IaC（Cloud Run `ROLE=edge`/min0/timeout・GCE `ROLE=worker`）。
-> **残**: edge のクエリ HTTP を health のみに絞る厳密化、projector（タスク18）の worker 配線。
+> **済（タスク17 と同時着地）**: `ROLE` による subscriber 配線ゲート（edge は consumer 非起動・publish 可）＋ notifier 出し分け（タスク17）＋ IaC（Cloud Run `ROLE=edge`/min0/timeout・GCE `ROLE=worker`）。
+> **済（本タスクで仕上げ）**: worker の HTTP を `/health` のみに絞る厳密化（`config.role !== "worker"` で `registerRoutes` をスキップ）。
+> **projector の worker 配線について**: タスク18 を独立 projector でなく `ReadModelCachingAlertRepository`（cache-aside デコレータ）で実現したため、追加配線は不要。worker の `alertRepository.save`（InvestigateAlert 更新）と edge の初回 `save`（ingest→AnalyzeAlert）が同じデコレータ経由で共有 Valkey に projection し、edge の読み取りが cache-aside でヒットする（タスク18 の設計判断参照）。
 
 - 【修正】`BackofficeApp.ts`：`ROLE` で起動を分岐
-  - `worker`：RabbitMQ Subscriber（EC ingest / AnalyzeAlert / InvestigateAlert）＋ projector（タスク18）＋ `RedisSSEAlertNotifier`(publish 側)。クエリ HTTP は health のみ
-  - `edge`：クエリ / SSE ルートのみ。RabbitMQ Subscriber を起動しない。`RedisSSEAlertNotifier`(subscribe 側) ＋ read-model 読み取り
+  - `worker`：RabbitMQ Subscriber（EC ingest / AnalyzeAlert / InvestigateAlert）＋ read-model projection（`save` 経由）＋ `RedisSSEAlertNotifier`(publish 側)。HTTP は `/health` のみ（`registerRoutes` を呼ばない）
+  - `edge`：クエリ / SSE / ingest ルート。RabbitMQ Subscriber を起動しない（`consumeEvents=false`・exchange だけ宣言して publish 可）。`RedisSSEAlertNotifier`(subscribe 側＝`startFanOut`) ＋ read-model 読み取り
   - `all`（既定・ローカル/現状）：両方を1プロセス（in-process notifier・Mongo 直読でも可）
 - **Cloud Run edge=`ROLE=edge` / GCE worker=`ROLE=worker`**（§11.1）。既存の単一プロセス（`all`）起動を壊さない段階移行
 
-### タスク 20: 検知 webhook トークン互換（B 残作業）〔stretchⅠ〕→ **step4-5 T1 へ移動**
+### タスク 20: 検知 webhook トークン互換（B 残作業）〔stretchⅠ〕→ **step4-5 T1 で完了済み ✅**
 
-> デプロイ垂直疎通の前提条件のため `docs/step4-5-backoffice-infra.todo.md` タスク T1 に移動・集約した。内容はそちらを正とする。
+> **このタスクが何をするか**: Cloud Monitoring の Alerting webhook（`webhook_tokenauth`）は認証トークンを **URL クエリ `?token=`** に付与して送ってくる（`infra/terraform/modules/monitoring/main.tf` の選択肢(a)）。一方 `CloudMonitoringAlertIngestController` は当初 `x-ingest-token` **ヘッダのみ**を検証していたため、そのままでは「監視→ingest」の疎通が原理的に通らなかった。これを **ヘッダ または `?token=` クエリのどちらか一致で 200/202 通過**するよう拡張するのが本タスク。`INGEST_TOKEN`（既存 config）単一ソースで、terraform の `secret_env` 注入値と一致させる。
+>
+> **「B 残作業」の意味**: 検知 webhook 結線は A=terraform 側（`webhook_tokenauth` チャネルが `?token=` を送る・実装済み）／ B=アプリ側（コントローラが `?token=` を受理する・本タスク）の2段。A は IaC スケルトンで先に入っていたため、残っていた B（アプリ側受理）をこのタスクで埋める、という意味。terraform コメントの選択肢(a)＝コントローラ拡張を採用（(b) basicauth 切替は不採用）。
+>
+> **移動先・正となる記述**: デプロイ垂直疎通の前提条件のため `docs/step4-5-backoffice-infra.todo.md` の **「タスク T1: ingest コントローラの URL クエリトークン対応 〔P0〕✅」** に移動・集約した（タイトルが変わっているため検索時は "URL クエリトークン" で引くこと）。内容はそちらを正とする。
+>
+> **実装状況**: ✅ 完了済み。[`CloudMonitoringAlertIngestController.run()`](../src/apps/backoffice/backend/src/controllers/ingest/CloudMonitoringAlertIngestController.ts) が header／`?token=` クエリの両経路を受理し、不一致は 401。`SecurityScanIngestPostController`（CI が叩く側＝ヘッダ送出可能）はヘッダ前提のまま。T1 のテスト項目（`ingest.int.test.ts` の `?token=` 受理／不一致 401）も含め step4-5 T1 で完結している。
 
 ---
 
