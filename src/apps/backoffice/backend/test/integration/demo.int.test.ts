@@ -6,8 +6,10 @@ import { startApp } from "./support.js";
 
 /**
  * routes/demoRoutes.ts に 1:1 対応。
- * POST /demo/payment-mode / /demo/scenario/:id/trigger / /demo/reset / GET /demo/status。
- * payment-mode と scenario は EC backend を叩くため ecDemoGateway を vi.fn に差し替える。
+ * POST /demo/scenario/:id/trigger / /demo/reset / GET /demo/status。
+ * scenario は EC backend を叩くため ecDemoGateway を vi.fn に差し替える
+ * （シナリオ内部で setPaymentMode/setInventoryMode/placeOrder/injectInfraFault を呼ぶ）。
+ * 決済モードの単独エンドポイントは廃止（シナリオ注入が EC へ内部設定する方針）。
  * （DEMO_ENABLED=true は vitest.integration.config.ts で設定済み＝demoGuard を通す。）
  */
 describe("demoRoutes (integration)", () => {
@@ -32,18 +34,11 @@ describe("demoRoutes (integration)", () => {
     await app?.stop();
   });
 
-  it("POST /demo/payment-mode は EC へ中継し mode を返す", async () => {
-    const res = await request(app.httpApp).post("/demo/payment-mode").send({ mode: "TIMEOUT" });
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ mode: "TIMEOUT" });
-    expect(setPaymentMode).toHaveBeenCalledWith("TIMEOUT");
-  });
-
   it("POST /demo/scenario/:id/trigger は既知シナリオで 202、未知で 400", async () => {
     const ok = await request(app.httpApp).post("/demo/scenario/payment-timeout/trigger").send();
     expect(ok.status).toBe(202);
     expect(ok.body).toMatchObject({ scenarioId: "payment-timeout" });
+    expect(setPaymentMode).toHaveBeenCalledWith("TIMEOUT");
     expect(placeOrder).toHaveBeenCalledTimes(1);
 
     const bad = await request(app.httpApp).post("/demo/scenario/bogus/trigger").send();

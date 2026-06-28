@@ -20,7 +20,6 @@ function fakeApi(overrides: Partial<DemoApi> = {}): DemoApi {
     triggerScenario: vi
       .fn()
       .mockResolvedValue({ scenarioId: "1", label: "決済タイムアウト", orderId: "o-1" }),
-    setPaymentMode: vi.fn().mockResolvedValue(undefined),
     reset: vi.fn().mockResolvedValue({ alertsSeeded: 2, patternsSeeded: 4 }),
     ...overrides,
   };
@@ -62,19 +61,6 @@ describe("useDemoControls", () => {
 
     expect(api.triggerScenario).toHaveBeenCalledWith("1");
     await waitFor(() => expect(result.current.status?.totalAlerts).toBe(3));
-  });
-
-  it("決済モード切替で paymentMode を更新する", async () => {
-    const api = fakeApi();
-    const { result } = renderHook(() => useDemoControls(api));
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    await act(async () => {
-      await result.current.setPaymentMode("TIMEOUT");
-    });
-
-    expect(api.setPaymentMode).toHaveBeenCalledWith("TIMEOUT");
-    expect(result.current.paymentMode).toBe("TIMEOUT");
   });
 
   it("操作失敗は error に載せる", async () => {

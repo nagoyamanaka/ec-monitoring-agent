@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HttpError } from "@shared/api/HttpClient";
-import type {
-  DemoApi,
-  DemoStatus,
-  PaymentMode,
-} from "../../infrastructure/demoApi";
+import type { DemoApi, DemoStatus } from "../../infrastructure/demoApi";
 
 export interface UseDemoControls {
   /** デモが有効か（/demo/status が 404 でない）。false ならドロワーを出さない。 */
@@ -13,12 +9,9 @@ export interface UseDemoControls {
   readonly loading: boolean;
   readonly status: DemoStatus | null;
   readonly error: Error | null;
-  /** 実行中アクションの識別子（例 "scenario:1"・"payment:TIMEOUT"・"reset"）。null なら待機中。 */
+  /** 実行中アクションの識別子（例 "scenario:1"・"reset"）。null なら待機中。 */
   readonly busy: string | null;
-  /** 決済モードトグルの選択値（楽観的なローカル状態）。 */
-  readonly paymentMode: PaymentMode;
   triggerScenario(id: string): Promise<void>;
-  setPaymentMode(mode: PaymentMode): Promise<void>;
   reset(): Promise<void>;
   refresh(): Promise<void>;
 }
@@ -38,7 +31,6 @@ export function useDemoControls(
   const [status, setStatus] = useState<DemoStatus | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [paymentMode, setPaymentModeState] = useState<PaymentMode>("SUCCESS");
 
   // unmount 後の setState を避けるためのフラグ。
   const mountedRef = useRef(true);
@@ -110,15 +102,6 @@ export function useDemoControls(
     [api, runAction],
   );
 
-  const setPaymentMode = useCallback(
-    (mode: PaymentMode) =>
-      runAction(`payment:${mode}`, async () => {
-        await api.setPaymentMode(mode);
-        if (mountedRef.current) setPaymentModeState(mode);
-      }),
-    [api, runAction],
-  );
-
   const reset = useCallback(
     () =>
       runAction("reset", async () => {
@@ -134,9 +117,7 @@ export function useDemoControls(
     status,
     error,
     busy,
-    paymentMode,
     triggerScenario,
-    setPaymentMode,
     reset,
     refresh,
   };
