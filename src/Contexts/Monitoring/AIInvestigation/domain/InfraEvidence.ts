@@ -5,7 +5,32 @@ export type AppLogEntry = {
   readonly resource: string;
 };
 
+export type TerraformResourceAction = "create" | "update" | "delete" | "replace";
+
+// 1リソースの1属性の変化。機微値の漏洩を避けるため before/after は文字列化済みの要約値で持つ。
+export type TerraformAttributeDelta = {
+  readonly key: string;
+  readonly before: string | null;
+  readonly after: string | null;
+};
+
+// terraform apply で実際に変わった1リソース。git diff（HCL 上の意図）ではなく適用後の事実。
+export type TerraformResourceChange = {
+  readonly address: string; // 例: google_sql_database_instance.main
+  readonly action: TerraformResourceAction;
+  readonly attributeDeltas: TerraformAttributeDelta[];
+};
+
+// terraform apply の適用差分。git commit（誰が/なぜ＝意図）と相補で、「実際に稼働インフラが何に変わったか」を表す。
+// apply は CI 上の一回限りのイベントで後から再構成できないため、適用時に捕捉・保存したものを時間窓で引く。
+// Date を含まない（appliedAt は ISO 文字列）ので Primitives は本型をそのまま再利用する。
 export type TerraformDiff = {
+  readonly resourceChanges: TerraformResourceChange[];
+  // この差分が実際に適用された時刻（ISO 8601）。
+  readonly appliedAt: string;
+  // 由来コミット。join キーではなく apply イベントの一属性として保持する。
+  readonly commitSha?: string;
+  // 変更されたリソースアドレス一覧（resourceChanges から導出する表示/空判定用の便宜フィールド）。
   readonly changedResources: string[];
   readonly summary: string;
 };

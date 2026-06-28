@@ -18,7 +18,25 @@ export type EvidenceLogView = {
   readonly resource: string;
 };
 
+export type EvidenceTerraformAction = "create" | "update" | "delete" | "replace";
+
+export type EvidenceTerraformDeltaView = {
+  readonly key: string;
+  readonly before: string | null;
+  readonly after: string | null;
+};
+
+export type EvidenceTerraformChangeView = {
+  readonly address: string;
+  readonly action: EvidenceTerraformAction;
+  readonly attributeDeltas: EvidenceTerraformDeltaView[];
+};
+
 export type EvidenceTerraformView = {
+  readonly resourceChanges: EvidenceTerraformChangeView[];
+  /** 適用時刻（ISO 文字列・表示側で整形）。 */
+  readonly appliedAt: string;
+  readonly commitSha: string | null;
   readonly changedResources: string[];
   readonly summary: string;
 };
@@ -59,6 +77,17 @@ export function toEvidenceView(dto: InfraEvidencePrimitives): EvidenceView {
     })),
     terraformDiff: dto.terraformDiff
       ? {
+          resourceChanges: dto.terraformDiff.resourceChanges.map((c) => ({
+            address: c.address,
+            action: c.action,
+            attributeDeltas: c.attributeDeltas.map((d) => ({
+              key: d.key,
+              before: d.before,
+              after: d.after,
+            })),
+          })),
+          appliedAt: dto.terraformDiff.appliedAt,
+          commitSha: dto.terraformDiff.commitSha ?? null,
           changedResources: dto.terraformDiff.changedResources,
           summary: dto.terraformDiff.summary,
         }

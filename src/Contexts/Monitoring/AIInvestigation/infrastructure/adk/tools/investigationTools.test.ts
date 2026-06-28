@@ -157,6 +157,16 @@ describe("fetch_app_logs", () => {
 
 describe("fetch_terraform_diff", () => {
   const DIFF: TerraformDiff = {
+    resourceChanges: [
+      {
+        address: "aws_instance.web",
+        action: "update",
+        attributeDeltas: [
+          { key: "instance_type", before: "m5.large", after: "t3.micro" },
+        ],
+      },
+    ],
+    appliedAt: "2026-01-01T00:00:00.000Z",
     changedResources: ["aws_instance.web"],
     summary: "EC2 インスタンスタイプ変更",
   };
@@ -172,6 +182,7 @@ describe("fetch_terraform_diff", () => {
   it("null のときフォールバックオブジェクトを返す", async () => {
     const result = await call(tool(1), { sinceIso: ISO });
     expect(result).toEqual({
+      resourceChanges: [],
       changedResources: [],
       summary: "適用済みの差分なし",
     });

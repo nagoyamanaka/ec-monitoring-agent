@@ -313,6 +313,22 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 
 > デプロイ着地後の任意タスクのため `docs/step4-5-backoffice-infra.todo.md` タスク T13 に移動・集約した。内容はそちらを正とする。
 
+### タスク 33: Terraform 証拠を「変更ファイル名」→「apply 適用差分（イベント捕捉）」へ格上げ 〔stretchⅠ〕✅ 完了済み
+
+> 背景: 旧 `TerraformGatewayImpl` は IaC リポジトリの `git log --name-only *.tf` で「どのファイルが触られたか」を集めていた。これは*意図*（コミット済み≠apply 済み）であって AI 原因分析にとって弱い。価値があるのは「どのリソースのどの属性が（before→after）変わったか」という*適用された事実*。インフラ障害シナリオ（デモ4）では terraform 差分が文字通り root cause になるため、ここを厚くする。
+> 設計のキモ: メトリクス/ログ/コミットは「後から時間窓でライブ照会」できるが、**terraform apply の差分だけは後から再構成できない**（apply は CI 上の一回限りのイベント）。よって git join ではなく**適用の瞬間にイベントとして捕捉して保存**し、調査は既存の `since` 時間窓で引く（検知ソースの peer ingest と同じ思想）。git sha は join キーでなく apply イベントの一属性。
+
+- 【完了】`domain/InfraEvidence.ts`: `TerraformDiff` を構造化（`resourceChanges: { address, action: create|update|delete|replace, attributeDeltas: {key, before, after}[] }[]` ＋ `appliedAt`(ISO) ＋ optional `commitSha`）。`changedResources`/`summary` は表示/空判定用の便宜フィールドとして維持（`resourceChanges` から導出）。Date を含まないので Primitives は本型をそのまま再利用（ワイヤ契約は無改造）。
+- 【完了】`infrastructure/infrainvestigation/AppliedInfraChangeStore.ts`（IF＋`AppliedInfraChange` 型・`record`/`findAppliedSince`）／`InMemoryAppliedInfraChangeStore.ts`（単一プロセス・新しい順返却）。実機では CI からの HTTP ingest（`terraform show -json`）を上流に差し替える受け皿。
+- 【完了】`TerraformGatewayImpl` を「git log 後追い」→「store から窓内最新の apply を引く」へ全面差し替え（IF `getAppliedDiff({since})` は不変なので ADK ランナー/`DefaultInfraInvestigationAdapter` の結線はノータッチ）。UT 追加（窓外無視/最新採用/address 導出）。
+- 【完了】composition root（`BackofficeApp`）: `InMemoryAppliedInfraChangeStore` を1インスタンス生成し、調査 read（terraformGateway）と demo write（`TriggerDemoScenarioUseCase`）で共有。
+- 【完了】`TriggerDemoScenarioUseCase`: infra-fault シナリオで注入の前に代表 apply（Cloud SQL の `tier` ダウングレード＋`max_connections` 100→20＝接続枯渇の起点）を `record`。実機の CI apply 記録をデモで合成する位置づけ。
+- 【完了】ADK `fetch_terraform_diff` ツール: 空フォールバックを新形（`resourceChanges: []`）に更新＋description を「どの属性が before→after」へ。
+- 【完了】frontend `EvidenceView`/`EvidencePanel`: `resourceChanges` を写像し、action バッジ＋`key: before → after` を表示（原因分析の決定打を可視化）。`commitSha`/適用時刻も併記。UT 更新。
+- 設計判断（git commit は置き換えない）: apply＝「実際に何が変わったか」、commit＝「誰が/なぜ＝意図」で別問。`recentCommits` は SECURITY 証拠源として従来どおり残し、相補関係にする。
+- 設計判断（最新1件採用）: 窓内に複数 apply があれば直近（障害に時間的に最も近い）を採用。集約は混乱を生むため見送り。
+- 全テスト緑（root＋frontend 609 件）。
+
 ---
 
 ## stretchⅡ: 予兆ブリーフィング（reactive → proactive）

@@ -76,7 +76,7 @@ export function buildInvestigationTools(deps: InvestigationToolDeps): FunctionTo
   const fetchTerraformDiff = new FunctionTool({
     name: "fetch_terraform_diff",
     description:
-      "指定日時以降に適用済みの Terraform/IaC 差分を読み取り専用で取得する。インフラ/設定変更が原因か疑うときに使う。",
+      "指定日時以降に適用済みの Terraform/IaC 差分を読み取り専用で取得する。どのリソースのどの属性が（before→after）変わったかが分かる。インフラ/設定変更が原因か疑うときに使う。",
     parameters: z.object({
       sinceIso: z.string().describe("この時刻以降の適用差分を見る（ISO 8601）"),
     }),
@@ -85,7 +85,13 @@ export function buildInvestigationTools(deps: InvestigationToolDeps): FunctionTo
         const diff = await deps.terraformGateway.getAppliedDiff({
           since: parseIso(sinceIso),
         });
-        return diff ?? { changedResources: [], summary: "適用済みの差分なし" };
+        return (
+          diff ?? {
+            resourceChanges: [],
+            changedResources: [],
+            summary: "適用済みの差分なし",
+          }
+        );
       }),
   });
 

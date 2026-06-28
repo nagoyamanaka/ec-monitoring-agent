@@ -53,6 +53,7 @@ import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitorin
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
 import { CloudMonitoringGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudMonitoringGatewayImpl.js";
 import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/TerraformGatewayImpl.js";
+import { InMemoryAppliedInfraChangeStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryAppliedInfraChangeStore.js";
 import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/GitHubGatewayImpl.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
 import { RedisSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/RedisSSEAlertNotifier.js";
@@ -165,7 +166,11 @@ export class BackofficeApp {
     // ADK版（エージェントの狙い撃ちツール）で共有する。
     const cloudLoggingGateway = new CloudLoggingGatewayImpl();
     const cloudMonitoringGateway = new CloudMonitoringGatewayImpl();
-    const terraformGateway = new TerraformGatewayImpl();
+    // apply 時に捕捉した IaC 変更イベントの保管。調査（terraformGateway 経由 read）と
+    // demo 注入（TriggerDemoScenarioUseCase 経由 write）で同一インスタンスを共有する。
+    // 実機では CI からの HTTP ingest を上流に差し込み、本ストアはその受け皿になる。
+    const appliedInfraChangeStore = new InMemoryAppliedInfraChangeStore();
+    const terraformGateway = new TerraformGatewayImpl(appliedInfraChangeStore);
     const githubGateway = new GitHubGatewayImpl(
       config.github.token,
       config.github.targetRepo,
@@ -377,7 +382,11 @@ export class BackofficeApp {
 
     const ecDemoGateway =
       this.overrides.ecDemoGateway ?? new HttpEcDemoGateway(config.demo.ecBackendUrl);
-    const triggerScenarioUseCase = new TriggerDemoScenarioUseCase(ecDemoGateway, config.demo.productId);
+    const triggerScenarioUseCase = new TriggerDemoScenarioUseCase(
+      ecDemoGateway,
+      config.demo.productId,
+      appliedInfraChangeStore,
+    );
     const demoResetUseCase = new DemoResetUseCase(
       new MongoDemoDataAdapter(mongoClient),
       knownErrorPatternRepository,

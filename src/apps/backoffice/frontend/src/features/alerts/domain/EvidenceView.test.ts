@@ -19,6 +19,16 @@ function makePrimitives(
       },
     ],
     terraformDiff: {
+      resourceChanges: [
+        {
+          address: "aws_db_instance.main",
+          action: "update",
+          attributeDeltas: [
+            { key: "max_connections", before: "100", after: "20" },
+          ],
+        },
+      ],
+      appliedAt: "2026-01-01T00:00:00.000Z",
       changedResources: ["aws_db_instance.main"],
       summary: "max_connections を縮小",
     },
@@ -44,6 +54,12 @@ describe("toEvidenceView", () => {
     });
     expect(view.recentCommits[0].shortSha).toBe("0123456");
     expect(view.terraformDiff?.summary).toBe("max_connections を縮小");
+    // 構造化された resourceChanges（before→after）が写像される。
+    expect(view.terraformDiff?.resourceChanges[0]).toEqual({
+      address: "aws_db_instance.main",
+      action: "update",
+      attributeDeltas: [{ key: "max_connections", before: "100", after: "20" }],
+    });
   });
 
   it("optional な terraformDiff / recentCommits / metrics 欠落を null / [] に正規化する", () => {
@@ -114,7 +130,12 @@ describe("evidenceSections", () => {
     const view = toEvidenceView(
       makePrimitives({
         appLogs: [],
-        terraformDiff: { changedResources: [], summary: "差分なし" },
+        terraformDiff: {
+          resourceChanges: [],
+          appliedAt: "2026-01-01T00:00:00.000Z",
+          changedResources: [],
+          summary: "差分なし",
+        },
         recentCommits: [],
       }),
     );

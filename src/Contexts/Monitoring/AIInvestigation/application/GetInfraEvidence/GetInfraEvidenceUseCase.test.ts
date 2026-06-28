@@ -37,7 +37,18 @@ const makeEvidence = (): InfraEvidence => ({
       resource: "cloudrun/ec-backend",
     },
   ],
-  terraformDiff: { changedResources: ["module.db"], summary: "pool size 10→5" },
+  terraformDiff: {
+    resourceChanges: [
+      {
+        address: "module.db",
+        action: "update",
+        attributeDeltas: [{ key: "pool_size", before: "10", after: "5" }],
+      },
+    ],
+    appliedAt: "2026-01-01T00:00:10.000Z",
+    changedResources: ["module.db"],
+    summary: "pool size 10→5",
+  },
   recentCommits: [
     {
       sha: "abc123",

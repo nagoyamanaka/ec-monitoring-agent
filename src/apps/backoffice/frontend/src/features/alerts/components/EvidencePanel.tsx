@@ -4,6 +4,7 @@ import type { AlertView } from "../domain/AlertView";
 import {
   type EvidenceLogLevel,
   type EvidenceSection,
+  type EvidenceTerraformAction,
   evidenceSections,
 } from "../domain/EvidenceView";
 import type { EvidenceApi } from "../infrastructure/evidenceApi";
@@ -38,6 +39,13 @@ const LOG_LEVEL_CLASS: Record<EvidenceLogLevel, string> = {
   ERROR: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
   WARNING: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
   INFO: "bg-slate-600/20 text-slate-300 ring-slate-500/30",
+};
+
+const TF_ACTION_CLASS: Record<EvidenceTerraformAction, string> = {
+  create: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+  update: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
+  replace: "bg-orange-500/15 text-orange-300 ring-orange-500/30",
+  delete: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
 };
 
 function formatTime(iso: string): string {
@@ -84,7 +92,9 @@ function SectionHeader({ kind }: { kind: EvidenceSection["kind"] }) {
 function sectionSlotCount(section: EvidenceSection): number {
   if (section.kind === "logs") return 1 + section.logs.length;
   if (section.kind === "metrics") return 1 + section.metrics.length;
-  if (section.kind === "terraform") return 1 + 1; // diff ブロック 1 つ
+  // summary 行 ＋ 変更リソース 1 行/件（無ければ chips の 1 行）。
+  if (section.kind === "terraform")
+    return 1 + 1 + Math.max(section.diff.resourceChanges.length, 1);
   return 1 + section.commits.length;
 }
 
@@ -180,6 +190,7 @@ function EvidenceSectionView({
   }
 
   if (section.kind === "terraform") {
+    const { diff } = section;
     return (
       <div className="space-y-2">
         <Rise index={baseIndex}>
@@ -189,20 +200,63 @@ function EvidenceSectionView({
           index={baseIndex + 1}
           className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
         >
-          <p className="text-xs text-slate-100">{section.diff.summary}</p>
-          {section.diff.changedResources.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-1.5">
-              {section.diff.changedResources.map((r, i) => (
-                <li
-                  key={i}
-                  className="rounded bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-amber-200"
-                >
-                  {r}
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="text-xs text-slate-100">{diff.summary}</p>
+          <p className="mt-1 text-[11px] text-slate-500">
+            適用 {formatTime(diff.appliedAt)}
+            {diff.commitSha ? ` · ${diff.commitSha.slice(0, 7)}` : ""}
+          </p>
         </Rise>
+        {diff.resourceChanges.length > 0
+          ? diff.resourceChanges.map((change, i) => (
+              <Rise
+                key={change.address}
+                index={baseIndex + 2 + i}
+                className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset",
+                      TF_ACTION_CLASS[change.action],
+                    )}
+                  >
+                    {change.action}
+                  </span>
+                  <code className="font-mono text-[11px] text-amber-200">
+                    {change.address}
+                  </code>
+                </div>
+                {change.attributeDeltas.length > 0 && (
+                  <ul className="mt-1.5 space-y-1">
+                    {change.attributeDeltas.map((d, j) => (
+                      <li key={j} className="font-mono text-[11px] text-slate-300">
+                        <span className="text-slate-400">{d.key}:</span>{" "}
+                        <span className="text-rose-300">{d.before ?? "—"}</span>
+                        <span className="text-slate-500"> → </span>
+                        <span className="text-emerald-300">{d.after ?? "—"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Rise>
+            ))
+          : diff.changedResources.length > 0 && (
+              <Rise
+                index={baseIndex + 2}
+                className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+              >
+                <ul className="flex flex-wrap gap-1.5">
+                  {diff.changedResources.map((r, i) => (
+                    <li
+                      key={i}
+                      className="rounded bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-amber-200"
+                    >
+                      {r}
+                    </li>
+                  ))}
+                </ul>
+              </Rise>
+            )}
       </div>
     );
   }
