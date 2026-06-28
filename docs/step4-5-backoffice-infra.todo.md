@@ -159,7 +159,7 @@
 
 ## Phase 3: GCP ネイティブ可観測性の仕上げ（#5 / #6）
 
-### タスク T10: Cloud Trace 書込権限の付与（cloudtrace.agent）〔P1〕
+### タスク T10: Cloud Trace 書込権限の付与（cloudtrace.agent）〔P1〕✅
 
 > 前提: Phase 1 完了。**トレースが出ない根本原因の修正**（§2 穴3）。terraform のみ。
 
@@ -167,7 +167,7 @@
 - 【修正】`modules/gce-backbone/main.tf` の `google_project_iam_member.vm` の for_each にも **`roles/cloudtrace.agent`** を追加（worker は GCE で動くため）
 - 理由: 現状 SA は logWriter/metricWriter/aiplatform.user 止まりで、`start.ts` の Cloud Trace exporter が書き込めない
 
-### タスク T11: OTel 自動計装の導入 〔P1〕
+### タスク T11: OTel 自動計装の導入 〔P1〕✅
 
 > 前提: T10（権限）。これでトレースに中身が入る。
 

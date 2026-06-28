@@ -1,11 +1,18 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { TraceExporter } from "@google-cloud/opentelemetry-cloud-trace-exporter";
+import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { BackofficeApp } from "./BackofficeApp.js";
 import { GcpCloudLoggingLogger } from "../../../../Contexts/Shared/infrastructure/logging/GcpCloudLoggingLogger.js";
 
 const sdk = new NodeSDK({
   serviceName: "backoffice-backend",
   traceExporter: new TraceExporter(),
+  instrumentations: [
+    getNodeAutoInstrumentations({
+      // fs 計装はスパン数が爆発するため無効化
+      "@opentelemetry/instrumentation-fs": { enabled: false },
+    }),
+  ],
 });
 
 sdk.start();
