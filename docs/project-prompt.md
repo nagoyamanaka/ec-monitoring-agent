@@ -1,4 +1,4 @@
-# 設計エージェント向けプロンプト v19
+# 設計エージェント向けプロンプト v19.1
 
 > **変更履歴（v18→v19）**
 > 検知境界（detection boundary）を明文化。検知基盤に Cloud Monitoring を採用（Datadog 不採用＝有料・物語矛盾／Cloud Monitoring は無料枠・GCP 要件加点）。
@@ -143,13 +143,13 @@ src/Contexts/
 │   └── Shared/
 ├── Monitoring/
 │   ├── AlertAnalysis/
-│   ├── AIInvestigation/
-│   │   ├── InfraInvestigation/        ← インフラ横断調査（v12追加・read-only Gateway）
-│   │   ├── Remediation/               ← 自律リメディエーション（v13追加・PR起票のwrite隔離）
-│   │   └── infrastructure/adk/        ← ADKマルチエージェント（Coordinator + 専門agent。a2a不使用）
-│   ├── Forecast/                      ← 予兆（stretchⅡ=現行シグナル×記憶 / stretchⅢ=イベントログ予知ビュー。v18整理）
-│   ├── EventLog/                      ← ログベース・イベントソーシング基盤（stretchⅢ・全DomainEvent追記の一次資料。v18追加・設計のみ）
-│   └── ReportGeneration/
+│   ├── AIInvestigation/               ← 実体は infrastructure 配下に内包（下記）
+│   │   ├── infrastructure/infrainvestigation/ ← インフラ横断調査（read-only Gateway群）【実装済み】
+│   │   ├── infrastructure/remediation/        ← 自律リメディエーション（PR起票のwrite隔離）【実装済み】
+│   │   └── infrastructure/adk/        ← ADKマルチエージェント（a2a不使用）【実装済み】
+│   ├── Forecast/                      ← 予兆（stretchⅡ）【未実装・設計のみ】
+│   ├── EventLog/                      ← イベントソーシング基盤（stretchⅢ）【未実装・設計のみ】
+│   └── ReportGeneration/             ← 【未実装・設計のみ。レポート生成は AlertAnalysis/GetAlertReport が担当】
 └── Shared/
 ```
 
@@ -172,7 +172,7 @@ RabbitMQ
   │         ├─ 成功 → InventoryReservedDomainEvent
   │         └─ 失敗 → InventoryReservationFailedDomainEvent
   ├─ CompensateOrderOnInventoryFailed → OrderをFAILEDに遷移
-  └─ CollectMonitoringEventOnECDomainEvent → AlertAnalysis → AI分析 → SSE push
+  └─ CollectMonitoringEventOnECEventPublished → AlertAnalysis → AI分析 → SSE push
 ```
 
 ---
@@ -411,6 +411,11 @@ interface InfraEvidence {
 
 「DevOps × AI Agent」の DevOps 半分を担うフロー。調査(read)とリメディエーション(write)の分離原則のもと、**AIが調査し修正PRを起票、人間がレビュー・承認**する。
 
+> **デモ実演の2経路（2026-06-29 整理）**:
+>
+> - **デモ卓 合成シナリオ5（脆弱性検知）**: DEMO CONSOLE のボタン押下で `TriggerDemoScenarioUseCase` が `SecurityScanTranslator`→`CollectMonitoringEventUseCase`（= 実 `/ingest/security-scan` と同一の変換・分類・調査経路）に合成ペイロードを直接通す。即時・確実で INITIALIZE DEMO で戻る。シナリオ1〜4と同じ「backend 経路を持つ合成注入」（偽ボタンではない）。ライブ実演はこちらを使う。
+> - **本物のCI証明（別役割）**: 実在依存を既知CVE版に pin した PR → 実 Trivy → 実 ingest。最も忠実だが、`ci.yml` は現状 `on: push: branches:[main]` のみで **PR では発火せず main merge の push でのみ走る**（PR時点で出すなら `pull_request:` トリガ追加が必要）。さらに `INGEST_URL`/`INGEST_TOKEN` + デプロイ済み到達可能 backend + 実在 HIGH/CRITICAL が揃って初めて検知が成立。レポート/PR の実リンクはライブでは出せない割り切り（実演コスパ優先）で、ナレーションで明示する。
+
 ```
 1. GitHub Actions（CI）が Trivy / npm audit を実行
 2. HIGH以上の脆弱性を検出 → POST /ingest/security-scan で backoffice へ送信
@@ -425,6 +430,7 @@ interface InfraEvidence {
 ```
 
 > リメディの実行は2モード（`RemediationExecutor` で差し替え、`config.remediation.mode`）:
+>
 > - **advisory**（既定・CI不要）: in-process で方針テキストのみ生成し `SECURITY_REMEDIATION.md` の草案PR。実コードは直さない（人間が直す前提）。
 > - **dispatch**（agentic・本命）: `repository_dispatch(ai-remediation)` で GitHub Actions（`.github/workflows/ai-remediation.yml`）へ投げ、**ランナー上でAIエージェント(Gemini CLI/差替可)が実コード修正→trivy再スキャン+UT/E2E が緑→draft PR**。**修正精度はテストゲートで担保**（APIサーバ内では実コードを書かない）。非同期のため起票時は `dispatched`、CI完了時に `POST /ingest/remediation-result` で `drafted`/`failed` に確定。過去のローカル版（Trivyローカルスキャン+Copilot Agent プロンプト）の CI/CD 化に相当。
 >
@@ -434,7 +440,14 @@ interface InfraEvidence {
 >
 > 〔将来P1〕dispatch＋検証ループの **AI調査**への展開構想あり（`step4-3` タスク16・未実装）。ただし「障害＝コードデグレ＝コード修正」は誤りで、根本原因カテゴリにより修正ターゲット（アプリのコード→PR+UT / 自前IaC→Terraform PR+`terraform plan` / 外部起因→runbook+エスカレーション・自動修正対象外）と検証ゲートが変わる。設計の中心は検証ループでなく **修正ターゲットのルーティング**。トークン多消費＋上限必須のため効果見極め後に着手。
 
-### シナリオ6：予兆ブリーフィング（stretchⅡ・v15追加）
+### シナリオ6: 脆弱性検知
+
+trivyによる脆弱性検知
+
+### シナリオXX：予兆ブリーフィング（stretchⅡ・v15追加）
+
+> **2026-06-29 実コード照合: 未実装**（設計案のみ。`Monitoring/Forecast/` 配下のコードは現状存在しない）。
+> 以下は構想記述として残す。着手時は step1 の Forecast ツリーごと新規作成する。
 
 reactive（事後対応）から **proactive（事前予防）** へのシフトレフト。統計MLではなく **既知の未来シグナル × 蓄積記憶 の LLM推論＋引用検証** で根拠付き予報を出す。録画前提（ライブ安定化コスト不要）。
 
@@ -551,13 +564,16 @@ AlertClassifier（インターフェース）← AnalyzeAlertCommandHandler は�
 
 ### AIInvestigationPort 設計方針（GCP要件段階移行）
 
+> **2026-06-29 実装状況**: フェーズ0（Gemini直接）とフェーズ2（ADK）は**実装済み**。フェーズ1 `VertexLLMClient` は未実装で、テスト/デモ用に `StubLLMClient`（`AI_INVESTIGATION_STUB=true` で決定的応答）が存在する。
+
 ```
 AIInvestigationPort（インターフェース）← Application層が依存する抽象
   ├─ LLMInvestigationAdapter            ← オーケストレーション（プロバイダ非依存・全フェーズ共通）
   │     └─ LLMTextClient（DI）          ← text in → text out のプロバイダ抽象
-  │           ├─ GeminiLLMClient        ← フェーズ0：ハッカソン本体（Gemini API直接）
-  │           └─ VertexLLMClient        ← フェーズ1：Vertex AI SDK経由（推奨経路）
-  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADK構成（自前オーケストレーション・Portを直接実装・a2a不使用）
+  │           ├─ GeminiLLMClient        ← フェーズ0：ハッカソン本体（Gemini API直接）【実装済み】
+  │           ├─ StubLLMClient          ← テスト/デモ用の決定的スタブ（AI_INVESTIGATION_STUB）【実装済み】
+  │           └─ VertexLLMClient        ← フェーズ1：Vertex AI SDK経由（推奨経路）【未実装】
+  └─ ADKAgentInvestigationAdapter      ← フェーズ2：ADK構成（自前オーケストレーション・Portを直接実装・a2a不使用）【実装済み】
 ```
 
 ### AlertClassification VOの設計原則（OCP適用）
@@ -893,6 +909,15 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(
 ---
 
 ## 変更履歴
+
+### v19.1（2026-06-29 実コード照合・ドキュメント最新化）
+
+実コード > step4系 > step1〜3/project-prompt を正の基準に、後追いの旧記述を実体へ寄せた。
+
+- シナリオ5: デモ卓 合成シナリオ（`SecurityScanTranslator`→`CollectMonitoringEventUseCase`・即時/確実）と、本物CI証明（`ci.yml` は PR 非発火・main merge 限定 + secrets/デプロイ前提）の**役割分離**を明記。レポート実リンクは出せない割り切りも明文化。
+- AIInvestigationPort: ADK（フェーズ2）は実装済み、`VertexLLMClient`（フェーズ1）は未実装で `StubLLMClient` が代替、と実装状況を注記。
+- シナリオXX（予兆/Forecast）: 未実装（設計案のみ）であることを明示。
+- 連動して step1（`Monitoring/Remediation` の AIInvestigation 内包・`Forecast` 未実装・ADK 実装済み）、step2（Payment コンテキスト・`InventoryFailureReason` VO化・補償フロー追記）、step3（`CollectMonitoringEventOnECEventPublished` への改名/再配置・実キュー名）を修正。
 
 ### v18（予兆を stretchⅡ＝現行 / stretchⅢ＝イベントソーシング予知ビュー に再構成）
 

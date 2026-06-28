@@ -1,7 +1,15 @@
 # Step 1: ディレクトリ構成（詳細設計）
 
-> 本ドキュメントは設計エージェント向けプロンプト v9 の Step 1 詳細設計です。
+> 本ドキュメントは設計エージェント向けプロンプト由来の Step 1 詳細設計です。
 > 元資料の設計背景・制約・ハッカソン要件は元資料を参照してください。
+>
+> **2026-06-29 実コード照合**: Monitoring コンテキストの構成が当初設計から進化したため、以下を実体に合わせて修正済み。
+> - `Monitoring/Remediation/`（top-level）は廃止 → `AIInvestigation/{domain,infrastructure}/remediation/` に内包。
+> - `Monitoring/Forecast/`（stretchⅡ・予兆）は**未実装**（設計案のみ。現コードに存在しない）。
+> - ADK マルチエージェントは「将来実装」ではなく**実装済み**（`AIInvestigation/infrastructure/adk/`）。
+> - `VertexLLMClient` は未実装。代わりに `StubLLMClient`（`AI_INVESTIGATION_STUB` 用）が存在。
+>
+> ファイル単位の最新の正準は step4 系（特に `step4-2-monitoring-context.md`）を参照。
 
 ---
 
@@ -220,16 +228,24 @@ src/Contexts/Monitoring/
 │   │   ├── CollectMonitoringEvent/            # 観測イベント収集（ingest）ユースケース。AnalyzeAlertとは責務が別なので独立フォルダ
 │   │   │   ├── CollectMonitoringEventUseCase.ts            # 源非依存：MonitoringEvent → AnalyzeAlertCommand 生成 → ハンドラ委譲
 │   │   │   ├── CollectMonitoringEventSubscriber.ts         # 抽象基底（テンプレートメソッド）。源固有差分は subscribedTo()/toMonitoringEvent() のみ＝OCP
-│   │   │   └── CollectMonitoringEventOnECEventPublished.ts # EC源アダプタ：EC DomainEvent → MonitoringEvent 変換（橋渡し）
-│   │   └── SubmitFeedback/
-│   │       ├── SubmitFeedbackCommand.ts
-│   │       └── SubmitFeedbackCommandHandler.ts # フィードバック受付・既知昇格トリガー・レポートレビュー結果の記録
+│   │   │   ├── CollectMonitoringEventOnECEventPublished.ts # EC源アダプタ：EC DomainEvent → MonitoringEvent 変換（橋渡し）
+│   │   │   ├── CloudMonitoringAlertTranslator.ts          # Cloud Monitoring 源アダプタ（ingest 境界で正規化）
+│   │   │   └── SecurityScanTranslator.ts                  # CI(Trivy/npm audit) 源アダプタ（ingest 境界で正規化）
+│   │   ├── SubmitFeedback/                    # フィードバック受付・レポートレビュー結果の記録
+│   │   ├── PromotePattern/                    # フィードバック起点の既知パターン自動昇格
+│   │   ├── GetAlert/ GetAlertReport/          # CQRS Read（一覧・詳細・調査レポート）
+│   │   ├── GetKnownErrorPatterns/             # CQRS Read（既知パターン一覧）
+│   │   ├── GetAnalytics/                      # CQRS Read（分類精度・件数の分析ビュー）
+│   │   └── errors/                            # AlertAnalysis 固有のアプリ層エラー
+│   ├── domain/
+│   │   ├── classification/                    # 【実装済み】AlertClassifier 3層（policies/ ＋ rules/）
+│   │   ├── promotion/                         # 既知昇格ドメインロジック
+│   │   └── contracts/                         # front/back 共有のワイヤ契約 re-export
 │   └── infrastructure/
-│       └── persistence/
-│           ├── InMemoryAlertRepository.ts
-│           ├── InMemoryKnownErrorPatternRepository.ts
-│           ├── MongoAlertRepository.ts
-│           └── MongoKnownErrorPatternRepository.ts
+│       ├── persistence/
+│       │   ├── InMemory/Mongo AlertRepository.ts
+│       │   └── InMemory/Mongo KnownErrorPatternRepository.ts
+│       └── readmodel/                         # 一覧/詳細用 read-model 投影（save デコレータ経由）
 │       # Subscriber本体は application/CollectMonitoringEvent/ に配置（CompensateOrderOnInventoryFailed と同じく application 層）。
 │       # DomainEventBus への配線は app の合成ルート src/apps/backoffice/backend/src/subscribers/ で行う
 │
@@ -268,60 +284,29 @@ src/Contexts/Monitoring/
 │       ├── infrainvestigation/               # InfraInvestigationPort 実装 + ACL 内部 Gateway 群
 │       │   ├── CloudLoggingGateway.ts        #   Gateway IF（ACL 内部シーム。DefaultInfraInvestigationAdapter のみが依存）
 │       │   ├── CloudLoggingGatewayImpl.ts    #   Cloud Logging API（read-only）
-│       │   ├── GitHubGateway.ts              #   Gateway IF（ACL 内部シーム）
-│       │   │                                 #     ※ 予兆(stretchⅡ)で listOpenPullRequests()（未マージPR）を追加。read-only維持
-│       │   ├── GitHubGatewayImpl.ts          #   GitHub REST API（read-only）
-│       │   ├── TerraformGateway.ts           #   Gateway IF（ACL 内部シーム）
-│       │   │                                 #     ※ 予兆(stretchⅡ)で getPendingPlan()（未適用plan）を追加。read-only維持
-│       │   ├── TerraformGatewayImpl.ts       #   Terraform CLI / git diff（read-only）
+│       │   ├── CloudMonitoringGateway.ts     #   Gateway IF（メトリクス取得）
+│       │   ├── CloudMonitoringGatewayImpl.ts #   Cloud Monitoring API（read-only・メトリクス証拠）
+│       │   ├── GitHubGateway.ts / GitHubGatewayImpl.ts      #   GitHub REST API（read-only）
+│       │   ├── TerraformGateway.ts / TerraformGatewayImpl.ts #   Terraform CLI / git diff（read-only・適用済み差分）
+│       │   ├── AppliedInfraChangeStore.ts    #   適用済み IaC 変更の記録ポート（demo 注入と TerraformGateway が共有）
+│       │   ├── InMemoryAppliedInfraChangeStore.ts
 │       │   └── DefaultInfraInvestigationAdapter.ts  # InfraInvestigationPort 実装（category 別に証拠源を出し分け）
 │       │
-│       ├── VertexLLMClient.ts                 # 【将来実装・フェーズ1】LLMTextClient実装
-│       │                                      # @google-cloud/vertexai（Vertex AI SDK）経由
-│       │                                      # LLMInvestigationAdapter に注入する部品の差し替えのみ。Application層もアダプタもノータッチ
-│       │                                      # 移行トリガー：ハッカソン審査後・ポートフォリオ強化フェーズ
-│       │                                      # 審査員評価：「推奨」項目（Vertex AI経由）を達成できる
+│       ├── remediation/                       # 自律リメディエーション（write 操作を隔離。旧 Monitoring/Remediation を内包）
+│       │   ├── RemediationPort 実装群:
+│       │   ├── GitHubActionsRemediationDispatcher.ts # repository_dispatch で ai-remediation.yml を起動
+│       │   ├── GitHubPullRequestGateway.ts    # PR 草案（人間承認ゲート。GITHUB_TOKEN 必須・対象リポジトリ限定）
+│       │   ├── InProcessAdvisoryRemediation.ts # CI を起動せずプロセス内で助言のみ返す実装
+│       │   ├── LLMRemediationPlanner.ts        # RemediationPlanner 実装（LLM で修正方針を立案）
+│       │   └── InMemory/MongoRemediationRepository.ts # 起票結果の永続化
 │       │
-│       └── adk/                              # 【将来実装・フェーズ2】ADKマルチエージェント（a2a不使用・1プロセス内）
-│           ├── ADKAgentInvestigationAdapter.ts # AIInvestigationPort実装。Coordinatorを起動するだけ
-│           │                                  # ※ 単純なtext-in/text-outでなく自前のオーケストレーションを持つため
-│           │                                  #   LLMInvestigationAdapter/LLMTextClient は経由せず Port を直接実装する
-│           │                                  # InvestigateAlertOnAlertClassifiedUnknown は完全にノータッチ
-│           │                                  # 審査員評価：「ADK」項目達成・マルチエージェントの必然性を提示
-│           ├── InvestigationCoordinator.ts    # オーケストレータ。category でサブエージェントをディスパッチ・統合
-│           ├── EvidenceCollectorAgent.ts      # 証拠の横断収集（infrainvestigation/ の各Gatewayをtoolとして保持）
-│           ├── RootCauseAnalystAgent.ts       # category別プロンプトで原因仮説・確信度・追加収集の判断（自律ループ）
-│           └── RemediationPlannerAgent.ts     # 推奨アクション・修正方針・PR草案（SECURITY時はRemediationPortへ）
-│
-├── Remediation/                               # 自律リメディエーション（v13）。write操作を隔離
-│   ├── domain/
-│   │   ├── RemediationPort.ts                 # draftPullRequest(plan)。マージはしない（人間承認ゲート）
-│   │   └── RemediationPlan.ts                 # title / branch / fileChanges / body
-│   └── infrastructure/
-│       └── GitHubPullRequestGateway.ts        # RemediationPort実装。GITHUB_TOKEN必須・対象リポジトリを環境変数で限定
-│
-├── Forecast/                                   # 予兆ブリーフィング（stretchⅡ）。反応的パイプライン無傷の追加レイヤー・全て read-only
-│   ├── domain/
-│   │   ├── ForecastSignal.ts                  # 異種ソースを共通の突合軸に正規化する器（subject/when/desc）
-│   │   │                                       #   ForecastSignalKind: FUTURE_CHANGE / SCHEDULE / MEMORY
-│   │   ├── RiskForecast.ts                     # 出力 read-model（RiskItem[]・level降順）。Alertではない（起点イベント無し・未発生）
-│   │   ├── RiskLevel.ts                        # Value Object（HIGH / MEDIUM / LOW）
-│   │   ├── Schedule.ts                         # ScheduleWindow（負荷窓・セール予定）。現状どこにも無い完全新規概念
-│   │   ├── ScheduleSource.ts                  # スケジュール取得インターフェース（list(horizon)・read-only）
-│   │   ├── ForecastMemory.ts                  # 突合キー(B)：過去インシデントにsubjectタグを構造化付与する投影
-│   │   │                                       #   ForecastMemoryRepository（findBySubjects / warmUp）
-│   │   └── ForecastPort.ts                     # AI予報ポート（forecast(context): RiskForecast）
-│   │                                           #   ※ プロンプトで citations 必須を強制（引用縛り）
-│   ├── application/
-│   │   └── ForecastRisk/
-│   │       ├── ForecastRiskCommand.ts
-│   │       └── ForecastRiskCommandHandler.ts   # 未来シグナル収集→正規化→Port→★引用検証（偽引用を落とす）→保存
-│   │                                           #   依存は全て read-only（write無し）
-│   └── infrastructure/
-│       ├── GeminiForecastAdapter.ts            # ForecastPort実装。GeminiLLMClient踏襲・citations: string[]固定
-│       ├── SeedScheduleSource.ts               # ScheduleSource実装（seed JSON/config。本番はカレンダー/負荷予測連携に差し替え）
-│       └── persistence/
-│           └── InMemoryForecastMemoryRepository.ts # 起動時にMongoのResolvedからsubject投影をウォームアップ
+│       └── adk/                              # 【実装済み】ADKマルチエージェント（a2a不使用・1プロセス内）
+│           ├── ADKAgentInvestigationAdapter.ts # AIInvestigationPort実装。Runner を起動するだけ（Port 直接実装）
+│           ├── ADKInvestigationAgentRunner.ts  # ADK ランタイムでエージェントを走らせる本体
+│           ├── InvestigationAgentRunner.ts     # ランナー抽象（テストで差し替え可能）
+│           ├── agents/                         # サブエージェント定義（証拠収集・原因分析・リメディ立案）
+│           └── tools/                          # エージェントが使う tool 群（infrainvestigation の Gateway を委譲）
+│       # ※ StubLLMClient.ts（aiinvestigation/）が AI_INVESTIGATION_STUB=true 時の決定的応答を担う（VertexLLMClient は未実装）
 │
 ├── AlertNotification/
 │   ├── domain/
@@ -340,7 +325,7 @@ src/Contexts/Monitoring/
 
 ### AlertClassifier 拡張ロードマップ（Policy / Rule / Sorter・仮完成後の優先実装）
 
-分類は3層（`AlertClassifier`（IF）→ `ClassificationPolicy`（category単位）→ `ClassificationRule`（最小単位・依存を内包））。拡張は「Classifier 丸ごと差し替え」ではなく「**Policy に Rule を足す**」。各 Rule は `kind`（EXACT_MATCH/SIMILARITY/INFERENCE）を持ち、`ClassificationRuleSorter` が kind 優先順位で並べる。
+分類は3層（`AlertClassifier`（IF）→ `ClassificationPolicy`（category単位）→ `ClassificationRule`（最小単位・依存を内包））。**3層の骨格と `KnownPatternRule`（EXACT_MATCH）は実装済み**（`domain/classification/{policies,rules}/`）。以下は今後の拡張ロードマップ。拡張は「Classifier 丸ごと差し替え」ではなく「**Policy に Rule を足す**」。各 Rule は `kind`（EXACT_MATCH/SIMILARITY/INFERENCE）を持ち、`ClassificationRuleSorter` が kind 優先順位で並べる。
 
 ```
 PolicyBasedAlertClassifier（AlertClassifier 実装）
