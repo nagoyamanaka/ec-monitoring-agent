@@ -17,6 +17,11 @@ export interface RelatedAlertsPanelProps {
    * 渡されると関連先の日時/severity/タイトルを補完する。無い・未解決でもリンクは出す。
    */
   lookup?: (id: string) => AlertView | undefined;
+  /**
+   * 関連アラートを開くハンドラ（任意）。渡されると行はルート遷移せず本関数で選択を差し替える
+   * ＝デモの舞台に留まったまま辿れる。無ければ `/alerts/:id` への `Link`（従来）にフォールバック。
+   */
+  onNavigate?: (id: string) => void;
   className?: string;
 }
 
@@ -25,13 +30,39 @@ function formatTime(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
-function RelatedAlertRow({ related }: { related: RelatedAlertView }) {
+const ROW_CLASS =
+  "block w-full rounded-md border border-slate-700/60 bg-slate-800/30 px-3 py-2.5 text-left transition hover:border-cyan-500/40 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400";
+
+function RelatedAlertRow({
+  related,
+  onNavigate,
+}: {
+  related: RelatedAlertView;
+  onNavigate?: (id: string) => void;
+}) {
   const title = related.resolved && related.title ? eventTitle(related.title) : null;
+  const body = <RelatedAlertBody related={related} title={title} />;
+  // onNavigate あり＝舞台に留まって選択差し替え（button）。無ければ詳細ページへの Link。
+  return onNavigate ? (
+    <button type="button" onClick={() => onNavigate(related.alertId)} className={ROW_CLASS}>
+      {body}
+    </button>
+  ) : (
+    <Link to={`/alerts/${encodeURIComponent(related.alertId)}`} className={ROW_CLASS}>
+      {body}
+    </Link>
+  );
+}
+
+function RelatedAlertBody({
+  related,
+  title,
+}: {
+  related: RelatedAlertView;
+  title: string | null;
+}) {
   return (
-    <Link
-      to={`/alerts/${encodeURIComponent(related.alertId)}`}
-      className="block rounded-md border border-slate-700/60 bg-slate-800/30 px-3 py-2.5 transition hover:border-cyan-500/40 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-    >
+    <>
       <div className="flex items-center gap-2">
         <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
           {related.relationLabel}
@@ -57,7 +88,7 @@ function RelatedAlertRow({ related }: { related: RelatedAlertView }) {
         <span aria-hidden>🔗</span>
         詳細を開く
       </span>
-    </Link>
+    </>
   );
 }
 
@@ -68,6 +99,7 @@ function RelatedAlertRow({ related }: { related: RelatedAlertView }) {
 export function RelatedAlertsPanel({
   alert,
   lookup,
+  onNavigate,
   className,
 }: RelatedAlertsPanelProps) {
   const refs = collectRelatedRefs(alert);
@@ -90,7 +122,7 @@ export function RelatedAlertsPanel({
       </p>
       <div className="space-y-2">
         {related.map((r) => (
-          <RelatedAlertRow key={r.alertId} related={r} />
+          <RelatedAlertRow key={r.alertId} related={r} onNavigate={onNavigate} />
         ))}
       </div>
     </section>

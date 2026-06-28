@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { RelatedAlertsPanel } from "./RelatedAlertsPanel";
 import { makeAlert, makeReport } from "../test-support/alertFixture";
@@ -64,6 +64,27 @@ describe("RelatedAlertsPanel", () => {
 
     expect(screen.getByText("同型")).toBeInTheDocument();
     expect(screen.getByRole("link")).toHaveAttribute("href", "/alerts/past-1");
+  });
+
+  it("onNavigate ありなら Link でなく button を出し、クリックで alertId を渡す（舞台に留まる）", () => {
+    const onNavigate = vi.fn();
+    const alert = makeAlert({
+      report: makeReport({
+        relatedAlerts: [
+          { alertId: "related-1", relation: "downstream", rationale: "波及" },
+        ],
+      }),
+    });
+
+    render(
+      <MemoryRouter>
+        <RelatedAlertsPanel alert={alert} onNavigate={onNavigate} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button"));
+    expect(onNavigate).toHaveBeenCalledWith("related-1");
   });
 
   it("lookup で解決できると関連先の severity を補完する", () => {

@@ -43,6 +43,12 @@ export interface AlertDetailDrawerProps {
   pushedRemediation?: RemediationView | null;
   /** 関連アラートの alertId → AlertView 解決（一覧から渡す。関連の日時/severity 補完用）。 */
   relatedLookup?: (id: string) => AlertView | undefined;
+  /**
+   * 関連アラートを開く（任意）。渡されると関連行はルート遷移せず本ハンドラで選択を差し替える
+   * ＝デモの舞台（/alerts）に留まったまま探索でき、戻るで前のドロワーに復元できる。
+   * 無い場合（詳細ページ等）は従来どおり `/alerts/:id` への `Link` にフォールバックする。
+   */
+  onRelatedNavigate?: (id: string) => void;
 }
 
 function formatAbsoluteTime(iso: string): string {
@@ -65,6 +71,7 @@ export function AlertDetailDrawer({
   remediationApi,
   pushedRemediation,
   relatedLookup,
+  onRelatedNavigate,
 }: AlertDetailDrawerProps) {
   useEffect(() => {
     if (!alert) return;
@@ -183,7 +190,11 @@ export function AlertDetailDrawer({
             onDecision={onDecision}
             onReinvestigate={onReinvestigate}
           />
-          <RelatedAlertsPanel alert={alert} lookup={relatedLookup} />
+          <RelatedAlertsPanel
+            alert={alert}
+            lookup={relatedLookup}
+            onNavigate={onRelatedNavigate}
+          />
           {remediationApi && (
             <RemediationPanel
               alert={alert}
