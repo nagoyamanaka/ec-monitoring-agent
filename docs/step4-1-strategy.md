@@ -83,7 +83,7 @@
 **(4) ingest アダプタは locality で2メカニズム。CI は HTTP 側で Cloud Monitoring と同類**
 
 - 流入アダプタは「**内部＝バス購読**（EC DomainEvent）」「**外部 push＝HTTP ingest controller**（Cloud Monitoring / CI・Trivy）」の2系統。全て `CollectMonitoringEventUseCase.run()` に合流済み＝**アーキ的には既に統一**。CI を `CollectMonitoringEventOnGithubAction` のような**バス購読**にするのは誤り（CI は外部ランナーで内部 RabbitMQ に publish できない＝HTTP が正）。
-- 残る非対称は**翻訳ロジックの置き場**: Cloud Monitoring は `CloudMonitoringAlertTranslator` に分離済みだが、SecurityScan はコントローラ内インライン。**`SecurityScanTranslator` に抽出**して「薄い境界（auth+parse）→ Translator → UseCase」で3経路を揃えるのが統一の正体（未実施・次の cleanup 候補）。
+- 【実施済】源固有 → MonitoringEvent の正規化を **Monitoring コンテキストの `AlertAnalysis/application/CollectMonitoringEvent/` に集約**（§8.3「源固有の型に触れるのはここだけ」の実体化）。`CloudMonitoringAlertTranslator` を app 層（controllers/ingest）から当該ディレクトリへ移動し、SecurityScan はコントローラ内インラインから **`SecurityScanTranslator` を新設して抽出**。これで EC(`CollectMonitoringEventOnECEventPublished`) / Cloud Monitoring / CI の3源の正規化が1か所に並ぶ。各 HTTP コントローラは「薄い境界（auth+parse）→ Translator → UseCase」に縮小し、alertable 判定は `MonitoringEvent.isAlertable()` に委譲（SecurityScan の MEDIUM/LOW→info→204、Cloud Monitoring の closed→info を同じ作法で扱う）。
 
 **(5) デモ操作は「設定＋発火」を1ユースケースに閉じる（裸の PAYMENT MODE トグルは廃止）**
 

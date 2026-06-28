@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { CollectMonitoringEventUseCase } from "../../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventUseCase.js";
-import { CloudMonitoringAlertTranslator } from "./CloudMonitoringAlertTranslator.js";
+import { CloudMonitoringAlertTranslator } from "../../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CloudMonitoringAlertTranslator.js";
 
 /**
  * POST /ingest/cloud-monitoring
