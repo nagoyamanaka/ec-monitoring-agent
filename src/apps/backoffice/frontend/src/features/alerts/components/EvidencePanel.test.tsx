@@ -27,6 +27,16 @@ const FULL_EVIDENCE: EvidenceView = {
       committedAt: "2026-01-01T00:00:00.000Z",
     },
   ],
+  metrics: [
+    {
+      metricType: "run.googleapis.com/container/cpu/utilizations",
+      displayName: "CPU 使用率",
+      unit: "ratio",
+      latest: 0.42,
+      max: 0.95,
+      points: 3,
+    },
+  ],
   collectedAt: "2026-01-01T00:00:01.000Z",
 };
 
@@ -48,9 +58,13 @@ describe("EvidencePanel", () => {
     );
     expect(screen.getByText("Terraform")).toBeInTheDocument();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
+    expect(screen.getByText("Cloud Monitoring")).toBeInTheDocument();
     expect(screen.getByText("pool exhausted")).toBeInTheDocument();
     expect(screen.getByText("0123456")).toBeInTheDocument();
     expect(screen.getByText("aws_db_instance.main")).toBeInTheDocument();
+    // メトリクス: ratio は % 整形（latest 0.42 → 42.0%）
+    expect(screen.getByText("CPU 使用率")).toBeInTheDocument();
+    expect(screen.getByText("42.0%")).toBeInTheDocument();
   });
 
   it("ANALYZING 中は解析インジケータを出し、証拠は fetch しない", async () => {
@@ -73,6 +87,7 @@ describe("EvidencePanel", () => {
       appLogs: [],
       terraformDiff: null,
       recentCommits: [],
+      metrics: [],
       collectedAt: "2026-01-01T00:00:01.000Z",
     };
     render(

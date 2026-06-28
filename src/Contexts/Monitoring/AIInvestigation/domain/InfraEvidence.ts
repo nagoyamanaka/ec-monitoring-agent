@@ -17,10 +17,23 @@ export type GitCommit = {
   readonly committedAt: Date;
 };
 
+// Cloud Monitoring から相関取得した1メトリクスの要約（CPU / 接続数 / 5xx 等）。
+// 生の時系列はそのまま AI に渡すとトークンを食うので、窓内の latest/max とサンプル点数に圧縮する。
+// Date を含まないので Primitives は本型をそのまま再利用する。
+export type InfraMetric = {
+  readonly metricType: string;
+  readonly displayName: string;
+  readonly unit?: string;
+  readonly latest: number | null;
+  readonly max: number | null;
+  readonly points: number;
+};
+
 export type InfraEvidence = {
   readonly appLogs: AppLogEntry[];
   readonly terraformDiff?: TerraformDiff;
   readonly recentCommits?: GitCommit[];
+  readonly metrics?: InfraMetric[];
   readonly collectedAt: Date;
 };
 
@@ -37,6 +50,7 @@ export type InfraEvidencePrimitives = {
   readonly appLogs: AppLogEntryPrimitives[];
   readonly terraformDiff?: TerraformDiff;
   readonly recentCommits?: GitCommitPrimitives[];
+  readonly metrics?: InfraMetric[];
   readonly collectedAt: string;
 };
 
@@ -57,6 +71,8 @@ export function infraEvidenceToPrimitives(
           })),
         }
       : {}),
+    // InfraMetric は Date を持たないのでそのまま透過。
+    ...(evidence.metrics ? { metrics: evidence.metrics } : {}),
     collectedAt: evidence.collectedAt.toISOString(),
   };
 }

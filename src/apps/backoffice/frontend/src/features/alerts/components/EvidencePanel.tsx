@@ -21,9 +21,18 @@ const SOURCE_META: Record<
   { label: string; icon: string }
 > = {
   logs: { label: "Cloud Logging", icon: "▤" },
+  metrics: { label: "Cloud Monitoring", icon: "📈" },
   terraform: { label: "Terraform", icon: "⬡" },
   commits: { label: "GitHub", icon: "❮❯" },
 };
+
+/** メトリクス値の表示整形。ratio は %、null は "—"。 */
+function formatMetric(value: number | null, unit: string | null): string {
+  if (value === null) return "—";
+  if (unit === "ratio") return `${(value * 100).toFixed(1)}%`;
+  const rounded = Math.abs(value) >= 100 ? Math.round(value) : Number(value.toFixed(2));
+  return unit && unit !== "ratio" ? `${rounded} ${unit}` : `${rounded}`;
+}
 
 const LOG_LEVEL_CLASS: Record<EvidenceLogLevel, string> = {
   ERROR: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
@@ -74,6 +83,7 @@ function SectionHeader({ kind }: { kind: EvidenceSection["kind"] }) {
 /** 1 セクションが占める stagger スロット数（ヘッダ 1 ＋ 行数）。次セクションの基点計算に使う。 */
 function sectionSlotCount(section: EvidenceSection): number {
   if (section.kind === "logs") return 1 + section.logs.length;
+  if (section.kind === "metrics") return 1 + section.metrics.length;
   if (section.kind === "terraform") return 1 + 1; // diff ブロック 1 つ
   return 1 + section.commits.length;
 }
@@ -121,6 +131,47 @@ function EvidenceSectionView({
               <p className="mt-1 font-mono text-xs text-slate-100">
                 {log.message}
               </p>
+            </Rise>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  if (section.kind === "metrics") {
+    return (
+      <div className="space-y-2">
+        <Rise index={baseIndex}>
+          <SectionHeader kind="metrics" />
+        </Rise>
+        <ul className="space-y-1.5">
+          {section.metrics.map((m, i) => (
+            <Rise
+              key={m.metricType}
+              index={baseIndex + 1 + i}
+              className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-100">
+                  {m.displayName}
+                </span>
+                <code className="text-[11px] text-slate-500">{m.metricType}</code>
+              </div>
+              <div className="mt-1 flex items-center gap-4 text-[11px] text-slate-300">
+                <span>
+                  latest{" "}
+                  <span className="font-mono text-cyan-300">
+                    {formatMetric(m.latest, m.unit)}
+                  </span>
+                </span>
+                <span>
+                  max{" "}
+                  <span className="font-mono text-amber-200">
+                    {formatMetric(m.max, m.unit)}
+                  </span>
+                </span>
+                <span className="ml-auto text-slate-500">{m.points} pts</span>
+              </div>
             </Rise>
           ))}
         </ul>

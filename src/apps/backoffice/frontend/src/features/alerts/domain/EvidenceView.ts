@@ -32,10 +32,20 @@ export type EvidenceCommitView = {
   readonly committedAt: string;
 };
 
+export type EvidenceMetricView = {
+  readonly metricType: string;
+  readonly displayName: string;
+  readonly unit: string | null;
+  readonly latest: number | null;
+  readonly max: number | null;
+  readonly points: number;
+};
+
 export type EvidenceView = {
   readonly appLogs: EvidenceLogView[];
   readonly terraformDiff: EvidenceTerraformView | null;
   readonly recentCommits: EvidenceCommitView[];
+  readonly metrics: EvidenceMetricView[];
   readonly collectedAt: string;
 };
 
@@ -60,20 +70,29 @@ export function toEvidenceView(dto: InfraEvidencePrimitives): EvidenceView {
       author: c.author,
       committedAt: c.committedAt,
     })),
+    metrics: (dto.metrics ?? []).map((m) => ({
+      metricType: m.metricType,
+      displayName: m.displayName,
+      unit: m.unit ?? null,
+      latest: m.latest,
+      max: m.max,
+      points: m.points,
+    })),
     collectedAt: dto.collectedAt,
   };
 }
 
 /** 証拠ソースの種別。積み上げ演出のアイコン／ラベル出し分けに使う。 */
-export type EvidenceSourceKind = "logs" | "terraform" | "commits";
+export type EvidenceSourceKind = "logs" | "metrics" | "terraform" | "commits";
 
 export type EvidenceSection =
   | { readonly kind: "logs"; readonly logs: EvidenceLogView[] }
+  | { readonly kind: "metrics"; readonly metrics: EvidenceMetricView[] }
   | { readonly kind: "terraform"; readonly diff: EvidenceTerraformView }
   | { readonly kind: "commits"; readonly commits: EvidenceCommitView[] };
 
 /**
- * 存在する証拠ソースのみを Cloud Logging→Terraform→GitHub の順で返す純関数。
+ * 存在する証拠ソースのみを Cloud Logging→Cloud Monitoring→Terraform→GitHub の順で返す純関数。
  * 「到着ごとに積み上がる」演出の単位（＝stagger フェードインする1ブロック）になる。
  * 中身が空のソースは畳んで出さない（空セクションを並べない）。
  */
@@ -81,6 +100,9 @@ export function evidenceSections(view: EvidenceView): EvidenceSection[] {
   const sections: EvidenceSection[] = [];
   if (view.appLogs.length > 0) {
     sections.push({ kind: "logs", logs: view.appLogs });
+  }
+  if (view.metrics.length > 0) {
+    sections.push({ kind: "metrics", metrics: view.metrics });
   }
   if (view.terraformDiff && view.terraformDiff.changedResources.length > 0) {
     sections.push({ kind: "terraform", diff: view.terraformDiff });

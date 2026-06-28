@@ -51,6 +51,7 @@ import { ADKAgentInvestigationAdapter } from "../../../../Contexts/Monitoring/AI
 import { ADKInvestigationAgentRunner } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKInvestigationAgentRunner.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
+import { CloudMonitoringGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudMonitoringGatewayImpl.js";
 import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/TerraformGatewayImpl.js";
 import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/GitHubGatewayImpl.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
@@ -163,6 +164,7 @@ export class BackofficeApp {
     // read-only 証拠ゲートウェイは単一Gemini版（InfraInvestigationPort 経由の事前収集）と
     // ADK版（エージェントの狙い撃ちツール）で共有する。
     const cloudLoggingGateway = new CloudLoggingGatewayImpl();
+    const cloudMonitoringGateway = new CloudMonitoringGatewayImpl();
     const terraformGateway = new TerraformGatewayImpl();
     const githubGateway = new GitHubGatewayImpl(
       config.github.token,
@@ -199,6 +201,7 @@ export class BackofficeApp {
         cloudLoggingGateway,
         terraformGateway,
         githubGateway,
+        cloudMonitoringGateway,
       );
     // SSE 通知の差し替え（stretchⅠ・案1）。REDIS_URL 設定時のみ Valkey Pub/Sub 版に載せ替える。
     //  - worker: publish のみ（SSE クライアントを持たないので fan-out 購読は張らない）

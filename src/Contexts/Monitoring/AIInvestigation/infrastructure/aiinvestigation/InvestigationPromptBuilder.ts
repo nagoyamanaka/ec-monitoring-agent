@@ -11,6 +11,9 @@ export const SYSTEM_INSTRUCTION = `あなたはECシステムの障害調査AI�
 必ずJSONフォーマットで回答してください。
 errorEvent.severity はソースが観測時点で付与した事前重大度です。これを出発点（prior）とし、
 証拠から見直す根拠がある場合のみ severity を変更してください。
+infraEvidence.metrics は Cloud Monitoring から相関取得した症状指標（CPU/メモリ使用率・5xx 数）の
+窓内サマリ（latest/max）です。インフラ起因の障害では、この値の急増・飽和を根本原因推定の裏付けに
+使ってください（例: 5xx 数の急増 × CPU 飽和 → 容量起因）。
 suggestedActions には「どう直すか」の具体的な修正方針を含めてください（例: 依存パッケージの
 バージョン更新なら "axios を 1.6.0 → 1.7.4 に更新 (CVE-XXXX)"）。これがユーザーが remediate を
 実行するか判断する材料になります。
