@@ -25,7 +25,6 @@ function fakeApi(overrides: Partial<DemoApi> = {}): DemoApi {
         label: "決済タイムアウト",
         orderId: "o-1",
       }),
-    setPaymentMode: vi.fn().mockResolvedValue(undefined),
     reset: vi.fn().mockResolvedValue({ alertsSeeded: 5, patternsSeeded: 4 }),
     ...overrides,
   };

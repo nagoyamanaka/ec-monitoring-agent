@@ -17,4 +17,7 @@ export interface EcDemoGateway {
     customerId: string;
     items: DemoOrderItem[];
   }): Promise<{ orderId: string }>;
+  // 業務失敗では出ないインフラ級異常（CRITICAL ログ + HTTP 500）を EC に注入する。
+  // Cloud Monitoring 経由の自動発報（経路B）を実環境で発火させるためのデモ操作。
+  injectInfraFault(): Promise<void>;
 }

@@ -47,3 +47,27 @@ resource "google_monitoring_alert_policy" "cloud_run_5xx" {
 
   notification_channels = [google_monitoring_notification_channel.ingest_webhook.id]
 }
+
+# CRITICAL ログ起点の Alerting Policy（#4）。ログエントリを直接マッチする condition_matched_log を使用。
+# condition_threshold + log-based metric は resource.type が cloud_run_revision/gce_instance の両方に
+# またがるため有効な組み合わせを単一フィルターで表現できず、condition_matched_log に切替。
+resource "google_monitoring_alert_policy" "critical_log" {
+  project      = var.project_id
+  display_name = "アプリ CRITICAL ログ検知"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "CRITICAL log entries"
+    condition_matched_log {
+      filter = "(resource.type=\"cloud_run_revision\" OR resource.type=\"gce_instance\") AND severity>=\"CRITICAL\""
+    }
+  }
+
+  alert_strategy {
+    notification_rate_limit {
+      period = "300s"
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.ingest_webhook.id]
+}

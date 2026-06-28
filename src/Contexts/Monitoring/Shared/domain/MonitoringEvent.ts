@@ -16,6 +16,10 @@ export class MonitoringEvent {
   // ソース固有イベント型 → severity の対応は変換境界（toMonitoringEvent）が知る。
   readonly severity: AlertSeverity;
   readonly source: string;
+  // 同一 eventName の中で症状（根本原因）が分かれるときの追加識別子（任意）。
+  // 例: ec.inventory.reservation_failed は在庫不足／楽観ロック競合の2症状を持つが
+  // eventName は共通。これを dedupKey に織り込まないと別症状が1件に畳み込まれてしまう。
+  readonly discriminator?: string;
 
   constructor(params: {
     eventId: string;
@@ -26,6 +30,7 @@ export class MonitoringEvent {
     category: MonitoringEventCategory;
     severity: AlertSeverity;
     source: string;
+    discriminator?: string;
   }) {
     this.eventId = params.eventId;
     this.eventName = params.eventName;
@@ -35,6 +40,7 @@ export class MonitoringEvent {
     this.category = params.category;
     this.severity = params.severity;
     this.source = params.source;
+    this.discriminator = params.discriminator;
   }
 
   /**
@@ -52,13 +58,16 @@ export class MonitoringEvent {
    * 検知ソースが複数（EC 自前イベント / Cloud Monitoring / CI）になった今、
    * どの単一上流もソース横断の重複を畳めない。境界での最小の冪等キーがこれ。
    *
-   * 粒度は「ソース × カテゴリ × イベント種別」。aggregateId は意図的に含めない
-   * ＝注文ごとに違う決済タイムアウトの嵐を1件（×N）にまとめる（storm 抑制）。
+   * 粒度は「ソース × カテゴリ × イベント種別（× 症状 discriminator）」。aggregateId は
+   * 意図的に含めない＝注文ごとに違う決済タイムアウトの嵐を1件（×N）にまとめる（storm 抑制）。
+   * 一方、同一 eventName でも症状が異なるもの（在庫不足 vs 楽観ロック競合）は discriminator で
+   * 分離する＝別根本原因を1件に畳み込まない。
    * 異症状・同一根本原因（例: DB枯渇=infra と payment失敗=app）は別キーになる。
    * それは検知層の dedup ではなく AI 調査が根本原因として相関させる責務（境界の外）。
    */
   dedupKey(): string {
-    return `${this.source}::${this.category.value}::${this.eventName}`;
+    const base = `${this.source}::${this.category.value}::${this.eventName}`;
+    return this.discriminator ? `${base}::${this.discriminator}` : base;
   }
 
   toPrimitives(): MonitoringEventPrimitives {
@@ -71,6 +80,7 @@ export class MonitoringEvent {
       category: this.category.value,
       severity: this.severity.value,
       source: this.source,
+      discriminator: this.discriminator,
     };
   }
 
@@ -84,6 +94,7 @@ export class MonitoringEvent {
       category: MonitoringEventCategory.fromString(primitives.category),
       severity: AlertSeverity.fromString(primitives.severity),
       source: primitives.source,
+      discriminator: primitives.discriminator,
     });
   }
 }

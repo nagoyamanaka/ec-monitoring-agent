@@ -129,24 +129,37 @@
 
 ## Phase 2: エラーログ起点の自動発報（#4）
 
-### タスク T9: FATAL ログベースメトリクス＋アラートポリシー 〔P1〕
+### タスク T9: CRITICAL ログベースメトリクス＋アラートポリシー 〔P1〕✅ 実装済み（実機検証残）
 
 > 前提: Phase 1 完了（疎通済みの ingest webhook を再利用）。terraform 編集中心。
 > 既存 `modules/logging`（`alert_ingested` 計数メトリクス）/ `modules/monitoring`（webhook channel + 5xx policy）に**追記**する形。
 
-- 【新規】`modules/logging/main.tf`：`severity=FATAL`（または特定例外クラス）を検知する log-based metric を追加
-  - フィルタ例: `resource.type="cloud_run_revision" AND jsonPayload.severity="FATAL"`（アプリは `start.ts` の bootstrap 失敗等で `severity:"FATAL"` JSON を既に吐く）
-  - GCE backbone 側のログも拾うなら `resource.type` を OR で追加（Ops Agent 経由）
-- 【新規】`modules/monitoring/main.tf`：上記メトリクスを条件にした `google_monitoring_alert_policy` を追加し、`notification_channels` に既存 `ingest_webhook` を指定
-- 【出力】logging module の outputs に metric 名を足し、monitoring module へ変数で渡す（module 間結線）
-- 【テスト】アプリに意図的に FATAL ログを吐かせる→メトリクス増加→policy 発火→`/ingest/cloud-monitoring` 着弾、を確認（Phase 2 DoD）
+- 【済】severity 語彙を Cloud Logging に正規化（GCP を正・二重 enum 排除）: `StructuredLog` の `WARN→WARNING` / `FATAL→CRITICAL`、`Logger.fatal()→critical()`（呼び出しは start.ts 2箇所のみ）・`OTelLogger`/`ConsoleLogger` の console 振り分け・`start.ts` の bootstrap も追従。AppLogEntry / AlertSeverities が既に WARNING/CRITICAL なので全層一致。これで GCP が severity を標準 enum として昇格できる
+- 【済】`modules/logging/main.tf`：`google_logging_metric.critical_log`（`ec_monitoring_critical_log`）を追加
+  - フィルタ: `(resource.type="cloud_run_revision" OR resource.type="gce_instance") AND severity>="CRITICAL"`
+  - Cloud Run（edge）と GCE backbone（worker・Ops Agent 経由）の両方を拾う。CRITICAL は標準 LogSeverity なので jsonPayload を覗くハック不要＝素直な severity フィルタで成立
+- 【済】`modules/monitoring/main.tf`：`google_monitoring_alert_policy.critical_log` を追加（条件＝当該 metric > 0、`notification_channels` に既存 `ingest_webhook`）
+- 【済】`modules/logging/outputs.tf` に `critical_log_metric` 出力を追加→ `envs/prod/main.tf` で `module.monitoring.critical_log_metric` へ結線（logging を monitoring より先に定義）
+- 【残】実機検証: アプリに意図的に CRITICAL ログを吐かせる→メトリクス増加→policy 発火→`/ingest/cloud-monitoring` 着弾（Phase 2 DoD）
 - 設計判断: 「アプリのエラーログ→自動アラート」を GCP 内で完結。アプリ側の追加実装は不要（構造化ログは既存 `GcpCloudLoggingLogger` が出力済み）
+
+#### おまけ: CloudLoggingGateway 実装（スタブ→実 API）✅ 実装済み
+
+> 背景: `CloudLoggingGatewayImpl` は空配列を返すスタブだった（AI 調査時のアプリログ証拠収集が常に空）。T9 で CRITICAL→アラートの自動発報を入れる流れに合わせ、調査側の証拠 pull も実装。
+
+- 【済】`CloudLoggingGatewayImpl`：`@google-cloud/logging` を **dynamic import**（ローカル/テスト経路では読み込まない）で `severity>=WARNING` を時間窓フィルタ取得→`AppLogEntry` に正規化（severity 丸め・jsonPayload.message 抽出・resource ラベル）
+- 【済】ローカル ⇄ 実環境のモック切替は **env 駆動**（既存 gateway 群と同型）:
+  - `GCP_PROJECT_ID` / `GOOGLE_CLOUD_PROJECT` 未設定 → `[]`（＝ローカル既定。GCP 認証不要で従来どおり動く）
+  - `CLOUD_LOGGING_ENABLED=false` → project があっても明示的に無効化
+  - project あり ＆ 無効化なし → 実 API（worker は GCE 常駐で ADC が効く）
+- 【済】terraform: gce-backbone SA に `roles/logging.viewer` を追加（worker がログを読むため）。worker は `docker-compose.prod.yml` で `GCP_PROJECT_ID` 注入済み＝デプロイ時に自動で実 API へ切替
+- 【テスト】`CloudLoggingGatewayImpl.test.ts`：project 空/`enabled=false` で no-op、フィルタ組み立て、LogEntry→AppLogEntry 正規化（fake クライアント注入で UT）
 
 ---
 
 ## Phase 3: GCP ネイティブ可観測性の仕上げ（#5 / #6）
 
-### タスク T10: Cloud Trace 書込権限の付与（cloudtrace.agent）〔P1〕
+### タスク T10: Cloud Trace 書込権限の付与（cloudtrace.agent）〔P1〕✅
 
 > 前提: Phase 1 完了。**トレースが出ない根本原因の修正**（§2 穴3）。terraform のみ。
 
@@ -154,7 +167,7 @@
 - 【修正】`modules/gce-backbone/main.tf` の `google_project_iam_member.vm` の for_each にも **`roles/cloudtrace.agent`** を追加（worker は GCE で動くため）
 - 理由: 現状 SA は logWriter/metricWriter/aiplatform.user 止まりで、`start.ts` の Cloud Trace exporter が書き込めない
 
-### タスク T11: OTel 自動計装の導入 〔P1〕
+### タスク T11: OTel 自動計装の導入 〔P1〕✅
 
 > 前提: T10（権限）。これでトレースに中身が入る。
 
@@ -163,7 +176,7 @@
 - 【任意】ノイズの多い計装（fs 等）は無効化オプションで絞る
 - 設計判断: exporter は既存。計装を足すだけで VPC connector 跨ぎの通信遅延・Mongo/Valkey レイテンシが Cloud Trace に出る
 
-### タスク T12: Log-Trace 相関の動作確認（#6・実装済み）〔P1〕
+### タスク T12: Log-Trace 相関の動作確認（#6・実装済み）〔P1〕✅
 
 > 前提: T10・T11。**実装は完了済み**（`GcpCloudLoggingLogger` が `logging.googleapis.com/trace`/`spanId` を注入）。確認のみ。
 
@@ -204,7 +217,7 @@
 
 ## 別トラック（本ロードマップ外・順序整合のため明記）
 
-### #3 worker/edge 分離・RedisSSEAlertNotifier・read-model
+### #3 worker/edge 分離・RedisSSEAlertNotifier・read-model　✅ 実装済み
 
 > **本 TODO では実装しない。** 正は **step4-3 stretchⅠ タスク16〜19**。
 > **着手タイミング**: Phase 1 が動いた後、Cloud Run を `min=max=1` 暫定（§3.2）から **多インスタンス / scale-to-zero** にする時。それまでは単一インスタンスで in-process SSE のまま正しく動く。

@@ -2,7 +2,6 @@ import type { DemoApi } from "../infrastructure/demoApi";
 import { useDemoControls } from "./hooks/useDemoControls";
 import { SystemStatus } from "./SystemStatus";
 import { ScenarioControls } from "./ScenarioControls";
-import { PaymentModeToggle } from "./PaymentModeToggle";
 
 export interface DemoDrawerProps {
   api: DemoApi;
@@ -22,9 +21,7 @@ export function DemoDrawer({ api, onAfterReset }: DemoDrawerProps) {
     status,
     error,
     busy,
-    paymentMode,
     triggerScenario,
-    setPaymentMode,
     reset,
   } = useDemoControls(api, { onAfterReset });
 
@@ -44,11 +41,6 @@ export function DemoDrawer({ api, onAfterReset }: DemoDrawerProps) {
 
       <SystemStatus status={status} loading={loading} />
       <ScenarioControls busy={busy} onTrigger={triggerScenario} />
-      <PaymentModeToggle
-        mode={paymentMode}
-        busy={busy}
-        onChange={setPaymentMode}
-      />
 
       <div className="space-y-2 border-t border-slate-700/50 pt-3">
         <button

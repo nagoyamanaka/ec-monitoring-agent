@@ -16,6 +16,8 @@ locals {
     RABBITMQ_HOST     = var.backbone_internal_ip
     # Vertex AI（ADC）が課金紐付けに使う project。GEMINI_API_KEY は不要。
     GOOGLE_CLOUD_PROJECT = var.project_id
+    # GcpCloudLoggingLogger が logging.googleapis.com/trace フィールドを組み立てるために必須。
+    GCP_PROJECT_ID = var.project_id
     # デモシナリオが EC backend を叩く接続先（VPC connector 経由で GCE 内部 IP に到達）
     EC_BACKEND_URL = "http://${var.backbone_internal_ip}:3000"
     # 配信エッジ役（クエリ/SSE）。RabbitMQ consumer は張らず（GCE worker が担う）、
@@ -37,6 +39,7 @@ resource "google_project_iam_member" "run" {
     "roles/secretmanager.secretAccessor",
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",
+    "roles/cloudtrace.agent",
     "roles/aiplatform.user",
   ])
   project = var.project_id

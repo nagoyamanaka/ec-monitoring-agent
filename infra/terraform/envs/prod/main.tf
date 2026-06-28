@@ -75,19 +75,20 @@ module "cloud_run_frontend" {
 }
 
 # Cloud Monitoring webhook チャネル + サンプル Alerting Policy
+# ログベースメトリクス（FATAL メトリクスを monitoring の alert policy が参照するため先に定義）
+module "logging" {
+  source     = "../../modules/logging"
+  project_id = var.project_id
+
+  depends_on = [module.bootstrap]
+}
+
 module "monitoring" {
   source                 = "../../modules/monitoring"
   project_id             = var.project_id
   ingest_webhook_url     = "${module.cloud_run.service_uri}/ingest/cloud-monitoring"
   cloud_run_service_name = module.cloud_run.service_name
-
-  depends_on = [module.bootstrap]
-}
-
-# ログベースメトリクス
-module "logging" {
-  source     = "../../modules/logging"
-  project_id = var.project_id
+  critical_log_metric    = module.logging.critical_log_metric
 
   depends_on = [module.bootstrap]
 }

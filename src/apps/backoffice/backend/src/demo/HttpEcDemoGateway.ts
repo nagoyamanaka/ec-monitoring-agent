@@ -34,6 +34,11 @@ export class HttpEcDemoGateway implements EcDemoGateway {
     return { orderId: params.orderId };
   }
 
+  async injectInfraFault(): Promise<void> {
+    // EC は意図的に 500 を返す（それが目的）。placeOrder と同様 res.ok を成功条件にしない。
+    await fetch(`${this.ecBackendUrl}/demo/infra-fault`, { method: "POST" });
+  }
+
   private async post(path: string, payload: unknown): Promise<void> {
     const res = await fetch(`${this.ecBackendUrl}${path}`, {
       method: "POST",

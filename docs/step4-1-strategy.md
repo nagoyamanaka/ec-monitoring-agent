@@ -54,10 +54,41 @@
 | 層 | 機構 | 実装 |
 | --- | --- | --- |
 | (a) **category オーナーシップ**（主防御・コードゼロ） | APPLICATION（業務失敗）は EC 自前イベントが権威、INFRASTRUCTURE/CAPACITY（CPU/接続数/5xx 等の症状）は Cloud Monitoring が権威。**同じものを両者に監視させない**＝被りの大半を構造的に消す | 設計／設定（`category` 弁別子を検知主担当キーに流用） |
-| (b) **dedupKey ＋ occurrenceCount**（唯一“実装”する被り対策） | `MonitoringEvent.dedupKey()`＝`source::category::eventName`。同一 dedupKey の未解決 Alert があれば新規作成・再分類・再調査せず**発生回数だけ加算**（UI は「×N」）。同一シグナルの嵐と文字通りの重複を1枚に畳む | 実装済み（`AnalyzeAlertUseCase` の classify 前・`AlertRepository.findOpenByDedupKey`） |
+| (b) **dedupKey ＋ occurrenceCount**（唯一“実装”する被り対策） | `MonitoringEvent.dedupKey()`＝`source::category::eventName`（＋同一 eventName 内で症状が割れる場合は任意の `discriminator` を末尾に連結）。同一 dedupKey の未解決 Alert があれば新規作成・再分類・再調査せず**発生回数だけ加算**（UI は「×N」）。同一シグナルの嵐と文字通りの重複を1枚に畳む | 実装済み（`AnalyzeAlertUseCase` の classify 前・`AlertRepository.findOpenByDedupKey`） |
 | (c) **異症状・同一根本原因の相関**（例: DB枯渇=infra と payment失敗=app） | dedupKey では捕まえない。**AI 調査が根本原因を突き止める過程で相関が浮く**＝検知層の dedup でなく investigation の副産物。エンジン化しない | ADR・将来（トーク） |
 
 > **要点**: (b) は correlation エンジンではなく**冪等キー＋grouping lite**。aggregateId を dedupKey に含めない＝注文ごとに違う決済タイムアウトの嵐を1件（×N）に畳む。closed 通知（Cloud Monitoring 回復）は `severity=info` ＝ `isAlertable()=false` で観測のみ・分類/調査に乗せない。
+
+### 2.6 実装で確定した補足（2026-06）
+
+> §2.5 の境界設計を実機・デモで詰める過程で確定した4点。いずれも「検知は境界の外・dedup は境界での最小冪等点」という §2.5 の原則の具体化であって、原則の変更ではない。
+
+**(1) dedupKey に症状 `discriminator` を追加（同一 eventName 内の別根本原因を畳まない）**
+
+- `ec.inventory.reservation_failed` は **在庫不足（INSUFFICIENT_STOCK）と楽観ロック競合（CONCURRENT_CONFLICT）の2症状**を同じ eventName で持つ。dedupKey が `source::category::eventName` のみだと**別根本原因が1件に畳み込まれる**バグになっていた（在庫競合を注入しても在庫不足アラートの ×N に吸われ、独立アラートとして出ない＝「在庫競合は未seedで未知→AI調査を見せる」という学習ループ演出も壊れる）。
+- 対策: `MonitoringEvent` に任意の `discriminator` を持たせ、`dedupKey()` に連結する（在庫イベントは `reason` を入れる）。決済タイムアウト等は discriminator 無し＝従来どおり注文跨ぎで storm 抑制。**aggregateId を入れない方針（storm 抑制）と、症状で割る方針（別原因を分離）の両立**がこの設計の肝。
+- 併せて **seed と実イベントの `source` 命名を統一**（seed の `"ec-backend"` → 実経路と同じ `"payment"/"inventory"/"order"`）。揃えないと seed と実発火の dedupKey が食い違い、実発火が seed に畳み込まれない。
+
+**(2) アラート流入は「経路A（業務イベント）」と「経路B（Cloud Monitoring）」の2系統で、デモでの発火条件が異なる**
+
+- **経路A**: EC DomainEvent → RabbitMQ → `CollectMonitoringEventOnECEventPublished` → Alert。決済タイムアウト/在庫不足/在庫競合の各 fault injection はこの経路。**Cloud Monitoring を通らない**。
+- **経路B**: アプリの **CRITICAL ログ / 5xx** → Cloud Monitoring Alerting Policy → webhook → `/ingest/cloud-monitoring` → Alert。シナリオ4（インフラ起因）と「アプリのエラーログ自動発報」がこの経路。
+- 重要な含意: **業務失敗（在庫不足・決済タイムアウト）は "ハンドリング済みの正常系" で 4xx・WARN ログ**であり、5xx でも CRITICAL でもない＝**経路B では発火しない**（経路Aで拾うのが正しい）。よって**経路Bをデモで見せるにはインフラ級異常を意図的に注入するしかない**。
+
+**(3) デモに「インフラ障害」注入を新設（経路B の発火源）**
+
+- EC に `POST /demo/infra-fault`（CRITICAL ログ＋HTTP 500 を発生）を追加し、`TriggerDemoScenarioUseCase` の `infra-fault` シナリオから叩く。EC は **GCE backbone 上**なので発報の主経路は CRITICAL ログ → `ec_monitoring_critical_log` メトリクス（フィルタが gce_instance も対象）。5xx は `cloud_run_5xx`（Cloud Run edge 専用）なので EC の 500 は数えない点に注意。
+- **ローカルには Cloud Monitoring が無い**ため、このボタンはローカルでは「500/CRITICAL ログが出るだけ・Alert 化しない」。Alert 化は GCP デプロイ環境でのみ成立（T9 の実機検証＝このボタンで踏める）。
+
+**(4) ingest アダプタは locality で2メカニズム。CI は HTTP 側で Cloud Monitoring と同類**
+
+- 流入アダプタは「**内部＝バス購読**（EC DomainEvent）」「**外部 push＝HTTP ingest controller**（Cloud Monitoring / CI・Trivy）」の2系統。全て `CollectMonitoringEventUseCase.run()` に合流済み＝**アーキ的には既に統一**。CI を `CollectMonitoringEventOnGithubAction` のような**バス購読**にするのは誤り（CI は外部ランナーで内部 RabbitMQ に publish できない＝HTTP が正）。
+- 残る非対称は**翻訳ロジックの置き場**: Cloud Monitoring は `CloudMonitoringAlertTranslator` に分離済みだが、SecurityScan はコントローラ内インライン。**`SecurityScanTranslator` に抽出**して「薄い境界（auth+parse）→ Translator → UseCase」で3経路を揃えるのが統一の正体（未実施・次の cleanup 候補）。
+
+**(5) デモ操作は「設定＋発火」を1ユースケースに閉じる（裸の PAYMENT MODE トグルは廃止）**
+
+- フロントの PAYMENT MODE トグルは「EC のモードを設定するだけ」で**単独では発火トリガが無く**（常時トラフィック/ストアフロント UI が無い）、押しても何も起きない＝混乱の元だった。「モード設定＋注文投入」を1操作にした FAULT INJECTION（`TriggerDemoScenarioUseCase`）と機能が重複。
+- 決定: **フロントの PAYMENT MODE トグルと backoffice の `/demo/payment-mode` を廃止**。モード設定はシナリオ注入が EC へ内部的に行う（EC の `/demo/payment-mode` は gateway 経由で残す）。原則は「**デモのコントロールは単体で目に見える効果を出す**」。storm（×N）は同じ fault ボタンの連打で再現でき、RANDOM モードは不要。
 
 ### 学習ループ：確度付き分類と知識の結晶化（差別化の中核）
 

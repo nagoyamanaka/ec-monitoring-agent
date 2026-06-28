@@ -22,7 +22,9 @@ export const ALERT_SEEDS: Alert[] = [
       payload: { orderId: "order-seed-0001", timeoutMs: 30000 },
       category: MonitoringEventCategory.application(),
       severity: AlertSeverity.critical(),
-      source: "ec-backend",
+      // source はライブ経路（CollectMonitoringEventOnECEventPublished）と揃える。
+      // 揃えないと seed と実イベントの dedupKey が食い違い、実発火が seed に畳み込まれない。
+      source: "payment",
     }),
     classification: {
       type: "known",
@@ -92,7 +94,9 @@ export const ALERT_SEEDS: Alert[] = [
       payload: { productId: "product-seed-0042", reason: "INSUFFICIENT_STOCK", requestedQty: 5, availableQty: 2 },
       category: MonitoringEventCategory.application(),
       severity: AlertSeverity.warning(),
-      source: "ec-backend",
+      source: "inventory",
+      // reason を dedup 識別子に含める（ライブの在庫不足イベントと同一 dedupKey になり畳み込まれる）。
+      discriminator: "INSUFFICIENT_STOCK",
     }),
     classification: {
       type: "known",
@@ -137,7 +141,7 @@ export const ALERT_SEEDS: Alert[] = [
       payload: { orderId: "order-seed-0099", errorCode: "UNKNOWN_GATEWAY_ERROR" },
       category: MonitoringEventCategory.application(),
       severity: AlertSeverity.pending(),
-      source: "ec-backend",
+      source: "order",
     }),
   }).attachInvestigationReport(
     new InvestigationReport({

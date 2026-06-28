@@ -56,6 +56,9 @@ export class CollectMonitoringEventOnECEventPublished extends CollectMonitoringE
         // 在庫引当の失敗。回復可能だが要注意。
         severity: AlertSeverity.warning(),
         source: "inventory",
+        // 在庫不足(INSUFFICIENT_STOCK)と楽観ロック競合(CONCURRENT_CONFLICT)は同一 eventName だが
+        // 根本原因が別。reason を dedup の識別子に織り込み、別アラートとして扱う（畳み込み回避）。
+        discriminator: event.reason.value,
         payload: {
           orderId: event.orderId,
           requestedQuantity: event.requestedQuantity,

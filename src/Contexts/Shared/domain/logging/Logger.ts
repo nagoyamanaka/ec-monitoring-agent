@@ -14,14 +14,16 @@ export abstract class Logger {
   }
 
   async warn(params: LogParams): Promise<void> {
-    await this.write({ ...params, severity: "WARN", timestamp: new Date().toISOString() });
+    await this.write({ ...params, severity: "WARNING", timestamp: new Date().toISOString() });
   }
 
   async error(params: LogParams): Promise<void> {
     await this.write({ ...params, severity: "ERROR", timestamp: new Date().toISOString() });
   }
 
-  async fatal(params: LogParams): Promise<void> {
-    await this.write({ ...params, severity: "FATAL", timestamp: new Date().toISOString() });
+  // Cloud Logging の LogSeverity に合わせて CRITICAL を出す
+  // （GCP が標準 enum として昇格できる＝ログベースメトリクス/UI が正しく扱える）。
+  async critical(params: LogParams): Promise<void> {
+    await this.write({ ...params, severity: "CRITICAL", timestamp: new Date().toISOString() });
   }
 }

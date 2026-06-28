@@ -19,12 +19,17 @@ const RECIPES: Record<string, ScenarioRecipe> = {
   "inventory-conflict": { label: "在庫競合", paymentMode: "SUCCESS", inventoryMode: "CONCURRENT_CONFLICT" },
 };
 
-// 数字エイリアス（UIのシナリオ1/2/3）も受ける
+// 数字エイリアス（UIのシナリオ1/2/3/4）も受ける
 const ALIASES: Record<string, string> = {
   "1": "payment-timeout",
   "2": "inventory-insufficient",
   "3": "inventory-conflict",
+  "4": "infra-fault",
 };
+
+// infra-fault は他シナリオと違い「注文の業務失敗」ではなくインフラ級異常の注入なので、
+// payment/inventory のモード設定も注文投入も伴わない（EcDemoGateway.injectInfraFault のみ）。
+const INFRA_FAULT_SCENARIO_ID = "infra-fault";
 
 // 障害シナリオを EC 操作の合成で再現する facade。
 // EC の demo モードを設定 → 注文を投入 → EC が障害イベントを発火 → Monitoring が Alert 化（SSE配信）。
@@ -36,6 +41,13 @@ export class TriggerDemoScenarioUseCase {
 
   async run(scenarioId: string): Promise<{ scenarioId: string; label: string; orderId: string }> {
     const resolvedId = ALIASES[scenarioId] ?? scenarioId;
+
+    if (resolvedId === INFRA_FAULT_SCENARIO_ID) {
+      await this.ecDemoGateway.injectInfraFault();
+      // 注文を伴わないので orderId は空。Cloud Monitoring 経由で Alert 化されるため即時の orderId 相関は無い。
+      return { scenarioId: resolvedId, label: "インフラ障害", orderId: "" };
+    }
+
     const recipe = RECIPES[resolvedId];
     if (!recipe) {
       throw new UnsupportedScenarioError(scenarioId);
