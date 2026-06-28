@@ -1,7 +1,10 @@
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
 import { AlertSeverity, AlertSeverities } from "../../../Shared/domain/AlertSeverity.js";
-import type { InvestigationStepPrimitives } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
+import type {
+  InvestigationStepPrimitives,
+  ImpactAssessmentPrimitives,
+} from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
 /**
@@ -12,6 +15,17 @@ import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
 function clampConfidence(value: number): number {
   return Math.max(0.0, Math.min(1.0, value));
+}
+
+/**
+ * 影響評価のハルシネーションガード。証拠 id（citations）の無い impact は「根拠なき影響主張」
+ * なので表示・永続化前に落とす（undefined＝影響評価なし）。§7.3 の citation 必須方針と同じ。
+ */
+function guardImpact(
+  impact: ImpactAssessmentPrimitives | undefined,
+): ImpactAssessmentPrimitives | undefined {
+  if (!impact || impact.citations.length === 0) return undefined;
+  return impact;
 }
 
 function parseSeverity(value: string): AlertSeverity {
@@ -44,6 +58,7 @@ export function toInvestigationReport(
     isFallback: false,
     remediable: output.remediable,
     relatedAlerts: output.relatedAlerts,
+    impact: guardImpact(output.impact),
   });
 }
 

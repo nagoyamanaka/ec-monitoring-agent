@@ -15,6 +15,7 @@ export function createInvestigationCoordinator(params: {
   evidenceCollector: LlmAgent;
   rootCauseAnalyst: LlmAgent;
   remediationPlanner: LlmAgent;
+  impactTriage: LlmAgent;
 }): LlmAgent {
   const orchestration = `
 
@@ -24,14 +25,18 @@ export function createInvestigationCoordinator(params: {
   追加証拠を収集する。仮説の検証に証拠が足りないときに、対象サービス名・時刻(ISO 8601)・検索語を渡して呼ぶ。
 - root_cause_analyst: 集めた証拠と類似インシデントから根本原因の仮説・確度・根拠を出す。
 - remediation_planner: コード/設定変更で直せる場合に具体的な修正方針を起案する（PR起票はしない）。
+- impact_triage: 根本原因確定後に「今回ぶんの影響」（自責他責 fault・影響範囲 scope・障害規模 scale）を
+  引用付きで算定する。fault は出口（自責→修正 / 他責→運用エスカレーション）の振り分け信号になる。
 
 手順:
 1. まず root_cause_analyst で初期仮説と確度を得る。
 2. 確証に証拠が不足していれば evidence_collector で狙い撃ちに証拠を追加収集し、再び root_cause_analyst で分析し直す。
    これを確度が十分になるか、これ以上証拠が得られないと判断するまで繰り返す。
-3. 必要に応じて remediation_planner を呼び、修正可否と方針を得る。
-4. 最後に、上で定義した JSON スキーマ「だけ」を出力する（前後に説明文・コードフェンス以外の地の文を付けない）。
-   confidence は実際に積み上げた証拠の強さを反映させること。`;
+3. 根本原因が確定したら impact_triage を呼び、impact（fault/scope/scale/affectedSubjects と各 citations）を埋める。
+4. 必要に応じて remediation_planner を呼び、修正可否と方針を得る。
+5. 最後に、上で定義した JSON スキーマ「だけ」を出力する（前後に説明文・コードフェンス以外の地の文を付けない）。
+   confidence は実際に積み上げた証拠の強さを反映させ、impact は impact_triage の算定をそのまま載せること
+   （citation を出せなかった場合は impact を省略する）。`;
 
   return new LlmAgent({
     name: "investigation_coordinator",
@@ -42,6 +47,7 @@ export function createInvestigationCoordinator(params: {
       new AgentTool({ agent: params.evidenceCollector }),
       new AgentTool({ agent: params.rootCauseAnalyst }),
       new AgentTool({ agent: params.remediationPlanner }),
+      new AgentTool({ agent: params.impactTriage }),
     ],
   });
 }

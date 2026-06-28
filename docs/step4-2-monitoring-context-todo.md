@@ -252,16 +252,17 @@
 
 > **タスク 34〜37（v20 追加・タスク18 の拡張）**: 調査グラフに「影響評価／他責エスカレーション／修正レビュー」の3エージェントを足し、**既知/未知でルートを分岐**させる。設計の正は `step4-1` §8.1.2（エージェント台帳・ルート分岐図・作業削減マッピング）。**目的＝作業者負担削減**。read/write 境界（調査=read / リメディ=write隔離 / 人間承認ゲート越境禁止）は既存どおり不変。依存順は 34（影響評価＝入口ルータ）→ 35/36（出口・並行可）→ 37（レポート表示）。
 
-### タスク 34: ImpactTriageAgent（影響評価＋自責他責ルータ）〔stretch〕
+### タスク 34: ImpactTriageAgent（影響評価＋自責他責ルータ）〔stretch〕✅ 完了済み
 
 > **狙い**: 「今回ぶんの判断」（自責他責・影響範囲・障害規模）を引用付きで算定。既知ルートでも必要な唯一の判断（根本原因は再利用、影響は毎回違う）。自責他責ラベルが出口（35 Remediation / 35' Runbook）の振り分け信号になる。
 
-- 【新規】`AlertAnalysis/domain/InvestigationReport.ts` に optional な `impact` を追記: `ImpactAssessment = { fault: "own" | "external" | "unknown"; scope: string; scale: string; affectedSubjects: string[]; citations: string[] }`（引用は収集済み証拠/類似事例の id を参照。空 citations の項目は表示前に落とす＝ハルシネーションガード、§7.3 と同方針）。`Primitives`/`fromPrimitives`/`toPrimitives` に optional で追加（**ワイヤ契約は後方互換**＝既存 Alert は `impact` 無しで読める）。
-- 【新規】`infrastructure/adk/agents/ImpactTriageAgent.ts`（`createImpactTriageAgent(model)`・推論のみ・ツール無し）。instruction: 与えられた証拠（appLogs/terraformDiff/recentCommits）と occurrenceCount から fault（直近 commit/terraform 差分と相関→own / 外部API由来・直近変更なし→external）・scope・scale を算定し、各項目に根拠 citation を必須化。証拠に無いことは "unknown" と返す。
-- 【変更】`agents/InvestigationCoordinator.ts`: orchestration 指示に「根本原因確定後、ImpactTriage を呼び impact を埋める」を追記。出力 JSON スキーマに `impact` を追加（`SYSTEM_INSTRUCTION` 側のスキーマ定義と `LLMOutputParser`/`InvestigationReportMapper` を同期して更新。新規 UT: impact 付き出力のパース／impact 欠落時は null）。
-- 【既知ルート結線】`AnalyzeAlertUseCase`（既知短絡）: 既知判定時は investigate モジュールを起動しない原則は不変のまま、**任意・非同期**で ImpactTriage 相当のみを回す軽量パスを追加（同期で挟まない＝シナリオ3「次回1秒」を殺さない）。MVP では結線せず「設計のみ」でも可（フラグ `AI_IMPACT_ON_KNOWN` 既定 false）。
-- 設計判断（過大回避）: 既知ルートに `EvidenceCollector`/`RootCauseAnalyst` は通さない（根本原因は結晶化済み＝再導出は無駄）。回すのは ImpactTriage だけ。
-- UT: fault 判定（own/external/unknown）、citations 空項目の除外、impact optional の後方互換（既存 Primitives が読める）。
+- 【完了】ワイヤ契約に `ImpactAssessmentPrimitives = { fault: "own"|"external"|"unknown"; scope; scale; affectedSubjects: string[]; citations: string[] }` ＋ `ImpactFault` を **`AlertAnalysis/domain/contracts/AlertContract.ts` に定義**（ワイヤ型は contracts 単一ソース方針）。`InvestigationReportPrimitives` に optional `impact?` を追加。`InvestigationReport`（domain）は contracts から re-export ＋ `impact?` フィールド・`toPrimitives`（impact 有時のみ展開）・`fromPrimitives` を後方互換で追加（**既存 Alert は `impact` 無しで読める**＝旧 Primitives に `impact` キーすら付かない）
+- 【完了】`infrastructure/adk/agents/ImpactTriageAgent.ts`（`createImpactTriageAgent(model)`・推論のみ・ツール無し）。instruction: 証拠（appLogs/terraformDiff/recentCommits）＋occurrenceCount＋根本原因から fault（直近 commit/terraform 差分と相関→own / 外部API由来・直近変更なし→external / 証拠不足→unknown）・scope・scale を算定し、各算定に根拠 citation を必須化（citation を出せない場合は impact を出さない）
+- 【完了】`agents/InvestigationCoordinator.ts`: impact_triage を AgentTool に追加＋orchestration 手順に「根本原因確定後 impact_triage を呼び impact を埋める」を追記。`ADKInvestigationAgentRunner` で `createImpactTriageAgent` を結線。出力 JSON スキーマ（`SYSTEM_INSTRUCTION`）に `impact` を追記し、`LLMOutputParser`（`toImpact` 正規化：fault を own/external/unknown に丸め・scope/scale 非文字列は undefined・citations 空白除去）／`InvestigationReportMapper`（`guardImpact`：citations 空の impact を落とすハルシネーションガード）を同期更新。**単一Gemini版（LLMInvestigationAdapter）も同経路で impact を生成**（パース/マッピング共通化＝DRY）
+- 【設計のみ・未結線】既知ルート（`AnalyzeAlertUseCase` 既知短絡）の軽量 ImpactTriage パスは**フラグ `AI_IMPACT_ON_KNOWN` 既定 false の設計のみ**で MVP は結線せず（タスク注記の許容範囲）。同期で挟まない＝シナリオ3「次回1秒」を殺さない方針は維持。結線するなら composition root で任意・非同期に ImpactTriage 相当のみ回す（`EvidenceCollector`/`RootCauseAnalyst` は通さない＝根本原因は結晶化済みで再導出は無駄）
+- 設計判断（ガードの置き場）: 構造正規化は parser（`toImpact`）、**証拠なき主張を落とすガードは mapper（`guardImpact`）** に分離。parser は「LLM 出力の型を整える」、mapper は「表示・永続化する報告を組む」関心事。citations 空 → impact undefined＝§7.3 の citation 必須方針と同方針
+- 【完了】UT: `LLMOutputParser.test.ts`（impact パース／fault 丸め／scope欠落→undefined／citations 空白除去・非配列丸め）／`InvestigationReportMapper.test.ts`（impact 伝播／citations 空→落とす）／`InvestigationReport.test.ts`（impact ラウンドトリップ／impact 無し旧 Primitives の後方互換）。全 618 テスト緑・`tsc --noEmit` クリーン
+- 残（タスク37）: フロント表示（一覧オーバレイ＝`impact.scale` のみ／詳細＝fault/scope/scale/affectedSubjects＋citations チップ）は**未着手**＝タスク37の責務
 
 ### タスク 35: Remediation 出口の自責他責ルーティング ＋ RunbookEscalationAgent（他責・運用）〔stretch〕
 

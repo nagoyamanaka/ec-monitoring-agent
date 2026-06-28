@@ -7,6 +7,7 @@ import {
 import { createEvidenceCollectorAgent } from "./agents/EvidenceCollectorAgent.js";
 import { createRootCauseAnalystAgent } from "./agents/RootCauseAnalystAgent.js";
 import { createRemediationPlannerAgent } from "./agents/RemediationPlannerAgent.js";
+import { createImpactTriageAgent } from "./agents/ImpactTriageAgent.js";
 import { createInvestigationCoordinator } from "./agents/InvestigationCoordinator.js";
 
 const USER_ID = "monitoring-agent";
@@ -52,6 +53,7 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
       evidenceCollector: createEvidenceCollectorAgent(config.model, tools),
       rootCauseAnalyst: createRootCauseAnalystAgent(config.model),
       remediationPlanner: createRemediationPlannerAgent(config.model),
+      impactTriage: createImpactTriageAgent(config.model),
     });
     this.runner = new InMemoryRunner({ agent: coordinator, appName: APP_NAME });
     this.maxLlmCalls = config.maxLlmCalls;

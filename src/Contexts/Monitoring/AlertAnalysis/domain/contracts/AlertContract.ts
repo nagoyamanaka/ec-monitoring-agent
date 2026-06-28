@@ -83,6 +83,27 @@ export type RelatedAlertPrimitives = {
   readonly rationale: string;
 };
 
+/** 自責他責ラベル。own=自社コード/IaC 起因 / external=外部API・ベンダー起因 / unknown=証拠不足で断定不能。 */
+export type ImpactFault = "own" | "external" | "unknown";
+
+/**
+ * 「今回ぶんの判断」＝影響評価（自責他責・影響範囲・障害規模）。根本原因（再利用可能）と違い
+ * 毎回変わるので既知ルートでも算定が要る（タスク34）。`fault` は出口（Remediation / Runbook）の
+ * 振り分け信号。`citations` は収集済み証拠/類似事例の id 参照で、空の impact は表示前に落とす
+ * （根拠なき影響主張＝ハルシネーションを出さないガード。§7.3 と同方針）。
+ */
+export type ImpactAssessmentPrimitives = {
+  readonly fault: ImpactFault;
+  // 影響範囲（どの機能・どのユーザ層が影響を受けるか・日本語1文）。
+  readonly scope: string;
+  // 障害規模（件数・割合・継続時間などの定量/定性表現・日本語1文）。
+  readonly scale: string;
+  // 影響を受けた主体（サービス名・チーム・顧客セグメント等）。
+  readonly affectedSubjects: string[];
+  // 算定根拠の引用（証拠ログ／類似インシデント／commit/terraform 差分の id）。
+  readonly citations: string[];
+};
+
 export type InvestigationReportPrimitives = {
   readonly summary: string;
   readonly confidence: number;
@@ -95,6 +116,9 @@ export type InvestigationReportPrimitives = {
   readonly isFallback: boolean;
   // AI 調査が見つけた相関アラート。optional は旧データ・fallback 互換（未保存なら空配列扱い）。
   readonly relatedAlerts?: RelatedAlertPrimitives[];
+  // 影響評価（自責他責ルータの入力）。optional は後方互換＝impact 無しの旧 Alert も読める。
+  // 根拠（citations）の無い impact はマッパ側で落とすので、保存される impact は必ず引用付き。
+  readonly impact?: ImpactAssessmentPrimitives;
   // AI が「コードで直せる（PR で remediate 可能）」と判定したか。category 非依存の
   // 汎用シグナルで、フロントは remediate ボタンの活性／ROI 提示の判断に使う（advisory）。
   // 実際の write 実行ゲートは人間承認＋executor の deterministic 判定が握る。

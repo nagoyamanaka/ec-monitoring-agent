@@ -62,6 +62,36 @@ describe("InvestigationReportMapper", () => {
       const report = toInvestigationReport(output({ investigationSteps: ["ログ確認"] }));
       expect(report.investigationSteps).toEqual(["ログ確認"]);
     });
+
+    it("impact 未指定なら report.impact は undefined", () => {
+      expect(toInvestigationReport(output()).impact).toBeUndefined();
+    });
+
+    it("citations 付き impact はそのまま伝播する", () => {
+      const impact = {
+        fault: "own" as const,
+        scope: "決済の一部",
+        scale: "5分で120件",
+        affectedSubjects: ["payment"],
+        citations: ["commit:abc"],
+      };
+      expect(toInvestigationReport(output({ impact })).impact).toEqual(impact);
+    });
+
+    it("citations 空の impact は落とす（ハルシネーションガード）", () => {
+      const report = toInvestigationReport(
+        output({
+          impact: {
+            fault: "external",
+            scope: "外部API",
+            scale: "不明",
+            affectedSubjects: ["payment"],
+            citations: [],
+          },
+        }),
+      );
+      expect(report.impact).toBeUndefined();
+    });
   });
 
   describe("buildFallbackReport", () => {

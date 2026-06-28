@@ -1,4 +1,8 @@
-import type { RelatedAlertPrimitives } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
+import type {
+  RelatedAlertPrimitives,
+  ImpactAssessmentPrimitives,
+  ImpactFault,
+} from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 
 /**
  * LLMの生テキスト出力を、検証済みの構造化スキーマへ変換する（プロバイダ非依存）。
@@ -17,7 +21,12 @@ export type LLMInvestigationOutput = {
   remediable: boolean;
   // AI が見つけた相関アラート（id・関係・根拠）。未指定・型不正は空配列に丸める。
   relatedAlerts: RelatedAlertPrimitives[];
+  // 影響評価（自責他責・影響範囲・障害規模）。未指定・構造不正は undefined（必須スキーマには含めない）。
+  // citations 空の影響主張を落とすハルシネーションガードはマッパ側（toInvestigationReport）。
+  impact?: ImpactAssessmentPrimitives;
 };
+
+const VALID_FAULTS: ReadonlySet<string> = new Set<ImpactFault>(["own", "external", "unknown"]);
 
 /**
  * 配列要素を文字列のみへ正規化する。LLM が誤って文字列以外（オブジェクト・数値）を混ぜても
@@ -57,6 +66,29 @@ function toRelatedAlerts(value: unknown): RelatedAlertPrimitives[] {
   });
 }
 
+/**
+ * impact を {fault, scope, scale, affectedSubjects, citations} へ正規化する。
+ * scope/scale が文字列で揃っていない・object でない場合は undefined（影響評価なし）。
+ * fault は own/external/unknown のみ許容し、未知値は安全側で "unknown" に丸める。
+ * citations は空白文字列を除いて配列化（id 参照の純度を上げる）。空 citations の影響を
+ * 落とすガードはここではなくマッパ側（証拠なき主張を「表示前に落とす」のは表示寄りの関心事）。
+ */
+function toImpact(value: unknown): ImpactAssessmentPrimitives | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const o = value as Record<string, unknown>;
+  if (typeof o["scope"] !== "string" || typeof o["scale"] !== "string") return undefined;
+  const rawFault = o["fault"];
+  const fault: ImpactFault =
+    typeof rawFault === "string" && VALID_FAULTS.has(rawFault) ? (rawFault as ImpactFault) : "unknown";
+  return {
+    fault,
+    scope: o["scope"],
+    scale: o["scale"],
+    affectedSubjects: toStringArray(o["affectedSubjects"]),
+    citations: toStringArray(o["citations"]).filter((c) => c.trim() !== ""),
+  };
+}
+
 export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
   try {
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
@@ -83,6 +115,7 @@ export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
       suggestedPatternName: parsed["suggestedPatternName"] as string,
       remediable: parsed["remediable"] === true,
       relatedAlerts: toRelatedAlerts(parsed["relatedAlerts"]),
+      impact: toImpact(parsed["impact"]),
     };
   } catch {
     return null;

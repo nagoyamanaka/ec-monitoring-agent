@@ -103,6 +103,63 @@ describe("LLMOutputParser", () => {
       ]);
     });
 
+    it("impact は欠落で undefined・揃った構造はそのままパースする", () => {
+      // 欠落（旧スキーマ互換）
+      expect(parseLLMOutput(validJson)?.impact).toBeUndefined();
+
+      const withImpact = JSON.stringify({
+        summary: "x",
+        confidence: 0.5,
+        severity: "INFO",
+        investigationSteps: [],
+        suggestedActions: [],
+        suggestedPatternName: "",
+        impact: {
+          fault: "external",
+          scope: "外部決済APIのタイムアウト",
+          scale: "決済の約3%が失敗",
+          affectedSubjects: ["payment", "checkout"],
+          citations: ["log:abc", "incident:i1"],
+        },
+      });
+      expect(parseLLMOutput(withImpact)?.impact).toEqual({
+        fault: "external",
+        scope: "外部決済APIのタイムアウト",
+        scale: "決済の約3%が失敗",
+        affectedSubjects: ["payment", "checkout"],
+        citations: ["log:abc", "incident:i1"],
+      });
+    });
+
+    it("impact.fault が own/external/unknown 以外なら unknown に丸める", () => {
+      const badFault = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        impact: { fault: "maybe", scope: "s", scale: "n", affectedSubjects: [], citations: ["c1"] },
+      });
+      expect(parseLLMOutput(badFault)?.impact?.fault).toBe("unknown");
+    });
+
+    it("impact の scope/scale が文字列でなければ undefined（構造不正）", () => {
+      const noScope = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        impact: { fault: "own", scale: "n", affectedSubjects: [], citations: ["c1"] },
+      });
+      expect(parseLLMOutput(noScope)?.impact).toBeUndefined();
+    });
+
+    it("impact.citations の空白文字列を除く・非配列フィールドは空配列に丸める", () => {
+      const messy = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        impact: { fault: "own", scope: "s", scale: "n", affectedSubjects: "oops", citations: ["c1", "  ", "", "c2"] },
+      });
+      const impact = parseLLMOutput(messy)?.impact;
+      expect(impact?.affectedSubjects).toEqual([]);
+      expect(impact?.citations).toEqual(["c1", "c2"]);
+    });
+
     it("relatedAlerts が配列でなければ空配列に丸める", () => {
       const notArray = JSON.stringify({
         summary: "x",

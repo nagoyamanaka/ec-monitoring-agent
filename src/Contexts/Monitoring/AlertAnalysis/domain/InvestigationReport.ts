@@ -4,6 +4,7 @@ import type {
   InvestigationReportPrimitives,
   InvestigationItemPrimitives,
   RelatedAlertPrimitives,
+  ImpactAssessmentPrimitives,
 } from "./contracts/AlertContract.js";
 
 // シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
@@ -11,6 +12,7 @@ export type {
   InvestigationReportPrimitives,
   InvestigationItemPrimitives,
   RelatedAlertPrimitives,
+  ImpactAssessmentPrimitives,
 };
 
 /** 調査ステップ／推奨アクション項目から表示・学習用のプレーンテキストを取り出す。 */
@@ -33,6 +35,9 @@ export class InvestigationReport {
   readonly remediable: boolean;
   // AI 調査が見つけた相関アラート（id・関係・根拠）。未指定は空配列（旧データ・fallback 互換）。
   readonly relatedAlerts: RelatedAlertPrimitives[];
+  // 影響評価（自責他責・影響範囲・障害規模）。未指定は undefined（旧データ・fallback 互換）。
+  // 根拠（citations）の無い impact はマッパ側で落とすので、ここに載るのは必ず引用付き。
+  readonly impact?: ImpactAssessmentPrimitives;
 
   constructor(params: {
     summary: string;
@@ -46,6 +51,7 @@ export class InvestigationReport {
     isFallback: boolean;
     remediable?: boolean;
     relatedAlerts?: RelatedAlertPrimitives[];
+    impact?: ImpactAssessmentPrimitives;
   }) {
     this.summary = params.summary;
     this.confidence = params.confidence;
@@ -58,6 +64,7 @@ export class InvestigationReport {
     this.isFallback = params.isFallback;
     this.remediable = params.remediable ?? false;
     this.relatedAlerts = params.relatedAlerts ?? [];
+    this.impact = params.impact;
   }
 
   withReviewStatus(reviewStatus: ReviewStatus): InvestigationReport {
@@ -77,6 +84,7 @@ export class InvestigationReport {
       isFallback: this.isFallback,
       remediable: this.remediable,
       relatedAlerts: [...this.relatedAlerts],
+      ...(this.impact ? { impact: this.impact } : {}),
     };
   }
 
@@ -93,6 +101,7 @@ export class InvestigationReport {
       isFallback: primitives.isFallback,
       remediable: primitives.remediable ?? false,
       relatedAlerts: primitives.relatedAlerts ?? [],
+      impact: primitives.impact,
     });
   }
 }

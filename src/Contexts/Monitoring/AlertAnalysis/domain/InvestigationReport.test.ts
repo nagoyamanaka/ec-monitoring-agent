@@ -52,6 +52,28 @@ describe("InvestigationReport toPrimitives / fromPrimitives", () => {
     expect(restored.reviewStatus).toBeInstanceOf(ReviewStatus);
   });
 
+  it("impact は既定で undefined・指定時はラウンドトリップで復元される", () => {
+    expect(new InvestigationReport(baseParams).impact).toBeUndefined();
+
+    const impact = {
+      fault: "own" as const,
+      scope: "決済機能の一部ユーザ",
+      scale: "5分間で約120件",
+      affectedSubjects: ["payment"],
+      citations: ["commit:abc1234"],
+    };
+    const restored = InvestigationReport.fromPrimitives(
+      new InvestigationReport({ ...baseParams, impact }).toPrimitives(),
+    );
+    expect(restored.impact).toEqual(impact);
+  });
+
+  it("impact 無しの旧 Primitives も読める（後方互換）", () => {
+    const legacy = new InvestigationReport(baseParams).toPrimitives();
+    expect("impact" in legacy).toBe(false);
+    expect(InvestigationReport.fromPrimitives(legacy).impact).toBeUndefined();
+  });
+
   it("relatedAlerts は既定で空配列・指定時はラウンドトリップで復元される", () => {
     expect(new InvestigationReport(baseParams).relatedAlerts).toEqual([]);
 

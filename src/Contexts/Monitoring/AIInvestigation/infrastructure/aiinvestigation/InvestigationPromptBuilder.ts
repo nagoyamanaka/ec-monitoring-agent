@@ -27,6 +27,13 @@ candidateAlerts は同時期に発生している他のアラート一覧です�
 実在する alertId を参照し、存在しない ID を作らないこと。関連が無ければ空配列にしてください。
 relation は same_root_cause（同一根本原因）/ downstream（波及・下流）/ upstream（起因・上流）/
 precursor（予兆）/ similar（同型）から選び、rationale に関連と判断した根拠を1文で書いてください。
+impact は「今回の障害ぶんの判断」です。fault は own（自社コード/IaC 起因＝直近 commit・terraform 差分と
+相関する）/ external（外部API・ベンダー起因＝直近の自社変更が無い）/ unknown（証拠不足で断定不能）から
+選んでください。scope（影響範囲）・scale（障害規模＝件数/割合/継続時間）も算定し、affectedSubjects に
+影響を受けた主体（サービス名・チーム・顧客セグメント）を列挙してください。impact の各算定には必ず根拠の
+citations（参照した証拠ログ・類似インシデント・commit/terraform 差分の id）を載せ、証拠に無いことは
+推測で断定せず fault を "unknown" にしてください。citations を出せない（証拠で裏付けられない）場合は
+impact を省略してください（根拠なき影響主張は出さない）。
 {
   "summary": "障害の説明（日本語・1〜2文）",
   "confidence": 0.87,
@@ -35,7 +42,8 @@ precursor（予兆）/ similar（同型）から選び、rationale に関連と�
   "suggestedActions": ["対応アクション1（具体的な修正方針）", "対応アクション2"],
   "suggestedPatternName": "自動昇格候補のパターン名（例: DB_CONNECTION_EXHAUSTION）",
   "remediable": true | false,
-  "relatedAlerts": [{ "alertId": "...", "relation": "same_root_cause", "rationale": "関連の根拠（1文）" }]
+  "relatedAlerts": [{ "alertId": "...", "relation": "same_root_cause", "rationale": "関連の根拠（1文）" }],
+  "impact": { "fault": "own" | "external" | "unknown", "scope": "影響範囲（1文）", "scale": "障害規模（1文）", "affectedSubjects": ["payment", "..."], "citations": ["証拠/類似事例の id", "..."] }
 }`;
 
 const MAX_ESTIMATED_TOKENS = 3500;
