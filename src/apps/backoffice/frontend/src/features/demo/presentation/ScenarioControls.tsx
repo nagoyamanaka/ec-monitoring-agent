@@ -3,8 +3,9 @@
  * 1〜3（決済タイムアウト/在庫不足/在庫競合）は 押下→EC へ注文投入→業務障害イベント→Alert 化（SSE）が
  * 一覧にライブで流れる＝経路A のデモ。4（インフラ障害）は EC に CRITICAL ログ + HTTP 500 を注入し、
  * GCP の Cloud Monitoring 経由で発報する経路B のデモ（ローカルでは Alert は出ない）。
- * 証拠パネル（シナリオ4）・リメディエーション（シナリオ5）は注入後の Alert ドロワー内の体験なので
- * ここには独立ボタンを置かない（backend に対応エンドポイントが無い＝偽ボタンを作らない）。
+ * 5（脆弱性検知）は CI(Trivy) の検知を合成し、実在 ingest と同じ変換経路（SecurityScanTranslator→
+ * CollectMonitoringEventUseCase）を辿って Alert 化＝DevOps ループ（検知→AI 調査→PR 起票）の起点。
+ * いずれも backend に対応経路を持つ合成注入で、エンドポイント不在の偽ボタンは作らない。
  */
 
 export interface ScenarioControlsProps {
@@ -39,6 +40,11 @@ const SCENARIOS: readonly Scenario[] = [
     id: "4",
     label: "インフラ障害",
     description: "CRITICAL ログ + HTTP 500 → Cloud Monitoring 経由で発報（GCP のみ）",
+  },
+  {
+    id: "5",
+    label: "脆弱性検知",
+    description: "CI(Trivy) の HIGH/CRITICAL 検知を合成 → AI 調査 → PR 起票（DevOps ループ）",
   },
 ];
 

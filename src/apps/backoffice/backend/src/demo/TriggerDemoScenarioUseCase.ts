@@ -3,6 +3,11 @@ import {
   AppliedInfraChange,
   AppliedInfraChangeStore,
 } from "../../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/AppliedInfraChangeStore.js";
+import { CollectMonitoringEventUseCase } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventUseCase.js";
+import {
+  SecurityScanBody,
+  SecurityScanTranslator,
+} from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/SecurityScanTranslator.js";
 
 export class UnsupportedScenarioError extends Error {
   constructor(scenarioId: string) {
@@ -23,17 +28,58 @@ const RECIPES: Record<string, ScenarioRecipe> = {
   "inventory-conflict": { label: "在庫競合", paymentMode: "SUCCESS", inventoryMode: "CONCURRENT_CONFLICT" },
 };
 
-// 数字エイリアス（UIのシナリオ1/2/3/4）も受ける
+// 数字エイリアス（UIのシナリオ1/2/3/4/5）も受ける
 const ALIASES: Record<string, string> = {
   "1": "payment-timeout",
   "2": "inventory-insufficient",
   "3": "inventory-conflict",
   "4": "infra-fault",
+  "5": "security-vuln",
 };
 
 // infra-fault は他シナリオと違い「注文の業務失敗」ではなくインフラ級異常の注入なので、
 // payment/inventory のモード設定も注文投入も伴わない（EcDemoGateway.injectInfraFault のみ）。
 const INFRA_FAULT_SCENARIO_ID = "infra-fault";
+
+// security-vuln は EC 操作でも IaC でもなく「CI(Trivy)の検知」を合成する。実機では ci.yml の
+// security-scan ジョブが /ingest/security-scan に POST する流れを、デモは正規ペイロードを
+// SecurityScanTranslator→CollectMonitoringEventUseCase に直接通すことで即時・確実に再現する
+// （= 偽ボタンではなく、実在 ingest 経路と同じ変換・分類を辿る合成注入）。
+const SECURITY_VULN_SCENARIO_ID = "security-vuln";
+
+// Trivy が pnpm-lock 上の実在依存から HIGH/CRITICAL を「どばっと」吐いた体の正規化済みボディ。
+// 代表（最深刻）CVE をトップに昇格し、全件を vulnerabilities[] に同梱（AI 一括リメディが参照する）
+// ＝ ci.yml の jq 整形と同じ形。CRITICAL なので下流 isAlertable()=true で調査に乗る。
+function buildSecurityScanBody(): SecurityScanBody {
+  const vulnerabilities = [
+    {
+      cveId: "CVE-2021-3807",
+      severity: "CRITICAL",
+      package: "ansi-regex",
+      version: "3.0.0",
+      fixedVersion: "5.0.1",
+    },
+    {
+      cveId: "CVE-2022-25883",
+      severity: "HIGH",
+      package: "semver",
+      version: "7.3.4",
+      fixedVersion: "7.5.2",
+    },
+  ];
+  const top = vulnerabilities[0];
+  return {
+    cveId: top.cveId,
+    severity: top.severity,
+    package: top.package,
+    version: top.version,
+    fixedVersion: top.fixedVersion,
+    scanner: "trivy",
+    target: "repo:fs",
+    repo: "ec-monitoring-agent",
+    vulnerabilities,
+  };
+}
 
 // 障害の「直前の IaC 変更」を AI が原因として突き止められるよう、注入と同時に記録する代表的な apply。
 // 実機では CI の terraform apply がこの構造化差分を ingest する想定で、デモはそれを合成する。
@@ -66,10 +112,19 @@ export class TriggerDemoScenarioUseCase {
     private readonly ecDemoGateway: EcDemoGateway,
     private readonly productId: string,
     private readonly appliedInfraChangeStore: AppliedInfraChangeStore,
+    private readonly collectMonitoringEventUseCase: CollectMonitoringEventUseCase,
   ) {}
 
   async run(scenarioId: string): Promise<{ scenarioId: string; label: string; orderId: string }> {
     const resolvedId = ALIASES[scenarioId] ?? scenarioId;
+
+    if (resolvedId === SECURITY_VULN_SCENARIO_ID) {
+      // 実在 ingest と同じ変換・分類・調査経路を辿る（コントローラの薄い境界をスキップするだけ）。
+      const event = SecurityScanTranslator.toMonitoringEvent(buildSecurityScanBody());
+      await this.collectMonitoringEventUseCase.run(event);
+      // 注文を伴わない検知なので orderId は空。
+      return { scenarioId: resolvedId, label: "脆弱性検知", orderId: "" };
+    }
 
     if (resolvedId === INFRA_FAULT_SCENARIO_ID) {
       // 注入の前に apply イベントを記録しておく（調査時に「直前の変更」として時間窓で引ける）。

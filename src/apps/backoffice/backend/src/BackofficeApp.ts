@@ -386,6 +386,7 @@ export class BackofficeApp {
       ecDemoGateway,
       config.demo.productId,
       appliedInfraChangeStore,
+      collectMonitoringEventUseCase,
     );
     const demoResetUseCase = new DemoResetUseCase(
       new MongoDemoDataAdapter(mongoClient),
