@@ -248,6 +248,53 @@
 - 既知の限界（試走ゆえ）: ライブ疎通（実 Vertex でのループ動作・トークン実測）は未検証＝デプロイ/ADC設定後に確認。E2E は stub 経路のまま無傷
 - 参考: 「ADKマルチエージェント実装」節
 
+---
+
+> **タスク 34〜37（v20 追加・タスク18 の拡張）**: 調査グラフに「影響評価／他責エスカレーション／修正レビュー」の3エージェントを足し、**既知/未知でルートを分岐**させる。設計の正は `step4-1` §8.1.2（エージェント台帳・ルート分岐図・作業削減マッピング）。**目的＝作業者負担削減**。read/write 境界（調査=read / リメディ=write隔離 / 人間承認ゲート越境禁止）は既存どおり不変。依存順は 34（影響評価＝入口ルータ）→ 35/36（出口・並行可）→ 37（レポート表示）。
+
+### タスク 34: ImpactTriageAgent（影響評価＋自責他責ルータ）〔stretch〕
+
+> **狙い**: 「今回ぶんの判断」（自責他責・影響範囲・障害規模）を引用付きで算定。既知ルートでも必要な唯一の判断（根本原因は再利用、影響は毎回違う）。自責他責ラベルが出口（35 Remediation / 35' Runbook）の振り分け信号になる。
+
+- 【新規】`AlertAnalysis/domain/InvestigationReport.ts` に optional な `impact` を追記: `ImpactAssessment = { fault: "own" | "external" | "unknown"; scope: string; scale: string; affectedSubjects: string[]; citations: string[] }`（引用は収集済み証拠/類似事例の id を参照。空 citations の項目は表示前に落とす＝ハルシネーションガード、§7.3 と同方針）。`Primitives`/`fromPrimitives`/`toPrimitives` に optional で追加（**ワイヤ契約は後方互換**＝既存 Alert は `impact` 無しで読める）。
+- 【新規】`infrastructure/adk/agents/ImpactTriageAgent.ts`（`createImpactTriageAgent(model)`・推論のみ・ツール無し）。instruction: 与えられた証拠（appLogs/terraformDiff/recentCommits）と occurrenceCount から fault（直近 commit/terraform 差分と相関→own / 外部API由来・直近変更なし→external）・scope・scale を算定し、各項目に根拠 citation を必須化。証拠に無いことは "unknown" と返す。
+- 【変更】`agents/InvestigationCoordinator.ts`: orchestration 指示に「根本原因確定後、ImpactTriage を呼び impact を埋める」を追記。出力 JSON スキーマに `impact` を追加（`SYSTEM_INSTRUCTION` 側のスキーマ定義と `LLMOutputParser`/`InvestigationReportMapper` を同期して更新。新規 UT: impact 付き出力のパース／impact 欠落時は null）。
+- 【既知ルート結線】`AnalyzeAlertUseCase`（既知短絡）: 既知判定時は investigate モジュールを起動しない原則は不変のまま、**任意・非同期**で ImpactTriage 相当のみを回す軽量パスを追加（同期で挟まない＝シナリオ3「次回1秒」を殺さない）。MVP では結線せず「設計のみ」でも可（フラグ `AI_IMPACT_ON_KNOWN` 既定 false）。
+- 設計判断（過大回避）: 既知ルートに `EvidenceCollector`/`RootCauseAnalyst` は通さない（根本原因は結晶化済み＝再導出は無駄）。回すのは ImpactTriage だけ。
+- UT: fault 判定（own/external/unknown）、citations 空項目の除外、impact optional の後方互換（既存 Primitives が読める）。
+
+### タスク 35: Remediation 出口の自責他責ルーティング ＋ RunbookEscalationAgent（他責・運用）〔stretch〕
+
+> **狙い**: 「コードで直せない他責/運用案件」を行き止まりにせず、エスカレーション草案まで自動化。RemediationPlanner（自責→コード/IaC PR）と排他で役割分担。
+
+- 【新規】`infrastructure/adk/agents/RunbookEscalationAgent.ts`（起案のみ・write しない）。instruction: 根本原因＋impact＋体制 seed（タスク36）から、想定オーナー/チーム・連絡先・暫定回避手順（過去 `resolvedNote` を参照）・severity 根拠・添付すべき証拠バンドルを草案化。**実際の通知送信・チケット起票はしない**（人間承認の前段）。
+- 【新規】`seeds/EscalationDirectorySeed.ts`: 組織体制サンプル（`{ team, owner, contact, slaTier, ownsSubjects: string[] }[]`）。SimilarIncident（過去事例）とは別物＝**体制の知識ベース**。実物っぽさがデモ価値（実装AIは EC ドメインに即した3〜5チームの妥当なサンプルを作る：payment / inventory / infra / security / external-vendor 等）。read-only でエージェントに食わせる薄い Gateway/Repository（`EscalationDirectory.findBySubjects()`）を `domain` IF＋`InMemory` 実装で用意。
+- 【変更】`agents/InvestigationCoordinator.ts`: impact.fault で出口分岐——own→`remediation_planner`、external/運用→`runbook_escalation`。両方該当しうる場合は両方起案して人間に委ねる。出力 JSON に `escalation`（optional）を追加し `InvestigationReport` に optional フィールド追記（タスク34 と同じ後方互換作法）。
+- 設計判断（write 隔離不変）: RunbookEscalation は草案テキストのみ。送信は人間承認後（既存 RemediationPort と同じゲート思想）。
+- UT: fault=external で escalation が埋まり remediation が空になる／seed から正しいオーナーが引かれる／resolvedNote が手順に反映される。
+
+### タスク 36: RemediationReviewerAgent（修正PRの自動レビュー・RV段階）〔stretch〕
+
+> **狙い**: AI/CI が起票した修正PRが「引用された根本原因に実際に対応しているか」を先に検証し、人間のRVを open-ended 監査→checklist 確認に縮める。誤修正を人間到達前に止める。
+
+- 【新規】`infrastructure/adk/agents/RemediationReviewerAgent.ts`（**read-only**・マージしない）。instruction: PR diff＋RootCauseAnalyst の根本原因＋変更ファイル／テストを突き合わせ、(1)diff は引用根本原因に対応するか (2)変更ファイルは証拠と整合するか (3)テストは障害経路をカバーするか を判定し、`verdict: "pass"|"concerns"|"reject"` ＋ `concerns: string[]` を返す。
+- 【新規】read-only ツール: PR diff/変更ファイル/CI テスト結果を引く FunctionTool（既存 `GitHubGateway` を拡張 or 新規 read メソッド。`getPullRequestDiff(prNumber)` 等。**write は足さない**）。
+- 【結線】Remediation（タスク16）で PR 起票（dispatch 完了の `POST /ingest/remediation-result` で `drafted` 確定）後に Reviewer を起動し、結果を Alert/InvestigationReport の `remediationReview`（optional）に格納。advisory モードでは草案PRに対しても回せる。
+- 設計判断（自動マージしない）: Reviewer は verdict を出すだけ。承認・マージは人間（既存 reviewStatus ゲート）。pass でも人間の最終承認は省かない。
+- UT: 根本原因に無関係な diff→reject/concerns、テスト欠落→concerns、整合 diff→pass。
+
+### タスク 37: レポート責務分割（一覧オーバレイ=要約 / 詳細=報告用フル）〔stretch〕
+
+> **狙い**: 同一 `InvestigationReport` を**射影違いで出し分ける**。一覧オーバレイ＝トリアージ用要約（原因候補＋confidence＋×N）、詳細＝報告用フル（自責他責・影響範囲・障害規模・証跡全部・引用・escalation・review）。型は単一ソース、データ二重持ちはしない。
+
+- 【変更（frontend）】`features/alerts/components/AlertCardExpanded.tsx`（一覧オーバレイ）: 要約フィールドのみ表示（summary / confidence / suggestedPatternName / occurrenceXN / impact.scale だけ）。重い証跡（investigationSteps 全文・terraformDiff・escalation 草案）は載せない。
+- 【変更（frontend）】`features/alerts/pages/AlertDetailPage.tsx`（詳細）: 報告用フル＝impact（自責他責/scope/scale/affectedSubjects＋citations チップ）・証拠パネル全部・escalation 草案・remediationReview verdict を全表示。
+- 【データ量対策】一覧 API（`GET /alerts`）は要約射影のみ返し、フル（impact 詳細・escalation・review・証跡）は `GET /alerts/:id` で遅延ロード。**一覧ペイロードを太らせない**（既存の `EvidenceView`/`useEvidence` の詳細遅延ロードと同じ作法に揃える）。
+- 設計判断（単一ソース）: 要約は `InvestigationReport` から導出する射影であって別型を作らない。後方互換のため impact/escalation/review は optional で、未生成 Alert は要約のみ表示される。
+- UT（frontend）: 一覧オーバレイに重フィールドが出ない／詳細に impact・escalation・review が出る／impact 無しの旧 Alert でも壊れない。
+
+---
+
 <!--
 【マルチエージェント統合の3パターン整理（A2A 判断のADR種・2026-06-23 確定）】
 「マルチエージェント」を1語で混ぜない。性質の違う3つに分ける:
