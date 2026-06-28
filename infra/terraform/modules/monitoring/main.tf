@@ -47,3 +47,29 @@ resource "google_monitoring_alert_policy" "cloud_run_5xx" {
 
   notification_channels = [google_monitoring_notification_channel.ingest_webhook.id]
 }
+
+# CRITICAL ログ起点の Alerting Policy（#4）。logging module の log-based metric を条件にし、
+# 既存 ingest webhook へ発報＝アプリのエラーログが GCP 内で自動的に /ingest/cloud-monitoring へ着弾する。
+resource "google_monitoring_alert_policy" "critical_log" {
+  project      = var.project_id
+  display_name = "アプリ CRITICAL ログ検知"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "CRITICAL log entries > 0"
+    condition_threshold {
+      # user 定義 log-based metric は metric.type で参照（resource は複数種なので絞らない）。
+      filter          = "metric.type = \"logging.googleapis.com/user/${var.critical_log_metric}\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_DELTA"
+      }
+    }
+  }
+
+  notification_channels = [google_monitoring_notification_channel.ingest_webhook.id]
+}

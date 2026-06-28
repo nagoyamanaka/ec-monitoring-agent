@@ -5,3 +5,7 @@ output "notification_channel_id" {
 output "alert_policy_id" {
   value = google_monitoring_alert_policy.cloud_run_5xx.id
 }
+
+output "critical_log_alert_policy_id" {
+  value = google_monitoring_alert_policy.critical_log.id
+}

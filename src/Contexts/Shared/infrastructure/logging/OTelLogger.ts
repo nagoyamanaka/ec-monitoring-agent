@@ -11,7 +11,7 @@ export class OTelLogger extends Logger {
     const spanContext = trace.getActiveSpan()?.spanContext();
     const entry = this.buildEntry(log, spanContext);
 
-    if (log.severity === "WARN" || log.severity === "ERROR" || log.severity === "FATAL") {
+    if (log.severity === "WARNING" || log.severity === "ERROR" || log.severity === "CRITICAL") {
       console.error(JSON.stringify(entry));
     } else {
       console.log(JSON.stringify(entry));

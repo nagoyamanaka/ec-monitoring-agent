@@ -15,3 +15,8 @@ variable "error_threshold" {
   type    = number
   default = 1
 }
+
+variable "critical_log_metric" {
+  type        = string
+  description = "logging module が作る CRITICAL ログベースメトリクス名（user/<name> として参照）"
+}
