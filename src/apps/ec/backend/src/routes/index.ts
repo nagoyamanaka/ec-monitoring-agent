@@ -3,6 +3,7 @@ import { CommandBus } from "../../../../../Contexts/Shared/domain/CommandBus.js"
 import { QueryBus } from "../../../../../Contexts/Shared/domain/QueryBus.js";
 import { PaymentMockOrderGateway } from "../../../../../Contexts/EC/Orders/infrastructure/PaymentMockOrderGateway.js";
 import { DemoInventoryRepository } from "../../../../../Contexts/EC/Inventory/infrastructure/DemoInventoryRepository.js";
+import { Logger } from "../../../../../Contexts/Shared/domain/logging/Logger.js";
 import { registerOrderRoutes } from "./orders.route.js";
 import { registerDemoRoutes } from "./demo.route.js";
 
@@ -12,7 +13,8 @@ export function registerRoutes(
   queryBus: QueryBus,
   paymentGateway: PaymentMockOrderGateway,
   demoInventoryRepository: DemoInventoryRepository,
+  logger: Logger,
 ): void {
   registerOrderRoutes(router, commandBus, queryBus);
-  registerDemoRoutes(router, paymentGateway, demoInventoryRepository);
+  registerDemoRoutes(router, paymentGateway, demoInventoryRepository, logger);
 }

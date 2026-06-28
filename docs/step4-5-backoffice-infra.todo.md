@@ -176,7 +176,7 @@
 - 【任意】ノイズの多い計装（fs 等）は無効化オプションで絞る
 - 設計判断: exporter は既存。計装を足すだけで VPC connector 跨ぎの通信遅延・Mongo/Valkey レイテンシが Cloud Trace に出る
 
-### タスク T12: Log-Trace 相関の動作確認（#6・実装済み）〔P1〕
+### タスク T12: Log-Trace 相関の動作確認（#6・実装済み）〔P1〕✅
 
 > 前提: T10・T11。**実装は完了済み**（`GcpCloudLoggingLogger` が `logging.googleapis.com/trace`/`spanId` を注入）。確認のみ。
 

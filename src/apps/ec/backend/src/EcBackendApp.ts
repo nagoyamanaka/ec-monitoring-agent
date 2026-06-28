@@ -90,7 +90,7 @@ export class EcBackendApp {
     await setupEventBus();
 
     this.server = new Server(config.port);
-    registerRoutes(this.server.router, commandBus, queryBus, paymentGateway, inventoryRepository);
+    registerRoutes(this.server.router, commandBus, queryBus, paymentGateway, inventoryRepository, logger);
     await this.server.listen();
   }
 

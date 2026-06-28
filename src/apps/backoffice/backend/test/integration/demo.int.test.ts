@@ -15,7 +15,13 @@ describe("demoRoutes (integration)", () => {
   const setPaymentMode = vi.fn().mockResolvedValue(undefined);
   const setInventoryMode = vi.fn().mockResolvedValue(undefined);
   const placeOrder = vi.fn().mockImplementation(async (p: { orderId: string }) => ({ orderId: p.orderId }));
-  const ecDemoGateway = { setPaymentMode, setInventoryMode, placeOrder } as unknown as EcDemoGateway;
+  const injectInfraFault = vi.fn().mockResolvedValue(undefined);
+  const ecDemoGateway = {
+    setPaymentMode,
+    setInventoryMode,
+    placeOrder,
+    injectInfraFault,
+  } as unknown as EcDemoGateway;
 
   beforeAll(async () => {
     const started = await startApp({ ecDemoGateway });
@@ -42,6 +48,13 @@ describe("demoRoutes (integration)", () => {
 
     const bad = await request(app.httpApp).post("/demo/scenario/bogus/trigger").send();
     expect(bad.status).toBe(400);
+  });
+
+  it("POST /demo/scenario/infra-fault/trigger は注文を伴わず EC へインフラ障害を注入する", async () => {
+    const res = await request(app.httpApp).post("/demo/scenario/infra-fault/trigger").send();
+    expect(res.status).toBe(202);
+    expect(res.body).toMatchObject({ scenarioId: "infra-fault" });
+    expect(injectInfraFault).toHaveBeenCalledTimes(1);
   });
 
   it("POST /demo/reset は 200 を返す", async () => {
