@@ -35,17 +35,23 @@ cleanup_ar() {
 }
 
 # VM 上で compose pull & up（IAP 経由 SSH）
+# sudo を使う理由: gcloud SSH ユーザーは docker グループ外のため /var/run/docker.sock にアクセス不可。
+# トークンを再取得する理由: startup-script のアクセストークンは ~1h で失効する。
 backbone_update() {
   local service="$1"
   gcloud compute ssh "${VM_NAME}" --zone="${ZONE}" --tunnel-through-iap \
     --command="
       set -e
-      docker compose \
+      TOKEN=\$(curl -sf -H 'Metadata-Flavor: Google' \
+        'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token' \
+        | sed -n 's/.*\"access_token\":\"\([^\"]*\)\".*/\1/p')
+      echo \"\$TOKEN\" | sudo docker login -u oauth2accesstoken --password-stdin 'https://${AR_HOST}'
+      sudo docker compose \
         --env-file /opt/app/.env \
         -f /opt/app/docker-compose.base.yml \
         -f /opt/app/docker-compose.prod.yml \
         pull ${service}
-      docker compose \
+      sudo docker compose \
         --env-file /opt/app/.env \
         -f /opt/app/docker-compose.base.yml \
         -f /opt/app/docker-compose.prod.yml \
