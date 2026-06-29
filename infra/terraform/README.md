@@ -67,11 +67,11 @@ terraform apply
 
 Terraform はインフラ（サービス設定・IAM・スケーリング）を管理し、**コンテナイメージの更新は CI または手動コマンドが担う**。
 
-| サービス | ランタイム | イメージ名 | CI ジョブ |
-|---|---|---|---|
-| ec-backend | GCE backbone（docker compose） | `ec-backend` | ※ CI 未整備・手動 |
-| backoffice-backend | GCE backbone + Cloud Run edge | `backoffice-backend` | ※ CI 未整備・手動 |
-| backoffice-frontend | Cloud Run（nginx） | `backoffice-frontend` | `build-push-frontend`（main push 自動） |
+| サービス            | ランタイム                     | イメージ名            | CI ジョブ                               |
+| ------------------- | ------------------------------ | --------------------- | --------------------------------------- |
+| ec-backend          | GCE backbone（docker compose） | `ec-backend`          | ※ CI 未整備・手動                       |
+| backoffice-backend  | GCE backbone + Cloud Run edge  | `backoffice-backend`  | ※ CI 未整備・手動                       |
+| backoffice-frontend | Cloud Run（nginx）             | `backoffice-frontend` | `build-push-frontend`（main push 自動） |
 
 **初回 `terraform apply` にイメージは不要**（frontend は `nginx:alpine` プレースホルダで起動、backbone はイメージプッシュ後に compose pull）。
 
@@ -89,6 +89,62 @@ infra/terraform/manual_deploy.sh all
 ```
 
 引数: `ec-backend` | `backoffice-backend` | `backoffice-frontend` | `all`
+
+## サービス停止・コスト 0 にする手順
+
+ハッカソン終了後など、GCP 課金を完全に止めたいときの手順。
+
+### 1. インフラ削除（terraform destroy）
+
+```bash
+infra/terraform/teardown.sh
+```
+
+`teardown.sh` が `envs/prod` に対して `terraform init` → `terraform destroy` を実行する。  
+以下のリソースが **すべて削除**される:
+
+| リソース                            | 備考                                           |
+| ----------------------------------- | ---------------------------------------------- |
+| GCE VM (ec-monitoring-backbone)     | MongoDB / RabbitMQ / ES / Valkey ごと消える    |
+| Cloud Run 2 サービス                | backoffice-backend edge / backoffice-frontend  |
+| VPC / subnet / VPC Access connector |                                                |
+| Artifact Registry リポジトリ        | push 済みイメージも一緒に消える                |
+| GCS deploy バケット                 | `force_destroy=true` のため中身ごと削除        |
+| Secret Manager secrets              | `INGEST_TOKEN` バージョンも含めて削除          |
+| Monitoring / Logging リソース       | アラートポリシー・通知チャネル・ログメトリクス |
+
+### 2. tfstate 用 GCS バケットを手動削除
+
+`terraform destroy` はバックエンド自身（tfstate バケット）を管理できないため、別途削除する。  
+バケット名は `envs/prod/backend.hcl` の `bucket =` を確認。
+
+```bash
+gcloud storage rm -r gs://<TFSTATE_BUCKET>
+```
+
+### 3. 手動追加 Secret の確認（条件付き）
+
+`INGEST_TOKEN` 以外の Secret（例: `GEMINI_API_KEY`）を手動で追加していた場合は Terraform 管理外のため残る。
+
+```bash
+gcloud secrets list --project=ec-monitoring-agent
+# 残っていれば個別削除
+gcloud secrets delete <SECRET_ID> --project=ec-monitoring-agent
+```
+
+> **注意**: Vertex AI 経由の Gemini 利用（`GOOGLE_GENAI_USE_VERTEXAI=true`）は SA の ADC 認証なので `GEMINI_API_KEY` Secret は通常不要。
+
+### 再構築するには
+
+```bash
+cd infra/terraform/envs/prod
+terraform init -backend-config=backend.hcl
+terraform apply
+```
+
+その後「apply 後にやること」セクションの手順を再実施する。
+
+---
 
 ## 既知の wiring 注意点（コード側の後続作業）
 
