@@ -1,4 +1,4 @@
-import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/InfraEvidence";
+import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/contracts/InfraEvidenceContract";
 
 /**
  * インフラ証拠（Cloud Logging / Terraform / GitHub）の表示用型と、

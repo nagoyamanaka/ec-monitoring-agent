@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/InfraEvidence";
+import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/contracts/InfraEvidenceContract";
 import {
   evidenceSections,
   isEvidenceEmpty,

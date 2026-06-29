@@ -1,4 +1,4 @@
-import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/InfraEvidence";
+import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/contracts/InfraEvidenceContract";
 import type { HttpClient } from "@shared/api/HttpClient";
 import { type EvidenceView, toEvidenceView } from "../domain/EvidenceView";
 

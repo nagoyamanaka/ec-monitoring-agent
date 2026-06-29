@@ -21,12 +21,23 @@ FROM deps AS dev
 EXPOSE 5173
 CMD ["pnpm", "run", "dev:frontend"]
 
+# ── context-contracts: Contexts/Monitoring の contracts/ ディレクトリのみ抽出 ──
+# @monitoring alias が参照するのは contracts/ 配下の型のみ。
+# find で再帰的に contracts/ を収集することで非 workspace package の混入を最小化する。
+FROM pruner AS context-contracts
+WORKDIR /filtered
+RUN find /app/src/Contexts/Monitoring -type d -name "contracts" | \
+    while read dir; do \
+      rel="${dir#/app/src/Contexts/Monitoring/}"; \
+      mkdir -p "$rel" && cp -r "$dir/." "$rel/"; \
+    done
+
 # ── build: static assets を生成 ──────────────────────────
 FROM deps AS build
 COPY --from=pruner /app/out/full/ .
 # src/Contexts は workspace package でないため turbo prune に含まれない。
-# @monitoring/* path alias の解決に必要なので手動でコピーする。
-COPY --from=pruner /app/src/Contexts ./src/Contexts
+# contracts/ のみを絞り込んでコピーする（context-contracts ステージで抽出済み）。
+COPY --from=context-contracts /filtered ./src/Contexts/Monitoring
 RUN pnpm run --filter @ec-monitoring-agent/backoffice-frontend build
 
 # ── runner: nginx で static 配信 + API リバースプロキシ ──
