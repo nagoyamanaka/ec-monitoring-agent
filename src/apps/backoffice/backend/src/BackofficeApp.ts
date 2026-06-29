@@ -177,6 +177,7 @@ export class BackofficeApp {
     const githubGateway = new GitHubGatewayImpl(
       config.github.token,
       config.github.targetRepo,
+      config.github.targetRef,
     );
 
     // 単一 LLMTextClient（stub 時は決定論）。AI調査の既定経路＋リメディ起案(planner)で共有する。

@@ -90,6 +90,26 @@ describe("TriggerDemoScenarioUseCase", () => {
     expect(ec.injectInfraFault).not.toHaveBeenCalled();
   });
 
+  it("シナリオ7（appcode-regression）は APPLICATION の合成イベントを実経路へ流す（注文/注入なし）", async () => {
+    const ec = fakeEcGateway();
+    const useCase = new TriggerDemoScenarioUseCase(ec, "p-1", fakeInfraStore(), collect);
+
+    const result = await useCase.run("7");
+
+    expect(result).toEqual({ scenarioId: "appcode-regression", label: "アプリコード退行", orderId: "" });
+
+    // 検知の入口だけ合成。UNKNOWN→AI 調査に乗る APPLICATION の CRITICAL イベントになる。
+    expect(collect.run).toHaveBeenCalledTimes(1);
+    const event = (collect.run as ReturnType<typeof vi.fn>).mock.calls[0][0] as MonitoringEvent;
+    expect(event.category.value).toBe("APPLICATION");
+    expect(event.isAlertable()).toBe(true);
+    expect(event.source).toBe("ec-backend");
+
+    // 注文投入・障害注入は伴わない（合成検知のみ）。
+    expect(ec.placeOrder).not.toHaveBeenCalled();
+    expect(ec.injectInfraFault).not.toHaveBeenCalled();
+  });
+
   it("未知シナリオは UnsupportedScenarioError", async () => {
     const useCase = new TriggerDemoScenarioUseCase(fakeEcGateway(), "p-1", fakeInfraStore(), collect);
     await expect(useCase.run("nope")).rejects.toBeInstanceOf(UnsupportedScenarioError);

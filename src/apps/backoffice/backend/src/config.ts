@@ -44,6 +44,10 @@ export const config = {
   github: {
     token: process.env.GITHUB_TOKEN ?? "",
     targetRepo: process.env.GITHUB_TARGET_REPO ?? "",
+    // 調査が「どの ref を見るか」。空＝既定ブランチ(main)を時間窓で絞る（本番）。
+    // デモ環境では demo/regression を指す＝そのブランチの直近コミットを壁時計非依存で証跡に使う
+    // （静的に1回積んだ証跡コミットを、審査員がいつ閲覧しても発見できるようにするため）。
+    targetRef: process.env.GITHUB_TARGET_REF ?? "",
     // 修正PRの起票先。未設定なら調査用の targetRepo にフォールバック（同一リポを想定）。
     remediationRepo:
       process.env.GITHUB_REMEDIATION_REPO ??
