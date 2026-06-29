@@ -42,6 +42,32 @@ export type GitCommit = {
   readonly committedAt: Date;
 };
 
+// あるコミットが変更した1ファイルのコード差分（unified diff）。
+// terraformDiff が「インフラに適用された事実」なのに対し、こちらは「アプリコードの変更内容」を表す相棒。
+// バイナリ/巨大ファイルでは patch は undefined になり得る。
+export type GitFileDiff = {
+  readonly filename: string;
+  readonly status: string; // added | modified | removed | renamed など
+  readonly additions: number;
+  readonly deletions: number;
+  // GitHub の unified diff（hunk 群）。トークン予算で末尾を切った場合は truncated=true。
+  readonly patch?: string;
+  readonly truncated?: boolean;
+};
+
+// 1コミットの詳細差分。fetch_recent_commits（一覧＝当たり付け）で疑わしい sha を見つけたあと、
+// その1件だけを深掘りする「詳細」。トークン肥大を避けるため InfraEvidence の事前収集には載せず、
+// エージェントが必要時にのみ引く（committedAt は Date／ワイヤ越えはしないので Primitives は持たない）。
+export type GitCommitDiff = {
+  readonly sha: string;
+  readonly message: string;
+  readonly author: string;
+  readonly committedAt: Date;
+  readonly files: GitFileDiff[];
+  // ファイル数が上限を超えて files を間引いた場合 true。
+  readonly filesTruncated?: boolean;
+};
+
 // Cloud Monitoring から相関取得した1メトリクスの要約（CPU / 接続数 / 5xx 等）。
 // 生の時系列はそのまま AI に渡すとトークンを食うので、窓内の latest/max とサンプル点数に圧縮する。
 // Date を含まないので Primitives は本型をそのまま再利用する。

@@ -6,6 +6,7 @@ import {
 import type {
   AppLogEntry,
   GitCommit,
+  GitCommitDiff,
   TerraformDiff,
 } from "../../../domain/InfraEvidence.js";
 import type { ScoredIncident } from "../../../../SimilarIncident/domain/SimilarIncidentRepository.js";
@@ -28,7 +29,10 @@ function makeDeps(
   return {
     cloudLoggingGateway: { getAppLogs: async () => [] },
     terraformGateway: { getAppliedDiff: async () => null },
-    githubGateway: { listRecentCommits: async () => [] },
+    githubGateway: {
+      listRecentCommits: async () => [],
+      getCommitDiff: async () => null,
+    },
     similarIncidentRepository: {
       findSimilar: async () => [],
       index: async () => {},
@@ -46,13 +50,14 @@ function tool(index: number, deps = makeDeps()) {
 // ── ツール一覧 ──────────────────────────────────────────────────────────────
 
 describe("buildInvestigationTools", () => {
-  it("4つのツールを返し名前が正しい", () => {
+  it("5つのツールを返し名前が正しい", () => {
     const tools = buildInvestigationTools(makeDeps());
-    expect(tools).toHaveLength(4);
+    expect(tools).toHaveLength(5);
     expect(tools.map((t) => t.name)).toEqual([
       "fetch_app_logs",
       "fetch_terraform_diff",
       "fetch_recent_commits",
+      "fetch_commit_diff",
       "search_similar_incidents",
     ]);
   });
@@ -227,7 +232,10 @@ describe("fetch_recent_commits", () => {
 
   it("GitCommit の committedAt を ISO 文字列に変換して返す", async () => {
     const deps = makeDeps({
-      githubGateway: { listRecentCommits: async () => [COMMIT] },
+      githubGateway: {
+        listRecentCommits: async () => [COMMIT],
+        getCommitDiff: async () => null,
+      },
     });
     const result = await call(tool(2, deps), { sinceIso: ISO });
     expect(result).toEqual([
@@ -248,6 +256,7 @@ describe("fetch_recent_commits", () => {
           captured = params;
           return [];
         },
+        getCommitDiff: async () => null,
       },
     });
     await call(tool(2, deps), { sinceIso: ISO, limit: 3 });
@@ -262,6 +271,7 @@ describe("fetch_recent_commits", () => {
           captured = params;
           return [];
         },
+        getCommitDiff: async () => null,
       },
     });
     await call(tool(2, deps), { sinceIso: ISO });
@@ -274,6 +284,7 @@ describe("fetch_recent_commits", () => {
         listRecentCommits: async () => {
           throw new Error("gh api error");
         },
+        getCommitDiff: async () => null,
       },
     });
     const result = await call(tool(2, deps), { sinceIso: ISO });
@@ -281,7 +292,75 @@ describe("fetch_recent_commits", () => {
   });
 });
 
-// ── search_similar_incidents (index 3) ──────────────────────────────────────
+// ── fetch_commit_diff (index 3) ─────────────────────────────────────────────
+
+describe("fetch_commit_diff", () => {
+  const COMMIT_DIFF: GitCommitDiff = {
+    sha: "abc1234",
+    message: "fix: connection pool exhaustion",
+    author: "dev",
+    committedAt: DATE,
+    files: [
+      {
+        filename: "src/db.ts",
+        status: "modified",
+        additions: 3,
+        deletions: 1,
+        patch: "@@ -1 +1 @@\n-pool(5)\n+pool(50)",
+      },
+    ],
+  };
+
+  it("GitCommitDiff の committedAt を ISO 文字列に変換して返す", async () => {
+    const deps = makeDeps({
+      githubGateway: {
+        listRecentCommits: async () => [],
+        getCommitDiff: async () => COMMIT_DIFF,
+      },
+    });
+    const result = await call(tool(3, deps), { sha: "abc1234" });
+    expect(result).toEqual({ ...COMMIT_DIFF, committedAt: ISO });
+  });
+
+  it("sha を getCommitDiff に渡す", async () => {
+    let captured: unknown;
+    const deps = makeDeps({
+      githubGateway: {
+        listRecentCommits: async () => [],
+        getCommitDiff: async (params) => {
+          captured = params;
+          return null;
+        },
+      },
+    });
+    await call(tool(3, deps), { sha: "deadbeef" });
+    expect((captured as { sha: string }).sha).toBe("deadbeef");
+  });
+
+  it("null のとき取得不可のフォールバックを返す", async () => {
+    const result = await call(tool(3), { sha: "unknown" });
+    expect(result).toEqual({
+      sha: "unknown",
+      files: [],
+      summary: "差分を取得できなかった（未設定/権限なし/不明な SHA）",
+    });
+  });
+
+  it("ゲートウェイが throw したら { error } を返す", async () => {
+    const deps = makeDeps({
+      githubGateway: {
+        listRecentCommits: async () => [],
+        getCommitDiff: async () => {
+          throw new Error("gh api error");
+        },
+      },
+    });
+    const result = await call(tool(3, deps), { sha: "abc1234" });
+    expect(result).toEqual({ error: "gh api error" });
+  });
+});
+
+// ── search_similar_incidents (index 4) ──────────────────────────────────────
 
 describe("search_similar_incidents", () => {
   const INCIDENT: SimilarIncident = {
@@ -303,7 +382,7 @@ describe("search_similar_incidents", () => {
         search: async () => [HIT],
       },
     });
-    const result = await call(tool(3, deps), {
+    const result = await call(tool(4, deps), {
       eventName: "PaymentTimeout",
       text: "タイムアウト",
     });
@@ -330,7 +409,7 @@ describe("search_similar_incidents", () => {
         },
       },
     });
-    await call(tool(3, deps), {
+    await call(tool(4, deps), {
       eventName: "PaymentTimeout",
       text: "タイムアウト",
     });
@@ -350,7 +429,7 @@ describe("search_similar_incidents", () => {
         },
       },
     });
-    await call(tool(3, deps), {
+    await call(tool(4, deps), {
       eventName: "PaymentTimeout",
       text: "タイムアウト",
       limit: 2,
@@ -369,7 +448,7 @@ describe("search_similar_incidents", () => {
         },
       },
     });
-    const result = await call(tool(3, deps), {
+    const result = await call(tool(4, deps), {
       eventName: "PaymentTimeout",
       text: "タイムアウト",
     });

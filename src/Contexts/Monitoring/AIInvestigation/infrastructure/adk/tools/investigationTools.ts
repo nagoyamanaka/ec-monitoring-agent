@@ -118,6 +118,29 @@ export function buildInvestigationTools(deps: InvestigationToolDeps): FunctionTo
       }),
   });
 
+  const fetchCommitDiff = new FunctionTool({
+    name: "fetch_commit_diff",
+    description:
+      "指定 SHA のコミットのファイル単位コード差分（unified diff）を読み取り専用で取得する。fetch_recent_commits で当たりを付けた疑わしい1コミットの「実際のコード変更」を深掘りするときに使う。アプリコード起因の障害調査向け。",
+    parameters: z.object({
+      sha: z
+        .string()
+        .describe("深掘りするコミットの SHA（fetch_recent_commits が返した sha）"),
+    }),
+    execute: ({ sha }) =>
+      bestEffort(async () => {
+        const diff = await deps.githubGateway.getCommitDiff({ sha });
+        if (!diff) {
+          return {
+            sha,
+            files: [],
+            summary: "差分を取得できなかった（未設定/権限なし/不明な SHA）",
+          };
+        }
+        return { ...diff, committedAt: diff.committedAt.toISOString() };
+      }),
+  });
+
   const searchSimilarIncidents = new FunctionTool({
     name: "search_similar_incidents",
     description:
@@ -143,5 +166,11 @@ export function buildInvestigationTools(deps: InvestigationToolDeps): FunctionTo
       }),
   });
 
-  return [fetchAppLogs, fetchTerraformDiff, fetchRecentCommits, searchSimilarIncidents];
+  return [
+    fetchAppLogs,
+    fetchTerraformDiff,
+    fetchRecentCommits,
+    fetchCommitDiff,
+    searchSimilarIncidents,
+  ];
 }
