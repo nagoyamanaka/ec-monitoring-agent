@@ -59,7 +59,9 @@ function formatAbsoluteTime(iso: string): string {
 /**
  * アラート詳細の右オーバーレイ・ドロワー（master-detail の detail）。
  * 背景 dim ＋ Esc / バックドロップ / ✕ で閉じる。大きい confidence ゲージはここに置き、
- * 本体は AlertCardExpanded を再利用する（summary・調査ステップ・推奨アクション・承認/却下）。
+ * 本体は AlertCardExpanded を要約射影（variant="summary"）で再利用する＝トリアージ用の原因候補＋
+ * 障害規模(impact.scale)＋承認/却下に絞り、報告用フル（調査ステップ全文・impact 全項目・escalation・
+ * review）は詳細ページ（AlertDetailPage・variant="full"）に委ねる（タスク37：射影違いで出し分け）。
  * 親は alerts.find(id) で最新 view を渡す＝SSE 更新がドロワーにもライブ反映される。
  */
 export function AlertDetailDrawer({
@@ -189,6 +191,7 @@ export function AlertDetailDrawer({
             alert={alert}
             onDecision={onDecision}
             onReinvestigate={onReinvestigate}
+            variant="summary"
           />
           <RelatedAlertsPanel
             alert={alert}

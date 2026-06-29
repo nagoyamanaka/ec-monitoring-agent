@@ -295,15 +295,18 @@
 - 注: 「無関係 diff→reject/concerns・テスト欠落→concerns・整合 diff→pass」はエージェント（LLM）挙動でデモ確認の領域＝疎通主体の ADK 部・read-only ゲートウェイは UT せず（既存方針）、決定論的な parser/mapper/report 側で担保
 - 残（タスク37）: フロント表示（詳細＝remediationReview verdict/concerns/citations の全表示）は**未着手**＝タスク37の責務
 
-### タスク 37: レポート責務分割（一覧オーバレイ=要約 / 詳細=報告用フル）〔stretch〕
+### タスク 37: レポート責務分割（一覧オーバレイ=要約 / 詳細=報告用フル）〔stretch〕✅ 完了
 
 > **狙い**: 同一 `InvestigationReport` を**射影違いで出し分ける**。一覧オーバレイ＝トリアージ用要約（原因候補＋confidence＋×N）、詳細＝報告用フル（自責他責・影響範囲・障害規模・証跡全部・引用・escalation・review）。型は単一ソース、データ二重持ちはしない。
 
-- 【変更（frontend）】`features/alerts/components/AlertCardExpanded.tsx`（一覧オーバレイ）: 要約フィールドのみ表示（summary / confidence / suggestedPatternName / occurrenceXN / impact.scale だけ）。重い証跡（investigationSteps 全文・terraformDiff・escalation 草案）は載せない。
-- 【変更（frontend）】`features/alerts/pages/AlertDetailPage.tsx`（詳細）: 報告用フル＝impact（自責他責/scope/scale/affectedSubjects＋citations チップ）・証拠パネル全部・escalation 草案・remediationReview verdict を全表示。
-- 【データ量対策】一覧 API（`GET /alerts`）は要約射影のみ返し、フル（impact 詳細・escalation・review・証跡）は `GET /alerts/:id` で遅延ロード。**一覧ペイロードを太らせない**（既存の `EvidenceView`/`useEvidence` の詳細遅延ロードと同じ作法に揃える）。
+- 【完了（frontend）】`features/alerts/components/AlertCardExpanded.tsx`: `variant: "summary" | "full"`（既定 summary）を導入し**同一 AlertView を射影違いで出し分け**。summary（一覧オーバレイ/ドロワー）＝原因候補（reason）＋サマリ文＋障害規模（`impact.scale` 1行）＋承認/却下のみ。重い証跡（investigationSteps 全文・推奨アクション・impact 全項目・escalation 草案・review）は載せない。`full`（詳細）でのみ全表示。
+- 【完了（frontend）】`features/alerts/pages/AlertDetailPage.tsx`: `AlertCardExpanded variant="full"` を渡す。報告用フル＝impact（自責他責/scope/scale/affectedSubjects＋citations チップ）・escalation 草案・remediationReview verdict＋既存の証拠パネル（`EvidencePanel`）。`AlertDetailDrawer.tsx` は `variant="summary"` を明示。
+- 【完了（frontend）】新パネル `ImpactPanel.tsx`（fault バッジ＋scope/scale＋affectedSubjects＋citations チップ）／`EscalationPanel.tsx`（team/owner/contact/reason/暫定回避/severity 根拠/evidenceBundle）／`RemediationReviewPanel.tsx`（verdict バッジ＋concerns＋PR リンク＋citations）。いずれも optional フィールド存在時のみ描画＝**未生成 Alert・自責ルート・PR 未起票では出ない**。
+- 【完了（frontend）】`domain/InvestigationReportView.ts`: `ImpactView`/`EscalationView`/`RemediationReviewView` 型＋`toInvestigationReportView` の射影を追加（contracts の `ImpactFault`/`RemediationVerdict` を re-export）。impact/escalation/review はワイヤ optional のまま欠落を保持＝**単一ソースからの射影でデータ二重持ちしない**。
+- 【完了】UT（frontend）: `AlertCardExpanded.test.tsx`（summary に重フィールドが出ない／full に impact・escalation・review が出る／impact 等無しの旧 Alert でも両 variant で壊れない）／`InvestigationReportView.test.ts`（impact/escalation/review の射影＋未設定後方互換）。frontend 148 テスト緑・`tsc --noEmit`（frontend/root とも）クリーン。
 - 設計判断（単一ソース）: 要約は `InvestigationReport` から導出する射影であって別型を作らない。後方互換のため impact/escalation/review は optional で、未生成 Alert は要約のみ表示される。
-- UT（frontend）: 一覧オーバレイに重フィールドが出ない／詳細に impact・escalation・review が出る／impact 無しの旧 Alert でも壊れない。
+- 設計判断（**バックエンド射影分割は不実施・トリガー付きで遅延**／2026-06-29 確定）: 「一覧ペイロードを太らせない」狙いに対し、**支配項の証跡（appLogs/terraformDiff/recentCommits）は既に `useEvidence` で別遅延ロード済み**＝最大の重量はもう一覧に無い。一覧に残る impact/escalation/review は KB 級テキストで限界効用が小さい。スケール軸は「幅（フィールド数）」より「件数」で、件数が問題化したら**ページネーション/フィルタ**の方が幅トリムより遥かに効く（1000→50件で幅無関係に95%減）。よって今回は**フロント表示射影のみ**で十分とし、`GET /alerts` の DTO トリムは見送り（必要時の段取りは下記）。配線面では**個別フェッチ経路 `refreshAlert(id)` は既存**＝後で一覧を要約 DTO に絞っても詳細は既存経路でフル取得できる。
+- 設計判断（**Valkey キャッシュは時期尚早**）: `GET /alerts/:id` は materialized な `toPrimitives()` の単一 Mongo ドキュメント read で、高コストな join/再計算が無い＝Mongo のワーキングセット自体が実質キャッシュ。Valkey を挟むと SSE（ANALYZING→OPEN→remediation→review）の頻繁な更新ごとに invalidate が要りヒット率が落ち stale リスクだけ残る。**Valkey が報われるのは詳細が「証跡＋関連＋cross-BC＋LLM 整形」の高コスト集約 read に育った時**で、その時は `updatedAt` をキーに組み立て済みビューをキャッシュする。read スケールが要るなら Valkey の前に **ETag/Cache-Control（updatedAt 由来）** が無 invalidation で安価。段取り＝①フロント射影（今）→②件数問題ならページネーション→③幅問題なら一覧 DTO トリム（詳細は `refreshAlert` でフル）→④詳細が高コスト集約化したら ETag→Valkey。
 
 ---
 

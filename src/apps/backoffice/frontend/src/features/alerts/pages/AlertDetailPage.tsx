@@ -127,6 +127,7 @@ export function AlertDetailPage() {
               alert={alert}
               onDecision={handleDecision}
               onReinvestigate={handleReinvestigate}
+              variant="full"
             />
             <RelatedAlertsPanel
               alert={alert}

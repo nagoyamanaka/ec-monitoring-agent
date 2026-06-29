@@ -71,6 +71,55 @@ describe("toInvestigationReportView", () => {
     const view = toInvestigationReportView(makePrimitives());
     expect(view.remediable).toBe(false);
   });
+
+  it("impact/escalation/review 無し（旧 Alert）は View でも欠落する（後方互換）", () => {
+    const view = toInvestigationReportView(makePrimitives());
+    expect(view.impact).toBeUndefined();
+    expect(view.escalation).toBeUndefined();
+    expect(view.remediationReview).toBeUndefined();
+  });
+
+  it("impact/escalation/review はワイヤ→View へ射影される", () => {
+    const view = toInvestigationReportView(
+      makePrimitives({
+        impact: {
+          fault: "external",
+          scope: "決済導線",
+          scale: "1,200件",
+          affectedSubjects: ["payment-api"],
+          citations: ["log:1"],
+        },
+        escalation: {
+          team: "vendor",
+          owner: "oncall",
+          contact: "#ch",
+          reason: "外部API起因",
+          interimWorkaround: "リトライ延長",
+          severityRationale: "売上直結",
+          evidenceBundle: ["log:1"],
+        },
+        remediationReview: {
+          verdict: "concerns",
+          concerns: ["テスト不足"],
+          pullRequestUrl: "https://github.com/x/y/pull/1",
+          citations: ["diff:a"],
+        },
+      }),
+    );
+
+    expect(view.impact).toEqual({
+      fault: "external",
+      scope: "決済導線",
+      scale: "1,200件",
+      affectedSubjects: ["payment-api"],
+      citations: ["log:1"],
+    });
+    expect(view.escalation?.team).toBe("vendor");
+    expect(view.remediationReview?.verdict).toBe("concerns");
+    expect(view.remediationReview?.pullRequestUrl).toBe(
+      "https://github.com/x/y/pull/1",
+    );
+  });
 });
 
 describe("isReviewed", () => {

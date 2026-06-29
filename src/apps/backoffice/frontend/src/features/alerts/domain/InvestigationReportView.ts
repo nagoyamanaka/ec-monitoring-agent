@@ -2,6 +2,8 @@ import type {
   InvestigationReportPrimitives,
   InvestigationItemPrimitives,
   InvestigationLinkKind,
+  ImpactFault,
+  RemediationVerdict,
 } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
 import type { AlertSeverity } from "./AlertView";
 
@@ -12,7 +14,38 @@ import type { AlertSeverity } from "./AlertView";
 
 export type ReviewStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";
 
-export type { InvestigationLinkKind };
+export type { InvestigationLinkKind, ImpactFault, RemediationVerdict };
+
+/**
+ * 影響評価（自責他責・影響範囲・障害規模）の表示用型（タスク34）。
+ * 一覧オーバレイは `scale` のみを要約に出し、詳細は全フィールド＋citations チップを出す（タスク37）。
+ */
+export type ImpactView = {
+  readonly fault: ImpactFault;
+  readonly scope: string;
+  readonly scale: string;
+  readonly affectedSubjects: string[];
+  readonly citations: string[];
+};
+
+/** 他責/運用案件のエスカレーション草案の表示用型（タスク35）。詳細のみで全表示する。 */
+export type EscalationView = {
+  readonly team: string;
+  readonly owner: string;
+  readonly contact: string;
+  readonly reason: string;
+  readonly interimWorkaround: string;
+  readonly severityRationale: string;
+  readonly evidenceBundle: string[];
+};
+
+/** 修正PR自動レビューの判定の表示用型（タスク36）。詳細のみで全表示する。 */
+export type RemediationReviewView = {
+  readonly verdict: RemediationVerdict;
+  readonly concerns: string[];
+  readonly pullRequestUrl: string;
+  readonly citations: string[];
+};
 
 /**
  * AI 調査が見つけた相関アラートの参照（id・関係種別・根拠）。
@@ -49,6 +82,12 @@ export type InvestigationReportView = {
   readonly remediable: boolean;
   // AI 調査が見つけた相関アラート（id・関係・根拠）。未指定は空配列。
   readonly relatedAlerts: RelatedAlertRef[];
+  // 影響評価（自責他責/影響範囲/障害規模）。後方互換のため optional（impact 無しの旧 Alert は未設定）。
+  readonly impact?: ImpactView;
+  // 他責/運用案件のエスカレーション草案。自責ルート・旧 Alert では未設定。
+  readonly escalation?: EscalationView;
+  // 修正PRの自動レビュー結果。PR 未起票・旧 Alert では未設定。
+  readonly remediationReview?: RemediationReviewView;
 };
 
 /** ワイヤ要素（文字列 or 構造化）を表示用の構造化形へ正規化。 */
@@ -76,6 +115,42 @@ export function toInvestigationReportView(
       relation: r.relation,
       rationale: r.rationale,
     })),
+    // impact/escalation/review はワイヤ optional（後方互換）。未設定なら View でも欠落させ、
+    // 表示側は存在チェックで出し分ける（単一ソースからの射影＝データ二重持ちはしない）。
+    ...(dto.impact
+      ? {
+          impact: {
+            fault: dto.impact.fault,
+            scope: dto.impact.scope,
+            scale: dto.impact.scale,
+            affectedSubjects: [...dto.impact.affectedSubjects],
+            citations: [...dto.impact.citations],
+          },
+        }
+      : {}),
+    ...(dto.escalation
+      ? {
+          escalation: {
+            team: dto.escalation.team,
+            owner: dto.escalation.owner,
+            contact: dto.escalation.contact,
+            reason: dto.escalation.reason,
+            interimWorkaround: dto.escalation.interimWorkaround,
+            severityRationale: dto.escalation.severityRationale,
+            evidenceBundle: [...dto.escalation.evidenceBundle],
+          },
+        }
+      : {}),
+    ...(dto.remediationReview
+      ? {
+          remediationReview: {
+            verdict: dto.remediationReview.verdict,
+            concerns: [...dto.remediationReview.concerns],
+            pullRequestUrl: dto.remediationReview.pullRequestUrl,
+            citations: [...dto.remediationReview.citations],
+          },
+        }
+      : {}),
   };
 }
 

@@ -6,8 +6,8 @@ import { AlertCardExpanded } from "./AlertCardExpanded";
 import { makeAlert, makeReport } from "../test-support/alertFixture";
 
 describe("AlertCardExpanded", () => {
-  it("AI 調査（未知）はサマリ・調査ステップ・推奨アクションを表示する", () => {
-    render(<AlertCardExpanded alert={makeAlert()} />);
+  it("full は サマリ・調査ステップ・推奨アクションを表示する", () => {
+    render(<AlertCardExpanded alert={makeAlert()} variant="full" />);
     expect(screen.getByText("AI 推定パターン")).toBeInTheDocument();
     expect(screen.getByText("未知のレイテンシ急増を検知")).toBeInTheDocument();
     expect(screen.getByText("ログ確認")).toBeInTheDocument();
@@ -17,6 +17,7 @@ describe("AlertCardExpanded", () => {
   it("href 付き調査ステップは新規タブの外部リンクになる", () => {
     render(
       <AlertCardExpanded
+        variant="full"
         alert={makeAlert({
           report: makeReport({
             investigationSteps: [
@@ -40,6 +41,7 @@ describe("AlertCardExpanded", () => {
   it("href の無いステップはプレーンテキストのまま（リンク化しない）", () => {
     render(
       <AlertCardExpanded
+        variant="full"
         alert={makeAlert({
           report: makeReport({
             investigationSteps: [{ text: "素のステップ" }],
@@ -80,9 +82,10 @@ describe("AlertCardExpanded", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("remediable=true のとき「コードで修正可能」バッジを出す", () => {
+  it("remediable=true のとき「コードで修正可能」バッジを出す（full）", () => {
     const { rerender } = render(
       <AlertCardExpanded
+        variant="full"
         alert={makeAlert({ report: makeReport({ remediable: false }) })}
       />,
     );
@@ -90,6 +93,7 @@ describe("AlertCardExpanded", () => {
 
     rerender(
       <AlertCardExpanded
+        variant="full"
         alert={makeAlert({ report: makeReport({ remediable: true }) })}
       />,
     );
@@ -265,5 +269,102 @@ describe("AlertCardExpanded", () => {
       />,
     );
     expect(screen.getByText(/調査中/)).toBeInTheDocument();
+  });
+
+  // タスク37: 同一 InvestigationReport を射影違いで出し分ける（要約 vs 報告用フル）。
+  describe("射影（variant: summary / full）", () => {
+    const fullReport = makeReport({
+      impact: {
+        fault: "external",
+        scope: "決済導線の一部ユーザ",
+        scale: "約1,200件・15分継続",
+        affectedSubjects: ["payment-api", "checkout"],
+        citations: ["log:err-503", "inc:past-42"],
+      },
+      escalation: {
+        team: "external-vendor-liaison",
+        owner: "oncall-vendor",
+        contact: "#vendor-escalation",
+        reason: "外部決済APIの 5xx 急増が根本原因",
+        interimWorkaround: "リトライ間隔を延ばし二重課金を防ぐ",
+        severityRationale: "売上直結のため high",
+        evidenceBundle: ["log:err-503"],
+      },
+      remediationReview: {
+        verdict: "concerns",
+        concerns: ["テストが障害経路をカバーしていない"],
+        pullRequestUrl: "https://github.com/acme/repo/pull/7",
+        citations: ["diff:src/pay.ts"],
+      },
+    });
+
+    it("summary は要約のみ（impact.scale は出すが調査ステップ/推奨アクション/escalation/review は出さない）", () => {
+      render(
+        <AlertCardExpanded
+          variant="summary"
+          alert={makeAlert({ report: fullReport })}
+        />,
+      );
+      // 要約に出るもの: サマリ文＋障害規模
+      expect(screen.getByText("未知のレイテンシ急増を検知")).toBeInTheDocument();
+      expect(screen.getByText("約1,200件・15分継続")).toBeInTheDocument();
+      // 重い証跡・報告用フルは出さない
+      expect(screen.queryByText("調査ステップ")).not.toBeInTheDocument();
+      expect(screen.queryByText("推奨アクション")).not.toBeInTheDocument();
+      expect(screen.queryByText("影響評価")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("エスカレーション草案"),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("修正PR 自動レビュー")).not.toBeInTheDocument();
+    });
+
+    it("full は報告用フル（impact 全項目・escalation・review を全表示）", () => {
+      render(
+        <AlertCardExpanded
+          variant="full"
+          alert={makeAlert({ report: fullReport })}
+        />,
+      );
+      // impact 全項目
+      expect(screen.getByText("影響評価")).toBeInTheDocument();
+      expect(screen.getByText(/他責/)).toBeInTheDocument();
+      expect(screen.getByText("決済導線の一部ユーザ")).toBeInTheDocument();
+      expect(screen.getByText("約1,200件・15分継続")).toBeInTheDocument();
+      expect(screen.getByText("payment-api")).toBeInTheDocument();
+      expect(screen.getByText("inc:past-42")).toBeInTheDocument();
+      // escalation
+      expect(screen.getByText("エスカレーション草案")).toBeInTheDocument();
+      expect(screen.getByText("external-vendor-liaison")).toBeInTheDocument();
+      // review
+      expect(screen.getByText("修正PR 自動レビュー")).toBeInTheDocument();
+      expect(screen.getByText(/concerns/)).toBeInTheDocument();
+      expect(
+        screen.getByText("テストが障害経路をカバーしていない"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: /レビュー対象 PR/ }),
+      ).toHaveAttribute("href", "https://github.com/acme/repo/pull/7");
+    });
+
+    it("impact/escalation/review の無い旧 Alert でも両 variant で壊れない", () => {
+      const plain = makeReport(); // impact 等を持たない既定レポート
+      const { rerender } = render(
+        <AlertCardExpanded variant="summary" alert={makeAlert({ report: plain })} />,
+      );
+      expect(screen.getByText("未知のレイテンシ急増を検知")).toBeInTheDocument();
+      expect(screen.queryByText("障害規模")).not.toBeInTheDocument();
+      expect(screen.queryByText("影響評価")).not.toBeInTheDocument();
+
+      rerender(
+        <AlertCardExpanded variant="full" alert={makeAlert({ report: plain })} />,
+      );
+      // full でも欠落フィールドのパネルは描画しない（調査ステップは出る）
+      expect(screen.getByText("調査ステップ")).toBeInTheDocument();
+      expect(screen.queryByText("影響評価")).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("エスカレーション草案"),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("修正PR 自動レビュー")).not.toBeInTheDocument();
+    });
   });
 });

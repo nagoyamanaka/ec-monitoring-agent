@@ -3,9 +3,21 @@ import { Card } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
 import { type AlertView } from "../domain/AlertView";
 import { InvestigationItem } from "./InvestigationItem";
+import { ImpactPanel } from "./ImpactPanel";
+import { EscalationPanel } from "./EscalationPanel";
+import { RemediationReviewPanel } from "./RemediationReviewPanel";
 import { alertReason } from "../domain/alertReason";
 import { alertReviewState, isAlertReviewed } from "../domain/alertReview";
 import type { FeedbackDecision } from "../application/submitFeedback";
+
+/**
+ * 表示の射影モード（タスク37：同一 InvestigationReport を射影違いで出し分ける）。
+ * - "summary"（一覧オーバレイ/ドロワー）: トリアージ用要約。重い証跡（調査ステップ全文・推奨アクション・
+ *   impact 全項目・escalation 草案・review）は載せず、原因候補＋障害規模(impact.scale)だけに絞る。
+ * - "full"（詳細ページ）: 報告用フル。impact 全項目・escalation・review まで全表示する。
+ * データは二重持ちせず、同じ AlertView から表示時に射影する。
+ */
+export type AlertReportVariant = "summary" | "full";
 
 export interface AlertCardExpandedProps {
   alert: AlertView;
@@ -26,6 +38,10 @@ export interface AlertCardExpandedProps {
     alertId: string,
     operatorNote: string,
   ) => void | Promise<void>;
+  /**
+   * 表示する射影。既定は要約（一覧オーバレイ/ドロワー）。詳細ページは "full" を渡し報告用フルを出す。
+   */
+  variant?: AlertReportVariant;
   className?: string;
 }
 
@@ -46,8 +62,10 @@ export function AlertCardExpanded({
   alert,
   onDecision,
   onReinvestigate,
+  variant = "summary",
   className,
 }: AlertCardExpandedProps) {
+  const full = variant === "full";
   const [submitting, setSubmitting] = useState<ReviewAction | null>(null);
   // 却下フロー：理由/修正方針の入力を開いているか・入力中の note。
   const [rejecting, setRejecting] = useState(false);
@@ -162,12 +180,23 @@ export function AlertCardExpanded({
           </section>
         )}
 
-      {/* AI 調査レポート（未知パターン） */}
+      {/* AI 調査レポート（未知パターン）。summary は要約（原因候補＋障害規模）のみ、
+          full は報告用フル（調査ステップ・推奨アクション・影響評価・escalation・review）。 */}
       {report && (
         <>
           <p className="leading-relaxed text-slate-100">{report.summary}</p>
 
-          {report.investigationSteps.length > 0 && (
+          {/* 要約: 障害規模(impact.scale)だけを1行で出す（重い impact 全項目は full のみ）。 */}
+          {!full && report.impact && (
+            <p className="flex items-baseline gap-2 text-xs">
+              <span className="font-medium uppercase tracking-wide text-slate-400">
+                障害規模
+              </span>
+              <span className="text-slate-200">{report.impact.scale}</span>
+            </p>
+          )}
+
+          {full && report.investigationSteps.length > 0 && (
             <section className="space-y-1">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
                 調査ステップ
@@ -182,7 +211,7 @@ export function AlertCardExpanded({
             </section>
           )}
 
-          {report.suggestedActions.length > 0 && (
+          {full && report.suggestedActions.length > 0 && (
             <section className="space-y-1">
               <div className="flex items-center gap-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
@@ -203,6 +232,16 @@ export function AlertCardExpanded({
                 ))}
               </ul>
             </section>
+          )}
+
+          {/* 報告用フル（詳細ページのみ）: 影響評価・エスカレーション草案・修正PRレビュー。
+              いずれも optional ＝ 未生成 Alert・自責ルート・PR 未起票では描画しない。 */}
+          {full && report.impact && <ImpactPanel impact={report.impact} />}
+          {full && report.escalation && (
+            <EscalationPanel escalation={report.escalation} />
+          )}
+          {full && report.remediationReview && (
+            <RemediationReviewPanel review={report.remediationReview} />
           )}
         </>
       )}
