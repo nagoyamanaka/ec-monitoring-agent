@@ -4,6 +4,7 @@ import { AlertSeverity, AlertSeverities } from "../../../Shared/domain/AlertSeve
 import type {
   InvestigationStepPrimitives,
   ImpactAssessmentPrimitives,
+  EscalationDraftPrimitives,
 } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
@@ -26,6 +27,18 @@ function guardImpact(
 ): ImpactAssessmentPrimitives | undefined {
   if (!impact || impact.citations.length === 0) return undefined;
   return impact;
+}
+
+/**
+ * エスカレーション草案のハルシネーションガード。`team` の無い草案は「宛先を引けなかった＝捏造」なので
+ * 表示・永続化前に落とす（undefined＝草案なし）。宛先は体制マスタ（EscalationDirectory）由来に限る
+ * という方針で、impact の citations 必須ガードと同じ（根拠なき宛先を出さない）。
+ */
+function guardEscalation(
+  escalation: EscalationDraftPrimitives | undefined,
+): EscalationDraftPrimitives | undefined {
+  if (!escalation || escalation.team.trim() === "") return undefined;
+  return escalation;
 }
 
 function parseSeverity(value: string): AlertSeverity {
@@ -59,6 +72,7 @@ export function toInvestigationReport(
     remediable: output.remediable,
     relatedAlerts: output.relatedAlerts,
     impact: guardImpact(output.impact),
+    escalation: guardEscalation(output.escalation),
   });
 }
 

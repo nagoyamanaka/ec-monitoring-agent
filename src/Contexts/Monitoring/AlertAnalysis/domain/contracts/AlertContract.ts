@@ -104,6 +104,30 @@ export type ImpactAssessmentPrimitives = {
   readonly citations: string[];
 };
 
+/**
+ * 他責/運用案件のエスカレーション草案（タスク35）。impact.fault が external/運用のとき
+ * RunbookEscalationAgent が起案する。RemediationPlan（自責→コード/IaC PR）と排他で出口を分ける。
+ * `team` は体制マスタ（EscalationDirectory）由来で、捏造させない＝宛先を引けないと空文字になり
+ * マッパ側で落とされる（根拠なき宛先＝ハルシネーションを出さないガード。impact の citations と同方針）。
+ * 起案までで、実際の通知送信・チケット起票はしない（write は人間承認ゲートの内側に閉じる）。
+ */
+export type EscalationDraftPrimitives = {
+  // エスカレーション先チーム（体制マスタ由来）。引けない場合は空文字＝宛先不明。
+  readonly team: string;
+  // 一次受けの担当者（オンコール代表など）。
+  readonly owner: string;
+  // 連絡先（Slack チャンネル・メール・PagerDuty 等）。
+  readonly contact: string;
+  // なぜこのチーム/運用対応なのか（fault=external/運用の根拠と affectedSubjects との対応・1文）。
+  readonly reason: string;
+  // 暫定回避手順（過去 resolvedNote を根拠に具体化・人間が引き継ぐまでの一次対応）。
+  readonly interimWorkaround: string;
+  // 重大度の根拠（impact.scale と slaTier から・1文）。
+  readonly severityRationale: string;
+  // 引き継ぎに添付すべき証拠/引用の id（証拠ログ・類似事例・commit/terraform 差分の id）。
+  readonly evidenceBundle: string[];
+};
+
 export type InvestigationReportPrimitives = {
   readonly summary: string;
   readonly confidence: number;
@@ -119,6 +143,10 @@ export type InvestigationReportPrimitives = {
   // 影響評価（自責他責ルータの入力）。optional は後方互換＝impact 無しの旧 Alert も読める。
   // 根拠（citations）の無い impact はマッパ側で落とすので、保存される impact は必ず引用付き。
   readonly impact?: ImpactAssessmentPrimitives;
+  // 他責/運用案件のエスカレーション草案（impact.fault=external/運用ルートの出口）。optional は
+  // 後方互換＝escalation 無しの旧 Alert・自責ルートでは未設定。team 空の草案はマッパ側で落とすので、
+  // 保存される escalation は必ず宛先付き。
+  readonly escalation?: EscalationDraftPrimitives;
   // AI が「コードで直せる（PR で remediate 可能）」と判定したか。category 非依存の
   // 汎用シグナルで、フロントは remediate ボタンの活性／ROI 提示の判断に使う（advisory）。
   // 実際の write 実行ゲートは人間承認＋executor の deterministic 判定が握る。

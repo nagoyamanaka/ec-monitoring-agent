@@ -160,6 +160,54 @@ describe("LLMOutputParser", () => {
       expect(impact?.citations).toEqual(["c1", "c2"]);
     });
 
+    it("escalation は欠落で undefined・揃った構造はそのままパースする", () => {
+      // 欠落（旧スキーマ互換）
+      expect(parseLLMOutput(validJson)?.escalation).toBeUndefined();
+
+      const withEscalation = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        escalation: {
+          team: "external-vendor-liaison",
+          owner: "外部ベンダー窓口",
+          contact: "#vendor-liaison",
+          reason: "外部決済APIの障害で自社変更が無いため",
+          interimWorkaround: "決済リトライ間隔を延ばす",
+          severityRationale: "決済の3%失敗・SLA P1",
+          evidenceBundle: ["log:abc", "incident:i1"],
+        },
+      });
+      expect(parseLLMOutput(withEscalation)?.escalation).toEqual({
+        team: "external-vendor-liaison",
+        owner: "外部ベンダー窓口",
+        contact: "#vendor-liaison",
+        reason: "外部決済APIの障害で自社変更が無いため",
+        interimWorkaround: "決済リトライ間隔を延ばす",
+        severityRationale: "決済の3%失敗・SLA P1",
+        evidenceBundle: ["log:abc", "incident:i1"],
+      });
+    });
+
+    it("escalation の文字列欠落は空文字・evidenceBundle の空白/非配列は除く", () => {
+      const messy = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        escalation: { team: "platform-sre", evidenceBundle: ["c1", "  ", "", "c2"] },
+      });
+      const escalation = parseLLMOutput(messy)?.escalation;
+      expect(escalation?.team).toBe("platform-sre");
+      expect(escalation?.owner).toBe("");
+      expect(escalation?.contact).toBe("");
+      expect(escalation?.evidenceBundle).toEqual(["c1", "c2"]);
+
+      const badBundle = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        escalation: { team: "platform-sre", evidenceBundle: "oops" },
+      });
+      expect(parseLLMOutput(badBundle)?.escalation?.evidenceBundle).toEqual([]);
+    });
+
     it("relatedAlerts が配列でなければ空配列に丸める", () => {
       const notArray = JSON.stringify({
         summary: "x",

@@ -2,6 +2,7 @@ import type {
   RelatedAlertPrimitives,
   ImpactAssessmentPrimitives,
   ImpactFault,
+  EscalationDraftPrimitives,
 } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 
 /**
@@ -24,6 +25,9 @@ export type LLMInvestigationOutput = {
   // 影響評価（自責他責・影響範囲・障害規模）。未指定・構造不正は undefined（必須スキーマには含めない）。
   // citations 空の影響主張を落とすハルシネーションガードはマッパ側（toInvestigationReport）。
   impact?: ImpactAssessmentPrimitives;
+  // 他責/運用案件のエスカレーション草案。未指定・構造不正は undefined（必須スキーマには含めない）。
+  // team 空（宛先を引けない＝捏造）を落とすガードはマッパ側（toInvestigationReport）。
+  escalation?: EscalationDraftPrimitives;
 };
 
 const VALID_FAULTS: ReadonlySet<string> = new Set<ImpactFault>(["own", "external", "unknown"]);
@@ -89,6 +93,31 @@ function toImpact(value: unknown): ImpactAssessmentPrimitives | undefined {
   };
 }
 
+/** 文字列フィールドを安全に取り出す。非文字列・欠落は空文字に丸める。 */
+function toStringField(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/**
+ * escalation を {team, owner, contact, reason, interimWorkaround, severityRationale, evidenceBundle} へ
+ * 正規化する。object でなければ undefined（エスカレーション草案なし）。各文字列フィールドは欠落・非文字列を
+ * 空文字に丸め、evidenceBundle は文字列要素のみ残す。team 空（宛先を引けなかった＝捏造）を落とすガードは
+ * マッパ側（証拠なき宛先を「表示前に落とす」のは表示寄りの関心事。impact の citations 空ガードと同方針）。
+ */
+function toEscalation(value: unknown): EscalationDraftPrimitives | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const o = value as Record<string, unknown>;
+  return {
+    team: toStringField(o["team"]),
+    owner: toStringField(o["owner"]),
+    contact: toStringField(o["contact"]),
+    reason: toStringField(o["reason"]),
+    interimWorkaround: toStringField(o["interimWorkaround"]),
+    severityRationale: toStringField(o["severityRationale"]),
+    evidenceBundle: toStringArray(o["evidenceBundle"]).filter((c) => c.trim() !== ""),
+  };
+}
+
 export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
   try {
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
@@ -116,6 +145,7 @@ export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
       remediable: parsed["remediable"] === true,
       relatedAlerts: toRelatedAlerts(parsed["relatedAlerts"]),
       impact: toImpact(parsed["impact"]),
+      escalation: toEscalation(parsed["escalation"]),
     };
   } catch {
     return null;

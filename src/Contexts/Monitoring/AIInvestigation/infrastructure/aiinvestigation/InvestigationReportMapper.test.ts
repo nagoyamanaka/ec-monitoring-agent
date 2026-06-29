@@ -92,6 +92,40 @@ describe("InvestigationReportMapper", () => {
       );
       expect(report.impact).toBeUndefined();
     });
+
+    it("escalation 未指定なら report.escalation は undefined", () => {
+      expect(toInvestigationReport(output()).escalation).toBeUndefined();
+    });
+
+    it("team 付き escalation はそのまま伝播する（他責ルートの出口）", () => {
+      const escalation = {
+        team: "external-vendor-liaison",
+        owner: "外部ベンダー窓口",
+        contact: "#vendor-liaison",
+        reason: "外部決済API起因で自社変更が無い",
+        interimWorkaround: "決済リトライ間隔を延長",
+        severityRationale: "決済3%失敗・P1",
+        evidenceBundle: ["log:abc"],
+      };
+      expect(toInvestigationReport(output({ escalation })).escalation).toEqual(escalation);
+    });
+
+    it("team 空の escalation は落とす（宛先捏造ガード）", () => {
+      const report = toInvestigationReport(
+        output({
+          escalation: {
+            team: "",
+            owner: "",
+            contact: "",
+            reason: "宛先不明",
+            interimWorkaround: "",
+            severityRationale: "",
+            evidenceBundle: [],
+          },
+        }),
+      );
+      expect(report.escalation).toBeUndefined();
+    });
   });
 
   describe("buildFallbackReport", () => {

@@ -264,15 +264,20 @@
 - 【完了】UT: `LLMOutputParser.test.ts`（impact パース／fault 丸め／scope欠落→undefined／citations 空白除去・非配列丸め）／`InvestigationReportMapper.test.ts`（impact 伝播／citations 空→落とす）／`InvestigationReport.test.ts`（impact ラウンドトリップ／impact 無し旧 Primitives の後方互換）。全 618 テスト緑・`tsc --noEmit` クリーン
 - 残（タスク37）: フロント表示（一覧オーバレイ＝`impact.scale` のみ／詳細＝fault/scope/scale/affectedSubjects＋citations チップ）は**未着手**＝タスク37の責務
 
-### タスク 35: Remediation 出口の自責他責ルーティング ＋ RunbookEscalationAgent（他責・運用）〔stretch〕
+### タスク 35: Remediation 出口の自責他責ルーティング ＋ RunbookEscalationAgent（他責・運用）〔stretch〕✅ 完了済み
 
 > **狙い**: 「コードで直せない他責/運用案件」を行き止まりにせず、エスカレーション草案まで自動化。RemediationPlanner（自責→コード/IaC PR）と排他で役割分担。
 
-- 【新規】`infrastructure/adk/agents/RunbookEscalationAgent.ts`（起案のみ・write しない）。instruction: 根本原因＋impact＋体制 seed（タスク36）から、想定オーナー/チーム・連絡先・暫定回避手順（過去 `resolvedNote` を参照）・severity 根拠・添付すべき証拠バンドルを草案化。**実際の通知送信・チケット起票はしない**（人間承認の前段）。
-- 【新規】`seeds/EscalationDirectorySeed.ts`: 組織体制サンプル（`{ team, owner, contact, slaTier, ownsSubjects: string[] }[]`）。SimilarIncident（過去事例）とは別物＝**体制の知識ベース**。実物っぽさがデモ価値（実装AIは EC ドメインに即した3〜5チームの妥当なサンプルを作る：payment / inventory / infra / security / external-vendor 等）。read-only でエージェントに食わせる薄い Gateway/Repository（`EscalationDirectory.findBySubjects()`）を `domain` IF＋`InMemory` 実装で用意。
-- 【変更】`agents/InvestigationCoordinator.ts`: impact.fault で出口分岐——own→`remediation_planner`、external/運用→`runbook_escalation`。両方該当しうる場合は両方起案して人間に委ねる。出力 JSON に `escalation`（optional）を追加し `InvestigationReport` に optional フィールド追記（タスク34 と同じ後方互換作法）。
-- 設計判断（write 隔離不変）: RunbookEscalation は草案テキストのみ。送信は人間承認後（既存 RemediationPort と同じゲート思想）。
-- UT: fault=external で escalation が埋まり remediation が空になる／seed から正しいオーナーが引かれる／resolvedNote が手順に反映される。
+- 【完了】`infrastructure/adk/agents/RunbookEscalationAgent.ts`（起案のみ・write しない・`find_escalation_owners` ツール内包）。instruction: 根本原因＋impact（fault/affectedSubjects）＋体制マスタから、想定 team/owner/contact・reason・暫定回避手順（過去 `resolvedNote` を参照）・severity 根拠・添付証拠バンドルを草案化。宛先は **ツールが返した値のみ**使い捏造しない（引けなければ team 空＝宛先不明を明示）。**実際の通知送信・チケット起票はしない**（人間承認の前段）。
+- 【完了】`seeds/EscalationDirectorySeed.ts`: 組織体制サンプル5チーム（payment-platform / inventory-fulfillment / platform-sre / security-response / external-vendor-liaison・`{ team, owner, contact, slaTier, ownsSubjects: string[] }`）。SimilarIncident（過去事例）とは別物＝**体制の知識ベース**。read-only の `AIInvestigation/domain/escalation/EscalationDirectory.ts`（IF・`findBySubjects()`）＋ `infrastructure/escalation/InMemoryEscalationDirectory.ts`（大文字小文字無視＋部分一致で ownsSubjects 突合・seed 宣言順保持）。`adk/tools/escalationTools.ts`（`find_escalation_owners` FunctionTool・read-only）でエージェントに食わせる
+- 【完了】`agents/InvestigationCoordinator.ts`: impact.fault で出口分岐——own＋remediable→`remediation_planner`（suggestedActions）、external/運用→`runbook_escalation`（escalation 草案）。両方該当しうる場合は両方起案。出力 JSON に `escalation`（optional）を追加し `InvestigationReport`/contracts（`EscalationDraftPrimitives`）に optional フィールド追記（タスク34 と同じ後方互換作法・toPrimitives は escalation 有時のみ展開）。**単一Gemini版（LLMInvestigationAdapter）も同経路で escalation を生成**（`SYSTEM_INSTRUCTION` に fault ルーティング＋schema 追記・`LLMOutputParser.toEscalation` 正規化・`InvestigationReportMapper.guardEscalation` で team 空を落とすハルシネーションガード＝impact の citations 空ガードと同方針＝DRY）
+- 設計判断（配置）: EscalationDirectory は ADK エージェントが使う調査知識なので `AIInvestigation/domain/escalation/`＋`infrastructure/escalation/` に配置（cross-BC 結合を避ける）。ワイヤ型 `EscalationDraftPrimitives` は contracts 単一ソース方針どおり `AlertContract.ts` に定義し domain は re-export
+- 設計判断（write 隔離不変）: RunbookEscalation は草案テキストのみ。送信は人間承認後（既存 RemediationPort と同じゲート思想）。`find_escalation_owners` も read-only
+- 設計判断（ガードの置き場）: 構造正規化は parser（`toEscalation`・文字列欠落は空文字・evidenceBundle 空白除去）、**宛先を引けなかった（team 空）草案を落とすガードは mapper（`guardEscalation`）**＝impact と同じ parser/mapper 役割分担
+- 【完了】UT: `InMemoryEscalationDirectory.test.ts`（突合6ケース：完全/大文字小文字無視/部分一致/複数主体重複なし/該当なし/空主体）／`LLMOutputParser.test.ts`（escalation パース・文字列欠落→空文字・evidenceBundle 空白/非配列丸め）／`InvestigationReportMapper.test.ts`（escalation 伝播／team 空→落とす）／`InvestigationReport.test.ts`（escalation ラウンドトリップ／旧 Primitives 後方互換）。全 636 テスト緑・`tsc --noEmit` クリーン
+- 【完了】配線: composition root（`BackofficeApp` ADK 経路）で `InMemoryEscalationDirectory(ESCALATION_DIRECTORY_SEED)` を runner に注入
+- 注: 「fault=external で escalation が埋まり remediation が空」「resolvedNote が手順に反映」はエージェント（LLM）挙動でデモ確認の領域＝疎通主体の ADK 部は UT せず（既存方針）、決定論的な parser/mapper/repository/report 側で担保
+- 残（タスク37）: フロント表示（詳細＝escalation 草案の全表示）は**未着手**＝タスク37の責務
 
 ### タスク 36: RemediationReviewerAgent（修正PRの自動レビュー・RV段階）〔stretch〕
 

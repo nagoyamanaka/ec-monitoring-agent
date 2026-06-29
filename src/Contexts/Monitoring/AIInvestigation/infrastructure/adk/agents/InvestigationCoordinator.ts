@@ -16,6 +16,7 @@ export function createInvestigationCoordinator(params: {
   rootCauseAnalyst: LlmAgent;
   remediationPlanner: LlmAgent;
   impactTriage: LlmAgent;
+  runbookEscalation: LlmAgent;
 }): LlmAgent {
   const orchestration = `
 
@@ -27,16 +28,23 @@ export function createInvestigationCoordinator(params: {
 - remediation_planner: コード/設定変更で直せる場合に具体的な修正方針を起案する（PR起票はしない）。
 - impact_triage: 根本原因確定後に「今回ぶんの影響」（自責他責 fault・影響範囲 scope・障害規模 scale）を
   引用付きで算定する。fault は出口（自責→修正 / 他責→運用エスカレーション）の振り分け信号になる。
+- runbook_escalation: 他責/運用案件（コードで直せない）のエスカレーション草案（宛先 team/owner/contact・
+  暫定回避手順・添付証拠）を起案する。通知送信はしない（草案まで）。
 
 手順:
 1. まず root_cause_analyst で初期仮説と確度を得る。
 2. 確証に証拠が不足していれば evidence_collector で狙い撃ちに証拠を追加収集し、再び root_cause_analyst で分析し直す。
    これを確度が十分になるか、これ以上証拠が得られないと判断するまで繰り返す。
 3. 根本原因が確定したら impact_triage を呼び、impact（fault/scope/scale/affectedSubjects と各 citations）を埋める。
-4. 必要に応じて remediation_planner を呼び、修正可否と方針を得る。
+4. impact.fault で出口を振り分ける:
+   - own（自社コード/IaC 起因）でコードで直せる → remediation_planner を呼び、修正可否と方針（suggestedActions）を得る。
+   - external（外部/ベンダー起因）または運用対応が要る → runbook_escalation を呼び、escalation 草案を埋める。
+   - 自責・他責の両方がありうる場合は両方（remediation_planner と runbook_escalation）を呼び、人間の判断に委ねる。
+   - unknown のときは断定せず、確度の高い側を起案する（証拠不足なら escalation を省略してよい）。
 5. 最後に、上で定義した JSON スキーマ「だけ」を出力する（前後に説明文・コードフェンス以外の地の文を付けない）。
    confidence は実際に積み上げた証拠の強さを反映させ、impact は impact_triage の算定をそのまま載せること
-   （citation を出せなかった場合は impact を省略する）。`;
+   （citation を出せなかった場合は impact を省略する）。escalation は runbook_escalation の草案をそのまま載せ、
+   宛先（team）を引けなかった場合・自責でコードで直す場合は escalation を省略すること。`;
 
   return new LlmAgent({
     name: "investigation_coordinator",
@@ -48,6 +56,7 @@ export function createInvestigationCoordinator(params: {
       new AgentTool({ agent: params.rootCauseAnalyst }),
       new AgentTool({ agent: params.remediationPlanner }),
       new AgentTool({ agent: params.impactTriage }),
+      new AgentTool({ agent: params.runbookEscalation }),
     ],
   });
 }

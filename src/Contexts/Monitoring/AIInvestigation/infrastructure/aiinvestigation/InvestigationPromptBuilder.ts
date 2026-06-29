@@ -34,6 +34,14 @@ impact は「今回の障害ぶんの判断」です。fault は own（自社コ
 citations（参照した証拠ログ・類似インシデント・commit/terraform 差分の id）を載せ、証拠に無いことは
 推測で断定せず fault を "unknown" にしてください。citations を出せない（証拠で裏付けられない）場合は
 impact を省略してください（根拠なき影響主張は出さない）。
+escalation は「他責/運用案件（impact.fault=external、またはコード/IaC で直せず運用対応が要るもの）」の
+エスカレーション草案です。自責（fault=own かつ remediable=true）でコードで直せる場合は escalation を省略し、
+suggestedActions に修正方針を書いてください。他責/運用の場合は escalation に引き継ぎ先 team/owner/contact
+（与えられた体制情報＝escalationDirectory がある場合はそこから引き、無ければ team を空文字にして宛先不明を明示。
+宛先を捏造しない）・reason（なぜそのチーム/運用か・1文）・interimWorkaround（暫定回避手順。過去の resolvedNote を
+根拠に）・severityRationale（重大度の根拠・1文）・evidenceBundle（添付すべき証拠/引用の id）を埋めてください。
+自責・他責の両方がありうる場合は suggestedActions（修正方針）と escalation（引き継ぎ草案）の両方を出して構いません。
+通知送信・チケット起票はしないでください（草案まで＝人間承認の前段）。
 {
   "summary": "障害の説明（日本語・1〜2文）",
   "confidence": 0.87,
@@ -43,7 +51,8 @@ impact を省略してください（根拠なき影響主張は出さない）�
   "suggestedPatternName": "自動昇格候補のパターン名（例: DB_CONNECTION_EXHAUSTION）",
   "remediable": true | false,
   "relatedAlerts": [{ "alertId": "...", "relation": "same_root_cause", "rationale": "関連の根拠（1文）" }],
-  "impact": { "fault": "own" | "external" | "unknown", "scope": "影響範囲（1文）", "scale": "障害規模（1文）", "affectedSubjects": ["payment", "..."], "citations": ["証拠/類似事例の id", "..."] }
+  "impact": { "fault": "own" | "external" | "unknown", "scope": "影響範囲（1文）", "scale": "障害規模（1文）", "affectedSubjects": ["payment", "..."], "citations": ["証拠/類似事例の id", "..."] },
+  "escalation": { "team": "...", "owner": "...", "contact": "...", "reason": "...", "interimWorkaround": "...", "severityRationale": "...", "evidenceBundle": ["証拠/引用の id", "..."] }
 }`;
 
 const MAX_ESTIMATED_TOKENS = 3500;

@@ -49,6 +49,8 @@ import { LLMTextClient } from "../../../../Contexts/Monitoring/AIInvestigation/d
 import { AIInvestigationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/AIInvestigationPort.js";
 import { ADKAgentInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKAgentInvestigationAdapter.js";
 import { ADKInvestigationAgentRunner } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKInvestigationAgentRunner.js";
+import { InMemoryEscalationDirectory } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/escalation/InMemoryEscalationDirectory.js";
+import { ESCALATION_DIRECTORY_SEED } from "../../../../Contexts/Monitoring/seeds/EscalationDirectorySeed.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
 import { CloudMonitoringGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudMonitoringGatewayImpl.js";
@@ -195,6 +197,8 @@ export class BackofficeApp {
           terraformGateway,
           githubGateway,
           similarIncidentRepository,
+          // 他責/運用案件のエスカレーション草案（タスク35）の宛先を引く体制マスタ（read-only・seed 駆動）。
+          escalationDirectory: new InMemoryEscalationDirectory(ESCALATION_DIRECTORY_SEED),
         }),
       );
     } else {
