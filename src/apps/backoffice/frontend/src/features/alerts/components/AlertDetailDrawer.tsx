@@ -15,6 +15,7 @@ import type { EvidenceApi } from "../infrastructure/evidenceApi";
 import type { RemediationApi } from "../infrastructure/remediationApi";
 import type { RemediationView } from "../domain/RemediationView";
 import { AlertCardExpanded } from "./AlertCardExpanded";
+import { AlertReviewPanel } from "./AlertReviewPanel";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { EvidencePanel } from "./EvidencePanel";
 import { RemediationPanel } from "./RemediationPanel";
@@ -187,12 +188,7 @@ export function AlertDetailDrawer({
               />
             </div>
           ) : null}
-          <AlertCardExpanded
-            alert={alert}
-            onDecision={onDecision}
-            onReinvestigate={onReinvestigate}
-            variant="summary"
-          />
+          <AlertCardExpanded alert={alert} variant="summary" />
           <RelatedAlertsPanel
             alert={alert}
             lookup={relatedLookup}
@@ -209,6 +205,12 @@ export function AlertDetailDrawer({
           {evidenceApi && hasAiInvestigation(alert) && (
             <EvidencePanel api={evidenceApi} alert={alert} />
           )}
+          {/* 判定は末尾に統一配置（詳細ページと同じ）。 */}
+          <AlertReviewPanel
+            alert={alert}
+            onDecision={onDecision}
+            onReinvestigate={onReinvestigate}
+          />
         </div>
 
         <footer className="border-t border-slate-700/60 px-5 py-3">

@@ -66,7 +66,7 @@ export function EscalationPanel({ escalation }: EscalationPanelProps) {
             {escalation.evidenceBundle.map((evidence, i) => (
               <li
                 key={i}
-                className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-200 ring-1 ring-inset ring-amber-500/30"
+                className="rounded bg-slate-800/70 px-1.5 py-0.5 font-mono text-[11px] text-slate-300 ring-1 ring-inset ring-slate-700/60"
               >
                 {evidence}
               </li>

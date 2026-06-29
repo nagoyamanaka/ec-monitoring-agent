@@ -142,7 +142,9 @@ export const ALERT_SEEDS: Alert[] = [
       summary: "商品 product-seed-0042 の在庫が不足しています。要求数5に対して在庫残2です。",
       confidence: 0.92,
       severity: AlertSeverity.warning(),
-      remediable: true,
+      // 自動修正（payload.vulnerabilities 起点）の対象ではない＝起票しても skip になるため false。
+      // 修正は人間の PR（remediationReview=pass）で表現する（「直せる」と煽らない）。
+      remediable: false,
       investigationSteps: [
         "対象商品の在庫数を確認",
         "直近の入荷スケジュールを確認",
@@ -207,7 +209,9 @@ export const ALERT_SEEDS: Alert[] = [
         "注文処理が UNKNOWN_GATEWAY_ERROR で失敗しました。直前の決済タイムアウト（同一の決済ゲートウェイ障害）が連鎖した結果と推定されます。",
       confidence: 0.82,
       severity: AlertSeverity.critical(),
-      remediable: true,
+      // 自動修正（payload.vulnerabilities 起点）の対象ではない＝起票しても skip になるため false。
+      // 修正は人間の PR（remediationReview=concerns で要確認）で表現する。
+      remediable: false,
       investigationSteps: [
         "同時刻帯の決済タイムアウト発生有無を確認",
         "決済ゲートウェイのエラーレスポンスを Cloud Logging で照会",
