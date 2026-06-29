@@ -65,4 +65,17 @@ describe("InvestigationPromptBuilder", () => {
     expect(SYSTEM_INSTRUCTION).toContain("JSON");
     expect(SYSTEM_INSTRUCTION).toContain("summary");
   });
+
+  it("SYSTEM_INSTRUCTIONはconfidenceの較正基準（過信を抑える指示）を含む", () => {
+    // 較正ルーブリックが消えると confidence が高アンカーに引きずられ過信に戻るため回帰で守る。
+    expect(SYSTEM_INSTRUCTION).toContain("較正");
+    expect(SYSTEM_INSTRUCTION).toContain("過信");
+    // 証拠不足時は低く出す＝0.40 未満の基準が明示されていること。
+    expect(SYSTEM_INSTRUCTION).toContain("0.40");
+  });
+
+  it("SYSTEM_INSTRUCTIONのJSON例confidenceは高アンカー(0.87)ではない", () => {
+    // スキーマ例の値は LLM のアンカーになるため高値を置かない（中立な見本値であること）。
+    expect(SYSTEM_INSTRUCTION).not.toContain('"confidence": 0.87');
+  });
 });
