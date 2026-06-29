@@ -1,6 +1,6 @@
-import { AlertSeverity } from "../../../../../../Contexts/Monitoring/Shared/domain/AlertSeverity.js";
-import { MonitoringEvent } from "../../../../../../Contexts/Monitoring/Shared/domain/MonitoringEvent.js";
-import { MonitoringEventCategory } from "../../../../../../Contexts/Monitoring/Shared/domain/MonitoringEventCategory.js";
+import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
+import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
+import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
 
 /**
  * Cloud Monitoring の Webhook 通知（Alerting Policy 発火）の最小サブセット。

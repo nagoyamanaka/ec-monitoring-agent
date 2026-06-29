@@ -43,6 +43,12 @@ export interface AlertDetailDrawerProps {
   pushedRemediation?: RemediationView | null;
   /** 関連アラートの alertId → AlertView 解決（一覧から渡す。関連の日時/severity 補完用）。 */
   relatedLookup?: (id: string) => AlertView | undefined;
+  /**
+   * 関連アラートを開く（任意）。渡されると関連行はルート遷移せず本ハンドラで選択を差し替える
+   * ＝デモの舞台（/alerts）に留まったまま探索でき、戻るで前のドロワーに復元できる。
+   * 無い場合（詳細ページ等）は従来どおり `/alerts/:id` への `Link` にフォールバックする。
+   */
+  onRelatedNavigate?: (id: string) => void;
 }
 
 function formatAbsoluteTime(iso: string): string {
@@ -53,7 +59,9 @@ function formatAbsoluteTime(iso: string): string {
 /**
  * アラート詳細の右オーバーレイ・ドロワー（master-detail の detail）。
  * 背景 dim ＋ Esc / バックドロップ / ✕ で閉じる。大きい confidence ゲージはここに置き、
- * 本体は AlertCardExpanded を再利用する（summary・調査ステップ・推奨アクション・承認/却下）。
+ * 本体は AlertCardExpanded を要約射影（variant="summary"）で再利用する＝トリアージ用の原因候補＋
+ * 障害規模(impact.scale)＋承認/却下に絞り、報告用フル（調査ステップ全文・impact 全項目・escalation・
+ * review）は詳細ページ（AlertDetailPage・variant="full"）に委ねる（タスク37：射影違いで出し分け）。
  * 親は alerts.find(id) で最新 view を渡す＝SSE 更新がドロワーにもライブ反映される。
  */
 export function AlertDetailDrawer({
@@ -65,6 +73,7 @@ export function AlertDetailDrawer({
   remediationApi,
   pushedRemediation,
   relatedLookup,
+  onRelatedNavigate,
 }: AlertDetailDrawerProps) {
   useEffect(() => {
     if (!alert) return;
@@ -124,10 +133,10 @@ export function AlertDetailDrawer({
                 {info.description}
               </p>
             )}
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-300">
               {info && (
                 <>
-                  <code className="text-slate-400">{alert.eventName}</code>{" "}
+                  <code className="text-slate-300">{alert.eventName}</code>{" "}
                   ·{" "}
                 </>
               )}
@@ -138,7 +147,7 @@ export function AlertDetailDrawer({
             type="button"
             onClick={onClose}
             aria-label="閉じる"
-            className="shrink-0 rounded-md px-2 py-1 text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200"
+            className="shrink-0 rounded-md px-2 py-1 text-slate-300 transition hover:bg-slate-800/60 hover:text-slate-200"
           >
             ✕
           </button>
@@ -182,8 +191,13 @@ export function AlertDetailDrawer({
             alert={alert}
             onDecision={onDecision}
             onReinvestigate={onReinvestigate}
+            variant="summary"
           />
-          <RelatedAlertsPanel alert={alert} lookup={relatedLookup} />
+          <RelatedAlertsPanel
+            alert={alert}
+            lookup={relatedLookup}
+            onNavigate={onRelatedNavigate}
+          />
           {remediationApi && (
             <RemediationPanel
               alert={alert}

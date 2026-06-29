@@ -15,6 +15,15 @@ const FULL_EVIDENCE: EvidenceView = {
     },
   ],
   terraformDiff: {
+    resourceChanges: [
+      {
+        address: "aws_db_instance.main",
+        action: "update",
+        attributeDeltas: [{ key: "max_connections", before: "100", after: "20" }],
+      },
+    ],
+    appliedAt: "2026-01-01T00:00:00.000Z",
+    commitSha: "deadbeefcafe1234",
     changedResources: ["aws_db_instance.main"],
     summary: "max_connections を縮小",
   },
@@ -25,6 +34,16 @@ const FULL_EVIDENCE: EvidenceView = {
       message: "tune pool",
       author: "alice",
       committedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+  metrics: [
+    {
+      metricType: "run.googleapis.com/container/cpu/utilizations",
+      displayName: "CPU 使用率",
+      unit: "ratio",
+      latest: 0.42,
+      max: 0.95,
+      points: 3,
     },
   ],
   collectedAt: "2026-01-01T00:00:01.000Z",
@@ -48,9 +67,17 @@ describe("EvidencePanel", () => {
     );
     expect(screen.getByText("Terraform")).toBeInTheDocument();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
+    expect(screen.getByText("Cloud Monitoring")).toBeInTheDocument();
     expect(screen.getByText("pool exhausted")).toBeInTheDocument();
     expect(screen.getByText("0123456")).toBeInTheDocument();
     expect(screen.getByText("aws_db_instance.main")).toBeInTheDocument();
+    // リソース単位の before→after（原因分析の決定打）が表示される。
+    expect(screen.getByText("max_connections:")).toBeInTheDocument();
+    expect(screen.getByText("100")).toBeInTheDocument();
+    expect(screen.getByText("20")).toBeInTheDocument();
+    // メトリクス: ratio は % 整形（latest 0.42 → 42.0%）
+    expect(screen.getByText("CPU 使用率")).toBeInTheDocument();
+    expect(screen.getByText("42.0%")).toBeInTheDocument();
   });
 
   it("ANALYZING 中は解析インジケータを出し、証拠は fetch しない", async () => {
@@ -73,6 +100,7 @@ describe("EvidencePanel", () => {
       appLogs: [],
       terraformDiff: null,
       recentCommits: [],
+      metrics: [],
       collectedAt: "2026-01-01T00:00:01.000Z",
     };
     render(

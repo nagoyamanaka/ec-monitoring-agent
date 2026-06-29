@@ -4,15 +4,28 @@ import {
   buildInvestigationTools,
   type InvestigationToolDeps,
 } from "./tools/investigationTools.js";
+import {
+  buildEscalationTools,
+  type EscalationToolDeps,
+} from "./tools/escalationTools.js";
+import {
+  buildRemediationReviewTools,
+  type RemediationReviewToolDeps,
+} from "./tools/remediationReviewTools.js";
 import { createEvidenceCollectorAgent } from "./agents/EvidenceCollectorAgent.js";
 import { createRootCauseAnalystAgent } from "./agents/RootCauseAnalystAgent.js";
 import { createRemediationPlannerAgent } from "./agents/RemediationPlannerAgent.js";
+import { createImpactTriageAgent } from "./agents/ImpactTriageAgent.js";
+import { createRunbookEscalationAgent } from "./agents/RunbookEscalationAgent.js";
+import { createRemediationReviewerAgent } from "./agents/RemediationReviewerAgent.js";
 import { createInvestigationCoordinator } from "./agents/InvestigationCoordinator.js";
 
 const USER_ID = "monitoring-agent";
 const APP_NAME = "ec-monitoring-investigation";
 
-export type ADKInvestigationAgentRunnerConfig = InvestigationToolDeps & {
+export type ADKInvestigationAgentRunnerConfig = InvestigationToolDeps &
+  EscalationToolDeps &
+  RemediationReviewToolDeps & {
   /** Gemini モデル名（env GEMINI_MODEL）。経路は GOOGLE_GENAI_USE_VERTEXAI で Vertex/AI Studio を ADK が自動選択。 */
   readonly model: string;
   /** 自律ループの LLM 呼び出し上限（トークン暴走の安全弁）。 */
@@ -47,11 +60,16 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
 
   constructor(config: ADKInvestigationAgentRunnerConfig) {
     const tools = buildInvestigationTools(config);
+    const escalationTools = buildEscalationTools(config);
+    const remediationReviewTools = buildRemediationReviewTools(config);
     const coordinator = createInvestigationCoordinator({
       model: config.model,
       evidenceCollector: createEvidenceCollectorAgent(config.model, tools),
       rootCauseAnalyst: createRootCauseAnalystAgent(config.model),
       remediationPlanner: createRemediationPlannerAgent(config.model),
+      impactTriage: createImpactTriageAgent(config.model),
+      runbookEscalation: createRunbookEscalationAgent(config.model, escalationTools),
+      remediationReviewer: createRemediationReviewerAgent(config.model, remediationReviewTools),
     });
     this.runner = new InMemoryRunner({ agent: coordinator, appName: APP_NAME });
     this.maxLlmCalls = config.maxLlmCalls;

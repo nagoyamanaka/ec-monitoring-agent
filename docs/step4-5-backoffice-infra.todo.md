@@ -228,10 +228,15 @@
 
 ## stretch: 任意・次フェーズ
 
-### タスク T13: CloudMonitoringGateway（pull・メトリクス相関）〔stretch〕
+### タスク T13: CloudMonitoringGateway（pull・メトリクス相関）〔stretch〕✅ 実装済み（実機検証残）
 
 > 移動元: step4-2 stretchⅠ タスク32。前提: Phase 1〜3 着地後。
 > webhook の push ingest（T7）とは別物＝**調査時の証拠 pull 側**。
 
-- 【新規（任意）】`CloudMonitoringGateway`（CPU / 接続数 / 5xx 等メトリクスの相関取得）を `InfraInvestigationPort` 配下に追加。**読み取り専用**。生レスポンスは `InfraEvidence` に正規化してから AI に渡す
+- 【済】`CloudMonitoringGateway` / `CloudMonitoringGatewayImpl`：`@google-cloud/monitoring`（MetricServiceClient）を **dynamic import**（ローカル/テスト経路では読み込まない）で CPU/メモリ使用率・5xx 数の時系列を取得し、窓内 latest/max + サンプル点数に圧縮 → `InfraMetric` に正規化。`CloudLoggingGatewayImpl` と同型の env 駆動モック切替（`GCP_PROJECT_ID` 未設定 → []、`CLOUD_MONITORING_ENABLED=false` で無効化）。1メトリクスの失敗は他を落とさないベストエフォート
+- 【済】`InfraEvidence` に `metrics?: InfraMetric[]` を追加（Primitives 透過・Date 無し）。`DefaultInfraInvestigationAdapter` が **INFRASTRUCTURE/CAPACITY のときだけ** `getMetrics` を呼ぶ（category オーナーシップに沿う・ベストエフォート）。`InvestigationPromptBuilder` の system 指示にメトリクス活用（5xx急増×CPU飽和→容量起因）を追記
+- 【済】フロント：`EvidenceView` に metrics セクションを追加（`EvidencePanel` が Cloud Logging→**Cloud Monitoring**→Terraform→GitHub の順で積み上げ表示・ratio は % 整形）
+- 【済】terraform：gce-backbone SA に `roles/monitoring.viewer` を追加（worker がメトリクスを読むため）。`@google-cloud/monitoring` を workspace root に追加
+- 【テスト】`CloudMonitoringGatewayImpl.test.ts`（project空/enabled=false で no-op・5xxフィルタ組立・latest/max/points圧縮・int64数値化・1メトリクス失敗の隔離）／フロント `EvidenceView` の metrics 写像・順序・`EvidencePanel` の表示。`pnpm typecheck` / `pnpm test`（605件）green
+- 【残】実機検証: 実 GCP でメトリクスが pull され InfraEvidence→AI プロンプト→証拠パネルに出ること（push ingest の T7/T8 とは別系統）
 - 無くてもシナリオ4は Cloud Logging + Terraform + GitHub で成立

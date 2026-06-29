@@ -297,6 +297,16 @@
 - [ ] **reviewStatus トランジション**（低コスト）：[✓承認]/[✗却下] 押下でボタン→ステータスバッジへフェード差し替え。
 - 演出は `features/demo` 寄せ or `shared/ui` の薄いラッパに限定し、プロダクションUIを侵食しない（本書「採用ライブラリ」方針）。
 
+### タスク 12b: 詳細⇄ドロワーの「戻る」導線（選択状態の URL 化）〔stretch・UX改善〕 ✅
+
+> **背景**: 一覧のオーバレイ（右ドロワー）から「詳細を開く」や関連アラートリンクを踏むと `/alerts/:id` フルページへ**ルート遷移**し、(1) デモの舞台（`AlertsLayout`＝SSE/デモ卓）を離脱、(2) 戻る導線が「一覧へ」ジャンプのみ＝**以前のオーバレイ位置に戻れない**（選択 state が `AlertsPage` のローカル `useState` で履歴に乗っていなかった）。「一覧へ」は header「ALERT」と重複でもあった。
+> **方針（議論で確定）**: 選択状態を URL の `?focus=:id` に一本化し、舞台上の関連探索は**ルート遷移せず選択差し替え**。「戻る」はブラウザ履歴（`navigate(-1)`）に委ねる＝履歴が単一ソース。詳細フルページ `/alerts/:id` は deep-link/別タブ/共有の入口として存続。
+
+- [x] 【改修】`AlertsPage`：選択 `useState` を廃し `useSearchParams` の `?focus=:id` 由来に。`openFocus`（push＝関連を辿るたび履歴を積む）/`closeFocus`（focus 削除）。ドロワーが deep-link/共有可能になり、開閉が履歴に乗る
+- [x] 【新規 prop】`RelatedAlertsPanel.onNavigate?(id)`：渡されると関連行は `Link`（`/alerts/:id`）でなく `button`（選択差し替え）に。**舞台に留まって**辿れ、戻るで前のドロワーへ復元。無ければ従来の `Link` にフォールバック（詳細ページ経由は履歴 push で辿れる）。`AlertDetailDrawer` が `onRelatedNavigate`→`openFocus` を中継
+- [x] 【改修】`AlertDetailPage`：「← 一覧へ」（`Link to="/alerts"`）を「← 戻る」（`navigate(-1)`・履歴が無い直リンク/別タブ時のみ `/alerts` へ退避）に。一覧へのジャンプは header「ALERT」に集約＝重複解消
+- [x] 検証：frontend `tsc --noEmit` 緑 / frontend テスト 143 件緑（`RelatedAlertsPanel` の onNavigate＝button 分岐 UT 追加）
+
 ---
 
 ## stretchⅡ: 予兆ブリーフィング UI

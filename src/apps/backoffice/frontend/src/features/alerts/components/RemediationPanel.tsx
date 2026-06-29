@@ -61,7 +61,7 @@ export function RemediationPanel({
           自動修正（リメディエーション）
         </h4>
         {remediable && (
-          <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
+          <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
             コードで修正可能（AI 判定）
           </span>
         )}
@@ -111,7 +111,7 @@ function RemediationBody({
         <div className="space-y-3 rounded-md bg-slate-800/40 px-3 py-3 ring-1 ring-inset ring-slate-700/60">
           {suggestedActions.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-300">
                 修正方針（AI 提案・ROI 判断材料）
               </p>
               <ul className="list-disc space-y-0.5 pl-5 text-xs text-slate-200 marker:text-cyan-500/70">
@@ -132,7 +132,7 @@ function RemediationBody({
             {submitting ? "起票中…" : "修正を起票"}
           </button>
           {!remediable && (
-            <p className="text-[11px] text-slate-500">
+            <p className="text-[11px] text-slate-400">
               このアラートは AI が「コードでの自動修正は不適」と判定しています。
             </p>
           )}
@@ -181,7 +181,7 @@ function RemediationBody({
         <div className="rounded-md bg-slate-800/40 px-3 py-3 text-xs text-slate-300 ring-1 ring-inset ring-slate-700/60">
           自動修正は見送られました。
           {remediation.reason && (
-            <span className="text-slate-400">（{remediation.reason}）</span>
+            <span className="text-slate-300">（{remediation.reason}）</span>
           )}
         </div>
       );

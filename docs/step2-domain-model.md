@@ -1,7 +1,9 @@
 # Step 2: ドメインモデル設計（ECドメイン）
 
-> 本ドキュメントは設計エージェント向けプロンプト v6 の Step 2 詳細設計です。
+> 本ドキュメントは設計エージェント向けプロンプト由来の Step 2 詳細設計です。
 > Step 1のディレクトリ構成は `docs/step1-directory-structure.md` を参照してください。
+> **2026-06-29 実コード照合**: Payment（決済）コンテキスト・`InventoryFailureReason` VO 化・補償フロー
+> （`CompensateOrder*`）を現コードに合わせて追記。対象は Orders / Inventory / Payment の3集約相当。
 
 ---
 
@@ -303,7 +305,7 @@ reserve(
   orderId: string,
   quantity: number,
   outcome: { success: true; remainingStock: number; newVersion: number }
-         | { success: false; reason: InventoryFailureReasonValue }
+         | { success: false; reason: InventoryFailureReasons } // INSUFFICIENT_STOCK | CONCURRENT_CONFLICT
 ): void
 ```
 
@@ -410,30 +412,26 @@ class InventoryReservedDomainEvent extends ECDomainEvent {
 
 **ファイルパス**: `src/Contexts/EC/Inventory/domain/InventoryReservationFailedDomainEvent.ts`
 
+> 失敗理由の列挙は独立 VO `InventoryFailureReason`（`Inventory/domain/InventoryFailureReason.ts`・後述）に切り出し済み。
+> イベントの primitives には `reason` を文字列値で載せる。
+
 ```typescript
-// 失敗理由の列挙（Monitoringの既知パターン照合に使用）
-export const InventoryFailureReason = {
-  INSUFFICIENT_STOCK: 'INSUFFICIENT_STOCK',
-  CONCURRENT_CONFLICT: 'CONCURRENT_CONFLICT', // 楽観ロック競合（MongoDBリトライ上限超過）
-} as const;
-
-export type InventoryFailureReasonValue =
-  (typeof InventoryFailureReason)[keyof typeof InventoryFailureReason];
-
 class InventoryReservationFailedDomainEvent extends ECDomainEvent {
   static readonly EVENT_NAME = 'ec.inventory.reservation_failed';
 
   readonly orderId: string;
   readonly requestedQuantity: number;
   readonly currentStock: number;  // 不足していた在庫数（Monitoring分析に使用）
-  readonly reason: InventoryFailureReasonValue;
+  readonly reason: InventoryFailureReason;        // 失敗理由 VO（後述）
+  readonly reservedProductIds: string[];          // 同一注文内で先に確保済み→補償で戻す対象
 
   constructor(params: {
     productId: string;
     orderId: string;
     requestedQuantity: number;
     currentStock: number;
-    reason: InventoryFailureReasonValue;
+    reason: InventoryFailureReason;
+    reservedProductIds: string[];
     eventId?: string;
     occurredOn?: Date;
   })
@@ -449,7 +447,28 @@ class InventoryReservationFailedDomainEvent extends ECDomainEvent {
 }
 ```
 
-**設計ポイント**: `reason` と `currentStock` をprimitivesに含めることで、Monitoringが「在庫切れ（INSUFFICIENT_STOCK）」「楽観ロック競合（CONCURRENT_CONFLICT）」を区別して観測できる。在庫切れは結果整合性モデルにおけるビジネスエラーとして扱い、注文ステータスをFAILEDに遷移させる補償処理のトリガーとなる（Step 3で設計）。
+**設計ポイント**: `reason` と `currentStock` をprimitivesに含めることで、Monitoringが「在庫切れ（INSUFFICIENT_STOCK）」「楽観ロック競合（CONCURRENT_CONFLICT）」を区別して観測できる。在庫切れは結果整合性モデルにおけるビジネスエラーとして扱い、注文ステータスをFAILEDに遷移させる補償処理（`CompensateOrderOnInventoryFailed`）のトリガーとなる。
+
+#### `InventoryFailureReason`（Value Object）
+
+**ファイルパス**: `src/Contexts/EC/Inventory/domain/InventoryFailureReason.ts`
+
+```typescript
+export enum InventoryFailureReasons {
+  INSUFFICIENT_STOCK = "INSUFFICIENT_STOCK",
+  CONCURRENT_CONFLICT = "CONCURRENT_CONFLICT", // 楽観ロック競合（findOneAndUpdate リトライ上限超過）
+}
+
+class InventoryFailureReason extends EnumValueObject<InventoryFailureReasons> {
+  static insufficientStock(): InventoryFailureReason;
+  static concurrentConflict(): InventoryFailureReason;
+  static fromString(value: string): InventoryFailureReason;
+  isInsufficientStock(): boolean;
+  isConcurrentConflict(): boolean;
+}
+```
+
+**設計ポイント**: 当初イベント内の `const` 列挙だったものを、判定メソッド（`isInsufficientStock()` 等）を持つ `EnumValueObject` 派生 VO に昇格。在庫イベントの `reason` プロパティはこの VO 型で保持し、primitives 化時に `.value` で文字列へ落とす。
 
 ---
 
@@ -471,7 +490,7 @@ interface InventoryRepository {
 
 type ReserveStockResult =
   | { success: true; remainingStock: number; newVersion: number }
-  | { success: false; reason: "INSUFFICIENT_STOCK" | "VERSION_CONFLICT" };
+  | { success: false; reason: InventoryFailureReasons }; // INSUFFICIENT_STOCK | CONCURRENT_CONFLICT
 ```
 
 **設計ポイント**:
@@ -480,6 +499,60 @@ type ReserveStockResult =
 - `Inventory.reserve()` はDomainEvent生成を担い、実際のDB更新はこのメソッドが担う
 - `ReserveStockResult` のunion型によりアプリケーション層が成功/失敗パターンを型安全に処理できる
 - PostgreSQL移行時は `reserveStock()` の実装を差し替えるだけでよい（インターフェースは維持）
+
+---
+
+## Payment（決済）
+
+> 決済は Order 確定の**前段**で行う（`PlaceOrderUseCase.processPayment()`）。専用の集約は持たず、
+> 外部決済を表す driven ポート `PaymentGateway` と、失敗を観測に流す `PaymentTimeoutDomainEvent` で構成する。
+> デモでは `PaymentMockGateway` が TIMEOUT/SUCCESS を切り替えて決済障害（シナリオ1）を再現する。
+
+### `PaymentGateway`（driven ポート）
+
+**ファイルパス**: `src/Contexts/EC/Orders/domain/PaymentGateway.ts`
+（Orders の業務フローが必要とする能力なので Orders/domain に置く。実装は EC/Payment/infrastructure。）
+
+```typescript
+export type PaymentResult =
+  | { success: true; transactionId: string }
+  | { success: false; reason: "TIMEOUT" | "DECLINED" | "ERROR" };
+
+export interface PaymentGateway {
+  run(params: { orderId: string; amount: number }): Promise<PaymentResult>;
+}
+```
+
+**実装**: `src/Contexts/EC/Payment/infrastructure/PaymentMockGateway.ts`（デモモードで結果を制御するモック）
+
+### `PaymentTimeoutDomainEvent`
+
+**ファイルパス**: `src/Contexts/EC/Payment/domain/PaymentTimeoutDomainEvent.ts`
+
+```typescript
+class PaymentTimeoutDomainEvent extends ECDomainEvent {
+  static readonly EVENT_NAME = 'ec.payment.timeout';
+
+  readonly orderId: string;
+  readonly customerId: string;
+  readonly amount: number;
+
+  constructor(params: {
+    paymentAttemptId: string; // aggregateId（決済試行の識別子）
+    orderId: string;
+    customerId: string;
+    amount: number;
+    eventId?: string;
+    occurredOn?: Date;
+  })
+}
+```
+
+**設計ポイント**: 決済失敗時、`PlaceOrderUseCase` が本イベントを publish したうえで `PlaceOrderFailedError` を throw する（注文は作られない）。Monitoring はこのイベントを観測して「決済タイムアウト」アラート（既知パターン）に載せる。`aggregateId` は決済試行 ID で、`orderId` は payload に持つ。
+
+| イベント | 発行タイミング | 受け取るコンテキスト |
+| -------- | -------------- | -------------------- |
+| `PaymentTimeoutDomainEvent` | `PlaceOrderUseCase.processPayment()` で決済失敗時 | Monitoring（観測用） |
 
 ---
 
@@ -500,26 +573,37 @@ type ReserveStockResult =
 ## 集約間の関係サマリー
 
 ```
-PlaceOrderCommand
+PlaceOrderUseCase
   ↓
-Order.place()
-  └─ record(OrderPlacedDomainEvent) → Monitoring が購読
-                                    → EC/Inventory が購読
-        ↓
-        ReserveInventoryOnOrderPlaced (Subscriber)
-          ↓
-          InventoryRepository.reserveStock()  ← MongoDB findOneAndUpdate
-          ↓
-          Inventory.reserve()
-            ├─ 成功 → record(InventoryReservedDomainEvent)          → Monitoring が購読
-            └─ 失敗 → record(InventoryReservationFailedDomainEvent) → Monitoring が購読（在庫切れビジネスエラー）
+PaymentGateway.run()   ← 決済（Order 確定の前段）
+  ├─ 失敗 → publish(PaymentTimeoutDomainEvent) → Monitoring が購読
+  │        → throw PlaceOrderFailedError（注文は作られない）
+  └─ 成功
+      ↓
+      Order.place()
+        └─ record(OrderPlacedDomainEvent) → Monitoring が購読
+                                          → EC/Inventory が購読
+              ↓
+              ReserveInventoryOnOrderPlaced (Subscriber)
+                ↓
+                InventoryRepository.reserveStock()  ← MongoDB findOneAndUpdate
+                ↓
+                Inventory.reserve()
+                  ├─ 成功 → record(InventoryReservedDomainEvent)          → Monitoring が購読
+                  └─ 失敗 → record(InventoryReservationFailedDomainEvent) → Monitoring が購読（在庫切れ）
+                              ↓
+                              CompensateOrderOnInventoryFailed (Subscriber)
+                                ↓
+                                CompensateOrderUseCase → Order.failInventory()（注文を FAILED に補償）
 ```
 
 ---
 
-## 次のStep（Step 3）で設計すること
+## アプリケーション層との接続（Step 3 で実装済み）
 
-- `PlaceOrderCommandHandler`: `Order.place()` の呼び出し、`EventBus.publish()` への委譲
-- `ReserveInventoryCommandHandler`: `InventoryRepository.reserveStock()` の結果に基づいた `Inventory.reserve()` の呼び出し
-- `GetOrderQueryHandler`: CQRSのRead側（MongoOrderRepositoryから直接読み取り）
-- `ReserveInventoryOnOrderPlaced` Subscriber: RabbitMQキュー命名規則 `ec-backend.ec.order.placed.reserve-inventory-on-order-placed`
+> 以下は本ドメインモデルを駆動するアプリ層。詳細は `docs/step3-application-layer.md`。
+
+- `PlaceOrderUseCase`: 決済（`PaymentGateway.run()`）→ `Order.place()` → 永続化 → `OrderPlacedDomainEvent` publish。決済失敗時は `PaymentTimeoutDomainEvent` を publish し `PlaceOrderFailedError` を throw。
+- `ReserveInventoryUseCase` / `ReserveInventoryOnOrderPlaced` Subscriber: `InventoryRepository.reserveStock()` の結果に基づき `Inventory.reserve()` を呼ぶ。キュー命名 `ec-backend.ec.order.placed.reserve-inventory-on-order-placed`。
+- `CompensateOrderUseCase` / `CompensateOrderOnInventoryFailed` Subscriber: `InventoryReservationFailedDomainEvent` を購読し `Order.failInventory()` で注文を FAILED に補償。
+- `GetOrderUseCase` / `GetOrderQueryHandler`: CQRS の Read 側（`MongoOrderRepository` から直接読み取り）。

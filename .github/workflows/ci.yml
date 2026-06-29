@@ -96,7 +96,88 @@ jobs:
             --image ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/backoffice-frontend:${{ github.sha }} \
             --region ${{ vars.GCP_REGION }}
 
-  # ── Job 4: Trivy 脆弱性スキャン → /ingest/security-scan ────────────────────
+  # ── Job 4: backend イメージ build & push → GCE backbone デプロイ ────────────
+  # check が通った後、main への push 時のみ実行。
+  # 必要な GitHub Actions Variables: WIF_PROVIDER, DEPLOYER_SA, GCP_PROJECT_ID,
+  #   AR_HOST, AR_REPO_ID, GCP_REGION, GCE_INSTANCE, GCE_ZONE, DEPLOY_BUCKET
+  build-push-backend:
+    name: Build & push backend (GCE backbone)
+    runs-on: ubuntu-latest
+    needs: check
+    if: github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.AR_HOST }} --quiet
+
+      - name: Build ec-backend image
+        run: |
+          docker build --target prod \
+            -t ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/ec-backend:${{ github.sha }} \
+            -t ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/ec-backend:latest \
+            -f src/apps/ec/backend/Dockerfile .
+
+      - name: Build backoffice-backend image
+        run: |
+          docker build --target prod \
+            -t ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/backoffice-backend:${{ github.sha }} \
+            -t ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/backoffice-backend:latest \
+            -f src/apps/backoffice/backend/Dockerfile .
+
+      - name: Push backend images
+        run: |
+          docker push ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/ec-backend:${{ github.sha }}
+          docker push ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/ec-backend:latest
+          docker push ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/backoffice-backend:${{ github.sha }}
+          docker push ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/backoffice-backend:latest
+
+      - name: Upload docker-compose.prod.yml to GCS
+        run: |
+          gcloud storage cp docker-compose.prod.yml gs://${{ vars.DEPLOY_BUCKET }}/docker-compose.prod.yml
+
+      - name: Deploy to GCE backbone (compose pull & up)
+        run: |
+          gcloud compute ssh ${{ vars.GCE_INSTANCE }} \
+            --project=${{ vars.GCP_PROJECT_ID }} \
+            --zone=${{ vars.GCE_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --command="
+              set -e
+              docker compose \
+                --env-file /opt/app/.env \
+                -f /opt/app/docker-compose.base.yml \
+                -f /opt/app/docker-compose.prod.yml \
+                pull ec-backend backoffice-backend
+              docker compose \
+                --env-file /opt/app/.env \
+                -f /opt/app/docker-compose.base.yml \
+                -f /opt/app/docker-compose.prod.yml \
+                up -d ec-backend backoffice-backend
+            "
+
+      - name: Update Cloud Run edge (backoffice-backend)
+        run: |
+          gcloud run services update backoffice-edge \
+            --image ${{ vars.AR_HOST }}/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPO_ID }}/backoffice-backend:${{ github.sha }} \
+            --region ${{ vars.GCP_REGION }}
+
+  # ── Job 5: Trivy 脆弱性スキャン → /ingest/security-scan ────────────────────
   # シナリオ5（DevOpsループ: 検知→調査→PR起票）の起点。
   # Trivy は1スキャンで HIGH/CRITICAL を大量に吐くので、jq で
   #   (1) HIGH/CRITICAL のみ抽出 (2) 最深刻=代表CVEに昇格 (3) 全件を vulnerabilities[] に同梱

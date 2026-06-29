@@ -456,10 +456,10 @@ GetOrderUseCase.run(id: OrderId): Promise<OrderResponse>
 
 **ファイルパス**: `src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryOnOrderPlaced.ts`
 
-**キュー名**:
+**キュー名**（実フォーマッタ `RabbitMQQueueNameFormatter` は `{module}.{snake_case(SubscriberClassName)}` を生成。1サブスクライバ=1キューで、購読イベントは routingKey として別途 bind される）:
 
 ```
-ec-backend.ec.order.placed.reserve-inventory-on-order-placed
+ec-backend.reserve_inventory_on_order_placed
 ```
 
 `ReserveInventory` は Subscriber のみがトリガー（HTTP エンドポイントなし）のため、CommandBus を介さず `ReserveInventoryUseCase` を直接 inject して呼ぶ（CodelyTV の `CreateBackofficeCourseOnCourseCreated` パターン）。
@@ -481,7 +481,7 @@ ec-backend.ec.order.placed.reserve-inventory-on-order-placed
 **キュー名**:
 
 ```
-ec-backend.ec.inventory.reservation_failed.compensate-order-on-inventory-failed
+ec-backend.compensate_order_on_inventory_failed
 ```
 
 ```
@@ -501,24 +501,31 @@ ec-backend.ec.inventory.reservation_failed.compensate-order-on-inventory-failed
 
 ---
 
-### `CollectMonitoringEventOnECDomainEvent`（EC → Monitoring の橋渡し）
+### `CollectMonitoringEventOnECEventPublished`（EC → Monitoring の橋渡し）
 
-**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/infrastructure/subscribers/CollectMonitoringEventOnECDomainEvent.ts`
+**ファイルパス**: `src/Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventOnECEventPublished.ts`
 
 > Monitoringコンテキストに配置する（ECコンテキストがMonitoringをimportしない原則）。
 > backoffice/backend プロセスが起動時に登録する。
+> **検知ソース別 peer アダプタの一つ**: EC イベント（本クラス）/ Cloud Monitoring（`CloudMonitoringAlertTranslator`）/
+> CI スキャン（`SecurityScanTranslator`）が同一ディレクトリに並び、いずれも `MonitoringEvent` へ正規化して
+> `CollectMonitoringEventUseCase` に合流させる。共通の購読・変換骨格は `CollectMonitoringEventSubscriber` 基底に集約。
 
-**購読するキュー（障害系イベントに絞る）**:
+**キュー名**（1サブスクライバ=1キュー。下記3イベントを routingKey として bind）:
 
 ```
-backoffice-backend.ec.order.placed.collect-monitoring-event
-backoffice-backend.ec.inventory.reservation_failed.collect-monitoring-event
-backoffice-backend.ec.payment.timeout.collect-monitoring-event
+backoffice-backend.collect_monitoring_event_on_e_c_event_published
 ```
 
-`ec.inventory.reserved`（正常系）は購読しない。障害検知に必要なイベントのみに絞りMonitoringのノイズを抑える。正常系の観測はCloud Loggingのメトリクスで対応する。
+**購読する EC DomainEvent（`subscribedTo()`）**:
 
-処理の詳細はStep 4で設計する。
+| イベント | source | severity | 備考 |
+| -------- | ------ | -------- | ---- |
+| `OrderPlacedDomainEvent` | `order` | `info` | 正常系。観測のみで `isAlertable()=false`（分類/調査には乗せない） |
+| `InventoryReservationFailedDomainEvent` | `inventory` | （理由で決定） | 在庫障害 |
+| `PaymentTimeoutDomainEvent` | `payment` | `critical` 相当 | 決済タイムアウト |
+
+`ec.inventory.reserved`（在庫引き当て成功）は購読しない。正常系のうち `order.placed` だけは観測フレームに `info` で流すが、`CollectMonitoringEventUseCase` が `isAlertable()` で打ち切るためアラート化しない。EC 固有の型に触れるのは本クラスの `toMonitoringEvent()` だけ（観測フレーム境界）。
 
 ---
 
@@ -526,8 +533,8 @@ backoffice-backend.ec.payment.timeout.collect-monitoring-event
 
 | エラークラス                        | 継承元                | 発生箇所                                    | errorHandlerの応答 |
 | ----------------------------------- | --------------------- | ------------------------------------------- | ------------------ |
-| `ResourceNotFoundError`             | `ApplicationError`    | `GetOrderQueryHandler`（Order未存在時）     | 404                |
-| `PlaceOrderFailedError`             | `ApplicationError`    | `PlaceOrderCommandHandler`（Payment失敗時） | 400                |
+| `OrderResourceNotFoundError`        | `ApplicationError`    | `GetOrderUseCase`（Order未存在時）          | 404                |
+| `PlaceOrderFailedError`             | `ApplicationError`    | `PlaceOrderUseCase`（Payment失敗時）        | 400                |
 | `RepositoryError`                   | `InfrastructureError` | 各CommandHandler（DB操作失敗時）            | 500                |
 | `InvalidOrderIdError` 等            | `DomainError`         | Value Object構築失敗                        | 400                |
 | `InvalidOrderStatusTransitionError` | `DomainError`         | `order.failInventory()` 等                  | 400                |
@@ -590,15 +597,15 @@ RabbitMQ（並列配信）
   ├─ [EC/Orders] CompensateOrderOnInventoryFailed
   │   └─ order.failInventory() → OrderRepository.save()
   │
-  └─ [Monitoring] CollectMonitoringEventOnECDomainEvent（障害系ECイベント購読）
-      └─ Step 4へ（AlertAnalysis → AIInvestigation → SSE push）
+  └─ [Monitoring] CollectMonitoringEventOnECEventPublished（EC イベント→MonitoringEvent 正規化）
+      └─ CollectMonitoringEventUseCase（isAlertable で打ち切り）→ AnalyzeAlert → AIInvestigation → SSE push（Step 4）
 ```
 
 ---
 
 ## 次のStep（Step 4）で設計すること
 
-- `CollectMonitoringEventOnECDomainEvent` の詳細（ECDomainEvent → MonitoringEvent 変換ロジック）
+- `CollectMonitoringEventOnECEventPublished` の詳細（ECDomainEvent → MonitoringEvent 変換ロジック）と、Cloud Monitoring / CI スキャンの peer ingest アダプタ群
 - `MonitoringEvent` の構造定義
 - `AlertAnalysis` の既知/未知分類ロジックのインターフェース（`AlertClassifier`）
 - `AIInvestigationPort`（Gemini API呼び出しのポート）

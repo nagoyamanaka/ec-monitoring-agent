@@ -4,6 +4,7 @@ import type { AlertView } from "../domain/AlertView";
 import {
   type EvidenceLogLevel,
   type EvidenceSection,
+  type EvidenceTerraformAction,
   evidenceSections,
 } from "../domain/EvidenceView";
 import type { EvidenceApi } from "../infrastructure/evidenceApi";
@@ -21,14 +22,30 @@ const SOURCE_META: Record<
   { label: string; icon: string }
 > = {
   logs: { label: "Cloud Logging", icon: "▤" },
+  metrics: { label: "Cloud Monitoring", icon: "📈" },
   terraform: { label: "Terraform", icon: "⬡" },
   commits: { label: "GitHub", icon: "❮❯" },
 };
+
+/** メトリクス値の表示整形。ratio は %、null は "—"。 */
+function formatMetric(value: number | null, unit: string | null): string {
+  if (value === null) return "—";
+  if (unit === "ratio") return `${(value * 100).toFixed(1)}%`;
+  const rounded = Math.abs(value) >= 100 ? Math.round(value) : Number(value.toFixed(2));
+  return unit && unit !== "ratio" ? `${rounded} ${unit}` : `${rounded}`;
+}
 
 const LOG_LEVEL_CLASS: Record<EvidenceLogLevel, string> = {
   ERROR: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
   WARNING: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
   INFO: "bg-slate-600/20 text-slate-300 ring-slate-500/30",
+};
+
+const TF_ACTION_CLASS: Record<EvidenceTerraformAction, string> = {
+  create: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+  update: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
+  replace: "bg-orange-500/15 text-orange-300 ring-orange-500/30",
+  delete: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
 };
 
 function formatTime(iso: string): string {
@@ -74,7 +91,10 @@ function SectionHeader({ kind }: { kind: EvidenceSection["kind"] }) {
 /** 1 セクションが占める stagger スロット数（ヘッダ 1 ＋ 行数）。次セクションの基点計算に使う。 */
 function sectionSlotCount(section: EvidenceSection): number {
   if (section.kind === "logs") return 1 + section.logs.length;
-  if (section.kind === "terraform") return 1 + 1; // diff ブロック 1 つ
+  if (section.kind === "metrics") return 1 + section.metrics.length;
+  // summary 行 ＋ 変更リソース 1 行/件（無ければ chips の 1 行）。
+  if (section.kind === "terraform")
+    return 1 + 1 + Math.max(section.diff.resourceChanges.length, 1);
   return 1 + section.commits.length;
 }
 
@@ -105,16 +125,16 @@ function EvidenceSectionView({
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                    "rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
                     LOG_LEVEL_CLASS[log.severity],
                   )}
                 >
                   {log.severity}
                 </span>
-                <code className="text-[11px] text-slate-400">
+                <code className="text-[11px] text-slate-300">
                   {log.resource}
                 </code>
-                <span className="ml-auto text-[11px] text-slate-500">
+                <span className="ml-auto text-[11px] text-slate-400">
                   {formatTime(log.timestamp)}
                 </span>
               </div>
@@ -128,7 +148,49 @@ function EvidenceSectionView({
     );
   }
 
+  if (section.kind === "metrics") {
+    return (
+      <div className="space-y-2">
+        <Rise index={baseIndex}>
+          <SectionHeader kind="metrics" />
+        </Rise>
+        <ul className="space-y-1.5">
+          {section.metrics.map((m, i) => (
+            <Rise
+              key={m.metricType}
+              index={baseIndex + 1 + i}
+              className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-100">
+                  {m.displayName}
+                </span>
+                <code className="text-[11px] text-slate-400">{m.metricType}</code>
+              </div>
+              <div className="mt-1 flex items-center gap-4 text-[11px] text-slate-300">
+                <span>
+                  latest{" "}
+                  <span className="font-mono text-cyan-300">
+                    {formatMetric(m.latest, m.unit)}
+                  </span>
+                </span>
+                <span>
+                  max{" "}
+                  <span className="font-mono text-amber-200">
+                    {formatMetric(m.max, m.unit)}
+                  </span>
+                </span>
+                <span className="ml-auto text-slate-400">{m.points} pts</span>
+              </div>
+            </Rise>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   if (section.kind === "terraform") {
+    const { diff } = section;
     return (
       <div className="space-y-2">
         <Rise index={baseIndex}>
@@ -138,20 +200,63 @@ function EvidenceSectionView({
           index={baseIndex + 1}
           className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
         >
-          <p className="text-xs text-slate-100">{section.diff.summary}</p>
-          {section.diff.changedResources.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-1.5">
-              {section.diff.changedResources.map((r, i) => (
-                <li
-                  key={i}
-                  className="rounded bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-amber-200"
-                >
-                  {r}
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="text-xs text-slate-100">{diff.summary}</p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            適用 {formatTime(diff.appliedAt)}
+            {diff.commitSha ? ` · ${diff.commitSha.slice(0, 7)}` : ""}
+          </p>
         </Rise>
+        {diff.resourceChanges.length > 0
+          ? diff.resourceChanges.map((change, i) => (
+              <Rise
+                key={change.address}
+                index={baseIndex + 2 + i}
+                className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ring-1 ring-inset",
+                      TF_ACTION_CLASS[change.action],
+                    )}
+                  >
+                    {change.action}
+                  </span>
+                  <code className="font-mono text-[11px] text-amber-200">
+                    {change.address}
+                  </code>
+                </div>
+                {change.attributeDeltas.length > 0 && (
+                  <ul className="mt-1.5 space-y-1">
+                    {change.attributeDeltas.map((d, j) => (
+                      <li key={j} className="font-mono text-[11px] text-slate-300">
+                        <span className="text-slate-300">{d.key}:</span>{" "}
+                        <span className="text-rose-300">{d.before ?? "—"}</span>
+                        <span className="text-slate-400"> → </span>
+                        <span className="text-emerald-300">{d.after ?? "—"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Rise>
+            ))
+          : diff.changedResources.length > 0 && (
+              <Rise
+                index={baseIndex + 2}
+                className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+              >
+                <ul className="flex flex-wrap gap-1.5">
+                  {diff.changedResources.map((r, i) => (
+                    <li
+                      key={i}
+                      className="rounded bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-amber-200"
+                    >
+                      {r}
+                    </li>
+                  ))}
+                </ul>
+              </Rise>
+            )}
       </div>
     );
   }
@@ -172,8 +277,8 @@ function EvidenceSectionView({
               <code className="rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300">
                 {c.shortSha}
               </code>
-              <span className="text-[11px] text-slate-400">{c.author}</span>
-              <span className="ml-auto text-[11px] text-slate-500">
+              <span className="text-[11px] text-slate-300">{c.author}</span>
+              <span className="ml-auto text-[11px] text-slate-400">
                 {formatTime(c.committedAt)}
               </span>
             </div>
@@ -215,7 +320,7 @@ export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
           AI が証拠を解析しています…
         </div>
       ) : sections.length === 0 ? (
-        <p className="text-xs text-slate-400">証拠は見つかりませんでした。</p>
+        <p className="text-xs text-slate-300">証拠は見つかりませんでした。</p>
       ) : (
         <div className="space-y-3">
           {sections.map((section, i) => {

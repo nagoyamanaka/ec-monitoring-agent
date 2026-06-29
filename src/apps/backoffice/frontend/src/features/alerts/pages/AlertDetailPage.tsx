@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { hasAiInvestigation } from "../domain/AlertView";
@@ -22,6 +22,13 @@ import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
  */
 export function AlertDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  // 「戻る」＝直前の画面（一覧のドロワー位置・前の詳細）へ。一覧へのジャンプは header の
+  // 「ALERT」が担うため重複させない。直リンク/別タブで履歴が無いときだけ /alerts へ退避。
+  const handleBack = useCallback(() => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/alerts");
+  }, [navigate]);
   const {
     alerts,
     status: listStatus,
@@ -76,12 +83,13 @@ export function AlertDetailPage() {
         />
       }
     >
-      <Link
-        to="/alerts"
-        className="inline-block text-sm text-slate-400 transition hover:text-slate-200"
+      <button
+        type="button"
+        onClick={handleBack}
+        className="inline-block text-sm text-slate-300 transition hover:text-slate-200"
       >
-        ← 一覧へ
-      </Link>
+        ← 戻る
+      </button>
 
       <div className="mt-4">
         {status === "loading" && (
@@ -95,7 +103,7 @@ export function AlertDetailPage() {
         )}
 
         {status === "notfound" && (
-          <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-500 ring-1 ring-inset ring-slate-700/50">
+          <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-400 ring-1 ring-inset ring-slate-700/50">
             指定されたアラートは見つかりませんでした。
           </div>
         )}
@@ -105,20 +113,21 @@ export function AlertDetailPage() {
             <header className="space-y-2">
               <div className="flex items-center gap-2">
                 <SeverityBadge level={alert.severity} />
-                <span className="rounded bg-slate-700/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300">
+                <span className="rounded bg-slate-700/40 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-300">
                   {alert.category}
                 </span>
               </div>
               <h2 className="text-lg font-semibold text-slate-100">
                 {alert.eventName}
               </h2>
-              <p className="text-xs text-slate-500">{alert.source}</p>
+              <p className="text-xs text-slate-400">{alert.source}</p>
             </header>
 
             <AlertCardExpanded
               alert={alert}
               onDecision={handleDecision}
               onReinvestigate={handleReinvestigate}
+              variant="full"
             />
             <RelatedAlertsPanel
               alert={alert}

@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertsLayout } from "@shared/layouts/AlertsLayout";
 import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import { DemoDrawer } from "@features/demo/presentation/DemoDrawer";
@@ -39,7 +40,28 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
     remediationApi,
   } = useAlertsData();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 選択中の alert を URL の ?focus= に持つ＝開閉が履歴に乗り、ブラウザ「戻る」で
+  // 直前のオーバレイ位置に復元できる（ドロワーは deep-link/共有可能にもなる）。
+  const [params, setParams] = useSearchParams();
+  const selectedId = params.get("focus");
+  const openFocus = useCallback(
+    (id: string) => {
+      // push（replace しない）＝関連アラートを辿るたびに履歴を積み、戻るで遡れる。
+      setParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("focus", id);
+        return next;
+      });
+    },
+    [setParams],
+  );
+  const closeFocus = useCallback(() => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("focus");
+      return next;
+    });
+  }, [setParams]);
   const selected = useMemo(
     () => alerts.find((a) => a.id === selectedId) ?? null,
     [alerts, selectedId],
@@ -93,12 +115,12 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
           status={status}
           error={error}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={openFocus}
         />
       </AlertsLayout>
       <AlertDetailDrawer
         alert={selected}
-        onClose={() => setSelectedId(null)}
+        onClose={closeFocus}
         onDecision={handleDecision}
         onReinvestigate={handleReinvestigate}
         evidenceApi={evidenceApi}
@@ -107,6 +129,7 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
           selectedId ? remediationByAlertId.get(selectedId) ?? null : null
         }
         relatedLookup={relatedLookup}
+        onRelatedNavigate={openFocus}
       />
     </>
   );

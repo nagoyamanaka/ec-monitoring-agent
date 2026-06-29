@@ -45,7 +45,7 @@ export function AppHeader({ rightSlot, forecastEnabled = false }: AppHeaderProps
                   "rounded-md px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
                   isActive
                     ? "bg-cyan-500/15 text-cyan-300 ring-1 ring-inset ring-cyan-500/30"
-                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200",
+                    : "text-slate-300 hover:bg-slate-800/60 hover:text-slate-200",
                 )
               }
             >

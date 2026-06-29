@@ -1,7 +1,12 @@
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
 import { AlertSeverity, AlertSeverities } from "../../../Shared/domain/AlertSeverity.js";
-import type { InvestigationStepPrimitives } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
+import type {
+  InvestigationStepPrimitives,
+  ImpactAssessmentPrimitives,
+  EscalationDraftPrimitives,
+  RemediationReviewPrimitives,
+} from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
 /**
@@ -12,6 +17,41 @@ import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
 function clampConfidence(value: number): number {
   return Math.max(0.0, Math.min(1.0, value));
+}
+
+/**
+ * 影響評価のハルシネーションガード。証拠 id（citations）の無い impact は「根拠なき影響主張」
+ * なので表示・永続化前に落とす（undefined＝影響評価なし）。§7.3 の citation 必須方針と同じ。
+ */
+function guardImpact(
+  impact: ImpactAssessmentPrimitives | undefined,
+): ImpactAssessmentPrimitives | undefined {
+  if (!impact || impact.citations.length === 0) return undefined;
+  return impact;
+}
+
+/**
+ * エスカレーション草案のハルシネーションガード。`team` の無い草案は「宛先を引けなかった＝捏造」なので
+ * 表示・永続化前に落とす（undefined＝草案なし）。宛先は体制マスタ（EscalationDirectory）由来に限る
+ * という方針で、impact の citations 必須ガードと同じ（根拠なき宛先を出さない）。
+ */
+function guardEscalation(
+  escalation: EscalationDraftPrimitives | undefined,
+): EscalationDraftPrimitives | undefined {
+  if (!escalation || escalation.team.trim() === "") return undefined;
+  return escalation;
+}
+
+/**
+ * 修正PR自動レビューのハルシネーションガード。`pullRequestUrl` の無いレビューは「レビュー対象 PR を
+ * 引けなかった＝何をレビューしたか不明」なので表示・永続化前に落とす（undefined＝レビューなし）。
+ * 初期調査時点（PR 未起票）はここで自然に落ちる。impact の citations・escalation の team と同方針。
+ */
+function guardRemediationReview(
+  review: RemediationReviewPrimitives | undefined,
+): RemediationReviewPrimitives | undefined {
+  if (!review || review.pullRequestUrl.trim() === "") return undefined;
+  return review;
 }
 
 function parseSeverity(value: string): AlertSeverity {
@@ -44,6 +84,9 @@ export function toInvestigationReport(
     isFallback: false,
     remediable: output.remediable,
     relatedAlerts: output.relatedAlerts,
+    impact: guardImpact(output.impact),
+    escalation: guardEscalation(output.escalation),
+    remediationReview: guardRemediationReview(output.remediationReview),
   });
 }
 

@@ -52,6 +52,73 @@ describe("InvestigationReport toPrimitives / fromPrimitives", () => {
     expect(restored.reviewStatus).toBeInstanceOf(ReviewStatus);
   });
 
+  it("impact は既定で undefined・指定時はラウンドトリップで復元される", () => {
+    expect(new InvestigationReport(baseParams).impact).toBeUndefined();
+
+    const impact = {
+      fault: "own" as const,
+      scope: "決済機能の一部ユーザ",
+      scale: "5分間で約120件",
+      affectedSubjects: ["payment"],
+      citations: ["commit:abc1234"],
+    };
+    const restored = InvestigationReport.fromPrimitives(
+      new InvestigationReport({ ...baseParams, impact }).toPrimitives(),
+    );
+    expect(restored.impact).toEqual(impact);
+  });
+
+  it("impact 無しの旧 Primitives も読める（後方互換）", () => {
+    const legacy = new InvestigationReport(baseParams).toPrimitives();
+    expect("impact" in legacy).toBe(false);
+    expect(InvestigationReport.fromPrimitives(legacy).impact).toBeUndefined();
+  });
+
+  it("escalation は既定で undefined・指定時はラウンドトリップで復元される", () => {
+    expect(new InvestigationReport(baseParams).escalation).toBeUndefined();
+
+    const escalation = {
+      team: "external-vendor-liaison",
+      owner: "外部ベンダー窓口",
+      contact: "#vendor-liaison",
+      reason: "外部決済API起因で自社変更が無い",
+      interimWorkaround: "決済リトライ間隔を延長",
+      severityRationale: "決済3%失敗・P1",
+      evidenceBundle: ["log:abc"],
+    };
+    const restored = InvestigationReport.fromPrimitives(
+      new InvestigationReport({ ...baseParams, escalation }).toPrimitives(),
+    );
+    expect(restored.escalation).toEqual(escalation);
+  });
+
+  it("escalation 無しの旧 Primitives も読める（後方互換）", () => {
+    const legacy = new InvestigationReport(baseParams).toPrimitives();
+    expect("escalation" in legacy).toBe(false);
+    expect(InvestigationReport.fromPrimitives(legacy).escalation).toBeUndefined();
+  });
+
+  it("remediationReview は既定で undefined・指定時はラウンドトリップで復元される", () => {
+    expect(new InvestigationReport(baseParams).remediationReview).toBeUndefined();
+
+    const remediationReview = {
+      verdict: "concerns" as const,
+      concerns: ["テストが障害経路をカバーしていない"],
+      pullRequestUrl: "https://github.com/o/r/pull/42",
+      citations: ["diff:src/payment.ts"],
+    };
+    const restored = InvestigationReport.fromPrimitives(
+      new InvestigationReport({ ...baseParams, remediationReview }).toPrimitives(),
+    );
+    expect(restored.remediationReview).toEqual(remediationReview);
+  });
+
+  it("remediationReview 無しの旧 Primitives も読める（後方互換）", () => {
+    const legacy = new InvestigationReport(baseParams).toPrimitives();
+    expect("remediationReview" in legacy).toBe(false);
+    expect(InvestigationReport.fromPrimitives(legacy).remediationReview).toBeUndefined();
+  });
+
   it("relatedAlerts は既定で空配列・指定時はラウンドトリップで復元される", () => {
     expect(new InvestigationReport(baseParams).relatedAlerts).toEqual([]);
 

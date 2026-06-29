@@ -1,0 +1,92 @@
+import type {
+  RemediationReviewView,
+  RemediationVerdict,
+} from "../domain/InvestigationReportView";
+
+export interface RemediationReviewPanelProps {
+  review: RemediationReviewView;
+}
+
+/** 判定の表示用ラベル＋配色。reject は誤修正＝危険色、concerns は要確認＝注意色。 */
+const VERDICT_STYLE: Record<
+  RemediationVerdict,
+  { label: string; className: string }
+> = {
+  pass: {
+    label: "✓ 整合（pass）",
+    className: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+  },
+  concerns: {
+    label: "⚠ 要確認（concerns）",
+    className: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+  },
+  reject: {
+    label: "✗ 不整合（reject）",
+    className: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+  },
+};
+
+/**
+ * 修正PR自動レビュー結果パネル（報告用フル・詳細ページのみ）。
+ * verdict・懸念点・レビュー対象 PR リンク・判定根拠（citations）を全表示する（タスク36/37）。
+ * verdict は出すだけで自動マージはしない（承認・マージは人間の reviewStatus ゲート）。
+ */
+export function RemediationReviewPanel({ review }: RemediationReviewPanelProps) {
+  const verdict = VERDICT_STYLE[review.verdict];
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center gap-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+          修正PR 自動レビュー
+        </h4>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${verdict.className}`}
+        >
+          {verdict.label}
+        </span>
+      </div>
+
+      {review.pullRequestUrl && (
+        <a
+          href={review.pullRequestUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block text-xs text-cyan-300 transition hover:text-cyan-200"
+        >
+          レビュー対象 PR を開く →
+        </a>
+      )}
+
+      {review.concerns.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+            懸念点
+          </p>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-slate-100 marker:text-amber-400/70">
+            {review.concerns.map((concern, i) => (
+              <li key={i}>{concern}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {review.citations.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+            判定根拠（引用）
+          </p>
+          <ul className="flex flex-wrap gap-1.5">
+            {review.citations.map((citation, i) => (
+              <li
+                key={i}
+                className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-300 ring-1 ring-inset ring-cyan-500/30"
+              >
+                {citation}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}

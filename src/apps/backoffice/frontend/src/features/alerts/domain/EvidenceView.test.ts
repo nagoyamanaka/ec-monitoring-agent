@@ -19,6 +19,16 @@ function makePrimitives(
       },
     ],
     terraformDiff: {
+      resourceChanges: [
+        {
+          address: "aws_db_instance.main",
+          action: "update",
+          attributeDeltas: [
+            { key: "max_connections", before: "100", after: "20" },
+          ],
+        },
+      ],
+      appliedAt: "2026-01-01T00:00:00.000Z",
       changedResources: ["aws_db_instance.main"],
       summary: "max_connections を縮小",
     },
@@ -44,22 +54,73 @@ describe("toEvidenceView", () => {
     });
     expect(view.recentCommits[0].shortSha).toBe("0123456");
     expect(view.terraformDiff?.summary).toBe("max_connections を縮小");
+    // 構造化された resourceChanges（before→after）が写像される。
+    expect(view.terraformDiff?.resourceChanges[0]).toEqual({
+      address: "aws_db_instance.main",
+      action: "update",
+      attributeDeltas: [{ key: "max_connections", before: "100", after: "20" }],
+    });
   });
 
-  it("optional な terraformDiff / recentCommits 欠落を null / [] に正規化する", () => {
+  it("optional な terraformDiff / recentCommits / metrics 欠落を null / [] に正規化する", () => {
     const view = toEvidenceView(
-      makePrimitives({ terraformDiff: undefined, recentCommits: undefined }),
+      makePrimitives({
+        terraformDiff: undefined,
+        recentCommits: undefined,
+        metrics: undefined,
+      }),
     );
     expect(view.terraformDiff).toBeNull();
     expect(view.recentCommits).toEqual([]);
+    expect(view.metrics).toEqual([]);
+  });
+
+  it("metrics を View へ写像する（unit 欠落は null）", () => {
+    const view = toEvidenceView(
+      makePrimitives({
+        metrics: [
+          {
+            metricType: "run.googleapis.com/request_count",
+            displayName: "5xx レスポンス数",
+            latest: 12,
+            max: 20,
+            points: 5,
+          },
+        ],
+      }),
+    );
+    expect(view.metrics[0]).toEqual({
+      metricType: "run.googleapis.com/request_count",
+      displayName: "5xx レスポンス数",
+      unit: null,
+      latest: 12,
+      max: 20,
+      points: 5,
+    });
   });
 });
 
 describe("evidenceSections", () => {
-  it("存在するソースのみ logs→terraform→commits の順で返す", () => {
-    const sections = evidenceSections(toEvidenceView(makePrimitives()));
+  it("存在するソースのみ logs→metrics→terraform→commits の順で返す", () => {
+    const sections = evidenceSections(
+      toEvidenceView(
+        makePrimitives({
+          metrics: [
+            {
+              metricType: "run.googleapis.com/container/cpu/utilizations",
+              displayName: "CPU 使用率",
+              unit: "ratio",
+              latest: 0.9,
+              max: 0.95,
+              points: 3,
+            },
+          ],
+        }),
+      ),
+    );
     expect(sections.map((s) => s.kind)).toEqual([
       "logs",
+      "metrics",
       "terraform",
       "commits",
     ]);
@@ -69,7 +130,12 @@ describe("evidenceSections", () => {
     const view = toEvidenceView(
       makePrimitives({
         appLogs: [],
-        terraformDiff: { changedResources: [], summary: "差分なし" },
+        terraformDiff: {
+          resourceChanges: [],
+          appliedAt: "2026-01-01T00:00:00.000Z",
+          changedResources: [],
+          summary: "差分なし",
+        },
         recentCommits: [],
       }),
     );

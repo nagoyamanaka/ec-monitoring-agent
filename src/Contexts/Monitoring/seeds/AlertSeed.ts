@@ -12,6 +12,10 @@ const now = new Date("2026-06-22T09:00:00.000Z");
 const ago = (minutes: number) => new Date(now.getTime() - minutes * 60 * 1000);
 
 export const ALERT_SEEDS: Alert[] = [
+  // ── Alert 0001: 決済タイムアウト（他責ルート）─────────────────────────────
+  // タスク34: impact.fault="external" で影響評価を表示（障害規模・引用付き）
+  // タスク35: fault=external → RunbookEscalationAgent → escalation 草案を表示
+  // タスク37: 詳細（variant="full"）でのみ impact 全項目＋escalation が出る
   Alert.createFromKnownPattern({
     id: new AlertId("5eeda1e7-0001-4000-8000-000000000001"),
     monitoringEvent: new MonitoringEvent({
@@ -22,8 +26,6 @@ export const ALERT_SEEDS: Alert[] = [
       payload: { orderId: "order-seed-0001", timeoutMs: 30000 },
       category: MonitoringEventCategory.application(),
       severity: AlertSeverity.critical(),
-      // source はライブ経路（CollectMonitoringEventOnECEventPublished）と揃える。
-      // 揃えないと seed と実イベントの dedupKey が食い違い、実発火が seed に畳み込まれない。
       source: "payment",
     }),
     classification: {
@@ -41,7 +43,7 @@ export const ALERT_SEEDS: Alert[] = [
       summary: "決済サービスへの接続が30秒でタイムアウトしました。外部決済APIのレスポンス遅延が原因と推定されます。",
       confidence: 0.95,
       severity: AlertSeverity.critical(),
-      // 構造化（href/kind）で配信し、調査ステップ／アクションから外部サービスへ直接飛べる動線を見せる。
+      remediable: false,
       investigationSteps: [
         {
           text: "外部決済サービスのステータスページを確認",
@@ -71,8 +73,6 @@ export const ALERT_SEEDS: Alert[] = [
       reviewStatus: ReviewStatus.pendingReview(),
       investigatedAt: ago(28),
       isFallback: false,
-      // AI 相関（タスク9e）: 決済タイムアウト（app）と注文処理失敗（...0004）は別アラートだが
-      // 同一の決済ゲートウェイ障害が根本原因＝異なる層をまたぐ相関を可視化するデモ。
       relatedAlerts: [
         {
           alertId: "5eeda1e7-0004-4000-8000-000000000004",
@@ -81,9 +81,39 @@ export const ALERT_SEEDS: Alert[] = [
             "決済タイムアウトの結果、注文処理が UNKNOWN_GATEWAY_ERROR で連鎖失敗。同一の決済ゲートウェイ障害が根本原因。",
         },
       ],
+      // タスク34: 影響評価（外部決済 API 障害）
+      impact: {
+        fault: "external",
+        scope: "全決済・チェックアウトフロー（payment / checkout サービス）",
+        scale: "過去30分で約47件の注文が決済未処理。障害は継続中の可能性あり",
+        affectedSubjects: ["payment", "checkout", "external-api"],
+        citations: [
+          "log:payment-timeout-cluster-20260622T085943Z",
+          "similar:incident-stripe-outage-20260301",
+        ],
+      },
+      // タスク35: 他責ルート → external-vendor-liaison へエスカレーション草案
+      escalation: {
+        team: "external-vendor-liaison",
+        owner: "外部ベンダー窓口",
+        contact: "#vendor-liaison (Slack) / vendor-liaison@example.com",
+        reason:
+          "Stripe 外部決済 API の障害が根本原因。直近コミット・Terraform 差分との相関なし。自社コードではなくベンダー対応が必要",
+        interimWorkaround:
+          "決済処理をキューに積み Stripe 復旧後に再処理する。復旧まで注文確定を保留するか、銀行振込に案内する",
+        severityRationale: "過去30分で47件の決済失敗・継続中のリアルタイム障害。P1-15m SLA 相当",
+        evidenceBundle: [
+          "log:payment-timeout-cluster-20260622T085943Z",
+          "similar:incident-stripe-outage-20260301",
+        ],
+      },
     }),
   ),
 
+  // ── Alert 0002: 在庫不足（自責ルート・PR レビュー通過）──────────────────
+  // タスク34: impact.fault="own" で自社コードの問題として影響評価を表示
+  // タスク36: remediationReview.verdict="pass" → 修正 PR が根本原因に対応済み
+  // タスク37: 詳細（variant="full"）でのみ impact + remediationReview が出る
   Alert.createFromKnownPattern({
     id: new AlertId("5eeda1e7-0002-4000-8000-000000000002"),
     monitoringEvent: new MonitoringEvent({
@@ -95,7 +125,6 @@ export const ALERT_SEEDS: Alert[] = [
       category: MonitoringEventCategory.application(),
       severity: AlertSeverity.warning(),
       source: "inventory",
-      // reason を dedup 識別子に含める（ライブの在庫不足イベントと同一 dedupKey になり畳み込まれる）。
       discriminator: "INSUFFICIENT_STOCK",
     }),
     classification: {
@@ -113,6 +142,7 @@ export const ALERT_SEEDS: Alert[] = [
       summary: "商品 product-seed-0042 の在庫が不足しています。要求数5に対して在庫残2です。",
       confidence: 0.92,
       severity: AlertSeverity.warning(),
+      remediable: true,
       investigationSteps: [
         "対象商品の在庫数を確認",
         "直近の入荷スケジュールを確認",
@@ -120,17 +150,45 @@ export const ALERT_SEEDS: Alert[] = [
       ],
       suggestedActions: [
         "在庫を補充するか、該当商品を販売停止にしてください。",
+        {
+          text: "発注点（reorder threshold）の調整 PR",
+          href: "https://github.com/example-org/ec-backend/pull/501",
+          kind: "code",
+        },
       ],
       suggestedPatternName: "INVENTORY_INSUFFICIENT",
       reviewStatus: ReviewStatus.pendingReview(),
       investigatedAt: ago(13),
       isFallback: false,
+      // タスク34: 影響評価（自社在庫管理ロジックの問題）
+      impact: {
+        fault: "own",
+        scope: "在庫管理・商品予約フロー（inventory / fulfillment サービス）",
+        scale: "product-seed-0042 の在庫残2件。直近1時間で5件の予約失敗",
+        affectedSubjects: ["inventory", "fulfillment"],
+        citations: [
+          "log:inventory-reservation-20260622T084500Z",
+          "commit:fix/reorder-threshold-a3f9b2c",
+        ],
+      },
+      // タスク36: 修正 PR レビュー通過（根本原因に対応・テストカバレッジ確認済み）
+      remediationReview: {
+        verdict: "pass",
+        concerns: [],
+        pullRequestUrl: "https://github.com/example-org/ec-backend/pull/501",
+        citations: [
+          "diff:src/inventory/ReorderPolicy.ts#L34-L52",
+          "test:ReorderPolicy.test.ts#L88",
+          "ci:check-run-8821/passed",
+        ],
+      },
     }),
   ),
 
-  // 未知障害を AI が調査し終え、レビュー待ちになった状態の例。
-  // （旧 seed では report 未添付のまま ANALYZING で固定され「分析中…」が永久に止まって見えたため、
-  //  調査完了レポートを添付して "AI 調査済み・承認待ち" の正しい姿に直した。）
+  // ── Alert 0004: 注文処理失敗（自責ルート・PR レビュー懸念あり）────────────
+  // タスク34: impact.fault="own" で自社の決済連携コードの問題として影響評価を表示
+  // タスク36: remediationReview.verdict="concerns" → 修正 PR に懸念点あり（人間確認を促す）
+  // タスク37: 詳細（variant="full"）でのみ impact + remediationReview の concerns が出る
   Alert.createAsUnknown({
     id: new AlertId("5eeda1e7-0004-4000-8000-000000000004"),
     monitoringEvent: new MonitoringEvent({
@@ -149,18 +207,23 @@ export const ALERT_SEEDS: Alert[] = [
         "注文処理が UNKNOWN_GATEWAY_ERROR で失敗しました。直前の決済タイムアウト（同一の決済ゲートウェイ障害）が連鎖した結果と推定されます。",
       confidence: 0.82,
       severity: AlertSeverity.critical(),
+      remediable: true,
       investigationSteps: [
         "同時刻帯の決済タイムアウト発生有無を確認",
         "決済ゲートウェイのエラーレスポンスを Cloud Logging で照会",
       ],
       suggestedActions: [
         "決済ゲートウェイの復旧を確認し、失敗した注文を再処理してください。",
+        {
+          text: "ゲートウェイエラーハンドリング改善 PR（要確認）",
+          href: "https://github.com/example-org/ec-backend/pull/503",
+          kind: "code",
+        },
       ],
       suggestedPatternName: "ORDER_GATEWAY_FAILURE（推定）",
       reviewStatus: ReviewStatus.pendingReview(),
       investigatedAt: ago(1),
       isFallback: false,
-      // AI 相関（タスク9e）: 決済タイムアウト（...0001）が根本原因の上流。異なる層をまたぐ相関を可視化する。
       relatedAlerts: [
         {
           alertId: "5eeda1e7-0001-4000-8000-000000000001",
@@ -169,6 +232,31 @@ export const ALERT_SEEDS: Alert[] = [
             "決済タイムアウトが先行し、その結果この注文処理が連鎖失敗。同一の決済ゲートウェイ障害が根本原因。",
         },
       ],
+      // タスク34: 影響評価（自社の決済連携コードの問題）
+      impact: {
+        fault: "own",
+        scope: "注文処理・決済連携フロー（order / payment サービス）",
+        scale: "直近2分で1件の注文処理失敗。決済タイムアウト波及でさらに拡大の可能性",
+        affectedSubjects: ["order", "payment"],
+        citations: [
+          "log:order-processing-failed-20260622T085800Z",
+          "log:payment-timeout-cluster-20260622T085943Z",
+        ],
+      },
+      // タスク36: 修正 PR レビュー懸念あり（タイムアウトリトライロジックの欠如・テスト不足）
+      remediationReview: {
+        verdict: "concerns",
+        concerns: [
+          "修正が GATEWAY_ERROR のハンドリングに限定されており、根本原因の決済タイムアウトリトライロジックへの対応が含まれていない",
+          "テストケースにタイムアウトシナリオのカバレッジがない（OrderProcessor.test.ts#L112 以降未追加）",
+        ],
+        pullRequestUrl: "https://github.com/example-org/ec-backend/pull/503",
+        citations: [
+          "diff:src/order/OrderProcessor.ts#L112-L125",
+          "test:OrderProcessor.test.ts",
+          "log:payment-timeout-cluster-20260622T085943Z",
+        ],
+      },
     }),
   ),
 ];

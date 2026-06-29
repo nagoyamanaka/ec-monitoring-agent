@@ -83,6 +83,73 @@ export type RelatedAlertPrimitives = {
   readonly rationale: string;
 };
 
+/** 自責他責ラベル。own=自社コード/IaC 起因 / external=外部API・ベンダー起因 / unknown=証拠不足で断定不能。 */
+export type ImpactFault = "own" | "external" | "unknown";
+
+/**
+ * 「今回ぶんの判断」＝影響評価（自責他責・影響範囲・障害規模）。根本原因（再利用可能）と違い
+ * 毎回変わるので既知ルートでも算定が要る（タスク34）。`fault` は出口（Remediation / Runbook）の
+ * 振り分け信号。`citations` は収集済み証拠/類似事例の id 参照で、空の impact は表示前に落とす
+ * （根拠なき影響主張＝ハルシネーションを出さないガード。§7.3 と同方針）。
+ */
+export type ImpactAssessmentPrimitives = {
+  readonly fault: ImpactFault;
+  // 影響範囲（どの機能・どのユーザ層が影響を受けるか・日本語1文）。
+  readonly scope: string;
+  // 障害規模（件数・割合・継続時間などの定量/定性表現・日本語1文）。
+  readonly scale: string;
+  // 影響を受けた主体（サービス名・チーム・顧客セグメント等）。
+  readonly affectedSubjects: string[];
+  // 算定根拠の引用（証拠ログ／類似インシデント／commit/terraform 差分の id）。
+  readonly citations: string[];
+};
+
+/**
+ * 他責/運用案件のエスカレーション草案（タスク35）。impact.fault が external/運用のとき
+ * RunbookEscalationAgent が起案する。RemediationPlan（自責→コード/IaC PR）と排他で出口を分ける。
+ * `team` は体制マスタ（EscalationDirectory）由来で、捏造させない＝宛先を引けないと空文字になり
+ * マッパ側で落とされる（根拠なき宛先＝ハルシネーションを出さないガード。impact の citations と同方針）。
+ * 起案までで、実際の通知送信・チケット起票はしない（write は人間承認ゲートの内側に閉じる）。
+ */
+export type EscalationDraftPrimitives = {
+  // エスカレーション先チーム（体制マスタ由来）。引けない場合は空文字＝宛先不明。
+  readonly team: string;
+  // 一次受けの担当者（オンコール代表など）。
+  readonly owner: string;
+  // 連絡先（Slack チャンネル・メール・PagerDuty 等）。
+  readonly contact: string;
+  // なぜこのチーム/運用対応なのか（fault=external/運用の根拠と affectedSubjects との対応・1文）。
+  readonly reason: string;
+  // 暫定回避手順（過去 resolvedNote を根拠に具体化・人間が引き継ぐまでの一次対応）。
+  readonly interimWorkaround: string;
+  // 重大度の根拠（impact.scale と slaTier から・1文）。
+  readonly severityRationale: string;
+  // 引き継ぎに添付すべき証拠/引用の id（証拠ログ・類似事例・commit/terraform 差分の id）。
+  readonly evidenceBundle: string[];
+};
+
+/** 修正PR自動レビューの判定（タスク36）。pass=引用根本原因に対応し整合 / concerns=要確認の懸念あり / reject=根本原因に無関係・誤修正。 */
+export type RemediationVerdict = "pass" | "concerns" | "reject";
+
+/**
+ * AI/CI が起票した修正PRの自動レビュー結果（タスク36・RV段階）。read-only レビューで
+ * (1)diff が引用根本原因に対応するか (2)変更ファイルが証拠と整合するか (3)テストが障害経路を
+ * カバーするか を判定し、誤修正を人間到達前に止める（人間の RV を open-ended 監査→checklist 確認へ縮める）。
+ * `pullRequestUrl` 空（レビュー対象 PR を引けなかった＝何をレビューしたか不明）はマッパ側で落とす
+ * （根拠なき verdict を出さないガード。impact の citations・escalation の team と同方針）。
+ * verdict を出すだけで自動マージはしない（承認・マージは人間の reviewStatus ゲート）。
+ */
+export type RemediationReviewPrimitives = {
+  // 判定。concerns/reject のときは concerns に理由を必須化する。
+  readonly verdict: RemediationVerdict;
+  // 懸念点（なぜ pass でないか）。pass のときは空配列でよい。
+  readonly concerns: string[];
+  // レビュー対象 PR（advisory では草案 PR）の URL。引けない場合は空文字＝マッパ側で落とす。
+  readonly pullRequestUrl: string;
+  // 判定根拠の引用（diff hunk・変更ファイルパス・テスト名・CI チェック id 等）。
+  readonly citations: string[];
+};
+
 export type InvestigationReportPrimitives = {
   readonly summary: string;
   readonly confidence: number;
@@ -95,6 +162,17 @@ export type InvestigationReportPrimitives = {
   readonly isFallback: boolean;
   // AI 調査が見つけた相関アラート。optional は旧データ・fallback 互換（未保存なら空配列扱い）。
   readonly relatedAlerts?: RelatedAlertPrimitives[];
+  // 影響評価（自責他責ルータの入力）。optional は後方互換＝impact 無しの旧 Alert も読める。
+  // 根拠（citations）の無い impact はマッパ側で落とすので、保存される impact は必ず引用付き。
+  readonly impact?: ImpactAssessmentPrimitives;
+  // 他責/運用案件のエスカレーション草案（impact.fault=external/運用ルートの出口）。optional は
+  // 後方互換＝escalation 無しの旧 Alert・自責ルートでは未設定。team 空の草案はマッパ側で落とすので、
+  // 保存される escalation は必ず宛先付き。
+  readonly escalation?: EscalationDraftPrimitives;
+  // 修正PRの自動レビュー結果（タスク36・RV段階）。optional は後方互換＝review 無しの旧 Alert・
+  // PR 未起票（初期調査時点）では未設定。pullRequestUrl 空の review はマッパ側で落とすので、
+  // 保存される review は必ずレビュー対象 PR 付き。
+  readonly remediationReview?: RemediationReviewPrimitives;
   // AI が「コードで直せる（PR で remediate 可能）」と判定したか。category 非依存の
   // 汎用シグナルで、フロントは remediate ボタンの活性／ROI 提示の判断に使う（advisory）。
   // 実際の write 実行ゲートは人間承認＋executor の deterministic 判定が握る。

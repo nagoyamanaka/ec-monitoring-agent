@@ -21,6 +21,8 @@ resource "google_project_iam_member" "vm" {
     # CloudLoggingGateway が調査時にアプリログ（severity>=WARNING）を読むため（worker は GCE 常駐）。
     "roles/logging.viewer",
     "roles/monitoring.metricWriter",
+    # CloudMonitoringGateway が調査時にメトリクス（CPU/メモリ/5xx）を読むため（T13・read-only 相関）。
+    "roles/monitoring.viewer",
     "roles/cloudtrace.agent",
     "roles/artifactregistry.reader",
     "roles/storage.objectViewer",

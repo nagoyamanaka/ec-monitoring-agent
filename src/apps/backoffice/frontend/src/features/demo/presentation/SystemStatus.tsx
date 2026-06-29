@@ -17,7 +17,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
       <div className="text-base font-semibold tabular-nums text-slate-100">
         {value}
       </div>
-      <div className="text-[10px] text-slate-500">{label}</div>
+      <div className="text-[11px] text-slate-400">{label}</div>
     </div>
   );
 }
@@ -25,7 +25,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 export function SystemStatus({ status, loading }: SystemStatusProps) {
   return (
     <div className="space-y-2">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
         STATUS OVERVIEW
       </h3>
       {loading && !status ? (

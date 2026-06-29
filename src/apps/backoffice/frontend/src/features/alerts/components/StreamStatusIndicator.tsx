@@ -96,7 +96,7 @@ export function StreamStatusIndicator({
         <span className={cn("font-medium", tone.text)}>{tone.label}</span>
       </span>
       {showLastUpdated && lastUpdatedAt && (
-        <span className="text-slate-500" title={lastUpdatedAt.toLocaleString()}>
+        <span className="text-slate-400" title={lastUpdatedAt.toLocaleString()}>
           最終更新 {formatRelative(lastUpdatedAt, now)}
         </span>
       )}
@@ -104,7 +104,7 @@ export function StreamStatusIndicator({
         <button
           type="button"
           onClick={onReconnect}
-          className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-400 ring-1 ring-inset ring-slate-600 transition hover:bg-slate-700/60 hover:text-slate-200 active:scale-95"
+          className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-300 ring-1 ring-inset ring-slate-600 transition hover:bg-slate-700/60 hover:text-slate-200 active:scale-95"
         >
           再接続
         </button>

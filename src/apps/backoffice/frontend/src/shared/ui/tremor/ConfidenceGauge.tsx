@@ -77,6 +77,7 @@ export function ConfidenceGauge({
         value={percent}
         size={size}
         color={color ?? confidenceColor(clamped)}
+        className="relative"
       >
         <Text className="text-xs">
           <Bold>{percent}%</Bold>

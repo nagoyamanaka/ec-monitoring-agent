@@ -83,7 +83,7 @@
 **(4) ingest アダプタは locality で2メカニズム。CI は HTTP 側で Cloud Monitoring と同類**
 
 - 流入アダプタは「**内部＝バス購読**（EC DomainEvent）」「**外部 push＝HTTP ingest controller**（Cloud Monitoring / CI・Trivy）」の2系統。全て `CollectMonitoringEventUseCase.run()` に合流済み＝**アーキ的には既に統一**。CI を `CollectMonitoringEventOnGithubAction` のような**バス購読**にするのは誤り（CI は外部ランナーで内部 RabbitMQ に publish できない＝HTTP が正）。
-- 残る非対称は**翻訳ロジックの置き場**: Cloud Monitoring は `CloudMonitoringAlertTranslator` に分離済みだが、SecurityScan はコントローラ内インライン。**`SecurityScanTranslator` に抽出**して「薄い境界（auth+parse）→ Translator → UseCase」で3経路を揃えるのが統一の正体（未実施・次の cleanup 候補）。
+- 【実施済】源固有 → MonitoringEvent の正規化を **Monitoring コンテキストの `AlertAnalysis/application/CollectMonitoringEvent/` に集約**（§8.3「源固有の型に触れるのはここだけ」の実体化）。`CloudMonitoringAlertTranslator` を app 層（controllers/ingest）から当該ディレクトリへ移動し、SecurityScan はコントローラ内インラインから **`SecurityScanTranslator` を新設して抽出**。これで EC(`CollectMonitoringEventOnECEventPublished`) / Cloud Monitoring / CI の3源の正規化が1か所に並ぶ。各 HTTP コントローラは「薄い境界（auth+parse）→ Translator → UseCase」に縮小し、alertable 判定は `MonitoringEvent.isAlertable()` に委譲（SecurityScan の MEDIUM/LOW→info→204、Cloud Monitoring の closed→info を同じ作法で扱う）。
 
 **(5) デモ操作は「設定＋発火」を1ユースケースに閉じる（裸の PAYMENT MODE トグルは廃止）**
 
@@ -478,6 +478,67 @@ stretchⅡ の予兆は「既知の未来シグナル × 過去インシデン�
 ```
 
 > **要点**: 「完全一致 or 類似一致（graded confidence） → 即終了」は `AnalyzeAlert`（上流）で完結し、コストのかかる AI 調査は未知時のみ。両者は EventBus（`InvestigateAlertDomainEvent`）で疎結合。受け口は `InvestigateAlertOnAlertClassifiedUnknown`（`DomainEventSubscriber`）が直接担い、Command/CommandHandler の二段ホップは挟まない。
+
+---
+
+### 8.1.2 ADK 調査エージェントの役割分担と既知/未知ルート分岐（v20 追加）
+
+> **位置づけ**: マルチエージェント（タスク18）の「**なぜ分割が必然か**」を構造で示す節。審査基準1（AIエージェントの自律性・必然性）の核。要点は **「エージェントを並べた」ではなく「ルートごとに必要なエージェントの部分集合だけを起動する」**——分割しているからこそ既知/未知で別ルートを引ける、という因果。
+
+#### (1) エージェント台帳（役割と read/write 境界）
+
+調査グラフは hub-and-spoke。hub=`InvestigationCoordinator` が spoke を `AgentTool` で呼ぶ。各 spoke の責務と「何を読み/何を書くか」を1行で固定する。
+
+| エージェント | 責務（1行） | 入力 | 出力 | read/write |
+| --- | --- | --- | --- | --- |
+| `InvestigationCoordinator`（hub） | ルート判定＋専門agentへの委譲と反復制御 | seed プロンプト | 最終 `InvestigationReport`(JSON) | — |
+| `EvidenceCollectorAgent` | 仮説に対し狙い撃ちで**追加証拠**を収集 | サービス×時間窓×検索語 | 証拠要約 | **read-only**（Logging/Terraform/GitHub/SimilarIncident） |
+| `RootCauseAnalystAgent` | 証拠と類似事例から**根本原因の仮説・確度・根拠** | 証拠＋類似事例 | 原因仮説＋confidence＋不足の明示 | 推論のみ |
+| `RemediationPlannerAgent` | **コード/IaC で直せるか**判定し修正方針を起案 | 根本原因 | 修正方針（PR起票はしない） | 起案のみ（write は `RemediationPort` に隔離） |
+| `ImpactTriageAgent`（**新規・③**） | **自責他責・影響範囲・障害規模**を引用付きで算定し、修正ルートを振り分ける | 証拠＋occurrenceCount | 影響評価＋自責他責ラベル | 推論のみ |
+| `RunbookEscalationAgent`（**新規・②**） | コードで直せない**他責/運用案件**のエスカレーション草案を起案 | 根本原因＋影響＋体制seed | runbook/エスカレーション草案 | 起案のみ |
+| `RemediationReviewerAgent`（**新規・①**） | 起票された修正PRが**引用された根本原因に対応するか**を検証 | PR diff＋根本原因＋テスト | verdict＋懸念フラグ | **read-only**（レビューのみ・マージしない） |
+
+> **不変原則**: 新規3体も既存の「調査=read / リメディ=write隔離 / 人間承認ゲートは越境させない」を守る。`ImpactTriage`/`Reviewer` は read-only、`RunbookEscalation` は起案のみ。
+
+#### (2) 既知/未知でルートが変わる（＝分割の必然性）
+
+investigate モジュール（`EvidenceCollector`＋`RootCauseAnalyst`）の存在目的は**根本原因の発見**。既知障害は定義上もう原因が結晶化済み（`KnownErrorPattern`）なので、**既知をこのモジュールに通すのは再導出＝過大**。よってルートで起動するエージェントの部分集合を変える。
+
+```
+                 検知ソース流入 → AnalyzeAlert（分類）
+                              │
+        ┌─────────────────────┴─────────────────────┐
+   【既知ルート】                              【未知ルート】
+   根本原因は結晶化済み                         根本原因は未発見
+        │                                          │
+   investigate モジュールは通さない（過大）        EvidenceCollector → RootCauseAnalyst
+   ・過去レポート/KnownErrorPattern を提示          （自律的証拠追加収集ループ）
+   ・×N（occurrenceCount）を規模の代理指標に         │
+   ・[任意・非同期] ImpactTriage で今回ぶんだけ算定   ▼
+        │                                      ImpactTriage（影響評価＋自責他責）
+        └──────────────┬───────────────────────────┘
+                       │ 自責他責で出口を振り分け
+        ┌──────────────┴──────────────┐
+     自責(own)                       他責(external)
+   RemediationPlanner               RunbookEscalation
+   → 修正PR(write隔離)               → 運用エスカレーション草案
+   → RemediationReviewer
+   → 人間承認（差戻あり）            → 人間承認（差戻あり）
+```
+
+- **既知でも「今回ぶんの判断」は要る**: 既知が再利用するのは*根本原因・対処方針*だけ。*影響範囲・規模・自責他責・対象エンティティ*は今回の payload 依存で毎回違う。これを埋めるのが `ImpactTriage`（③）であって、`EvidenceCollector`/`RootCauseAnalyst` ではない。デモ規模では既知ルートは「過去レポート提示＋×N」で十分成立し、`ImpactTriage` は**非同期の追加レイヤー**（シナリオ3「次回1秒で既知」の速さを殺さないため同期で挟まない）。
+- **`ImpactTriage` は入口ルータでもある**: 自責他責ラベル（直近 commit/terraform 差分と相関＝自責 / 外部API由来・直近変更なし＝他責）が、出口の `RemediationPlanner`（自責→コード/IaC PR）と `RunbookEscalation`（他責→運用）の振り分け信号になる。
+
+#### (3) 各エージェントがオペレータ作業をどう削るか（目的＝作業者負担削減）
+
+| 段階 | 今オペレータが手でやること | 奪うエージェント | 削減の質 |
+| --- | --- | --- | --- |
+| 影響判断・報告 | ダッシュボード目視で blast radius/自責他責/規模を見積もり報告書に書く | `ImpactTriage`（③） | 「調査して書く」→「引用付きで埋まった値を確認」 |
+| 他責/運用対応 | 連絡先特定・暫定手順作成・チケット起票・証拠添付 | `RunbookEscalation`（②） | 「行き止まり（直せません）」→「草案を確認して送る」 |
+| 修正レビュー(RV) | PR diff を読み根本原因と突き合わせ、的外れ修正でないか再推論 | `RemediationReviewer`（①） | open-ended 監査→checklist 確認。誤修正を人間到達前に止める |
+
+> **発表の一言**: 「複数エージェントを作った」ではなく「**根本原因の発見が要る未知だけ重いモジュールを起動し、既知は安価に畳む。出口は自責他責で運用とコード修正に分岐し、各分岐の人手作業を1体ずつ消す**」——分割の必然性と作業者負担削減が1枚で繋がる。
 
 ---
 

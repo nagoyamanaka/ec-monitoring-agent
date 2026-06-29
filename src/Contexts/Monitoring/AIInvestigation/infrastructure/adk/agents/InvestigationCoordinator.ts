@@ -15,6 +15,9 @@ export function createInvestigationCoordinator(params: {
   evidenceCollector: LlmAgent;
   rootCauseAnalyst: LlmAgent;
   remediationPlanner: LlmAgent;
+  impactTriage: LlmAgent;
+  runbookEscalation: LlmAgent;
+  remediationReviewer: LlmAgent;
 }): LlmAgent {
   const orchestration = `
 
@@ -24,14 +27,31 @@ export function createInvestigationCoordinator(params: {
   追加証拠を収集する。仮説の検証に証拠が足りないときに、対象サービス名・時刻(ISO 8601)・検索語を渡して呼ぶ。
 - root_cause_analyst: 集めた証拠と類似インシデントから根本原因の仮説・確度・根拠を出す。
 - remediation_planner: コード/設定変更で直せる場合に具体的な修正方針を起案する（PR起票はしない）。
+- impact_triage: 根本原因確定後に「今回ぶんの影響」（自責他責 fault・影響範囲 scope・障害規模 scale）を
+  引用付きで算定する。fault は出口（自責→修正 / 他責→運用エスカレーション）の振り分け信号になる。
+- runbook_escalation: 他責/運用案件（コードで直せない）のエスカレーション草案（宛先 team/owner/contact・
+  暫定回避手順・添付証拠）を起案する。通知送信はしない（草案まで）。
+- remediation_reviewer: 既に起票済みの修正PR（PR番号が分かる場合）を読み取り専用でレビューし、引用根本原因
+  への対応・証拠との整合・テストのカバレッジを判定して verdict を出す。マージはしない（read-only）。
 
 手順:
 1. まず root_cause_analyst で初期仮説と確度を得る。
 2. 確証に証拠が不足していれば evidence_collector で狙い撃ちに証拠を追加収集し、再び root_cause_analyst で分析し直す。
    これを確度が十分になるか、これ以上証拠が得られないと判断するまで繰り返す。
-3. 必要に応じて remediation_planner を呼び、修正可否と方針を得る。
-4. 最後に、上で定義した JSON スキーマ「だけ」を出力する（前後に説明文・コードフェンス以外の地の文を付けない）。
-   confidence は実際に積み上げた証拠の強さを反映させること。`;
+3. 根本原因が確定したら impact_triage を呼び、impact（fault/scope/scale/affectedSubjects と各 citations）を埋める。
+4. impact.fault で出口を振り分ける:
+   - own（自社コード/IaC 起因）でコードで直せる → remediation_planner を呼び、修正可否と方針（suggestedActions）を得る。
+   - external（外部/ベンダー起因）または運用対応が要る → runbook_escalation を呼び、escalation 草案を埋める。
+   - 自責・他責の両方がありうる場合は両方（remediation_planner と runbook_escalation）を呼び、人間の判断に委ねる。
+   - unknown のときは断定せず、確度の高い側を起案する（証拠不足なら escalation を省略してよい）。
+5. 既に修正PRが起票済みで PR 番号が分かる場合（advisory モードでは草案PRも対象）に限り、remediation_reviewer を
+   呼んで PR をレビューし、remediationReview（verdict/concerns/pullRequestUrl/citations）を埋める。PR が未起票で
+   レビュー対象が無い場合は remediationReview を省略する（pullRequestUrl を埋めない＝マッパ側で落ちる）。
+6. 最後に、上で定義した JSON スキーマ「だけ」を出力する（前後に説明文・コードフェンス以外の地の文を付けない）。
+   confidence は実際に積み上げた証拠の強さを反映させ、impact は impact_triage の算定をそのまま載せること
+   （citation を出せなかった場合は impact を省略する）。escalation は runbook_escalation の草案をそのまま載せ、
+   宛先（team）を引けなかった場合・自責でコードで直す場合は escalation を省略すること。remediationReview は
+   remediation_reviewer の判定をそのまま載せ、レビュー対象 PR を引けなかった場合は省略すること。`;
 
   return new LlmAgent({
     name: "investigation_coordinator",
@@ -42,6 +62,9 @@ export function createInvestigationCoordinator(params: {
       new AgentTool({ agent: params.evidenceCollector }),
       new AgentTool({ agent: params.rootCauseAnalyst }),
       new AgentTool({ agent: params.remediationPlanner }),
+      new AgentTool({ agent: params.impactTriage }),
+      new AgentTool({ agent: params.runbookEscalation }),
+      new AgentTool({ agent: params.remediationReviewer }),
     ],
   });
 }

@@ -49,10 +49,15 @@ import { LLMTextClient } from "../../../../Contexts/Monitoring/AIInvestigation/d
 import { AIInvestigationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/AIInvestigationPort.js";
 import { ADKAgentInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKAgentInvestigationAdapter.js";
 import { ADKInvestigationAgentRunner } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKInvestigationAgentRunner.js";
+import { InMemoryEscalationDirectory } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/escalation/InMemoryEscalationDirectory.js";
+import { ESCALATION_DIRECTORY_SEED } from "../../../../Contexts/Monitoring/seeds/EscalationDirectorySeed.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
+import { CloudMonitoringGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudMonitoringGatewayImpl.js";
 import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/TerraformGatewayImpl.js";
+import { InMemoryAppliedInfraChangeStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryAppliedInfraChangeStore.js";
 import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/GitHubGatewayImpl.js";
+import { GitHubPullRequestReadGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestReadGateway.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
 import { RedisSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/RedisSSEAlertNotifier.js";
 import { SSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/domain/SSEAlertNotifier.js";
@@ -163,7 +168,12 @@ export class BackofficeApp {
     // read-only 証拠ゲートウェイは単一Gemini版（InfraInvestigationPort 経由の事前収集）と
     // ADK版（エージェントの狙い撃ちツール）で共有する。
     const cloudLoggingGateway = new CloudLoggingGatewayImpl();
-    const terraformGateway = new TerraformGatewayImpl();
+    const cloudMonitoringGateway = new CloudMonitoringGatewayImpl();
+    // apply 時に捕捉した IaC 変更イベントの保管。調査（terraformGateway 経由 read）と
+    // demo 注入（TriggerDemoScenarioUseCase 経由 write）で同一インスタンスを共有する。
+    // 実機では CI からの HTTP ingest を上流に差し込み、本ストアはその受け皿になる。
+    const appliedInfraChangeStore = new InMemoryAppliedInfraChangeStore();
+    const terraformGateway = new TerraformGatewayImpl(appliedInfraChangeStore);
     const githubGateway = new GitHubGatewayImpl(
       config.github.token,
       config.github.targetRepo,
@@ -188,6 +198,14 @@ export class BackofficeApp {
           terraformGateway,
           githubGateway,
           similarIncidentRepository,
+          // 他責/運用案件のエスカレーション草案（タスク35）の宛先を引く体制マスタ（read-only・seed 駆動）。
+          escalationDirectory: new InMemoryEscalationDirectory(ESCALATION_DIRECTORY_SEED),
+          // 修正PRの自動レビュー（タスク36）が diff/変更ファイル/CI を引く read-only ゲートウェイ。
+          // 起票先（remediationRepo）の PR を見る。未設定なら null/空で review は自然に省略される。
+          pullRequestReadGateway: new GitHubPullRequestReadGateway(
+            config.github.token,
+            config.github.remediationRepo,
+          ),
         }),
       );
     } else {
@@ -199,6 +217,7 @@ export class BackofficeApp {
         cloudLoggingGateway,
         terraformGateway,
         githubGateway,
+        cloudMonitoringGateway,
       );
     // SSE 通知の差し替え（stretchⅠ・案1）。REDIS_URL 設定時のみ Valkey Pub/Sub 版に載せ替える。
     //  - worker: publish のみ（SSE クライアントを持たないので fan-out 購読は張らない）
@@ -374,7 +393,12 @@ export class BackofficeApp {
 
     const ecDemoGateway =
       this.overrides.ecDemoGateway ?? new HttpEcDemoGateway(config.demo.ecBackendUrl);
-    const triggerScenarioUseCase = new TriggerDemoScenarioUseCase(ecDemoGateway, config.demo.productId);
+    const triggerScenarioUseCase = new TriggerDemoScenarioUseCase(
+      ecDemoGateway,
+      config.demo.productId,
+      appliedInfraChangeStore,
+      collectMonitoringEventUseCase,
+    );
     const demoResetUseCase = new DemoResetUseCase(
       new MongoDemoDataAdapter(mongoClient),
       knownErrorPatternRepository,

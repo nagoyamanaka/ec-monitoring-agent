@@ -28,6 +28,8 @@ variable "deployer_roles" {
   default = [
     "roles/run.admin",
     "roles/compute.admin",
+    "roles/compute.osAdminLogin",
+    "roles/iap.tunnelResourceAccessor",
     "roles/iam.serviceAccountUser",
     "roles/secretmanager.admin",
     "roles/storage.admin",

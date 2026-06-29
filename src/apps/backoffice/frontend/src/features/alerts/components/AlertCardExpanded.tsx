@@ -3,9 +3,21 @@ import { Card } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
 import { type AlertView } from "../domain/AlertView";
 import { InvestigationItem } from "./InvestigationItem";
+import { ImpactPanel } from "./ImpactPanel";
+import { EscalationPanel } from "./EscalationPanel";
+import { RemediationReviewPanel } from "./RemediationReviewPanel";
 import { alertReason } from "../domain/alertReason";
 import { alertReviewState, isAlertReviewed } from "../domain/alertReview";
 import type { FeedbackDecision } from "../application/submitFeedback";
+
+/**
+ * 表示の射影モード（タスク37：同一 InvestigationReport を射影違いで出し分ける）。
+ * - "summary"（一覧オーバレイ/ドロワー）: トリアージ用要約。重い証跡（調査ステップ全文・推奨アクション・
+ *   impact 全項目・escalation 草案・review）は載せず、原因候補＋障害規模(impact.scale)だけに絞る。
+ * - "full"（詳細ページ）: 報告用フル。impact 全項目・escalation・review まで全表示する。
+ * データは二重持ちせず、同じ AlertView から表示時に射影する。
+ */
+export type AlertReportVariant = "summary" | "full";
 
 export interface AlertCardExpandedProps {
   alert: AlertView;
@@ -26,6 +38,10 @@ export interface AlertCardExpandedProps {
     alertId: string,
     operatorNote: string,
   ) => void | Promise<void>;
+  /**
+   * 表示する射影。既定は要約（一覧オーバレイ/ドロワー）。詳細ページは "full" を渡し報告用フルを出す。
+   */
+  variant?: AlertReportVariant;
   className?: string;
 }
 
@@ -46,8 +62,10 @@ export function AlertCardExpanded({
   alert,
   onDecision,
   onReinvestigate,
+  variant = "summary",
   className,
 }: AlertCardExpandedProps) {
+  const full = variant === "full";
   const [submitting, setSubmitting] = useState<ReviewAction | null>(null);
   // 却下フロー：理由/修正方針の入力を開いているか・入力中の note。
   const [rejecting, setRejecting] = useState(false);
@@ -136,7 +154,7 @@ export function AlertCardExpanded({
             <div className="overflow-x-auto rounded-md ring-1 ring-inset ring-slate-700/60">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="bg-slate-800/50 text-slate-400">
+                  <tr className="bg-slate-800/50 text-slate-300">
                     <th className="px-3 py-1.5 font-medium">項目</th>
                     <th className="px-3 py-1.5 font-medium">期待値</th>
                     <th className="px-3 py-1.5 font-medium">実値</th>
@@ -162,17 +180,28 @@ export function AlertCardExpanded({
           </section>
         )}
 
-      {/* AI 調査レポート（未知パターン） */}
+      {/* AI 調査レポート（未知パターン）。summary は要約（原因候補＋障害規模）のみ、
+          full は報告用フル（調査ステップ・推奨アクション・影響評価・escalation・review）。 */}
       {report && (
         <>
           <p className="leading-relaxed text-slate-100">{report.summary}</p>
 
-          {report.investigationSteps.length > 0 && (
+          {/* 要約: 障害規模(impact.scale)だけを1行で出す（重い impact 全項目は full のみ）。 */}
+          {!full && report.impact && (
+            <p className="flex items-baseline gap-2 text-xs">
+              <span className="font-medium uppercase tracking-wide text-slate-400">
+                障害規模
+              </span>
+              <span className="text-slate-200">{report.impact.scale}</span>
+            </p>
+          )}
+
+          {full && report.investigationSteps.length > 0 && (
             <section className="space-y-1">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
                 調査ステップ
               </h4>
-              <ol className="list-decimal space-y-1 pl-5 marker:text-slate-500">
+              <ol className="list-decimal space-y-1 pl-5 marker:text-slate-400">
                 {report.investigationSteps.map((step, i) => (
                   <li key={i}>
                     <InvestigationItem item={step} />
@@ -182,7 +211,7 @@ export function AlertCardExpanded({
             </section>
           )}
 
-          {report.suggestedActions.length > 0 && (
+          {full && report.suggestedActions.length > 0 && (
             <section className="space-y-1">
               <div className="flex items-center gap-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
@@ -190,7 +219,7 @@ export function AlertCardExpanded({
                 </h4>
                 {/* AI が「コードで直せる」と判定した場合のみ提示。remediate 実行の判断材料。 */}
                 {report.remediable && (
-                  <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
+                  <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
                     コードで修正可能（AI 判定）
                   </span>
                 )}
@@ -203,6 +232,16 @@ export function AlertCardExpanded({
                 ))}
               </ul>
             </section>
+          )}
+
+          {/* 報告用フル（詳細ページのみ）: 影響評価・エスカレーション草案・修正PRレビュー。
+              いずれも optional ＝ 未生成 Alert・自責ルート・PR 未起票では描画しない。 */}
+          {full && report.impact && <ImpactPanel impact={report.impact} />}
+          {full && report.escalation && (
+            <EscalationPanel escalation={report.escalation} />
+          )}
+          {full && report.remediationReview && (
+            <RemediationReviewPanel review={report.remediationReview} />
           )}
         </>
       )}
@@ -228,7 +267,7 @@ export function AlertCardExpanded({
                 rows={3}
                 autoFocus
                 placeholder="例: 原因は決済 API ではなく在庫サービス。タイムアウト閾値の見直しを提案して。"
-                className="w-full resize-y rounded-md border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/50 disabled:opacity-50"
+                className="w-full resize-y rounded-md border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus-visible:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/50 disabled:opacity-50"
               />
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -236,7 +275,7 @@ export function AlertCardExpanded({
                 type="button"
                 disabled={submitting !== null}
                 onClick={cancelReject}
-                className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 disabled:opacity-50"
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 disabled:opacity-50"
               >
                 キャンセル
               </button>
@@ -265,7 +304,7 @@ export function AlertCardExpanded({
         ) : (
           <Card className="space-y-2 !bg-slate-800/40 !p-3 !ring-slate-700/60">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-300">
                 {reviewed ? "この分類の判定" : "この分類は正しいですか？"}
               </span>
               <div
@@ -282,7 +321,7 @@ export function AlertCardExpanded({
                     "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
                     reviewState === "APPROVED"
                       ? "bg-emerald-500/25 text-emerald-200 ring-2 ring-inset ring-emerald-400/60 disabled:opacity-100"
-                      : "bg-slate-800 text-slate-500 ring-1 ring-slate-700 hover:bg-slate-700",
+                      : "bg-slate-800 text-slate-400 ring-1 ring-slate-700 hover:bg-slate-700",
                   )}
                 >
                   {(() => {
@@ -309,7 +348,7 @@ export function AlertCardExpanded({
                     "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:active:scale-100",
                     reviewState === "REJECTED"
                       ? "bg-rose-500/25 text-rose-200 ring-2 ring-inset ring-rose-400/60 disabled:opacity-100"
-                      : "bg-slate-800 text-slate-500 ring-1 ring-slate-700 hover:bg-slate-700",
+                      : "bg-slate-800 text-slate-400 ring-1 ring-slate-700 hover:bg-slate-700",
                   )}
                 >
                   {(() => {
@@ -325,7 +364,7 @@ export function AlertCardExpanded({
               </div>
             </div>
             {reviewState === "REJECTED" && alert.feedback?.operatorNote && (
-              <p className="text-[11px] leading-snug text-slate-400">
+              <p className="text-[11px] leading-snug text-slate-300">
                 却下理由：「{alert.feedback.operatorNote}」
               </p>
             )}

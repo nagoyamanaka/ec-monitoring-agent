@@ -242,7 +242,9 @@ DomainEventSubscriber<InventoryReservationFailedDomainEvent> を implements す�
 
 参考ドキュメント: docs/step3-application-layer.md の「CompensateOrderOnInventoryFailed」セクション
 
-# タスク 9: errorHandler ミドルウェア + server.ts 実装
+# ~~タスク 9: errorHandler ミドルウェア + server.ts 実装~~ ✅ 完了済み
+
+> 実装済み: `src/apps/ec/backend/src/middleware/errorHandler.ts` ＋ `src/apps/ec/backend/src/server.ts`。
 
 概要: EC backend の Express サーバー起動・ルーティング・DI・RabbitMQ Subscriber 登録をまとめて実装する。
 

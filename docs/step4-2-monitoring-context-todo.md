@@ -248,6 +248,68 @@
 - 既知の限界（試走ゆえ）: ライブ疎通（実 Vertex でのループ動作・トークン実測）は未検証＝デプロイ/ADC設定後に確認。E2E は stub 経路のまま無傷
 - 参考: 「ADKマルチエージェント実装」節
 
+---
+
+> **タスク 34〜37（v20 追加・タスク18 の拡張）**: 調査グラフに「影響評価／他責エスカレーション／修正レビュー」の3エージェントを足し、**既知/未知でルートを分岐**させる。設計の正は `step4-1` §8.1.2（エージェント台帳・ルート分岐図・作業削減マッピング）。**目的＝作業者負担削減**。read/write 境界（調査=read / リメディ=write隔離 / 人間承認ゲート越境禁止）は既存どおり不変。依存順は 34（影響評価＝入口ルータ）→ 35/36（出口・並行可）→ 37（レポート表示）。
+
+### タスク 34: ImpactTriageAgent（影響評価＋自責他責ルータ）〔stretch〕✅ 完了済み
+
+> **狙い**: 「今回ぶんの判断」（自責他責・影響範囲・障害規模）を引用付きで算定。既知ルートでも必要な唯一の判断（根本原因は再利用、影響は毎回違う）。自責他責ラベルが出口（35 Remediation / 35' Runbook）の振り分け信号になる。
+
+- 【完了】ワイヤ契約に `ImpactAssessmentPrimitives = { fault: "own"|"external"|"unknown"; scope; scale; affectedSubjects: string[]; citations: string[] }` ＋ `ImpactFault` を **`AlertAnalysis/domain/contracts/AlertContract.ts` に定義**（ワイヤ型は contracts 単一ソース方針）。`InvestigationReportPrimitives` に optional `impact?` を追加。`InvestigationReport`（domain）は contracts から re-export ＋ `impact?` フィールド・`toPrimitives`（impact 有時のみ展開）・`fromPrimitives` を後方互換で追加（**既存 Alert は `impact` 無しで読める**＝旧 Primitives に `impact` キーすら付かない）
+- 【完了】`infrastructure/adk/agents/ImpactTriageAgent.ts`（`createImpactTriageAgent(model)`・推論のみ・ツール無し）。instruction: 証拠（appLogs/terraformDiff/recentCommits）＋occurrenceCount＋根本原因から fault（直近 commit/terraform 差分と相関→own / 外部API由来・直近変更なし→external / 証拠不足→unknown）・scope・scale を算定し、各算定に根拠 citation を必須化（citation を出せない場合は impact を出さない）
+- 【完了】`agents/InvestigationCoordinator.ts`: impact_triage を AgentTool に追加＋orchestration 手順に「根本原因確定後 impact_triage を呼び impact を埋める」を追記。`ADKInvestigationAgentRunner` で `createImpactTriageAgent` を結線。出力 JSON スキーマ（`SYSTEM_INSTRUCTION`）に `impact` を追記し、`LLMOutputParser`（`toImpact` 正規化：fault を own/external/unknown に丸め・scope/scale 非文字列は undefined・citations 空白除去）／`InvestigationReportMapper`（`guardImpact`：citations 空の impact を落とすハルシネーションガード）を同期更新。**単一Gemini版（LLMInvestigationAdapter）も同経路で impact を生成**（パース/マッピング共通化＝DRY）
+- 【設計のみ・未結線】既知ルート（`AnalyzeAlertUseCase` 既知短絡）の軽量 ImpactTriage パスは**フラグ `AI_IMPACT_ON_KNOWN` 既定 false の設計のみ**で MVP は結線せず（タスク注記の許容範囲）。同期で挟まない＝シナリオ3「次回1秒」を殺さない方針は維持。結線するなら composition root で任意・非同期に ImpactTriage 相当のみ回す（`EvidenceCollector`/`RootCauseAnalyst` は通さない＝根本原因は結晶化済みで再導出は無駄）
+- 設計判断（ガードの置き場）: 構造正規化は parser（`toImpact`）、**証拠なき主張を落とすガードは mapper（`guardImpact`）** に分離。parser は「LLM 出力の型を整える」、mapper は「表示・永続化する報告を組む」関心事。citations 空 → impact undefined＝§7.3 の citation 必須方針と同方針
+- 【完了】UT: `LLMOutputParser.test.ts`（impact パース／fault 丸め／scope欠落→undefined／citations 空白除去・非配列丸め）／`InvestigationReportMapper.test.ts`（impact 伝播／citations 空→落とす）／`InvestigationReport.test.ts`（impact ラウンドトリップ／impact 無し旧 Primitives の後方互換）。全 618 テスト緑・`tsc --noEmit` クリーン
+- 残（タスク37）: フロント表示（一覧オーバレイ＝`impact.scale` のみ／詳細＝fault/scope/scale/affectedSubjects＋citations チップ）は**未着手**＝タスク37の責務
+
+### タスク 35: Remediation 出口の自責他責ルーティング ＋ RunbookEscalationAgent（他責・運用）〔stretch〕✅ 完了済み
+
+> **狙い**: 「コードで直せない他責/運用案件」を行き止まりにせず、エスカレーション草案まで自動化。RemediationPlanner（自責→コード/IaC PR）と排他で役割分担。
+
+- 【完了】`infrastructure/adk/agents/RunbookEscalationAgent.ts`（起案のみ・write しない・`find_escalation_owners` ツール内包）。instruction: 根本原因＋impact（fault/affectedSubjects）＋体制マスタから、想定 team/owner/contact・reason・暫定回避手順（過去 `resolvedNote` を参照）・severity 根拠・添付証拠バンドルを草案化。宛先は **ツールが返した値のみ**使い捏造しない（引けなければ team 空＝宛先不明を明示）。**実際の通知送信・チケット起票はしない**（人間承認の前段）。
+- 【完了】`seeds/EscalationDirectorySeed.ts`: 組織体制サンプル5チーム（payment-platform / inventory-fulfillment / platform-sre / security-response / external-vendor-liaison・`{ team, owner, contact, slaTier, ownsSubjects: string[] }`）。SimilarIncident（過去事例）とは別物＝**体制の知識ベース**。read-only の `AIInvestigation/domain/escalation/EscalationDirectory.ts`（IF・`findBySubjects()`）＋ `infrastructure/escalation/InMemoryEscalationDirectory.ts`（大文字小文字無視＋部分一致で ownsSubjects 突合・seed 宣言順保持）。`adk/tools/escalationTools.ts`（`find_escalation_owners` FunctionTool・read-only）でエージェントに食わせる
+- 【完了】`agents/InvestigationCoordinator.ts`: impact.fault で出口分岐——own＋remediable→`remediation_planner`（suggestedActions）、external/運用→`runbook_escalation`（escalation 草案）。両方該当しうる場合は両方起案。出力 JSON に `escalation`（optional）を追加し `InvestigationReport`/contracts（`EscalationDraftPrimitives`）に optional フィールド追記（タスク34 と同じ後方互換作法・toPrimitives は escalation 有時のみ展開）。**単一Gemini版（LLMInvestigationAdapter）も同経路で escalation を生成**（`SYSTEM_INSTRUCTION` に fault ルーティング＋schema 追記・`LLMOutputParser.toEscalation` 正規化・`InvestigationReportMapper.guardEscalation` で team 空を落とすハルシネーションガード＝impact の citations 空ガードと同方針＝DRY）
+- 設計判断（配置）: EscalationDirectory は ADK エージェントが使う調査知識なので `AIInvestigation/domain/escalation/`＋`infrastructure/escalation/` に配置（cross-BC 結合を避ける）。ワイヤ型 `EscalationDraftPrimitives` は contracts 単一ソース方針どおり `AlertContract.ts` に定義し domain は re-export
+- 設計判断（write 隔離不変）: RunbookEscalation は草案テキストのみ。送信は人間承認後（既存 RemediationPort と同じゲート思想）。`find_escalation_owners` も read-only
+- 設計判断（ガードの置き場）: 構造正規化は parser（`toEscalation`・文字列欠落は空文字・evidenceBundle 空白除去）、**宛先を引けなかった（team 空）草案を落とすガードは mapper（`guardEscalation`）**＝impact と同じ parser/mapper 役割分担
+- 【完了】UT: `InMemoryEscalationDirectory.test.ts`（突合6ケース：完全/大文字小文字無視/部分一致/複数主体重複なし/該当なし/空主体）／`LLMOutputParser.test.ts`（escalation パース・文字列欠落→空文字・evidenceBundle 空白/非配列丸め）／`InvestigationReportMapper.test.ts`（escalation 伝播／team 空→落とす）／`InvestigationReport.test.ts`（escalation ラウンドトリップ／旧 Primitives 後方互換）。全 636 テスト緑・`tsc --noEmit` クリーン
+- 【完了】配線: composition root（`BackofficeApp` ADK 経路）で `InMemoryEscalationDirectory(ESCALATION_DIRECTORY_SEED)` を runner に注入
+- 注: 「fault=external で escalation が埋まり remediation が空」「resolvedNote が手順に反映」はエージェント（LLM）挙動でデモ確認の領域＝疎通主体の ADK 部は UT せず（既存方針）、決定論的な parser/mapper/repository/report 側で担保
+- 残（タスク37）: フロント表示（詳細＝escalation 草案の全表示）は**未着手**＝タスク37の責務
+
+### タスク 36: RemediationReviewerAgent（修正PRの自動レビュー・RV段階）〔stretch〕✅ 完了
+
+> **狙い**: AI/CI が起票した修正PRが「引用された根本原因に実際に対応しているか」を先に検証し、人間のRVを open-ended 監査→checklist 確認に縮める。誤修正を人間到達前に止める。
+
+- 【完了】ワイヤ契約に `RemediationReviewPrimitives = { verdict: "pass"|"concerns"|"reject"; concerns: string[]; pullRequestUrl: string; citations: string[] }` ＋ `RemediationVerdict` を **`AlertContract.ts` に定義**（ワイヤ型は contracts 単一ソース方針）。`InvestigationReportPrimitives` に optional `remediationReview?` を追加。`InvestigationReport`（domain）は contracts から re-export ＋ フィールド・`toPrimitives`（review 有時のみ展開）・`fromPrimitives` を後方互換で追加（タスク34/35 と同じ作法・旧 Primitives は `remediationReview` キーすら付かない）
+- 【完了】`infrastructure/adk/agents/RemediationReviewerAgent.ts`（**read-only**・マージしない）。instruction: PR diff＋確定根本原因＋変更ファイル／CI を突き合わせ、(1)diff は引用根本原因に対応するか (2)変更ファイルは証拠と整合するか (3)テストは障害経路をカバーするか を判定し、`verdict` ＋ `concerns: string[]` を citations 付きで返す。レビュー対象 PR を引けない（未起票）ときは省略
+- 【完了】read-only ツール `infrastructure/adk/tools/remediationReviewTools.ts`（`get_pull_request_diff` / `get_pull_request_checks`・**write は足さない**・ベストエフォート）。read-only ゲートウェイ `infrastructure/remediation/PullRequestReadGateway.ts`（IF・`getPullRequest`/`getCheckRuns`）＋ `GitHubPullRequestReadGateway.ts`（GitHub REST・diff メディアタイプ＋files＋check-runs・未設定/失敗は null/空）。write 側 `GitHubPullRequestGateway`（人間承認ゲート内）とは意図的に分離（read=調査 / write=リメディの境界を越境させない）
+- 【完了】`InvestigationCoordinator.ts`: remediation_reviewer を AgentTool に追加＋手順に「PR 起票済み（PR番号が分かる・advisory では草案PRも）に限りレビューし remediationReview を埋める／未起票なら省略」を追記。`ADKInvestigationAgentRunner` で `createRemediationReviewerAgent`＋`buildRemediationReviewTools` を結線。**単一Gemini版（LLMInvestigationAdapter）も同経路で生成**（`SYSTEM_INSTRUCTION` に判定基準＋schema 追記・`LLMOutputParser.toRemediationReview` 正規化〔verdict を pass/concerns/reject に丸め・不正/欠落は安全側 concerns〕・`InvestigationReportMapper.guardRemediationReview` で pullRequestUrl 空を落とすハルシネーションガード＝impact の citations 空・escalation の team 空と同方針＝DRY）
+- 設計判断（自動マージしない）: Reviewer は verdict を出すだけ。承認・マージは人間（既存 reviewStatus ゲート）。pass でも人間の最終承認は省かない。ツールも read-only
+- 設計判断（PR 未起票時の自然な省略）: 初期調査時点は PR が無く `get_pull_request_diff` が空→agent は remediationReview を省略→`pullRequestUrl` 空ガードで落ちる。E2E（stub 経路）も review 無しのまま無傷。「Remediation後にReviewer起動して格納」のフロー（タスク16 PR起票→`POST /ingest/remediation-result` `drafted` 確定後の再レビュー）は composition root（step4-3）で非同期に回す前提で、本タスクはエージェント＋ツール＋契約＋in-graph 結線まで（PR番号を seed に載せて回せばグラフ内でも review が埋まる）
+- 設計判断（ガードの置き場）: 構造正規化は parser（`toRemediationReview`）、レビュー対象 PR を引けなかった（pullRequestUrl 空）verdict を落とすガードは mapper（`guardRemediationReview`）＝impact/escalation と同じ parser/mapper 役割分担。verdict 不正の安全側は「自動 pass させない」ため concerns に丸める
+- 配線: composition root（`BackofficeApp` ADK 経路）で `GitHubPullRequestReadGateway(token, remediationRepo)` を runner に注入
+- 【完了】UT: `LLMOutputParser.test.ts`（review パース／verdict 丸め〔不正・欠落→concerns〕／concerns・citations 空白除去・非配列/文字列欠落丸め）／`InvestigationReportMapper.test.ts`（review 伝播／pullRequestUrl 空→落とす）／`InvestigationReport.test.ts`（review ラウンドトリップ／review 無し旧 Primitives 後方互換）。全 644 テスト緑・`tsc --noEmit` クリーン
+- 注: 「無関係 diff→reject/concerns・テスト欠落→concerns・整合 diff→pass」はエージェント（LLM）挙動でデモ確認の領域＝疎通主体の ADK 部・read-only ゲートウェイは UT せず（既存方針）、決定論的な parser/mapper/report 側で担保
+- 残（タスク37）: フロント表示（詳細＝remediationReview verdict/concerns/citations の全表示）は**未着手**＝タスク37の責務
+
+### タスク 37: レポート責務分割（一覧オーバレイ=要約 / 詳細=報告用フル）〔stretch〕✅ 完了
+
+> **狙い**: 同一 `InvestigationReport` を**射影違いで出し分ける**。一覧オーバレイ＝トリアージ用要約（原因候補＋confidence＋×N）、詳細＝報告用フル（自責他責・影響範囲・障害規模・証跡全部・引用・escalation・review）。型は単一ソース、データ二重持ちはしない。
+
+- 【完了（frontend）】`features/alerts/components/AlertCardExpanded.tsx`: `variant: "summary" | "full"`（既定 summary）を導入し**同一 AlertView を射影違いで出し分け**。summary（一覧オーバレイ/ドロワー）＝原因候補（reason）＋サマリ文＋障害規模（`impact.scale` 1行）＋承認/却下のみ。重い証跡（investigationSteps 全文・推奨アクション・impact 全項目・escalation 草案・review）は載せない。`full`（詳細）でのみ全表示。
+- 【完了（frontend）】`features/alerts/pages/AlertDetailPage.tsx`: `AlertCardExpanded variant="full"` を渡す。報告用フル＝impact（自責他責/scope/scale/affectedSubjects＋citations チップ）・escalation 草案・remediationReview verdict＋既存の証拠パネル（`EvidencePanel`）。`AlertDetailDrawer.tsx` は `variant="summary"` を明示。
+- 【完了（frontend）】新パネル `ImpactPanel.tsx`（fault バッジ＋scope/scale＋affectedSubjects＋citations チップ）／`EscalationPanel.tsx`（team/owner/contact/reason/暫定回避/severity 根拠/evidenceBundle）／`RemediationReviewPanel.tsx`（verdict バッジ＋concerns＋PR リンク＋citations）。いずれも optional フィールド存在時のみ描画＝**未生成 Alert・自責ルート・PR 未起票では出ない**。
+- 【完了（frontend）】`domain/InvestigationReportView.ts`: `ImpactView`/`EscalationView`/`RemediationReviewView` 型＋`toInvestigationReportView` の射影を追加（contracts の `ImpactFault`/`RemediationVerdict` を re-export）。impact/escalation/review はワイヤ optional のまま欠落を保持＝**単一ソースからの射影でデータ二重持ちしない**。
+- 【完了】UT（frontend）: `AlertCardExpanded.test.tsx`（summary に重フィールドが出ない／full に impact・escalation・review が出る／impact 等無しの旧 Alert でも両 variant で壊れない）／`InvestigationReportView.test.ts`（impact/escalation/review の射影＋未設定後方互換）。frontend 148 テスト緑・`tsc --noEmit`（frontend/root とも）クリーン。
+- 設計判断（単一ソース）: 要約は `InvestigationReport` から導出する射影であって別型を作らない。後方互換のため impact/escalation/review は optional で、未生成 Alert は要約のみ表示される。
+- 設計判断（**バックエンド射影分割は不実施・トリガー付きで遅延**／2026-06-29 確定）: 「一覧ペイロードを太らせない」狙いに対し、**支配項の証跡（appLogs/terraformDiff/recentCommits）は既に `useEvidence` で別遅延ロード済み**＝最大の重量はもう一覧に無い。一覧に残る impact/escalation/review は KB 級テキストで限界効用が小さい。スケール軸は「幅（フィールド数）」より「件数」で、件数が問題化したら**ページネーション/フィルタ**の方が幅トリムより遥かに効く（1000→50件で幅無関係に95%減）。よって今回は**フロント表示射影のみ**で十分とし、`GET /alerts` の DTO トリムは見送り（必要時の段取りは下記）。配線面では**個別フェッチ経路 `refreshAlert(id)` は既存**＝後で一覧を要約 DTO に絞っても詳細は既存経路でフル取得できる。
+- 設計判断（**Valkey キャッシュは時期尚早**）: `GET /alerts/:id` は materialized な `toPrimitives()` の単一 Mongo ドキュメント read で、高コストな join/再計算が無い＝Mongo のワーキングセット自体が実質キャッシュ。Valkey を挟むと SSE（ANALYZING→OPEN→remediation→review）の頻繁な更新ごとに invalidate が要りヒット率が落ち stale リスクだけ残る。**Valkey が報われるのは詳細が「証跡＋関連＋cross-BC＋LLM 整形」の高コスト集約 read に育った時**で、その時は `updatedAt` をキーに組み立て済みビューをキャッシュする。read スケールが要るなら Valkey の前に **ETag/Cache-Control（updatedAt 由来）** が無 invalidation で安価。段取り＝①フロント射影（今）→②件数問題ならページネーション→③幅問題なら一覧 DTO トリム（詳細は `refreshAlert` でフル）→④詳細が高コスト集約化したら ETag→Valkey。
+
+---
+
 <!--
 【マルチエージェント統合の3パターン整理（A2A 判断のADR種・2026-06-23 確定）】
 「マルチエージェント」を1語で混ぜない。性質の違う3つに分ける:
@@ -312,6 +374,33 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 ### タスク 32: CloudMonitoringGateway（pull・メトリクス相関）〔stretchⅠ / 次フェーズ〕→ **step4-5 T13 へ移動**
 
 > デプロイ着地後の任意タスクのため `docs/step4-5-backoffice-infra.todo.md` タスク T13 に移動・集約した。内容はそちらを正とする。
+
+### タスク 33: Terraform 証拠を「変更ファイル名」→「apply 適用差分（イベント捕捉）」へ格上げ 〔stretchⅠ〕✅ 完了済み
+
+> 背景: 旧 `TerraformGatewayImpl` は IaC リポジトリの `git log --name-only *.tf` で「どのファイルが触られたか」を集めていた。これは*意図*（コミット済み≠apply 済み）であって AI 原因分析にとって弱い。価値があるのは「どのリソースのどの属性が（before→after）変わったか」という*適用された事実*。インフラ障害シナリオ（デモ4）では terraform 差分が文字通り root cause になるため、ここを厚くする。
+> 設計のキモ: メトリクス/ログ/コミットは「後から時間窓でライブ照会」できるが、**terraform apply の差分だけは後から再構成できない**（apply は CI 上の一回限りのイベント）。よって git join ではなく**適用の瞬間にイベントとして捕捉して保存**し、調査は既存の `since` 時間窓で引く（検知ソースの peer ingest と同じ思想）。git sha は join キーでなく apply イベントの一属性。
+
+- 【完了】`domain/InfraEvidence.ts`: `TerraformDiff` を構造化（`resourceChanges: { address, action: create|update|delete|replace, attributeDeltas: {key, before, after}[] }[]` ＋ `appliedAt`(ISO) ＋ optional `commitSha`）。`changedResources`/`summary` は表示/空判定用の便宜フィールドとして維持（`resourceChanges` から導出）。Date を含まないので Primitives は本型をそのまま再利用（ワイヤ契約は無改造）。
+- 【完了】`infrastructure/infrainvestigation/AppliedInfraChangeStore.ts`（IF＋`AppliedInfraChange` 型・`record`/`findAppliedSince`）／`InMemoryAppliedInfraChangeStore.ts`（単一プロセス・新しい順返却）。実機では CI からの HTTP ingest（`terraform show -json`）を上流に差し替える受け皿。
+- 【完了】`TerraformGatewayImpl` を「git log 後追い」→「store から窓内最新の apply を引く」へ全面差し替え（IF `getAppliedDiff({since})` は不変なので ADK ランナー/`DefaultInfraInvestigationAdapter` の結線はノータッチ）。UT 追加（窓外無視/最新採用/address 導出）。
+- 【完了】composition root（`BackofficeApp`）: `InMemoryAppliedInfraChangeStore` を1インスタンス生成し、調査 read（terraformGateway）と demo write（`TriggerDemoScenarioUseCase`）で共有。
+- 【完了】`TriggerDemoScenarioUseCase`: infra-fault シナリオで注入の前に代表 apply（Cloud SQL の `tier` ダウングレード＋`max_connections` 100→20＝接続枯渇の起点）を `record`。実機の CI apply 記録をデモで合成する位置づけ。
+- 【完了】ADK `fetch_terraform_diff` ツール: 空フォールバックを新形（`resourceChanges: []`）に更新＋description を「どの属性が before→after」へ。
+- 【完了】frontend `EvidenceView`/`EvidencePanel`: `resourceChanges` を写像し、action バッジ＋`key: before → after` を表示（原因分析の決定打を可視化）。`commitSha`/適用時刻も併記。UT 更新。
+- 設計判断（git commit は置き換えない）: apply＝「実際に何が変わったか」、commit＝「誰が/なぜ＝意図」で別問。`recentCommits` は SECURITY 証拠源として従来どおり残し、相補関係にする。
+- 設計判断（最新1件採用）: 窓内に複数 apply があれば直近（障害に時間的に最も近い）を採用。集約は混乱を生むため見送り。
+- 全テスト緑（root＋frontend 609 件）。
+
+### タスク 34: デモシナリオ6「構成変更障害」＋ FAULT INJECTION の「合成入力」明示 〔stretchⅠ〕✅ 完了済み
+
+> 背景: タスク33 で apply 差分は記録できるようになったが、シナリオ4（インフラ障害）は発報が **GCP の Cloud Monitoring 経路B 依存でローカルでは Alert が出ない**ため、terraform 差分の証拠がローカルのデモで流れない。そこで「IaC 変更そのものが原因の障害」を、検知の入口だけ合成して実 ingest 経路に通す新シナリオを追加した（シナリオ5＝脆弱性検知と同方式）。
+
+- 【完了】`TriggerDemoScenarioUseCase`: シナリオ `infra-config-change`（数字エイリアス `6`）を追加。① `appliedInfraChangeStore.record()` で apply 差分（Cloud SQL の tier 縮小＋max_connections 100→20）を記録 → ② 合成 Cloud Monitoring webhook を `CloudMonitoringAlertTranslator.toMonitoringEvent()` → `CollectMonitoringEventUseCase.run()` に通す。**ローカルでも**実 Alert→AI 調査が走り、調査が記録済み apply 差分を root cause として収集・提示できる。
+- 設計判断（分類の罠）: 調査が terraform 差分を引くのは category===**INFRASTRUCTURE** のときだけ（`DefaultInfraInvestigationAdapter`）。translator の `CAPACITY_HINTS`（connection/pool/cpu…）に当たると CAPACITY になり差分を引かないので、condition 名は容量語を避け（"Cloud SQL instance unhealthy after configuration change"）INFRASTRUCTURE に倒す。UT で category を固定。
+- 【完了】frontend `ScenarioControls`: シナリオ6 を追加し、`kind: "live" | "synthetic"` を導入。**合成入力**（5/6）に amber バッジ＋tooltip＋凡例を付与。コピー＝「検知の入口のみ合成。変換→分類→AI 調査→PR 起票は実経路。本番は実 CI/apply から同経路。外部リンク（PR/コンソール）はデモ環境では代表値」。
+- 設計判断（"シミュレータ"枠は不採用）: 5/6 はパイプラインが**実際に動く**ため「動かない偽物」と括るのは不正確かつ作った価値の過小評価。軸は「動く/動かない」ではなく「検知の入口が合成か実外部ソースか」「外部ディープリンクが代表値か実リンクか」。よって正確なバッジ＋凡例で明示する方針にした。
+- 外部リンク（PR への遷移など）は実機なら `commitSha`/CVE から実リンクに解決するが、デモでは代表値（`evidenceLinks` は recentCommits の sha からのみ実リンクを組む＝ハルシネーション URL を出さない既存方針）。この「本番では飛べる／デモは代表値」をポートフォリオ説明として UI 凡例＋tooltip に内蔵した。
+- 全テスト緑（root＋frontend 623 件）。
 
 ---
 
