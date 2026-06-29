@@ -6,6 +6,7 @@ import type {
   RelatedAlertPrimitives,
   ImpactAssessmentPrimitives,
   EscalationDraftPrimitives,
+  RemediationReviewPrimitives,
 } from "./contracts/AlertContract.js";
 
 // シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
@@ -15,6 +16,7 @@ export type {
   RelatedAlertPrimitives,
   ImpactAssessmentPrimitives,
   EscalationDraftPrimitives,
+  RemediationReviewPrimitives,
 };
 
 /** 調査ステップ／推奨アクション項目から表示・学習用のプレーンテキストを取り出す。 */
@@ -43,6 +45,9 @@ export class InvestigationReport {
   // 他責/運用案件のエスカレーション草案（impact.fault=external/運用ルートの出口）。未指定は
   // undefined（旧データ・自責ルート・fallback 互換）。team の無い草案はマッパ側で落とす。
   readonly escalation?: EscalationDraftPrimitives;
+  // 修正PRの自動レビュー結果（タスク36・RV段階）。未指定は undefined（旧データ・PR 未起票・
+  // fallback 互換）。pullRequestUrl 空のレビューはマッパ側で落とす。
+  readonly remediationReview?: RemediationReviewPrimitives;
 
   constructor(params: {
     summary: string;
@@ -58,6 +63,7 @@ export class InvestigationReport {
     relatedAlerts?: RelatedAlertPrimitives[];
     impact?: ImpactAssessmentPrimitives;
     escalation?: EscalationDraftPrimitives;
+    remediationReview?: RemediationReviewPrimitives;
   }) {
     this.summary = params.summary;
     this.confidence = params.confidence;
@@ -72,6 +78,7 @@ export class InvestigationReport {
     this.relatedAlerts = params.relatedAlerts ?? [];
     this.impact = params.impact;
     this.escalation = params.escalation;
+    this.remediationReview = params.remediationReview;
   }
 
   withReviewStatus(reviewStatus: ReviewStatus): InvestigationReport {
@@ -93,6 +100,7 @@ export class InvestigationReport {
       relatedAlerts: [...this.relatedAlerts],
       ...(this.impact ? { impact: this.impact } : {}),
       ...(this.escalation ? { escalation: this.escalation } : {}),
+      ...(this.remediationReview ? { remediationReview: this.remediationReview } : {}),
     };
   }
 
@@ -111,6 +119,7 @@ export class InvestigationReport {
       relatedAlerts: primitives.relatedAlerts ?? [],
       impact: primitives.impact,
       escalation: primitives.escalation,
+      remediationReview: primitives.remediationReview,
     });
   }
 }

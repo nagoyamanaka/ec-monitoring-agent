@@ -57,6 +57,7 @@ import { CloudMonitoringGatewayImpl } from "../../../../Contexts/Monitoring/AIIn
 import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/TerraformGatewayImpl.js";
 import { InMemoryAppliedInfraChangeStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryAppliedInfraChangeStore.js";
 import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/GitHubGatewayImpl.js";
+import { GitHubPullRequestReadGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestReadGateway.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
 import { RedisSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/RedisSSEAlertNotifier.js";
 import { SSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/domain/SSEAlertNotifier.js";
@@ -199,6 +200,12 @@ export class BackofficeApp {
           similarIncidentRepository,
           // 他責/運用案件のエスカレーション草案（タスク35）の宛先を引く体制マスタ（read-only・seed 駆動）。
           escalationDirectory: new InMemoryEscalationDirectory(ESCALATION_DIRECTORY_SEED),
+          // 修正PRの自動レビュー（タスク36）が diff/変更ファイル/CI を引く read-only ゲートウェイ。
+          // 起票先（remediationRepo）の PR を見る。未設定なら null/空で review は自然に省略される。
+          pullRequestReadGateway: new GitHubPullRequestReadGateway(
+            config.github.token,
+            config.github.remediationRepo,
+          ),
         }),
       );
     } else {

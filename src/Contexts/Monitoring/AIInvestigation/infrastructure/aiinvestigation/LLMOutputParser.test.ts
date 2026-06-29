@@ -208,6 +208,63 @@ describe("LLMOutputParser", () => {
       expect(parseLLMOutput(badBundle)?.escalation?.evidenceBundle).toEqual([]);
     });
 
+    it("remediationReview は欠落で undefined・揃った構造はそのままパースする", () => {
+      // 欠落（旧スキーマ互換）
+      expect(parseLLMOutput(validJson)?.remediationReview).toBeUndefined();
+
+      const withReview = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        remediationReview: {
+          verdict: "pass",
+          concerns: [],
+          pullRequestUrl: "https://github.com/o/r/pull/42",
+          citations: ["diff:src/payment.ts", "test:payment.timeout.test.ts"],
+        },
+      });
+      expect(parseLLMOutput(withReview)?.remediationReview).toEqual({
+        verdict: "pass",
+        concerns: [],
+        pullRequestUrl: "https://github.com/o/r/pull/42",
+        citations: ["diff:src/payment.ts", "test:payment.timeout.test.ts"],
+      });
+    });
+
+    it("remediationReview.verdict が pass/concerns/reject 以外なら concerns に丸める", () => {
+      const badVerdict = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        remediationReview: { verdict: "lgtm", concerns: [], pullRequestUrl: "u", citations: [] },
+      });
+      expect(parseLLMOutput(badVerdict)?.remediationReview?.verdict).toBe("concerns");
+
+      // verdict 欠落も安全側で concerns
+      const noVerdict = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        remediationReview: { pullRequestUrl: "u" },
+      });
+      expect(parseLLMOutput(noVerdict)?.remediationReview?.verdict).toBe("concerns");
+    });
+
+    it("remediationReview の concerns/citations は空白を除き・非配列/文字列欠落を丸める", () => {
+      const messy = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        remediationReview: {
+          verdict: "reject",
+          concerns: ["根本原因と無関係", "  ", ""],
+          pullRequestUrl: 123,
+          citations: "oops",
+        },
+      });
+      const review = parseLLMOutput(messy)?.remediationReview;
+      expect(review?.verdict).toBe("reject");
+      expect(review?.concerns).toEqual(["根本原因と無関係"]);
+      expect(review?.pullRequestUrl).toBe("");
+      expect(review?.citations).toEqual([]);
+    });
+
     it("relatedAlerts が配列でなければ空配列に丸める", () => {
       const notArray = JSON.stringify({
         summary: "x",

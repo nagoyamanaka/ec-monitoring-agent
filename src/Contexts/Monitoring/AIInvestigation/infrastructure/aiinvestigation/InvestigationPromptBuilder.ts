@@ -42,6 +42,13 @@ suggestedActions に修正方針を書いてください。他責/運用の場�
 根拠に）・severityRationale（重大度の根拠・1文）・evidenceBundle（添付すべき証拠/引用の id）を埋めてください。
 自責・他責の両方がありうる場合は suggestedActions（修正方針）と escalation（引き継ぎ草案）の両方を出して構いません。
 通知送信・チケット起票はしないでください（草案まで＝人間承認の前段）。
+remediationReview は「修正PRが起票済みで、その diff を渡された場合」に限り、その PR を読み取り専用でレビューした結果です。
+(1)diff が引用根本原因に実際に対応しているか (2)変更ファイルは証拠（commit/terraform 差分・ログ）と整合するか
+(3)テストは障害経路をカバーするか を確認し、verdict を pass（対応し整合）/ concerns（要確認の懸念あり）/
+reject（根本原因に無関係・誤修正）で返してください。concerns / reject のときは concerns に「なぜ pass でないか」を
+具体的に列挙し、判定根拠は citations（diff hunk・変更ファイルパス・テスト名・CI チェック id）で裏付けてください。
+レビュー対象 PR が無い（diff を渡されていない＝まだ起票前）場合は remediationReview を省略してください
+（自動マージはしません＝verdict を出すだけで承認・マージは人間が行います）。
 {
   "summary": "障害の説明（日本語・1〜2文）",
   "confidence": 0.87,
@@ -52,7 +59,8 @@ suggestedActions に修正方針を書いてください。他責/運用の場�
   "remediable": true | false,
   "relatedAlerts": [{ "alertId": "...", "relation": "same_root_cause", "rationale": "関連の根拠（1文）" }],
   "impact": { "fault": "own" | "external" | "unknown", "scope": "影響範囲（1文）", "scale": "障害規模（1文）", "affectedSubjects": ["payment", "..."], "citations": ["証拠/類似事例の id", "..."] },
-  "escalation": { "team": "...", "owner": "...", "contact": "...", "reason": "...", "interimWorkaround": "...", "severityRationale": "...", "evidenceBundle": ["証拠/引用の id", "..."] }
+  "escalation": { "team": "...", "owner": "...", "contact": "...", "reason": "...", "interimWorkaround": "...", "severityRationale": "...", "evidenceBundle": ["証拠/引用の id", "..."] },
+  "remediationReview": { "verdict": "pass" | "concerns" | "reject", "concerns": ["懸念点1", "..."], "pullRequestUrl": "...", "citations": ["diff hunk/変更ファイル/テスト名 等", "..."] }
 }`;
 
 const MAX_ESTIMATED_TOKENS = 3500;

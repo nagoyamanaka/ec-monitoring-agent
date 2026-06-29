@@ -5,6 +5,7 @@ import type {
   InvestigationStepPrimitives,
   ImpactAssessmentPrimitives,
   EscalationDraftPrimitives,
+  RemediationReviewPrimitives,
 } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
@@ -41,6 +42,18 @@ function guardEscalation(
   return escalation;
 }
 
+/**
+ * 修正PR自動レビューのハルシネーションガード。`pullRequestUrl` の無いレビューは「レビュー対象 PR を
+ * 引けなかった＝何をレビューしたか不明」なので表示・永続化前に落とす（undefined＝レビューなし）。
+ * 初期調査時点（PR 未起票）はここで自然に落ちる。impact の citations・escalation の team と同方針。
+ */
+function guardRemediationReview(
+  review: RemediationReviewPrimitives | undefined,
+): RemediationReviewPrimitives | undefined {
+  if (!review || review.pullRequestUrl.trim() === "") return undefined;
+  return review;
+}
+
 function parseSeverity(value: string): AlertSeverity {
   const upper = value.toUpperCase();
   if (
@@ -73,6 +86,7 @@ export function toInvestigationReport(
     relatedAlerts: output.relatedAlerts,
     impact: guardImpact(output.impact),
     escalation: guardEscalation(output.escalation),
+    remediationReview: guardRemediationReview(output.remediationReview),
   });
 }
 

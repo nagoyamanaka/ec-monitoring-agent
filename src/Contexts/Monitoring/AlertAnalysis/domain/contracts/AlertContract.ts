@@ -128,6 +128,28 @@ export type EscalationDraftPrimitives = {
   readonly evidenceBundle: string[];
 };
 
+/** 修正PR自動レビューの判定（タスク36）。pass=引用根本原因に対応し整合 / concerns=要確認の懸念あり / reject=根本原因に無関係・誤修正。 */
+export type RemediationVerdict = "pass" | "concerns" | "reject";
+
+/**
+ * AI/CI が起票した修正PRの自動レビュー結果（タスク36・RV段階）。read-only レビューで
+ * (1)diff が引用根本原因に対応するか (2)変更ファイルが証拠と整合するか (3)テストが障害経路を
+ * カバーするか を判定し、誤修正を人間到達前に止める（人間の RV を open-ended 監査→checklist 確認へ縮める）。
+ * `pullRequestUrl` 空（レビュー対象 PR を引けなかった＝何をレビューしたか不明）はマッパ側で落とす
+ * （根拠なき verdict を出さないガード。impact の citations・escalation の team と同方針）。
+ * verdict を出すだけで自動マージはしない（承認・マージは人間の reviewStatus ゲート）。
+ */
+export type RemediationReviewPrimitives = {
+  // 判定。concerns/reject のときは concerns に理由を必須化する。
+  readonly verdict: RemediationVerdict;
+  // 懸念点（なぜ pass でないか）。pass のときは空配列でよい。
+  readonly concerns: string[];
+  // レビュー対象 PR（advisory では草案 PR）の URL。引けない場合は空文字＝マッパ側で落とす。
+  readonly pullRequestUrl: string;
+  // 判定根拠の引用（diff hunk・変更ファイルパス・テスト名・CI チェック id 等）。
+  readonly citations: string[];
+};
+
 export type InvestigationReportPrimitives = {
   readonly summary: string;
   readonly confidence: number;
@@ -147,6 +169,10 @@ export type InvestigationReportPrimitives = {
   // 後方互換＝escalation 無しの旧 Alert・自責ルートでは未設定。team 空の草案はマッパ側で落とすので、
   // 保存される escalation は必ず宛先付き。
   readonly escalation?: EscalationDraftPrimitives;
+  // 修正PRの自動レビュー結果（タスク36・RV段階）。optional は後方互換＝review 無しの旧 Alert・
+  // PR 未起票（初期調査時点）では未設定。pullRequestUrl 空の review はマッパ側で落とすので、
+  // 保存される review は必ずレビュー対象 PR 付き。
+  readonly remediationReview?: RemediationReviewPrimitives;
   // AI が「コードで直せる（PR で remediate 可能）」と判定したか。category 非依存の
   // 汎用シグナルで、フロントは remediate ボタンの活性／ROI 提示の判断に使う（advisory）。
   // 実際の write 実行ゲートは人間承認＋executor の deterministic 判定が握る。

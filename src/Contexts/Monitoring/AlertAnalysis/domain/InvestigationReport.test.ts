@@ -98,6 +98,27 @@ describe("InvestigationReport toPrimitives / fromPrimitives", () => {
     expect(InvestigationReport.fromPrimitives(legacy).escalation).toBeUndefined();
   });
 
+  it("remediationReview は既定で undefined・指定時はラウンドトリップで復元される", () => {
+    expect(new InvestigationReport(baseParams).remediationReview).toBeUndefined();
+
+    const remediationReview = {
+      verdict: "concerns" as const,
+      concerns: ["テストが障害経路をカバーしていない"],
+      pullRequestUrl: "https://github.com/o/r/pull/42",
+      citations: ["diff:src/payment.ts"],
+    };
+    const restored = InvestigationReport.fromPrimitives(
+      new InvestigationReport({ ...baseParams, remediationReview }).toPrimitives(),
+    );
+    expect(restored.remediationReview).toEqual(remediationReview);
+  });
+
+  it("remediationReview 無しの旧 Primitives も読める（後方互換）", () => {
+    const legacy = new InvestigationReport(baseParams).toPrimitives();
+    expect("remediationReview" in legacy).toBe(false);
+    expect(InvestigationReport.fromPrimitives(legacy).remediationReview).toBeUndefined();
+  });
+
   it("relatedAlerts は既定で空配列・指定時はラウンドトリップで復元される", () => {
     expect(new InvestigationReport(baseParams).relatedAlerts).toEqual([]);
 

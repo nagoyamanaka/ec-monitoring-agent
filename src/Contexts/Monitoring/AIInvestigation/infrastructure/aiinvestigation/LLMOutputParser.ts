@@ -3,6 +3,8 @@ import type {
   ImpactAssessmentPrimitives,
   ImpactFault,
   EscalationDraftPrimitives,
+  RemediationReviewPrimitives,
+  RemediationVerdict,
 } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 
 /**
@@ -28,9 +30,18 @@ export type LLMInvestigationOutput = {
   // 他責/運用案件のエスカレーション草案。未指定・構造不正は undefined（必須スキーマには含めない）。
   // team 空（宛先を引けない＝捏造）を落とすガードはマッパ側（toInvestigationReport）。
   escalation?: EscalationDraftPrimitives;
+  // 修正PRの自動レビュー結果。未指定・構造不正は undefined（必須スキーマには含めない）。
+  // pullRequestUrl 空（レビュー対象 PR を引けない＝何をレビューしたか不明）を落とすガードはマッパ側。
+  remediationReview?: RemediationReviewPrimitives;
 };
 
 const VALID_FAULTS: ReadonlySet<string> = new Set<ImpactFault>(["own", "external", "unknown"]);
+
+const VALID_VERDICTS: ReadonlySet<string> = new Set<RemediationVerdict>([
+  "pass",
+  "concerns",
+  "reject",
+]);
 
 /**
  * 配列要素を文字列のみへ正規化する。LLM が誤って文字列以外（オブジェクト・数値）を混ぜても
@@ -118,6 +129,29 @@ function toEscalation(value: unknown): EscalationDraftPrimitives | undefined {
   };
 }
 
+/**
+ * remediationReview を {verdict, concerns, pullRequestUrl, citations} へ正規化する。
+ * object でなければ undefined（レビュー結果なし）。verdict は pass/concerns/reject のみ許容し、
+ * 未知値・欠落は安全側（自動 pass させない）で "concerns" に丸める。concerns/citations は空白文字列を除いて
+ * 配列化。pullRequestUrl 空（レビュー対象 PR を引けなかった＝何をレビューしたか不明）の review を落とす
+ * ガードはマッパ側（根拠なき verdict を「表示前に落とす」のは表示寄りの関心事。impact/escalation と同方針）。
+ */
+function toRemediationReview(value: unknown): RemediationReviewPrimitives | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const o = value as Record<string, unknown>;
+  const rawVerdict = o["verdict"];
+  const verdict: RemediationVerdict =
+    typeof rawVerdict === "string" && VALID_VERDICTS.has(rawVerdict)
+      ? (rawVerdict as RemediationVerdict)
+      : "concerns";
+  return {
+    verdict,
+    concerns: toStringArray(o["concerns"]).filter((c) => c.trim() !== ""),
+    pullRequestUrl: toStringField(o["pullRequestUrl"]),
+    citations: toStringArray(o["citations"]).filter((c) => c.trim() !== ""),
+  };
+}
+
 export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
   try {
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
@@ -146,6 +180,7 @@ export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
       relatedAlerts: toRelatedAlerts(parsed["relatedAlerts"]),
       impact: toImpact(parsed["impact"]),
       escalation: toEscalation(parsed["escalation"]),
+      remediationReview: toRemediationReview(parsed["remediationReview"]),
     };
   } catch {
     return null;

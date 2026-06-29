@@ -126,6 +126,36 @@ describe("InvestigationReportMapper", () => {
       );
       expect(report.escalation).toBeUndefined();
     });
+
+    it("remediationReview 未指定なら report.remediationReview は undefined", () => {
+      expect(toInvestigationReport(output()).remediationReview).toBeUndefined();
+    });
+
+    it("pullRequestUrl 付き remediationReview はそのまま伝播する", () => {
+      const remediationReview = {
+        verdict: "concerns" as const,
+        concerns: ["テストが障害経路をカバーしていない"],
+        pullRequestUrl: "https://github.com/o/r/pull/42",
+        citations: ["diff:src/payment.ts"],
+      };
+      expect(
+        toInvestigationReport(output({ remediationReview })).remediationReview,
+      ).toEqual(remediationReview);
+    });
+
+    it("pullRequestUrl 空の remediationReview は落とす（レビュー対象不明ガード）", () => {
+      const report = toInvestigationReport(
+        output({
+          remediationReview: {
+            verdict: "pass",
+            concerns: [],
+            pullRequestUrl: "",
+            citations: [],
+          },
+        }),
+      );
+      expect(report.remediationReview).toBeUndefined();
+    });
   });
 
   describe("buildFallbackReport", () => {

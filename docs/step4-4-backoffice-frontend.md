@@ -16,12 +16,12 @@
 
 ### 選定理由（要件 → 効くタスク）
 
-| 体験要件 | 関係タスク | テーマでの担保 |
-| -------- | ---------- | -------------- |
+| 体験要件                         | 関係タスク                                                                            | テーマでの担保                                                    |
+| -------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | 動く過程をリアルタイムに見やすく | タスク4 `useAlertStream`（ANALYZING→OPEN）/ タスク8 `EvidencePanel`（証拠の積み上げ） | ダーク基調はストリーム/ログの逐次更新が最も読みやすく緊張感が出る |
-| 危険度をランク別で | タスク2 `severity.ts` / `SeverityBadge` / タスク13 `RiskLevel`(HIGH/MEDIUM/LOW) | オブザーバビリティ標準配色（赤/橙/青）をランク色に採用 |
-| レポートを割合・視覚的に | confidence→% / confidenceゲージ（タスク6/12）/ タスク11 analytics | **Tremor** のゲージ/ドーナツ/チャートで実装コスト最小化 |
-| 予兆をグラフで | タスク13 `ForecastPage` / `RiskCard` / シナリオ6の降下演出 | グラフは Tremor、降ってくる演出は③ネオン系アニメを部分採用 |
+| 危険度をランク別で               | タスク2 `severity.ts` / `SeverityBadge` / タスク13 `RiskLevel`(HIGH/MEDIUM/LOW)       | オブザーバビリティ標準配色（赤/橙/青）をランク色に採用            |
+| レポートを割合・視覚的に         | confidence→% / confidenceゲージ（タスク6/12）/ タスク11 analytics                     | **Tremor** のゲージ/ドーナツ/チャートで実装コスト最小化           |
+| 予兆をグラフで                   | タスク13 `ForecastPage` / `RiskCard` / シナリオ6の降下演出                            | グラフは Tremor、降ってくる演出は③ネオン系アニメを部分採用        |
 
 ### 採用ライブラリ
 
@@ -50,12 +50,12 @@ confidence ゲージ  低→高で #F43F5E → #F59E0B → #22C55E のグラデ�
 
 レイヤーを feature 配下に切るが、**各レイヤーの粒度を校正する**（過剰設計回避）。
 
-| レイヤー | 置くもの | 置かないもの |
-| -------- | -------- | ------------ |
-| `domain/` | **型＋純粋なview-logic**（`AlertView`型、severity→色、confidence整形） | 集約・ふるまい・`DomainService`（バックエンドの責務） |
-| `application/` | 薄いユースケース（`submitFeedback` / `approveRemediation`） | 重いオーケストレーション。hooksに畳んでよい |
-| `infrastructure/` | **APIクライアント＋SSE**（HttpClient依存、`AlertStream`実装） | — ここが最も価値ある抽象 |
-| `presentation/` | pages / components / hooks | ビジネスロジック |
+| レイヤー          | 置くもの                                                               | 置かないもの                                          |
+| ----------------- | ---------------------------------------------------------------------- | ----------------------------------------------------- |
+| `domain/`         | **型＋純粋なview-logic**（`AlertView`型、severity→色、confidence整形） | 集約・ふるまい・`DomainService`（バックエンドの責務） |
+| `application/`    | 薄いユースケース（`submitFeedback` / `approveRemediation`）            | 重いオーケストレーション。hooksに畳んでよい           |
+| `infrastructure/` | **APIクライアント＋SSE**（HttpClient依存、`AlertStream`実装）          | — ここが最も価値ある抽象                              |
+| `presentation/`   | pages / components / hooks                                             | ビジネスロジック                                      |
 
 > **原則**: フロントの `domain` は「型＋純関数」。バックエンドの集約を複製しない。`UserDomainService` 相当はクライアント側に本物の不変条件がある時だけ（今回は無し）。
 
@@ -139,6 +139,10 @@ features間の直接依存は禁止（共有は shared に上げる）
 AlertsLayout → features/demo/DemoDrawer（ここだけ）。DefaultLayout は参照しない
 ```
 
+### [フロント driven ポートは infrastructure/]
+
+— Api interface・factory・wire DTO は infra、domain/ は純粋・I/Oゼロのみ、「型が通信非依存」≠「domain」
+
 ---
 
 ## SSE の扱い（最重要）
@@ -169,11 +173,11 @@ useAlertStream():
 
 ## 画面と表示内容
 
-| パス | 役割 | DemoDrawer |
-| ---- | ---- | ---------- |
-| `/alerts` | 一覧（マスター）＋クリックで**右オーバーレイ・詳細ドロワー** | **常時表示**（デモ舞台） |
-| `/alerts/:id` | フル詳細（調査プロセス全表示・PR詳細・ディープリンク） | 非表示 |
-| `/analytics` | AI精度トラッキング | 非表示 |
+| パス          | 役割                                                         | DemoDrawer               |
+| ------------- | ------------------------------------------------------------ | ------------------------ |
+| `/alerts`     | 一覧（マスター）＋クリックで**右オーバーレイ・詳細ドロワー** | **常時表示**（デモ舞台） |
+| `/alerts/:id` | フル詳細（調査プロセス全表示・PR詳細・ディープリンク）       | 非表示                   |
+| `/analytics`  | AI精度トラッキング                                           | 非表示                   |
 
 ### 閲覧モデル：マスター詳細（右ドロワー）〔当初のインライン展開から改訂〕
 
@@ -201,10 +205,10 @@ useAlertStream():
 
 > backend（`AnalyzeAlertUseCase`）は全アラートを必ず次のどちらかにする。フロントは**両方の説明データを必ず提示する**（当初は classification を捨て known アラートで「何が・なぜ」が空だった）。
 
-| 種別 | status | 説明データ | confidence |
-| ---- | ------ | ---------- | ---------- |
-| **既知パターン一致**（known） | `OPEN` | `classification.patternName` ＋ **`matchedConditions`（一致根拠）** | classification.confidence |
-| **未知**（unknown） | `ANALYZING`→調査後 `OPEN` | `investigationReport`（summary・調査ステップ・推奨アクション） | report.confidence |
+| 種別                          | status                    | 説明データ                                                          | confidence                |
+| ----------------------------- | ------------------------- | ------------------------------------------------------------------- | ------------------------- |
+| **既知パターン一致**（known） | `OPEN`                    | `classification.patternName` ＋ **`matchedConditions`（一致根拠）** | classification.confidence |
+| **未知**（unknown）           | `ANALYZING`→調査後 `OPEN` | `investigationReport`（summary・調査ステップ・推奨アクション）      | report.confidence         |
 
 - **「未調査」状態は実在しない**（分類器は必ず known/unknown を返し、unknown は即 ANALYZING）。OPEN かつ report 無しは**既知パターン一致**であって未調査ではない。状態バッジ（`AlertStatusBadge`）はこれを「未調査」と誤表示しない。
 - **レビュー状態は `feedback` ベース（`alertReviewState`）**で既知・未知を統一（known は `investigationReport` を持たず `reviewStatus` で判定できないため）。これにより**既知アラートも承認/却下できる**。
@@ -214,6 +218,7 @@ useAlertStream():
   - （旧 `eventDomains.json` は eventCatalog に統合・廃止＝より具体的な per-event タイトルが上位互換のため。）
 
 `AlertCardExpanded`（ドロワー本体／詳細ページ共用）の表示要素:
+
 - **推定原因**: known=該当パターン名、unknown=AI推定パターン名
 - **一致根拠**（known のみ）: `matchedConditions` を**テーブル表示**（項目／期待値／実値の3列）＝「なぜそう判断したか」を整列して読ませる（一覧はカード維持、ドロワー内のこの根拠のみ表形式）
 - 原因仮説サマリー・調査ステップ・推奨アクション（unknown の `investigationReport`）

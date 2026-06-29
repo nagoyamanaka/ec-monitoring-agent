@@ -279,15 +279,21 @@
 - 注: 「fault=external で escalation が埋まり remediation が空」「resolvedNote が手順に反映」はエージェント（LLM）挙動でデモ確認の領域＝疎通主体の ADK 部は UT せず（既存方針）、決定論的な parser/mapper/repository/report 側で担保
 - 残（タスク37）: フロント表示（詳細＝escalation 草案の全表示）は**未着手**＝タスク37の責務
 
-### タスク 36: RemediationReviewerAgent（修正PRの自動レビュー・RV段階）〔stretch〕
+### タスク 36: RemediationReviewerAgent（修正PRの自動レビュー・RV段階）〔stretch〕✅ 完了
 
 > **狙い**: AI/CI が起票した修正PRが「引用された根本原因に実際に対応しているか」を先に検証し、人間のRVを open-ended 監査→checklist 確認に縮める。誤修正を人間到達前に止める。
 
-- 【新規】`infrastructure/adk/agents/RemediationReviewerAgent.ts`（**read-only**・マージしない）。instruction: PR diff＋RootCauseAnalyst の根本原因＋変更ファイル／テストを突き合わせ、(1)diff は引用根本原因に対応するか (2)変更ファイルは証拠と整合するか (3)テストは障害経路をカバーするか を判定し、`verdict: "pass"|"concerns"|"reject"` ＋ `concerns: string[]` を返す。
-- 【新規】read-only ツール: PR diff/変更ファイル/CI テスト結果を引く FunctionTool（既存 `GitHubGateway` を拡張 or 新規 read メソッド。`getPullRequestDiff(prNumber)` 等。**write は足さない**）。
-- 【結線】Remediation（タスク16）で PR 起票（dispatch 完了の `POST /ingest/remediation-result` で `drafted` 確定）後に Reviewer を起動し、結果を Alert/InvestigationReport の `remediationReview`（optional）に格納。advisory モードでは草案PRに対しても回せる。
-- 設計判断（自動マージしない）: Reviewer は verdict を出すだけ。承認・マージは人間（既存 reviewStatus ゲート）。pass でも人間の最終承認は省かない。
-- UT: 根本原因に無関係な diff→reject/concerns、テスト欠落→concerns、整合 diff→pass。
+- 【完了】ワイヤ契約に `RemediationReviewPrimitives = { verdict: "pass"|"concerns"|"reject"; concerns: string[]; pullRequestUrl: string; citations: string[] }` ＋ `RemediationVerdict` を **`AlertContract.ts` に定義**（ワイヤ型は contracts 単一ソース方針）。`InvestigationReportPrimitives` に optional `remediationReview?` を追加。`InvestigationReport`（domain）は contracts から re-export ＋ フィールド・`toPrimitives`（review 有時のみ展開）・`fromPrimitives` を後方互換で追加（タスク34/35 と同じ作法・旧 Primitives は `remediationReview` キーすら付かない）
+- 【完了】`infrastructure/adk/agents/RemediationReviewerAgent.ts`（**read-only**・マージしない）。instruction: PR diff＋確定根本原因＋変更ファイル／CI を突き合わせ、(1)diff は引用根本原因に対応するか (2)変更ファイルは証拠と整合するか (3)テストは障害経路をカバーするか を判定し、`verdict` ＋ `concerns: string[]` を citations 付きで返す。レビュー対象 PR を引けない（未起票）ときは省略
+- 【完了】read-only ツール `infrastructure/adk/tools/remediationReviewTools.ts`（`get_pull_request_diff` / `get_pull_request_checks`・**write は足さない**・ベストエフォート）。read-only ゲートウェイ `infrastructure/remediation/PullRequestReadGateway.ts`（IF・`getPullRequest`/`getCheckRuns`）＋ `GitHubPullRequestReadGateway.ts`（GitHub REST・diff メディアタイプ＋files＋check-runs・未設定/失敗は null/空）。write 側 `GitHubPullRequestGateway`（人間承認ゲート内）とは意図的に分離（read=調査 / write=リメディの境界を越境させない）
+- 【完了】`InvestigationCoordinator.ts`: remediation_reviewer を AgentTool に追加＋手順に「PR 起票済み（PR番号が分かる・advisory では草案PRも）に限りレビューし remediationReview を埋める／未起票なら省略」を追記。`ADKInvestigationAgentRunner` で `createRemediationReviewerAgent`＋`buildRemediationReviewTools` を結線。**単一Gemini版（LLMInvestigationAdapter）も同経路で生成**（`SYSTEM_INSTRUCTION` に判定基準＋schema 追記・`LLMOutputParser.toRemediationReview` 正規化〔verdict を pass/concerns/reject に丸め・不正/欠落は安全側 concerns〕・`InvestigationReportMapper.guardRemediationReview` で pullRequestUrl 空を落とすハルシネーションガード＝impact の citations 空・escalation の team 空と同方針＝DRY）
+- 設計判断（自動マージしない）: Reviewer は verdict を出すだけ。承認・マージは人間（既存 reviewStatus ゲート）。pass でも人間の最終承認は省かない。ツールも read-only
+- 設計判断（PR 未起票時の自然な省略）: 初期調査時点は PR が無く `get_pull_request_diff` が空→agent は remediationReview を省略→`pullRequestUrl` 空ガードで落ちる。E2E（stub 経路）も review 無しのまま無傷。「Remediation後にReviewer起動して格納」のフロー（タスク16 PR起票→`POST /ingest/remediation-result` `drafted` 確定後の再レビュー）は composition root（step4-3）で非同期に回す前提で、本タスクはエージェント＋ツール＋契約＋in-graph 結線まで（PR番号を seed に載せて回せばグラフ内でも review が埋まる）
+- 設計判断（ガードの置き場）: 構造正規化は parser（`toRemediationReview`）、レビュー対象 PR を引けなかった（pullRequestUrl 空）verdict を落とすガードは mapper（`guardRemediationReview`）＝impact/escalation と同じ parser/mapper 役割分担。verdict 不正の安全側は「自動 pass させない」ため concerns に丸める
+- 配線: composition root（`BackofficeApp` ADK 経路）で `GitHubPullRequestReadGateway(token, remediationRepo)` を runner に注入
+- 【完了】UT: `LLMOutputParser.test.ts`（review パース／verdict 丸め〔不正・欠落→concerns〕／concerns・citations 空白除去・非配列/文字列欠落丸め）／`InvestigationReportMapper.test.ts`（review 伝播／pullRequestUrl 空→落とす）／`InvestigationReport.test.ts`（review ラウンドトリップ／review 無し旧 Primitives 後方互換）。全 644 テスト緑・`tsc --noEmit` クリーン
+- 注: 「無関係 diff→reject/concerns・テスト欠落→concerns・整合 diff→pass」はエージェント（LLM）挙動でデモ確認の領域＝疎通主体の ADK 部・read-only ゲートウェイは UT せず（既存方針）、決定論的な parser/mapper/report 側で担保
+- 残（タスク37）: フロント表示（詳細＝remediationReview verdict/concerns/citations の全表示）は**未着手**＝タスク37の責務
 
 ### タスク 37: レポート責務分割（一覧オーバレイ=要約 / 詳細=報告用フル）〔stretch〕
 
