@@ -12,8 +12,9 @@ export type ResolvedIncident = {
   readonly sourceAlertId?: string;
 };
 
-// 類似度スコア付きの検索ヒット。score は検索バックエンドが返す関連度（高いほど類似）。
-// [0,1] への正規化は consumer（SimilarPatternRule）の責務（バックエンド依存の飽和点を吸収する）。
+// 類似度スコア付きの検索ヒット。score は **backend 非依存で有界な字句類似度 [0,1]**（高いほど類似）。
+// 各リポジトリ実装が lexicalSimilarity で算出する＝Elastic(BM25)/InMemory どちらでも同じ意味になり、
+// 無界 BM25 の小コーパス飽和（無関係事例への偽 100% 一致）を防ぐ。BM25 は候補取得にのみ使う。
 export type ScoredIncident = {
   readonly incident: SimilarIncident;
   readonly score: number;

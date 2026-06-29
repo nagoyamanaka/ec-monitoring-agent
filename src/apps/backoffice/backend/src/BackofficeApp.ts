@@ -469,7 +469,7 @@ export class BackofficeApp {
       esClient,
       config.elasticsearch.similarIncidentsIndex,
     );
-    // BM25 の生スコアを scoreCeiling で [0,1] 正規化、minConfidence 未満は棄権（いずれも env 調整可）。
+    // search は有界な字句類似度 [0,1] を返す（BM25 は候補取得のみ）。minConfidence 未満は棄権して AI 調査へ。
     rules.push(
       new SimilarPatternRule(
         esRepository,

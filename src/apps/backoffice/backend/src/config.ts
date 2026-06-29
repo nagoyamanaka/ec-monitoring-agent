@@ -75,10 +75,10 @@ export const config = {
     url: process.env.ELASTICSEARCH_URL ?? "",
     similarIncidentsIndex:
       process.env.ELASTICSEARCH_SIMILAR_INCIDENTS_INDEX ?? "similar-incidents",
-    // BM25 の生スコアは corpus 依存・非有界なので [0,1] 正規化の飽和点は env で調整可能にする
-    // （短文の解決メモだと max は数程度。デフォルトは控えめに 5）。
+    // リポジトリの search は既に有界な字句類似度 [0,1]（lexicalSimilarity）を返すので、
+    // SimilarPatternRule 側の正規化は実質恒等＝既定 1。生 BM25 を消費していた頃の名残の安全クランプ。
     similarScoreCeiling: Number(
-      process.env.ELASTICSEARCH_SIMILAR_SCORE_CEILING ?? 5,
+      process.env.ELASTICSEARCH_SIMILAR_SCORE_CEILING ?? 1,
     ),
     // この確度未満は棄権して AI 調査経路に回す
     similarMinConfidence: Number(

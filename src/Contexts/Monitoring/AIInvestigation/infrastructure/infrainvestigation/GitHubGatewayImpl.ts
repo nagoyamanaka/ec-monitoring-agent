@@ -63,6 +63,7 @@ export class GitHubGatewayImpl implements GitHubGateway {
 
     const data = (await res.json()) as Array<{
       sha: string;
+      html_url?: string;
       commit: { message: string; author: { name: string; date: string } };
     }>;
 
@@ -71,6 +72,7 @@ export class GitHubGatewayImpl implements GitHubGateway {
       message: c.commit.message.split("\n")[0],
       author: c.commit.author.name,
       committedAt: new Date(c.commit.author.date),
+      ...(c.html_url ? { url: c.html_url } : {}),
     }));
   }
 
@@ -89,6 +91,7 @@ export class GitHubGatewayImpl implements GitHubGateway {
 
     const data = (await res.json()) as {
       sha: string;
+      html_url?: string;
       commit: { message: string; author: { name: string; date: string } };
       files?: Array<{
         filename: string;
@@ -131,6 +134,7 @@ export class GitHubGatewayImpl implements GitHubGateway {
       committedAt: new Date(data.commit.author.date),
       files,
       ...(filesTruncated ? { filesTruncated: true } : {}),
+      ...(data.html_url ? { url: data.html_url } : {}),
     };
   }
 }

@@ -104,6 +104,10 @@ describe("TriggerDemoScenarioUseCase", () => {
     expect(event.category.value).toBe("APPLICATION");
     expect(event.isAlertable()).toBe(true);
     expect(event.source).toBe("ec-backend");
+    // seed の類似コーパスと語彙が被らない eventName＝類似検索が誤って既知に寄せず UNKNOWN→AI 調査に乗る。
+    expect(event.eventName).toBe("ec.pricing.subtotal_mismatch");
+    // 日本語プローズを payload に入れない（kuromoji 無しの偶発一致→BM25 飽和→偽 KNOWN を防ぐ）。
+    expect(JSON.stringify(event.payload)).not.toMatch(/[ぁ-んァ-ヶ一-龠]/);
 
     // 注文投入・障害注入は伴わない（合成検知のみ）。
     expect(ec.placeOrder).not.toHaveBeenCalled();

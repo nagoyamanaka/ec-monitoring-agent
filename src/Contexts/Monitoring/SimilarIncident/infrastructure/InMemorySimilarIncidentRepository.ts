@@ -7,6 +7,7 @@ import {
   SimilarSearchQuery,
 } from "../domain/SimilarIncidentRepository.js";
 import { SimilarIncident } from "../domain/SimilarIncident.js";
+import { lexicalSimilarity } from "../domain/lexicalSimilarity.js";
 
 const MAX_INCIDENTS = 100;
 
@@ -56,14 +57,13 @@ export class InMemorySimilarIncidentRepository implements SimilarIncidentReposit
     );
   }
 
-  // Elastic 無しでも graded confidence 分類を回すための字句類似スコアリング（Jaccard, [0,1]）。
-  // Elastic の生 BM25 と違い既に [0,1] 正規化済みなので SimilarPatternRule の scoreCeiling 既定 1 と整合する。
+  // graded confidence 分類用の字句類似スコアリング（lexicalSimilarity = Jaccard, [0,1]）。
+  // Elastic 版と同一の有界指標を使うことで、backend を変えても score の意味が一致する。
   async search(query: SimilarSearchQuery): Promise<ScoredIncident[]> {
-    const queryTokens = tokenize(query.text);
     return this.incidents
       .map((incident) => ({
         incident,
-        score: jaccard(queryTokens, tokenize(documentText(incident))),
+        score: lexicalSimilarity(query.text, documentText(incident)),
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, query.limit);
@@ -72,24 +72,4 @@ export class InMemorySimilarIncidentRepository implements SimilarIncidentReposit
 
 function documentText(incident: SimilarIncident): string {
   return `${incident.eventName} ${incident.resolvedNote}`;
-}
-
-function tokenize(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .split(/[^a-z0-9ぁ-んァ-ヶ一-龠]+/i)
-      .filter((token) => token.length > 0),
-  );
-}
-
-// Jaccard 係数: |A∩B| / |A∪B| ∈ [0,1]
-function jaccard(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0;
-  let intersection = 0;
-  for (const token of a) {
-    if (b.has(token)) intersection += 1;
-  }
-  const union = a.size + b.size - intersection;
-  return union === 0 ? 0 : intersection / union;
 }

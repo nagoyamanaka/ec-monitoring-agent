@@ -144,22 +144,25 @@ function buildInfraConfigChangeWebhook(): unknown {
 const APPCODE_REGRESSION_SCENARIO_ID = "appcode-regression";
 
 // 症状（WHAT）は Alert が運ぶ。原因（WHY）は demo ブランチの実コミット差分が運ぶ＝AI が両者を相関する。
-// eventName は既知パターンに無い語にして UNKNOWN→AI 調査に必ず乗せる。source は調査の
-// fetch_app_logs が引く対象サービス名（ec-backend）。occurredOn は now（証跡コミットは ref 固定で
-// 壁時計非依存に発見されるので時刻整合は不要）。
+// source は調査の fetch_app_logs が引く対象サービス名（ec-backend）。occurredOn は now（証跡コミットは
+// ref 固定で壁時計非依存に発見されるので時刻整合は不要）。
+//
+// 【UNKNOWN に確実に倒す設計】eventName/payload は seed のインシデント（類似コーパス）と語彙を被らせない。
+//  - 唯一共有する "ec" は全 doc に出る低IDF語で BM25 寄与がほぼゼロ＝類似検索が誤って既知に寄せない。
+//  - payload に**日本語プローズを入れない**: kuromoji 無しの既定アナライザは和文を文字単位に割り、seed の
+//    和文 resolvedNote と大量に偶発一致して BM25 が飽和し confidence 100% の偽 KNOWN を生む（実害バグ）。
+//    短い英語の構造化フィールドのみにする。eventName も seed と被らない pricing 名前空間にする。
 function buildAppcodeRegressionEvent(): MonitoringEvent {
   return new MonitoringEvent({
     eventId: crypto.randomUUID(),
-    eventName: "ec.checkout.subtotal_mismatch",
+    eventName: "ec.pricing.subtotal_mismatch",
     aggregateId: crypto.randomUUID(),
     occurredOn: new Date(),
     category: MonitoringEventCategory.application(),
     severity: AlertSeverity.critical(),
     source: "ec-backend",
     payload: {
-      summary:
-        "一部の注文でチェックアウト小計が不整合（丸め誤り）→ 500。直近のアプリコード変更が疑わしい。",
-      symptom: "checkout subtotal mismatch",
+      symptom: "subtotal rounding mismatch on fractional-priced items",
       httpStatus: 500,
     },
   });

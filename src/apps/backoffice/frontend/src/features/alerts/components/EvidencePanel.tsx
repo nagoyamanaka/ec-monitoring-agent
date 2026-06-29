@@ -274,9 +274,21 @@ function EvidenceSectionView({
             className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
           >
             <div className="flex items-center gap-2">
-              <code className="rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300">
-                {c.shortSha}
-              </code>
+              {c.url ? (
+                <a
+                  href={c.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="GitHub でコミットを開く"
+                  className="rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
+                >
+                  {c.shortSha}
+                </a>
+              ) : (
+                <code className="rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300">
+                  {c.shortSha}
+                </code>
+              )}
               <span className="text-[11px] text-slate-300">{c.author}</span>
               <span className="ml-auto text-[11px] text-slate-400">
                 {formatTime(c.committedAt)}

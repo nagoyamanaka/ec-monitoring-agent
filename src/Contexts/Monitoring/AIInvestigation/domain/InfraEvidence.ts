@@ -40,6 +40,9 @@ export type GitCommit = {
   readonly message: string;
   readonly author: string;
   readonly committedAt: Date;
+  // コミットの Web リンク（GitHub html_url）。証拠としてフロントで sha をクリック可能にする。
+  // ソースが提供しない場合もあるので任意。
+  readonly url?: string;
 };
 
 // あるコミットが変更した1ファイルのコード差分（unified diff）。
@@ -66,6 +69,8 @@ export type GitCommitDiff = {
   readonly files: GitFileDiff[];
   // ファイル数が上限を超えて files を間引いた場合 true。
   readonly filesTruncated?: boolean;
+  // コミットの Web リンク（GitHub html_url）。AI が根拠として参照リンクを提示できる。
+  readonly url?: string;
 };
 
 // Cloud Monitoring から相関取得した1メトリクスの要約（CPU / 接続数 / 5xx 等）。
