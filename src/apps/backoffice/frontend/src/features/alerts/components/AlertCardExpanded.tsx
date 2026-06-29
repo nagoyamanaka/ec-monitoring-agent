@@ -136,7 +136,7 @@ export function AlertCardExpanded({
             <div className="overflow-x-auto rounded-md ring-1 ring-inset ring-slate-700/60">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="bg-slate-800/50 text-slate-400">
+                  <tr className="bg-slate-800/50 text-slate-300">
                     <th className="px-3 py-1.5 font-medium">項目</th>
                     <th className="px-3 py-1.5 font-medium">期待値</th>
                     <th className="px-3 py-1.5 font-medium">実値</th>
@@ -172,7 +172,7 @@ export function AlertCardExpanded({
               <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
                 調査ステップ
               </h4>
-              <ol className="list-decimal space-y-1 pl-5 marker:text-slate-500">
+              <ol className="list-decimal space-y-1 pl-5 marker:text-slate-400">
                 {report.investigationSteps.map((step, i) => (
                   <li key={i}>
                     <InvestigationItem item={step} />
@@ -190,7 +190,7 @@ export function AlertCardExpanded({
                 </h4>
                 {/* AI が「コードで直せる」と判定した場合のみ提示。remediate 実行の判断材料。 */}
                 {report.remediable && (
-                  <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[10px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
+                  <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
                     コードで修正可能（AI 判定）
                   </span>
                 )}
@@ -228,7 +228,7 @@ export function AlertCardExpanded({
                 rows={3}
                 autoFocus
                 placeholder="例: 原因は決済 API ではなく在庫サービス。タイムアウト閾値の見直しを提案して。"
-                className="w-full resize-y rounded-md border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus-visible:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/50 disabled:opacity-50"
+                className="w-full resize-y rounded-md border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus-visible:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-500/50 disabled:opacity-50"
               />
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -236,7 +236,7 @@ export function AlertCardExpanded({
                 type="button"
                 disabled={submitting !== null}
                 onClick={cancelReject}
-                className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 disabled:opacity-50"
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 disabled:opacity-50"
               >
                 キャンセル
               </button>
@@ -265,7 +265,7 @@ export function AlertCardExpanded({
         ) : (
           <Card className="space-y-2 !bg-slate-800/40 !p-3 !ring-slate-700/60">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-300">
                 {reviewed ? "この分類の判定" : "この分類は正しいですか？"}
               </span>
               <div
@@ -282,7 +282,7 @@ export function AlertCardExpanded({
                     "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
                     reviewState === "APPROVED"
                       ? "bg-emerald-500/25 text-emerald-200 ring-2 ring-inset ring-emerald-400/60 disabled:opacity-100"
-                      : "bg-slate-800 text-slate-500 ring-1 ring-slate-700 hover:bg-slate-700",
+                      : "bg-slate-800 text-slate-400 ring-1 ring-slate-700 hover:bg-slate-700",
                   )}
                 >
                   {(() => {
@@ -309,7 +309,7 @@ export function AlertCardExpanded({
                     "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:active:scale-100",
                     reviewState === "REJECTED"
                       ? "bg-rose-500/25 text-rose-200 ring-2 ring-inset ring-rose-400/60 disabled:opacity-100"
-                      : "bg-slate-800 text-slate-500 ring-1 ring-slate-700 hover:bg-slate-700",
+                      : "bg-slate-800 text-slate-400 ring-1 ring-slate-700 hover:bg-slate-700",
                   )}
                 >
                   {(() => {
@@ -325,7 +325,7 @@ export function AlertCardExpanded({
               </div>
             </div>
             {reviewState === "REJECTED" && alert.feedback?.operatorNote && (
-              <p className="text-[11px] leading-snug text-slate-400">
+              <p className="text-[11px] leading-snug text-slate-300">
                 却下理由：「{alert.feedback.operatorNote}」
               </p>
             )}

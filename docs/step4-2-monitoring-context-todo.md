@@ -377,6 +377,17 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 - 設計判断（最新1件採用）: 窓内に複数 apply があれば直近（障害に時間的に最も近い）を採用。集約は混乱を生むため見送り。
 - 全テスト緑（root＋frontend 609 件）。
 
+### タスク 34: デモシナリオ6「構成変更障害」＋ FAULT INJECTION の「合成入力」明示 〔stretchⅠ〕✅ 完了済み
+
+> 背景: タスク33 で apply 差分は記録できるようになったが、シナリオ4（インフラ障害）は発報が **GCP の Cloud Monitoring 経路B 依存でローカルでは Alert が出ない**ため、terraform 差分の証拠がローカルのデモで流れない。そこで「IaC 変更そのものが原因の障害」を、検知の入口だけ合成して実 ingest 経路に通す新シナリオを追加した（シナリオ5＝脆弱性検知と同方式）。
+
+- 【完了】`TriggerDemoScenarioUseCase`: シナリオ `infra-config-change`（数字エイリアス `6`）を追加。① `appliedInfraChangeStore.record()` で apply 差分（Cloud SQL の tier 縮小＋max_connections 100→20）を記録 → ② 合成 Cloud Monitoring webhook を `CloudMonitoringAlertTranslator.toMonitoringEvent()` → `CollectMonitoringEventUseCase.run()` に通す。**ローカルでも**実 Alert→AI 調査が走り、調査が記録済み apply 差分を root cause として収集・提示できる。
+- 設計判断（分類の罠）: 調査が terraform 差分を引くのは category===**INFRASTRUCTURE** のときだけ（`DefaultInfraInvestigationAdapter`）。translator の `CAPACITY_HINTS`（connection/pool/cpu…）に当たると CAPACITY になり差分を引かないので、condition 名は容量語を避け（"Cloud SQL instance unhealthy after configuration change"）INFRASTRUCTURE に倒す。UT で category を固定。
+- 【完了】frontend `ScenarioControls`: シナリオ6 を追加し、`kind: "live" | "synthetic"` を導入。**合成入力**（5/6）に amber バッジ＋tooltip＋凡例を付与。コピー＝「検知の入口のみ合成。変換→分類→AI 調査→PR 起票は実経路。本番は実 CI/apply から同経路。外部リンク（PR/コンソール）はデモ環境では代表値」。
+- 設計判断（"シミュレータ"枠は不採用）: 5/6 はパイプラインが**実際に動く**ため「動かない偽物」と括るのは不正確かつ作った価値の過小評価。軸は「動く/動かない」ではなく「検知の入口が合成か実外部ソースか」「外部ディープリンクが代表値か実リンクか」。よって正確なバッジ＋凡例で明示する方針にした。
+- 外部リンク（PR への遷移など）は実機なら `commitSha`/CVE から実リンクに解決するが、デモでは代表値（`evidenceLinks` は recentCommits の sha からのみ実リンクを組む＝ハルシネーション URL を出さない既存方針）。この「本番では飛べる／デモは代表値」をポートフォリオ説明として UI 凡例＋tooltip に内蔵した。
+- 全テスト緑（root＋frontend 623 件）。
+
 ---
 
 ## stretchⅡ: 予兆ブリーフィング（reactive → proactive）

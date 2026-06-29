@@ -131,10 +131,10 @@ export function AlertDetailDrawer({
                 {info.description}
               </p>
             )}
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-300">
               {info && (
                 <>
-                  <code className="text-slate-400">{alert.eventName}</code>{" "}
+                  <code className="text-slate-300">{alert.eventName}</code>{" "}
                   ·{" "}
                 </>
               )}
@@ -145,7 +145,7 @@ export function AlertDetailDrawer({
             type="button"
             onClick={onClose}
             aria-label="閉じる"
-            className="shrink-0 rounded-md px-2 py-1 text-slate-400 transition hover:bg-slate-800/60 hover:text-slate-200"
+            className="shrink-0 rounded-md px-2 py-1 text-slate-300 transition hover:bg-slate-800/60 hover:text-slate-200"
           >
             ✕
           </button>

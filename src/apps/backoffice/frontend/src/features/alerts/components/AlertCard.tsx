@@ -111,7 +111,7 @@ export function AlertCard({
           </span>
           {info && (
             <code
-              className="shrink-0 text-xs text-slate-500"
+              className="shrink-0 text-xs text-slate-400"
               title={alert.eventName}
             >
               {alert.eventName}
@@ -120,7 +120,7 @@ export function AlertCard({
         </div>
 
         {/* ② 従属メタ: 種別（未知障害）・重要度（分析中は判定中）・category（人間語）・時刻 */}
-        <div className="flex min-w-0 items-center gap-2 text-sm text-slate-400">
+        <div className="flex min-w-0 items-center gap-2 text-sm text-slate-300">
           {/* 未知障害は eventName だけでは伝わらないので種別バッジで明示する */}
           {hasAiInvestigation(alert) && <UnknownFaultBadge />}
           {analyzing ? (
@@ -159,7 +159,7 @@ export function AlertCard({
             "AI が未知障害を調査中…"
           ) : (
             <>
-              <span className="text-slate-500">
+              <span className="text-slate-400">
                 {reason.kind === "known" ? "該当: " : "AI推定: "}
               </span>
               {reason.patternName}

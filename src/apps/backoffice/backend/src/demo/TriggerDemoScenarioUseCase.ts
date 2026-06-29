@@ -8,6 +8,7 @@ import {
   SecurityScanBody,
   SecurityScanTranslator,
 } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/SecurityScanTranslator.js";
+import { CloudMonitoringAlertTranslator } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CloudMonitoringAlertTranslator.js";
 
 export class UnsupportedScenarioError extends Error {
   constructor(scenarioId: string) {
@@ -35,6 +36,7 @@ const ALIASES: Record<string, string> = {
   "3": "inventory-conflict",
   "4": "infra-fault",
   "5": "security-vuln",
+  "6": "infra-config-change",
 };
 
 // infra-fault は他シナリオと違い「注文の業務失敗」ではなくインフラ級異常の注入なので、
@@ -81,6 +83,13 @@ function buildSecurityScanBody(): SecurityScanBody {
   };
 }
 
+// infra-config-change は「IaC 変更（terraform apply）そのものが原因の障害」を、検知の入口だけ
+// 合成して実 ingest 経路に通すシナリオ。infra-fault（経路B＝GCP の Cloud Monitoring 依存で
+// ローカルでは Alert が出ない）と違い、合成 INFRASTRUCTURE イベントを直接
+// CloudMonitoringAlertTranslator→CollectMonitoringEventUseCase に通すので**ローカルでも**
+// 実 Alert→AI 調査が走り、AI が記録済みの apply 差分を root cause として収集・提示できる。
+const INFRA_CONFIG_CHANGE_SCENARIO_ID = "infra-config-change";
+
 // 障害の「直前の IaC 変更」を AI が原因として突き止められるよう、注入と同時に記録する代表的な apply。
 // 実機では CI の terraform apply がこの構造化差分を ingest する想定で、デモはそれを合成する。
 // Cloud SQL の接続上限縮小＝接続枯渇 → CRITICAL/500（注入される障害）の決定打になる因果。
@@ -102,6 +111,25 @@ function buildInfraFaultApplyEvent(): AppliedInfraChange {
         ],
       },
     ],
+  };
+}
+
+// IaC 変更（インスタンスタイプ縮小）適用直後に Cloud SQL が不安定化した、という Cloud Monitoring
+// 発火アラートの最小ペイロード。condition は容量語（connection/pool/cpu…）を避けて命名し、
+// translator で **INFRASTRUCTURE** に分類させる（INFRASTRUCTURE のときだけ調査が terraform 差分を引く）。
+function buildInfraConfigChangeWebhook(): unknown {
+  return {
+    incident: {
+      incident_id: crypto.randomUUID(),
+      resource_name: "google_sql_database_instance.main",
+      policy_name: "Cloud SQL 可用性",
+      condition_name: "Cloud SQL instance unhealthy after configuration change",
+      state: "open",
+      started_at: Math.floor(Date.now() / 1000),
+      severity: "Critical",
+      summary: "IaC 変更（インスタンスタイプ縮小）適用直後に DB インスタンスが不安定化",
+      resource: { type: "cloudsql_database", labels: { instance_id: "main" } },
+    },
   };
 }
 
@@ -132,6 +160,18 @@ export class TriggerDemoScenarioUseCase {
       await this.ecDemoGateway.injectInfraFault();
       // 注文を伴わないので orderId は空。Cloud Monitoring 経由で Alert 化されるため即時の orderId 相関は無い。
       return { scenarioId: resolvedId, label: "インフラ障害", orderId: "" };
+    }
+
+    if (resolvedId === INFRA_CONFIG_CHANGE_SCENARIO_ID) {
+      // ① 直前の IaC 変更（apply 差分）を記録 → ② その変更が原因の INFRASTRUCTURE 障害を合成入力で発火。
+      // 入口だけ合成し、変換→分類→AI 調査（terraform 差分を root cause として収集）は実経路を辿る。
+      await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent());
+      const event = CloudMonitoringAlertTranslator.toMonitoringEvent(
+        buildInfraConfigChangeWebhook(),
+      );
+      await this.collectMonitoringEventUseCase.run(event);
+      // 注文を伴わない検知なので orderId は空。
+      return { scenarioId: resolvedId, label: "構成変更障害", orderId: "" };
     }
 
     const recipe = RECIPES[resolvedId];

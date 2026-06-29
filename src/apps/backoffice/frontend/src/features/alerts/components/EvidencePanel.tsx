@@ -125,16 +125,16 @@ function EvidenceSectionView({
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                    "rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
                     LOG_LEVEL_CLASS[log.severity],
                   )}
                 >
                   {log.severity}
                 </span>
-                <code className="text-[11px] text-slate-400">
+                <code className="text-[11px] text-slate-300">
                   {log.resource}
                 </code>
-                <span className="ml-auto text-[11px] text-slate-500">
+                <span className="ml-auto text-[11px] text-slate-400">
                   {formatTime(log.timestamp)}
                 </span>
               </div>
@@ -165,7 +165,7 @@ function EvidenceSectionView({
                 <span className="text-xs font-medium text-slate-100">
                   {m.displayName}
                 </span>
-                <code className="text-[11px] text-slate-500">{m.metricType}</code>
+                <code className="text-[11px] text-slate-400">{m.metricType}</code>
               </div>
               <div className="mt-1 flex items-center gap-4 text-[11px] text-slate-300">
                 <span>
@@ -180,7 +180,7 @@ function EvidenceSectionView({
                     {formatMetric(m.max, m.unit)}
                   </span>
                 </span>
-                <span className="ml-auto text-slate-500">{m.points} pts</span>
+                <span className="ml-auto text-slate-400">{m.points} pts</span>
               </div>
             </Rise>
           ))}
@@ -201,7 +201,7 @@ function EvidenceSectionView({
           className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
         >
           <p className="text-xs text-slate-100">{diff.summary}</p>
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1 text-[11px] text-slate-400">
             適用 {formatTime(diff.appliedAt)}
             {diff.commitSha ? ` · ${diff.commitSha.slice(0, 7)}` : ""}
           </p>
@@ -216,7 +216,7 @@ function EvidenceSectionView({
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ring-1 ring-inset",
+                      "rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ring-1 ring-inset",
                       TF_ACTION_CLASS[change.action],
                     )}
                   >
@@ -230,9 +230,9 @@ function EvidenceSectionView({
                   <ul className="mt-1.5 space-y-1">
                     {change.attributeDeltas.map((d, j) => (
                       <li key={j} className="font-mono text-[11px] text-slate-300">
-                        <span className="text-slate-400">{d.key}:</span>{" "}
+                        <span className="text-slate-300">{d.key}:</span>{" "}
                         <span className="text-rose-300">{d.before ?? "—"}</span>
-                        <span className="text-slate-500"> → </span>
+                        <span className="text-slate-400"> → </span>
                         <span className="text-emerald-300">{d.after ?? "—"}</span>
                       </li>
                     ))}
@@ -277,8 +277,8 @@ function EvidenceSectionView({
               <code className="rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300">
                 {c.shortSha}
               </code>
-              <span className="text-[11px] text-slate-400">{c.author}</span>
-              <span className="ml-auto text-[11px] text-slate-500">
+              <span className="text-[11px] text-slate-300">{c.author}</span>
+              <span className="ml-auto text-[11px] text-slate-400">
                 {formatTime(c.committedAt)}
               </span>
             </div>
@@ -320,7 +320,7 @@ export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
           AI が証拠を解析しています…
         </div>
       ) : sections.length === 0 ? (
-        <p className="text-xs text-slate-400">証拠は見つかりませんでした。</p>
+        <p className="text-xs text-slate-300">証拠は見つかりませんでした。</p>
       ) : (
         <div className="space-y-3">
           {sections.map((section, i) => {

@@ -46,7 +46,7 @@ export function ConfidenceChip({
     : TEXT_BY_COLOR[confidenceColor(clamped)];
   return (
     <span className={cn("inline-flex items-center gap-1 text-sm", className)}>
-      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-300">{label}</span>
       <span className={cn("font-semibold tabular-nums", valueColor)}>
         {percent}%
       </span>

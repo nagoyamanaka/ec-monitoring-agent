@@ -21,7 +21,7 @@ const RANK_STYLE: Record<SeverityLevel, string> = {
   MEDIUM: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
   INFO: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
   LOW: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  PENDING: "bg-slate-500/15 text-slate-400 ring-slate-500/30",
+  PENDING: "bg-slate-500/15 text-slate-300 ring-slate-500/30",
 };
 
 export interface SeverityBadgeProps {

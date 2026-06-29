@@ -24,7 +24,7 @@ export function AnalyticsPage({ api }: AnalyticsPageProps) {
             <h2 className="text-lg font-semibold text-slate-100">
               AI 分類の精度
             </h2>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-300">
               オペレーターの承認/却下フィードバックを母数に、AI
               分類の正答率と既知/未知の内訳を集計します。
             </p>
@@ -68,12 +68,12 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
       {/* 上段: 正答率ゲージ ＋ 既知/未知ドーナツ */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="!bg-slate-900/40 !ring-slate-700/60">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
             分類正答率
           </h3>
           <div className="mt-4 flex flex-col items-center gap-2">
             {analytics.accuracyPercent === null ? (
-              <p className="py-10 text-center text-sm text-slate-500">
+              <p className="py-10 text-center text-sm text-slate-400">
                 まだフィードバックがありません。
                 <br />
                 承認/却下を行うと正答率が表示されます。
@@ -86,7 +86,7 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
                   label={`${analytics.correctCount}/${analytics.withFeedbackCount} 件が正解`}
                   animate
                 />
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-400">
                   フィードバック {analytics.withFeedbackCount} 件を母数に算出
                 </p>
               </>
@@ -95,11 +95,11 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
         </Card>
 
         <Card className="!bg-slate-900/40 !ring-slate-700/60">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
             既知 / 未知の内訳
           </h3>
           {analytics.totalAlerts === 0 ? (
-            <p className="py-10 text-center text-sm text-slate-500">
+            <p className="py-10 text-center text-sm text-slate-400">
               アラートがまだありません。
             </p>
           ) : (
@@ -167,7 +167,7 @@ function StatCard({
 }) {
   return (
     <div className="text-center rounded-tremor-default bg-slate-900/40 px-4 py-3 ring-1 ring-inset ring-slate-700/60">
-      <p className="text-xs text-slate-400">{label}</p>
+      <p className="text-xs text-slate-300">{label}</p>
       <p
         className={`mt-1 text-2xl font-semibold tabular-nums ${TONE_CLASS[tone]}`}
       >

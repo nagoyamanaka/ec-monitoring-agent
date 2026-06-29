@@ -34,7 +34,7 @@ export function DemoDrawer({ api, onAfterReset }: DemoDrawerProps) {
       className="space-y-4 rounded-tremor-default bg-slate-900/40 p-4 ring-1 ring-inset ring-slate-700/60"
     >
       <div className="flex items-center gap-2">
-        <span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-fuchsia-300 ring-1 ring-inset ring-fuchsia-500/30">
+        <span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-fuchsia-300 ring-1 ring-inset ring-fuchsia-500/30">
           🕹️ DEMO CONSOLE
         </span>
       </div>

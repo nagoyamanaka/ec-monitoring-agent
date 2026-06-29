@@ -440,9 +440,31 @@ interface InfraEvidence {
 >
 > 〔将来P1〕dispatch＋検証ループの **AI調査**への展開構想あり（`step4-3` タスク16・未実装）。ただし「障害＝コードデグレ＝コード修正」は誤りで、根本原因カテゴリにより修正ターゲット（アプリのコード→PR+UT / 自前IaC→Terraform PR+`terraform plan` / 外部起因→runbook+エスカレーション・自動修正対象外）と検証ゲートが変わる。設計の中心は検証ループでなく **修正ターゲットのルーティング**。トークン多消費＋上限必須のため効果見極め後に着手。
 
-### シナリオ6: 脆弱性検知
+### シナリオ6: 構成変更障害（IaC apply 起因・v14追加）
 
-trivyによる脆弱性検知
+**「terraform apply（IaC 変更）そのものが原因の障害」を、AI が apply 適用差分を root cause として特定する**フロー。シナリオ4（インフラ障害）が GCP の Cloud Monitoring 経路B 依存で**ローカルでは Alert が出ない**のに対し、本シナリオは検知の入口だけ合成して実 ingest 経路に通すので**ローカルでも実 Alert→AI 調査が走る**（シナリオ5＝脆弱性検知と同方式）。
+
+> **設計のキモ（2026-06-29）**: メトリクス/ログ/コミットは事後に時間窓でライブ照会できるが、**terraform apply の差分だけは後から再構成できない**（apply は CI 上の一回限りのイベント）。よって git join ではなく**適用の瞬間にイベントとして捕捉して保存**し、調査は既存の `since` 時間窓で引く（検知ソースの peer ingest と同じ思想）。git sha は join キーでなく apply イベントの一属性。証拠 `TerraformDiff` は「変更ファイル名の羅列」ではなく**リソース単位の構造化差分**（address / action / `attributeDeltas: {key, before, after}`）に格上げ済み＝AI 原因分析の決定打になる（タスク33）。
+
+```
+1. terraform apply で Cloud SQL の設定が縮小される
+   （tier db-custom-2-7680→db-f1-micro / max_connections 100→20）
+   → apply の瞬間に AppliedInfraChangeStore へ構造化差分を記録
+   （実機: CI の apply パイプラインが `terraform show -json` を ingest／デモ: 合成）
+2. その変更が原因で DB インスタンスが不安定化 → INFRASTRUCTURE Alert が発生
+3. InfraInvestigation が自律的に証拠収集
+   ├─ Terraform: 障害直前（時間窓内最新）の apply 差分を取得＝root cause
+   │             google_sql_database_instance.main update
+   │               settings.tier:            db-custom-2-7680 → db-f1-micro
+   │               …database_flags.max_connections: 100 → 20
+   ├─ Cloud Monitoring: CPU/接続数などのメトリクス相関（INFRASTRUCTURE/CAPACITY時）
+   └─ Cloud Logging:    エラーログ
+4. バックオフィスに証拠（apply 差分の before→after）+ AI推定をSSE表示
+```
+
+> **デモ卓 合成シナリオ6（構成変更障害）**: DEMO CONSOLE のボタン押下で `TriggerDemoScenarioUseCase` が ① 代表 apply 差分を `AppliedInfraChangeStore.record()` → ② 合成 Cloud Monitoring webhook を `CloudMonitoringAlertTranslator`→`CollectMonitoringEventUseCase`（= 実 `/ingest/cloud-monitoring` と同一の変換・分類・調査経路）に通す。**検知の入口のみ合成**で、変換→分類→AI 調査（terraform 差分の収集）は実経路。INITIALIZE DEMO で戻る。
+> 分類の罠: 調査が terraform 差分を引くのは category===**INFRASTRUCTURE** のときだけ（`DefaultInfraInvestigationAdapter`）。translator の `CAPACITY_HINTS`（connection/pool/cpu…）に当たると CAPACITY になり差分を引かないので、condition 名は容量語を避けて INFRASTRUCTURE に倒す（UTで固定）。
+> **「合成入力」の明示**: シナリオ5/6 は FAULT INJECTION 上で amber バッジ＋凡例を出す＝「検知の入口のみ合成。変換→AI調査→PR起票は実経路。本番は実 CI/apply から同経路。外部リンク（PR/コンソール）はデモ環境では代表値」。パイプラインは実際に動くため「動かない偽物」とは括らず、軸は「入口が合成か実外部ソースか」「外部リンクが代表値か実リンクか」で正確に示す（タスク34）。
 
 ### シナリオXX：予兆ブリーフィング（stretchⅡ・v15追加）
 

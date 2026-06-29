@@ -60,6 +60,36 @@ describe("TriggerDemoScenarioUseCase", () => {
     expect(ec.injectInfraFault).not.toHaveBeenCalled();
   });
 
+  it("シナリオ6（infra-config-change）は apply 差分を記録し、INFRASTRUCTURE の合成イベントを実経路へ流す", async () => {
+    const store = fakeInfraStore();
+    const useCase = new TriggerDemoScenarioUseCase(fakeEcGateway(), "p-1", store, collect);
+
+    const result = await useCase.run("6");
+
+    expect(result).toEqual({ scenarioId: "infra-config-change", label: "構成変更障害", orderId: "" });
+
+    // ① 直前の apply 差分（Cloud SQL の設定縮小）が記録される＝調査が時間窓で root cause として引ける。
+    expect(store.record).toHaveBeenCalledTimes(1);
+    const recorded = (store.record as ReturnType<typeof vi.fn>).mock.calls[0][0] as AppliedInfraChange;
+    expect(recorded.resourceChanges[0].address).toBe("google_sql_database_instance.main");
+
+    // ② 合成イベントが実 ingest 経路へ流れ、INFRASTRUCTURE 分類で調査が terraform 差分を収集できる。
+    expect(collect.run).toHaveBeenCalledTimes(1);
+    const event = (collect.run as ReturnType<typeof vi.fn>).mock.calls[0][0] as MonitoringEvent;
+    expect(event.category.value).toBe("INFRASTRUCTURE");
+    expect(event.isAlertable()).toBe(true);
+  });
+
+  it("infra-config-change では EC への注文投入・障害注入を行わない（検知の合成のみ）", async () => {
+    const ec = fakeEcGateway();
+    const useCase = new TriggerDemoScenarioUseCase(ec, "p-1", fakeInfraStore(), collect);
+
+    await useCase.run("infra-config-change");
+
+    expect(ec.placeOrder).not.toHaveBeenCalled();
+    expect(ec.injectInfraFault).not.toHaveBeenCalled();
+  });
+
   it("未知シナリオは UnsupportedScenarioError", async () => {
     const useCase = new TriggerDemoScenarioUseCase(fakeEcGateway(), "p-1", fakeInfraStore(), collect);
     await expect(useCase.run("nope")).rejects.toBeInstanceOf(UnsupportedScenarioError);

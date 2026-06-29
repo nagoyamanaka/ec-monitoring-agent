@@ -71,7 +71,7 @@ function AlertListBody({
 
   if (alerts.length === 0) {
     return (
-      <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-500 ring-1 ring-inset ring-slate-700/50">
+      <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-400 ring-1 ring-inset ring-slate-700/50">
         現在アクティブなアラートはありません。
       </div>
     );

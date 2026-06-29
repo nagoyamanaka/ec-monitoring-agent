@@ -86,7 +86,7 @@ export function AlertDetailPage() {
       <button
         type="button"
         onClick={handleBack}
-        className="inline-block text-sm text-slate-400 transition hover:text-slate-200"
+        className="inline-block text-sm text-slate-300 transition hover:text-slate-200"
       >
         ← 戻る
       </button>
@@ -103,7 +103,7 @@ export function AlertDetailPage() {
         )}
 
         {status === "notfound" && (
-          <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-500 ring-1 ring-inset ring-slate-700/50">
+          <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-400 ring-1 ring-inset ring-slate-700/50">
             指定されたアラートは見つかりませんでした。
           </div>
         )}
@@ -113,14 +113,14 @@ export function AlertDetailPage() {
             <header className="space-y-2">
               <div className="flex items-center gap-2">
                 <SeverityBadge level={alert.severity} />
-                <span className="rounded bg-slate-700/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-300">
+                <span className="rounded bg-slate-700/40 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-300">
                   {alert.category}
                 </span>
               </div>
               <h2 className="text-lg font-semibold text-slate-100">
                 {alert.eventName}
               </h2>
-              <p className="text-xs text-slate-500">{alert.source}</p>
+              <p className="text-xs text-slate-400">{alert.source}</p>
             </header>
 
             <AlertCardExpanded
