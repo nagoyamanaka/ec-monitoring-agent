@@ -67,9 +67,15 @@ export const config = {
   remediation: {
     // "dispatch" = CI(GitHub Actions)のAIエージェントへ repository_dispatch（実修正+UT/E2E）。
     // "advisory" = in-process で SECURITY_REMEDIATION.md の方針PRを起票（CI不要・既定）。
-    mode: (process.env.REMEDIATION_MODE ?? "advisory") as
+    // "demo"     = 事前に1本だけ起票した本物の草案PRのURL（REMEDIATION_DEMO_PR_URL）を毎回返す。
+    //              GitHub 非接触・PR増殖なし・書き込みトークン不要（審査/デモ用・既定）。
+    //              実際にPRを起票したい場合のみ advisory / dispatch を明示する。
+    mode: (process.env.REMEDIATION_MODE ?? "demo") as
       | "dispatch"
-      | "advisory",
+      | "advisory"
+      | "demo",
+    // demo モードで返す、事前に手動起票した本物の草案PRのURL。
+    demoPullRequestUrl: process.env.REMEDIATION_DEMO_PR_URL ?? "",
     // dispatch 経路で起動する repository_dispatch のイベント種別（ターゲットリポの workflow と一致させる）。
     dispatchEventType:
       process.env.REMEDIATION_DISPATCH_EVENT_TYPE ?? "ai-remediation",
