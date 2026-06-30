@@ -1,4 +1,5 @@
 import { InMemoryRunner, isFinalResponse, type Event } from "@google/adk";
+import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationAgentRunner } from "./InvestigationAgentRunner.js";
 import {
   buildInvestigationTools,
@@ -32,6 +33,8 @@ export type ADKInvestigationAgentRunnerConfig = InvestigationToolDeps &
   readonly maxLlmCalls: number;
   /** 全体のウォールクロック上限(ms)。超過したらそれまでの最終応答で打ち切る。 */
   readonly timeoutMs?: number;
+  /** 調査の所要時間・打ち切り有無を観測するためのロガー（タイムアウト肉薄の監視用）。 */
+  readonly logger: Logger;
 };
 
 function extractText(event: Event): string {
@@ -57,6 +60,7 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
   private readonly runner: InMemoryRunner;
   private readonly maxLlmCalls: number;
   private readonly timeoutMs: number;
+  private readonly logger: Logger;
 
   constructor(config: ADKInvestigationAgentRunnerConfig) {
     const tools = buildInvestigationTools(config);
@@ -74,11 +78,15 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
     this.runner = new InMemoryRunner({ agent: coordinator, appName: APP_NAME });
     this.maxLlmCalls = config.maxLlmCalls;
     this.timeoutMs = config.timeoutMs ?? 120_000;
+    this.logger = config.logger;
   }
 
   async run(seedPrompt: string): Promise<string> {
-    const deadline = Date.now() + this.timeoutMs;
+    const startedAt = Date.now();
+    const deadline = startedAt + this.timeoutMs;
     let finalText = "";
+    let eventCount = 0;
+    let timedOut = false;
 
     const stream = this.runner.runEphemeral({
       userId: USER_ID,
@@ -87,11 +95,23 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
     });
 
     for await (const event of stream) {
+      eventCount++;
       if (isFinalResponse(event)) {
         finalText = extractText(event);
       }
-      if (Date.now() > deadline) break;
+      if (Date.now() > deadline) {
+        timedOut = true;
+        break;
+      }
     }
+
+    // 調査の所要・打ち切り・最終応答長を観測する。timedOut=true（上限到達で打ち切り）や
+    // finalTextLen=0（最終応答に未到達）は fallback（暫定表示）の典型。timeoutMs への肉薄を監視する。
+    await this.logger.info({
+      service: "backoffice-backend",
+      action: "adk_investigation_run_completed",
+      message: `ADK調査実行：elapsedMs=${Date.now() - startedAt}, events=${eventCount}, timedOut=${timedOut}, maxLlmCalls=${this.maxLlmCalls}, finalTextLen=${finalText.length}`,
+    });
 
     return finalText;
   }

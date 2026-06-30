@@ -9,6 +9,10 @@ export const config = {
     vhost: process.env.RABBITMQ_VHOST ?? "/",
     retryTtl: parseInt(process.env.RABBITMQ_RETRY_TTL ?? "5000"),
     exchangeName: process.env.EXCHANGE_NAME ?? "ec-domain-events",
+    // channel prefetch（未ack同時配信上限）。1 だと長時間ハンドラ（AI調査 ~100秒）が全キューを止める
+    // ヘッドオブラインブロッキングになるため、完了後 ack（at-least-once）を保ったまま並列度を上げる。
+    // 既定 3（並列2で既に ~116秒なので 429/遅延を抑えつつ collect 用の枠も残す）。
+    prefetch: Math.max(1, parseInt(process.env.RABBITMQ_PREFETCH ?? "3")),
   },
   gemini: {
     // true で Vertex AI 経由（ADC 認証・GCP 無料クレジット対象・本番既定）、false で AI Studio（APIキー課金）。
@@ -30,6 +34,12 @@ export const config = {
     adkMaxLlmCalls: Math.max(
       1,
       parseInt(process.env.AI_INVESTIGATION_ADK_MAX_LLM_CALLS ?? "8"),
+    ),
+    // AI調査1件のウォールクロック上限(ms)。ADK の7エージェント自律ループは実測 92-116秒かかり、
+    // 既定120秒では並列実行時に超過して暫定落ちする。240秒へ広げて余裕を持たせる。
+    investigationTimeoutMs: Math.max(
+      1_000,
+      parseInt(process.env.AI_INVESTIGATION_TIMEOUT_MS ?? "240000"),
     ),
   },
   demo: {

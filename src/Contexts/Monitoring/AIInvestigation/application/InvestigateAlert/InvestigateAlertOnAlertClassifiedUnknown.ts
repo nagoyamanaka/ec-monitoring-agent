@@ -9,6 +9,10 @@ import { InvestigateAlertUseCase } from "./InvestigateAlertUseCase.js";
 // EventBus 経由で受け取り、AI 調査ユースケースへ委譲する DomainEventSubscriber。
 // 既知アラートに関してはAnalyzeAlert内で完結して、それが出来ない場合 InvestigateAlertDomainEvent
 // が発行されて、このサブスクライバーが購読する。
+//
+// 調査は数十〜100秒かかるが、ここでは完了まで await する（完了後 ack の at-least-once を維持し、
+// crash 時は redelivery で自動再調査させる）。1件の長時間調査が全キューを止める問題は、
+// RabbitMQ channel の prefetch を上げて並列配信することで解消する（RabbitMqConnection.prefetchCount）。
 export class InvestigateAlertOnAlertClassifiedUnknown implements DomainEventSubscriber<InvestigateAlertDomainEvent> {
   constructor(
     private readonly investigateAlertUseCase: InvestigateAlertUseCase,
