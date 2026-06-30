@@ -1,5 +1,7 @@
-name: CI
+name: app
 
+# アプリ資材の pipeline: typecheck/UT/E2E（CI）→ image build & push → deploy（CD）。
+# インフラ資材は terraform.yml が別 pipeline として plan/apply を担当する。
 on:
   push:
     branches: [main]
@@ -32,8 +34,8 @@ jobs:
         run: pnpm test
 
   # ── Job 2: E2E（Docker Compose でフルスタック起動）────────────────────────
-  # check が通ってから実行。AI_INVESTIGATION_STUB=true が local compose に設定済み
-  # なので Gemini API キーは不要。
+  # check が通ってから実行。docker-compose.e2e.yml で AI_INVESTIGATION_STUB=true を上書きするため
+  # Gemini API キーは不要。
   e2e:
     name: E2E (Docker Compose)
     runs-on: ubuntu-latest
@@ -64,18 +66,18 @@ jobs:
 
       - name: Run E2E suite
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.local.yml \
+          docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.e2e.yml \
             run --rm e2e
 
   # ── Job 3: frontend イメージ build & push → Cloud Run deploy ────────────────
-  # check が通った後、main への push 時のみ実行。
+  # check + e2e が通った後、main への push 時のみ実行。
   # WIF キーレス認証（terraform.yml と同じパターン）。
   # 必要な GitHub Actions Variables: WIF_PROVIDER, DEPLOYER_SA, GCP_PROJECT_ID,
   #   AR_HOST（例: asia-northeast1-docker.pkg.dev）, AR_REPO_ID（例: apps）, GCP_REGION
   build-push-frontend:
     name: Build & push frontend (nginx)
     runs-on: ubuntu-latest
-    needs: check
+    needs: [check, e2e]
     if: github.ref == 'refs/heads/main'
 
     permissions:
@@ -117,13 +119,13 @@ jobs:
             --region ${{ vars.GCP_REGION }}
 
   # ── Job 4: backend イメージ build & push → GCE backbone デプロイ ────────────
-  # check が通った後、main への push 時のみ実行。
+  # check + e2e が通った後、main への push 時のみ実行。
   # 必要な GitHub Actions Variables: WIF_PROVIDER, DEPLOYER_SA, GCP_PROJECT_ID,
   #   AR_HOST, AR_REPO_ID, GCP_REGION, GCE_INSTANCE, GCE_ZONE, DEPLOY_BUCKET
   build-push-backend:
     name: Build & push backend (GCE backbone)
     runs-on: ubuntu-latest
-    needs: check
+    needs: [check, e2e]
     if: github.ref == 'refs/heads/main'
 
     permissions:

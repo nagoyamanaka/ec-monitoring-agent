@@ -1,0 +1,6 @@
+services:
+  backoffice-backend:
+    environment:
+      # E2E 実行時のみ stub を有効化（Gemini 課金・非決定性なし）。
+      # make up / ローカル開発時は docker-compose.local.yml の false が使われる。
+      AI_INVESTIGATION_STUB: "true"
