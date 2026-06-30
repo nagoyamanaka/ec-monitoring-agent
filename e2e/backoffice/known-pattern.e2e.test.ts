@@ -11,6 +11,11 @@ import {
   PRODUCT_IN_STOCK,
   KNOWN_ERROR_PATTERNS_COLLECTION,
 } from "./support.js";
+// Note: ec/orders.e2e.test.ts also fires a payment.timeout event. Since Vitest
+// transitions between test files almost instantly, that event may still be
+// in-flight when this test's beforeAll clears alerts. We therefore call
+// clearAlerts() a second time, right before placing the order, to eliminate
+// the dedup-collision race.
 
 /**
  * 【既知パターン経路 E2E】Gemini を一切呼ばない・決定論的・無料の縦串テスト。
@@ -59,6 +64,9 @@ describe("backoffice E2E: known-pattern path (no AI)", () => {
   it("既知パターン一致 → Alert は known / OPEN で確定し、AI調査は走らない", async () => {
     await setInventoryMode("SUCCESS");
     await setPaymentMode("TIMEOUT");
+    // 直前テスト（ec/orders）の payment.timeout イベントが遅れて到達しても
+    // dedup で畳み込まれないよう、注文投入の直前に改めて Alert を空にする。
+    await clearAlerts();
     // 在庫ありで予約は通り、決済が TIMEOUT → PaymentTimeoutDomainEvent 発火（EC は 400 を返す）
     await placeEcOrder({
       orderId: crypto.randomUUID(),
