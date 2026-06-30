@@ -58,6 +58,33 @@ function formatAbsoluteTime(iso: string): string {
 }
 
 /**
+ * 重複観測の期間サマリ。occurrenceCount ≥ 2 のときのみ表示する。
+ * createdAt（初回）〜 updatedAt（最新）のスパンを「N分間」「N時間」等に丸める。
+ */
+function formatOccurrenceSummary(alert: {
+  occurrenceCount: number;
+  createdAt: string;
+  updatedAt: string;
+}): string | null {
+  if (alert.occurrenceCount < 2) return null;
+  const first = new Date(alert.createdAt);
+  const last = new Date(alert.updatedAt);
+  if (Number.isNaN(first.getTime()) || Number.isNaN(last.getTime())) return null;
+
+  const spanMs = last.getTime() - first.getTime();
+  let span: string;
+  if (spanMs < 60_000) {
+    span = `${Math.round(spanMs / 1000)} 秒間`;
+  } else if (spanMs < 3_600_000) {
+    span = `${Math.round(spanMs / 60_000)} 分間`;
+  } else {
+    span = `${Math.round(spanMs / 3_600_000)} 時間`;
+  }
+
+  return `${span}に ${alert.occurrenceCount} 回観測（初回 ${first.toLocaleTimeString()} → 最新 ${last.toLocaleTimeString()}）`;
+}
+
+/**
  * アラート詳細の右オーバーレイ・ドロワー（master-detail の detail）。
  * 背景 dim ＋ Esc / バックドロップ / ✕ で閉じる。大きい confidence ゲージはここに置き、
  * 本体は AlertCardExpanded を要約射影（variant="summary"）で再利用する＝トリアージ用の原因候補＋
@@ -94,6 +121,7 @@ export function AlertDetailDrawer({
   const info = eventInfo(alert.eventName);
   const title = eventTitle(alert.eventName);
   const category = categoryInfo(alert.category);
+  const occurrenceSummary = formatOccurrenceSummary(alert);
 
   return (
     <div
@@ -143,6 +171,11 @@ export function AlertDetailDrawer({
               )}
               {alert.source} · {formatAbsoluteTime(alert.occurredOn)}
             </p>
+            {occurrenceSummary && (
+              <p className="text-xs text-amber-300/80">
+                {occurrenceSummary}
+              </p>
+            )}
           </div>
           <button
             type="button"

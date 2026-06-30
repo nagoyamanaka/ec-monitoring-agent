@@ -33,6 +33,17 @@ const STRIPE_COLOR: Record<AlertSeverity, string> = {
   PENDING: "bg-slate-500",
 };
 
+/**
+ * 畳み込み件数（重複観測）の表示トーン。重大度（severity）とは別軸なので
+ * severity 色（rose/amber/sky）から始めず neutral（slate）を起点にし、
+ * 回数が増えるほど視覚的重みを上げる（嵐の規模を色でも伝える）。
+ */
+function occurrenceTone(count: number): string {
+  if (count >= 10) return "bg-rose-500/15 text-rose-300 ring-rose-500/30";
+  if (count >= 3) return "bg-amber-500/15 text-amber-300 ring-amber-500/30";
+  return "bg-slate-600/30 text-slate-200 ring-slate-500/40";
+}
+
 function formatRelativeTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -142,13 +153,18 @@ export function AlertCard({
           >
             {formatRelativeTime(alert.occurredOn)}
           </span>
-          {/* 重複観測の畳み込み回数。嵐をカード乱立でなく1枚＋件数で見せる。 */}
+          {/* 重複観測の畳み込み件数。嵐をカード乱立でなく1枚＋件数で見せる。
+              記号「×N」は意味が伝わらないため「重複 N件」とラベル付きで出す。 */}
           {alert.occurrenceCount > 1 && (
             <span
-              className="shrink-0 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30"
-              title={`同一インシデントの観測 ${alert.occurrenceCount} 件をまとめています`}
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                occurrenceTone(alert.occurrenceCount),
+              )}
+              title={`同一インシデント（同一 dedupKey）の重複観測 ${alert.occurrenceCount} 件を 1 枚にまとめています`}
             >
-              ×{alert.occurrenceCount}
+              重複{" "}
+              {alert.occurrenceCount >= 100 ? "99+" : alert.occurrenceCount}件
             </span>
           )}
         </div>
