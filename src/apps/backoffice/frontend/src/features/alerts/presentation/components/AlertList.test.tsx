@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AlertList } from "./AlertList";
-import { makeAlert } from "../test-support/alertFixture";
+import { makeAlert } from "../../test-support/alertFixture";
 
 describe("AlertList", () => {
   it("loading 時はスケルトン（aria-busy）を出す", () => {

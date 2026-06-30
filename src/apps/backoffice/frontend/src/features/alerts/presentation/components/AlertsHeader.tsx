@@ -1,5 +1,5 @@
-import type { AlertView } from "../domain/AlertView";
-import type { AlertsStatus } from "../presentation/hooks/useAlerts";
+import type { AlertView } from "../../domain/AlertView";
+import type { AlertsStatus } from "../hooks/useAlerts";
 
 export interface AlertsHeaderProps {
   alerts: AlertView[];

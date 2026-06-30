@@ -1,13 +1,13 @@
 import { cn } from "@shared/ui/cn";
-import type { AlertView } from "../domain/AlertView";
-import type { InvestigationStepView } from "../domain/InvestigationReportView";
+import type { AlertView } from "../../domain/AlertView";
+import type { InvestigationStepView } from "../../domain/InvestigationReportView";
 import {
   hasPullRequest,
   isRemediationUnstarted,
   type RemediationView,
-} from "../domain/RemediationView";
-import type { RemediationApi } from "../infrastructure/remediationApi";
-import { useRemediation } from "../presentation/hooks/useRemediation";
+} from "../../domain/RemediationView";
+import type { RemediationApi } from "../../infrastructure/remediationApi";
+import { useRemediation } from "../hooks/useRemediation";
 import { InvestigationItem } from "./InvestigationItem";
 
 export interface RemediationPanelProps {

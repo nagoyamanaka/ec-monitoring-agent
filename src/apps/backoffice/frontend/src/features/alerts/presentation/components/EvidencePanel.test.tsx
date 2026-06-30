@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { EvidencePanel } from "./EvidencePanel";
-import type { EvidenceApi } from "../infrastructure/evidenceApi";
-import type { EvidenceView } from "../domain/EvidenceView";
-import { makeAlert } from "../test-support/alertFixture";
+import type { EvidenceApi } from "../../infrastructure/evidenceApi";
+import type { EvidenceView } from "../../domain/EvidenceView";
+import { makeAlert } from "../../test-support/alertFixture";
 
 const FULL_EVIDENCE: EvidenceView = {
   appLogs: [

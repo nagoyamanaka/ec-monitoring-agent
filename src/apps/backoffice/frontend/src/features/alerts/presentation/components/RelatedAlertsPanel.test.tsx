@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { RelatedAlertsPanel } from "./RelatedAlertsPanel";
-import { makeAlert, makeReport } from "../test-support/alertFixture";
+import { makeAlert, makeReport } from "../../test-support/alertFixture";
 
 describe("RelatedAlertsPanel", () => {
   it("関連が無ければ何も描画しない", () => {

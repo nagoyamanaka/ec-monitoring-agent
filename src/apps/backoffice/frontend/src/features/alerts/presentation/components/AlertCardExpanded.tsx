@@ -1,10 +1,10 @@
 import { cn } from "@shared/ui/cn";
-import { type AlertView } from "../domain/AlertView";
+import { type AlertView } from "../../domain/AlertView";
 import { InvestigationItem } from "./InvestigationItem";
 import { ImpactPanel } from "./ImpactPanel";
 import { EscalationPanel } from "./EscalationPanel";
 import { RemediationReviewPanel } from "./RemediationReviewPanel";
-import { alertReason } from "../domain/alertReason";
+import { alertReason } from "../../domain/alertReason";
 
 /**
  * 表示の射影モード（タスク37：同一 InvestigationReport を射影違いで出し分ける）。

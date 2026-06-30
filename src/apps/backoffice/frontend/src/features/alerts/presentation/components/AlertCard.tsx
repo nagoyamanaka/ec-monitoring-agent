@@ -7,11 +7,11 @@ import {
   type AlertSeverity,
   isAnalyzing,
   hasAiInvestigation,
-} from "../domain/AlertView";
-import { alertConfidence } from "../domain/alertConfidence";
-import { eventInfo, eventTitle } from "../domain/eventCatalog";
-import { categoryInfo } from "../domain/alertCategory";
-import { alertReason } from "../domain/alertReason";
+} from "../../domain/AlertView";
+import { alertConfidence } from "../../domain/alertConfidence";
+import { eventInfo, eventTitle } from "../../domain/eventCatalog";
+import { categoryInfo } from "../../domain/alertCategory";
+import { alertReason } from "../../domain/alertReason";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { ExactMatchBadge } from "./ExactMatchBadge";
 import { UnknownFaultBadge } from "./UnknownFaultBadge";

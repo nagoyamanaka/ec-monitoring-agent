@@ -1,7 +1,7 @@
 import type {
   InvestigationStepView,
   InvestigationLinkKind,
-} from "../domain/InvestigationReportView";
+} from "../../domain/InvestigationReportView";
 
 // ディープリンク種別ごとのアイコン（log=Cloud Logging, code=GitHub, runbook=手順書, console=Cloud Console）。
 const KIND_ICON: Record<InvestigationLinkKind, string> = {

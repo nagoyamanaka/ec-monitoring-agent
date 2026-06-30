@@ -1,6 +1,6 @@
-import type { AlertView } from "../domain/AlertView";
-import type { AlertsStatus } from "../presentation/hooks/useAlerts";
-import { sortForTriage } from "../domain/alertSort";
+import type { AlertView } from "../../domain/AlertView";
+import type { AlertsStatus } from "../hooks/useAlerts";
+import { sortForTriage } from "../../domain/alertSort";
 import { AlertCard } from "./AlertCard";
 import { AlertsHeader } from "./AlertsHeader";
 

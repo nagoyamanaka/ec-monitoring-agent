@@ -1,6 +1,6 @@
 import { cn } from "@shared/ui/cn";
-import { type AlertView, isAnalyzing } from "../domain/AlertView";
-import { alertReviewState } from "../domain/alertReview";
+import { type AlertView, isAnalyzing } from "../../domain/AlertView";
+import { alertReviewState } from "../../domain/alertReview";
 
 export interface AlertStatusBadgeProps {
   alert: AlertView;

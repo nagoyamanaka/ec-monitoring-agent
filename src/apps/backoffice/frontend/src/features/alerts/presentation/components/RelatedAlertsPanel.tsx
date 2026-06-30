@@ -1,13 +1,13 @@
 import { Link } from "react-router-dom";
 import { cn } from "@shared/ui/cn";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
-import type { AlertView } from "../domain/AlertView";
-import { eventTitle } from "../domain/eventCatalog";
+import type { AlertView } from "../../domain/AlertView";
+import { eventTitle } from "../../domain/eventCatalog";
 import {
   collectRelatedRefs,
   toRelatedAlertViews,
   type RelatedAlertView,
-} from "../domain/relatedAlerts";
+} from "../../domain/relatedAlerts";
 
 export interface RelatedAlertsPanelProps {
   /** 表示対象アラート。AI 相関（report.relatedAlerts）＋ SIMILARITY back-link を集約する。 */

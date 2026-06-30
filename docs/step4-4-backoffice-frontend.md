@@ -59,6 +59,16 @@ confidence ゲージ  低→高で #F43F5E → #F59E0B → #22C55E のグラデ�
 
 > **原則**: フロントの `domain` は「型＋純関数」。バックエンドの集約を複製しない。`UserDomainService` 相当はクライアント側に本物の不変条件がある時だけ（今回は無し）。
 
+### `application/` をいつ使うか（write/read の非対称ルール）
+
+> **背景**: 「hook が infra の API を直接呼ぶ箇所（read）と、application のユースケースを挟む箇所（write）が混在していて、application 層をいつ使うのか分からない」という疑問への回答。これは設計のブレではなく、**意図的な非対称ルール**として明文化する。
+
+- **write（command）系 = `application/` を必ず1段挟む**。`submitFeedback` / `reinvestigate` / `triggerRemediation` のような副作用を起こす操作は、入力の正規化（例: `operatorNote.trim()`）・コマンド型の定義（`ReinvestigateCommand`）・将来の複数 API オーケストレーションの受け皿として application 関数に切り出す。hook（`useRemediation` 等）は React の状態管理に専念し、`application/triggerRemediation` を呼ぶだけにする。
+- **read（query）系 = hook が `infrastructure` の `*Api` を直接呼んでよい**。`getAlerts` / `getRemediation` / `getEvidence` は今オーケストレーションが無く、application を挟んでも委譲するだけ（YAGNI）。`useAlerts` のように hook → `*Api` 直結を正とする。**read にドメイン横断の組み立てや複数ソースの統合が生じたら、その時点で application へ引き上げる**。
+- **判断基準**: 「hook から React 依存（`useState`/`useEffect`）を取り除いても残る、副作用の手順・正規化・複数 I/O の調整」があれば `application/`。それが無く単一 API への素通しなら `infrastructure` 直呼びでよい。`application/` は薄いままが正常で、太ってきたら orchestration がそこに集まっている健全なサインとみなす。
+
+> この非対称は「死蔵スキャフォルドを置かない（YAGNI）」方針と一貫する。read 用に対称な委譲関数を機械的に増やすことはしない。
+
 ---
 
 ## ディレクトリ

@@ -581,9 +581,9 @@ AlertClassifier（インターフェース）← AnalyzeAlertCommandHandler は�
 | **完了条件** | `SimilarPatternRule` を Policy に追加し DI で差し替え可能。graded confidence で類似分類が動く状態                                                                                |
 | 注意         | **Elastic CloudはGCPマーケットプレイス経由で登録すると無料トライアルがない。公式サイトから登録する**                                                                             |
 
-**インフラ証拠とElasticのシナジー（v12追加）**:
+**ElasticとAI調査のシナジー（v12追加）**:
 インフラ横断調査（フェーズ1）を先に完成させてからElastic（フェーズ2）に入ること。
-アプリログのみをクエリにするより、`InfraEvidence`（アプリログ + Terraform差分 + GitHubコミット）を合わせた多次元コンテキストでハイブリッド検索する方が類似障害パターンのマッチ精度が大幅に向上する。
+Elasticは `MonitoringEvent`（eventName + payload）を BM25 fuzzy でクエリし過去事例を召喚する。収集した InfraEvidence はレイヤー3（Gemini）のコンテキストとして渡すことで根本原因推定の精度が上がる（ElasticのクエリへのInfraEvidence直接統合は将来の強化余地）。
 
 #### Step3：AiInferenceRule（AI推論フォールバック・将来・stretch）
 

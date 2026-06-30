@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AlertStatusBadge } from "./AlertStatusBadge";
-import { makeAlert } from "../test-support/alertFixture";
+import { makeAlert } from "../../test-support/alertFixture";
 
 describe("AlertStatusBadge", () => {
   it("分析中を表示する", () => {

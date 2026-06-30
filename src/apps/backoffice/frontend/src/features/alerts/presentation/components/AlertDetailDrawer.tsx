@@ -6,14 +6,14 @@ import {
   type AlertView,
   isAnalyzing,
   hasAiInvestigation,
-} from "../domain/AlertView";
-import { alertConfidence } from "../domain/alertConfidence";
-import { eventInfo, eventTitle } from "../domain/eventCatalog";
-import { categoryInfo } from "../domain/alertCategory";
-import type { FeedbackDecision } from "../application/submitFeedback";
-import type { EvidenceApi } from "../infrastructure/evidenceApi";
-import type { RemediationApi } from "../infrastructure/remediationApi";
-import type { RemediationView } from "../domain/RemediationView";
+} from "../../domain/AlertView";
+import { alertConfidence } from "../../domain/alertConfidence";
+import { eventInfo, eventTitle } from "../../domain/eventCatalog";
+import { categoryInfo } from "../../domain/alertCategory";
+import type { FeedbackDecision } from "../../application/submitFeedback";
+import type { EvidenceApi } from "../../infrastructure/evidenceApi";
+import type { RemediationApi } from "../../infrastructure/remediationApi";
+import type { RemediationView } from "../../domain/RemediationView";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertReviewPanel } from "./AlertReviewPanel";
 import { AlertStatusBadge } from "./AlertStatusBadge";
