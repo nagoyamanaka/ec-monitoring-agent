@@ -190,8 +190,9 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Upload docker-compose.prod.yml to GCS
+      - name: Upload compose files to GCS
         run: |
+          gcloud storage cp docker-compose.yml gs://${{ vars.DEPLOY_BUCKET }}/docker-compose.yml
           gcloud storage cp docker-compose.prod.yml gs://${{ vars.DEPLOY_BUCKET }}/docker-compose.prod.yml
 
       - name: Deploy to GCE backbone (compose pull & up)
@@ -204,12 +205,17 @@ jobs:
             --ssh-flag="-o StrictHostKeyChecking=no" \
             --command="
               set -e
-              docker compose \
+              # GCS から最新の compose を VM へ再取得（VM SA = roles/storage.objectViewer）。
+              # これをしないと起動時に取得した古い compose のまま up され、変数参照のずれ等が起きる。
+              TOKEN=\$(curl -sf -H 'Metadata-Flavor: Google' 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token' | sed -n 's/.*\"access_token\":\"\([^\"]*\)\".*/\1/p')
+              sudo curl -fsS -H \"Authorization: Bearer \$TOKEN\" -o /opt/app/docker-compose.base.yml 'https://storage.googleapis.com/storage/v1/b/${{ vars.DEPLOY_BUCKET }}/o/docker-compose.yml?alt=media'
+              sudo curl -fsS -H \"Authorization: Bearer \$TOKEN\" -o /opt/app/docker-compose.prod.yml 'https://storage.googleapis.com/storage/v1/b/${{ vars.DEPLOY_BUCKET }}/o/docker-compose.prod.yml?alt=media'
+              sudo docker compose \
                 --env-file /opt/app/.env \
                 -f /opt/app/docker-compose.base.yml \
                 -f /opt/app/docker-compose.prod.yml \
                 pull ec-backend backoffice-backend
-              docker compose \
+              sudo docker compose \
                 --env-file /opt/app/.env \
                 -f /opt/app/docker-compose.base.yml \
                 -f /opt/app/docker-compose.prod.yml \
