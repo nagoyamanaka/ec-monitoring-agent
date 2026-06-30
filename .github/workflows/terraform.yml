@@ -23,6 +23,9 @@ defaults:
 
 env:
   TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+  TF_VAR_github_repository: ${{ github.repository }}
+  TF_VAR_deploy_bucket_name: ${{ vars.DEPLOY_BUCKET }}
 
 jobs:
   plan:
