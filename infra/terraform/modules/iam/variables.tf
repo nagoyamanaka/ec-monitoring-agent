@@ -24,6 +24,15 @@ variable "deployer_sa_id" {
   default = "terraform-deployer"
 }
 
+# 既存 WIF プロバイダに設定済みの許可 audience（剥がさないよう明示）。
+variable "provider_allowed_audiences" {
+  type = list(string)
+  default = [
+    "https://github.com/nagoyamanaka",
+    "https://iam.googleapis.com/projects/442787395252/locations/global/workloadIdentityPools/github-actions-pool2/providers/github-provider",
+  ]
+}
+
 variable "deployer_roles" {
   type        = list(string)
   description = "Project roles granted to the CI deployer SA"

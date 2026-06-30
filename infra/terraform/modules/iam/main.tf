@@ -30,6 +30,9 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
+    # 既存プロバイダ（手動作成）の許可 audience を明示し、import 後に剥がさない。
+    # CI（google-github-actions/auth）は audience 未指定でデフォルト（= プロバイダ URL）を使う。
+    allowed_audiences = var.provider_allowed_audiences
   }
 }
 
