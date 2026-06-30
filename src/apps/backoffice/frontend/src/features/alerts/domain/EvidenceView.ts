@@ -1,4 +1,4 @@
-import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/InfraEvidence";
+import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/contracts/InfraEvidenceContract";
 
 /**
  * インフラ証拠（Cloud Logging / Terraform / GitHub）の表示用型と、
@@ -48,6 +48,8 @@ export type EvidenceCommitView = {
   readonly message: string;
   readonly author: string;
   readonly committedAt: string;
+  /** コミットの Web リンク（GitHub）。あれば sha をクリック可能にする。無ければ非リンク表示。 */
+  readonly url?: string;
 };
 
 export type EvidenceMetricView = {
@@ -98,6 +100,7 @@ export function toEvidenceView(dto: InfraEvidencePrimitives): EvidenceView {
       message: c.message,
       author: c.author,
       committedAt: c.committedAt,
+      ...(c.url ? { url: c.url } : {}),
     })),
     metrics: (dto.metrics ?? []).map((m) => ({
       metricType: m.metricType,

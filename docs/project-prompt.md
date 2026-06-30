@@ -466,6 +466,36 @@ interface InfraEvidence {
 > 分類の罠: 調査が terraform 差分を引くのは category===**INFRASTRUCTURE** のときだけ（`DefaultInfraInvestigationAdapter`）。translator の `CAPACITY_HINTS`（connection/pool/cpu…）に当たると CAPACITY になり差分を引かないので、condition 名は容量語を避けて INFRASTRUCTURE に倒す（UTで固定）。
 > **「合成入力」の明示**: シナリオ5/6 は FAULT INJECTION 上で amber バッジ＋凡例を出す＝「検知の入口のみ合成。変換→AI調査→PR起票は実経路。本番は実 CI/apply から同経路。外部リンク（PR/コンソール）はデモ環境では代表値」。パイプラインは実際に動くため「動かない偽物」とは括らず、軸は「入口が合成か実外部ソースか」「外部リンクが代表値か実リンクか」で正確に示す（タスク34）。
 
+### シナリオ7：アプリコード退行（CIは通ったが挙動デグレ・v20追加）
+
+**「テストは緑のまま通ったアプリコード変更そのものが挙動を退行させた障害」を、AI が実コミット差分を読んで root cause として特定する**フロー。シナリオ4/6（インフラ・IaC 起因）・5（CVE）がカバーしない**アプリコード起因**の根本原因カテゴリを埋め、既述の「修正ターゲット・ルーティング（アプリのコード→PR+UT / 自前IaC→Terraform PR / 外部→runbook）」を実証する。`GitHubGateway.getCommitDiff()`（コミット単位の実 unified diff 取得・タスク35）の見せ場。
+
+> **設計のキモ（2026-06-29）— 証跡を「代表値」から「本物」へ一段上げる**: 「成果物が本物」と「本番にデプロイされている」は別の軸。原因コミットは**実在の git コミット**（demo 隔離ブランチ上）で、AI は `fetch_recent_commits`→`fetch_commit_diff` で**本物の差分**を引いて分析し、修正は**事前生成した実 draft PR**にリンクする。合成は検知の入口（Alert 発火）のみ＝シナリオ5/6 と同じ「正直な合成」の延長。評価者が「適当に言ってる」と疑うのは*サービスが実際にクラッシュしなかったから*ではなく*差分やPRが本物でない／クリックできないから*。直すべきはそっちで、それは安全に本物化できる。
+>
+> **なぜ main でなく demo ブランチを調査するか**: `ci.yml` は `on: push: branches:[main]` で push→build→deploy(Cloud Run/GCE 再起動)まで走る。原因コミットを main に積むと **live demo サービスが実際に壊れ、他シナリオまで人質**。よって「デプロイ経路（main）」と「証跡コミット（`demo/regression-*`）」を物理的に切り離す。本番では deployed ref（=main）を調査する物語だが、デモでは live を汚さないため退行を隔離ブランチに置き、AI が読むのは**実コミット・実差分**。**「main に入れて実デプロイ」は非推奨**＝デモ全体が人質になり、得る信頼は実差分+実ログ+実PRの上にほぼ上乗せしない。
+>
+> **実装（タスク35・完了）**: ① 調査対象 ref は use case 引数でなく **`GITHUB_TARGET_REF` env**（`config.github.targetRef`→`GitHubGatewayImpl`）。アプリ層は一切汚さない。本番は未設定＝既定ブランチを `since` で時間窓フィルタ／**デモは `demo/regression` を指す**。② **ref 固定時は `listRecentCommits` が tip コミットを `since` 無しで返す**＝静的に1回積んだ証跡コミットを審査員がいつ閲覧しても壁時計非依存で発見できる（**1次審査の非同期閲覧に対応・直前の再仕込み不要**）。③ `DefaultInfraInvestigationAdapter` の commit 収集 gating に **APPLICATION を追加**（SECURITY と並ぶ「直近コミットが原因候補」カテゴリ）。④ 証跡仕込みは **`scripts/stage-demo-branch.sh`**（main から `demo/regression` を作り `SubtotalAmount` に丸め誤りを実コミット。デプロイされない）。⑤ **前提: 差分は `fetch_commit_diff` ツールで引くため ADK パス（`useAdk`）が要る**（単一Gemini 事前収集は commit 一覧のみ＝差分は InfraEvidence に載せない設計）。
+
+```
+事前準備（1回・デモ前）:
+  - demo/regression-* に症状と整合する実バグコミットを1個積む
+    （例: checkout 合計の丸め誤り／在庫デクリメント条件式ミス など、diff から原因が読める変更）
+  - main 不変＝CI/deploy 不発火・live サービス無傷。コミット sha と症状ログを scenario7 ペイロードに整合
+  - 修正案の実 draft PR を事前生成しておく（advisory もしくは dispatch・draft ゆえマージ不要）
+
+ライブ:
+1. DEMO CONSOLE でシナリオ7押下 → TriggerDemoScenarioUseCase が APPLICATION category の
+   Alert を合成注入（実 ingest 経路）。同時投入する appLogs は当該バグの症状
+2. AnalyzeAlert → InvestigateAlert（ADKマルチエージェント）が実走
+3. EvidenceCollector: fetch_recent_commits(since, ref=demoブランチ) → 本物のコミット一覧から疑わしい sha を発見
+                     fetch_commit_diff(sha)                      → 本物の unified diff を取得
+4. RootCauseAnalyst: 差分と症状ログを相関 → 「このコミットの該当変更が原因」
+5. RemediationPlanner: 事前生成済みの実 draft PR にリンク（修正ターゲット=アプリのコード→PR+UT）
+6. バックオフィスに「実差分 before→after + AI原因特定 + 実PRリンク」を SSE 表示
+```
+
+> **「合成入力」の明示**: シナリオ5/6 と同じ amber バッジ＋凡例に1行足す＝「検知の入口のみ合成。**調査対象 ref はデモ隔離ブランチ**（本番は deployed ref）。コミット差分・AI分析・修正PR は実物」。軸は「入口が合成か実外部ソースか」「調査 ref がデモ隔離か本番 ref か」「PR/外部リンクが実 draft か代表値か」で正確に示す。
+
 ### シナリオXX：予兆ブリーフィング（stretchⅡ・v15追加）
 
 > **2026-06-29 実コード照合: 未実装**（設計案のみ。`Monitoring/Forecast/` 配下のコードは現状存在しない）。

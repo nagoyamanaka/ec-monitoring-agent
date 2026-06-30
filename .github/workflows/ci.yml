@@ -42,6 +42,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # docker-compose.local.yml の dev サービスは `- .:/app` で checkout を丸ごと
+      # コンテナに被せる。pnpm の isolated linker は各 workspace パッケージの依存を
+      # `<pkg>/node_modules/` 配下に symlink するが、この bind mount がそれを
+      # ホスト側ツリーで shadow するため、ホスト未 install だとコンテナ内で
+      # パッケージ直下の依存（例: ec-backend の cors）が ERR_MODULE_NOT_FOUND になる。
+      # runner で frozen install しておくと、ホストツリーに同じ相対 symlink が用意され
+      # （リンク先 .pnpm は各サービスの匿名ボリューム=pruned イメージ側で解決される）、
+      # コンテナ起動が通る。
+      - name: Install dependencies (populate workspace symlinks for bind mount)
+        run: pnpm install --frozen-lockfile
+
       - name: Run E2E suite
         run: |
           docker compose -f docker-compose.yml -f docker-compose.local.yml \

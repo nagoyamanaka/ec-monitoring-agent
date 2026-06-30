@@ -82,7 +82,7 @@ export function ImpactPanel({ impact }: ImpactPanelProps) {
             {impact.citations.map((citation, i) => (
               <li
                 key={i}
-                className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-300 ring-1 ring-inset ring-cyan-500/30"
+                className="rounded bg-slate-800/70 px-1.5 py-0.5 font-mono text-[11px] text-slate-300 ring-1 ring-inset ring-slate-700/60"
               >
                 {citation}
               </li>

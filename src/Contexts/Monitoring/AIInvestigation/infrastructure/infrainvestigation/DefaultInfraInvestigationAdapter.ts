@@ -34,8 +34,12 @@ export class DefaultInfraInvestigationAdapter implements InfraInvestigationPort 
         ? await this.tryGetTerraformDiff(since)
         : undefined;
 
+    // SECURITY（脆弱依存の導入コミット）と APPLICATION（アプリコード退行の原因コミット）は
+    // 「直近コミットが原因の候補」になり得るので収集する。INFRASTRUCTURE/CAPACITY は
+    // terraform 差分・メトリクスが主証拠なのでコミットは引かない（category オーナーシップ）。
     const recentCommits =
-      category === MonitoringEventCategories.SECURITY
+      category === MonitoringEventCategories.SECURITY ||
+      category === MonitoringEventCategories.APPLICATION
         ? await this.tryListCommits(since)
         : undefined;
 

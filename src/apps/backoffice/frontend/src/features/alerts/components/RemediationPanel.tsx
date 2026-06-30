@@ -45,6 +45,9 @@ export function RemediationPanel({
   const report = alert.report;
   const remediable = report?.remediable ?? false;
   const unstarted = remediation === null || isRemediationUnstarted(remediation);
+  // AI が remediable=true としても、自動修正エンジンが対象を見つけられず skip した場合は
+  // 「コードで修正可能」バッジと skip 文言が矛盾して見える。skip 済みならバッジを伏せる。
+  const skipped = remediation?.status === "skipped";
 
   // 起票できず（remediable でない）、まだ何の記録も無いなら出さない（ノイズ回避）。
   if (!remediable && unstarted && status !== "error") {
@@ -60,7 +63,7 @@ export function RemediationPanel({
         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
           自動修正（リメディエーション）
         </h4>
-        {remediable && (
+        {remediable && !skipped && (
           <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
             コードで修正可能（AI 判定）
           </span>
@@ -178,10 +181,10 @@ function RemediationBody({
 
     case "skipped":
       return (
-        <div className="rounded-md bg-slate-800/40 px-3 py-3 text-xs text-slate-300 ring-1 ring-inset ring-slate-700/60">
-          自動修正は見送られました。
+        <div className="space-y-1 rounded-md bg-slate-800/40 px-3 py-3 text-xs text-slate-300 ring-1 ring-inset ring-slate-700/60">
+          <p>自動修正は実行されませんでした。</p>
           {remediation.reason && (
-            <span className="text-slate-300">（{remediation.reason}）</span>
+            <p className="text-slate-400">{remediation.reason}</p>
           )}
         </div>
       );

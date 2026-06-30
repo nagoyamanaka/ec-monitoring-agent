@@ -44,6 +44,10 @@ export const config = {
   github: {
     token: process.env.GITHUB_TOKEN ?? "",
     targetRepo: process.env.GITHUB_TARGET_REPO ?? "",
+    // 調査が「どの ref を見るか」。空＝既定ブランチ(main)を時間窓で絞る（本番）。
+    // デモ環境では demo/regression を指す＝そのブランチの直近コミットを壁時計非依存で証跡に使う
+    // （静的に1回積んだ証跡コミットを、審査員がいつ閲覧しても発見できるようにするため）。
+    targetRef: process.env.GITHUB_TARGET_REF ?? "",
     // 修正PRの起票先。未設定なら調査用の targetRepo にフォールバック（同一リポを想定）。
     remediationRepo:
       process.env.GITHUB_REMEDIATION_REPO ??
@@ -71,10 +75,10 @@ export const config = {
     url: process.env.ELASTICSEARCH_URL ?? "",
     similarIncidentsIndex:
       process.env.ELASTICSEARCH_SIMILAR_INCIDENTS_INDEX ?? "similar-incidents",
-    // BM25 の生スコアは corpus 依存・非有界なので [0,1] 正規化の飽和点は env で調整可能にする
-    // （短文の解決メモだと max は数程度。デフォルトは控えめに 5）。
+    // リポジトリの search は既に有界な字句類似度 [0,1]（lexicalSimilarity）を返すので、
+    // SimilarPatternRule 側の正規化は実質恒等＝既定 1。生 BM25 を消費していた頃の名残の安全クランプ。
     similarScoreCeiling: Number(
-      process.env.ELASTICSEARCH_SIMILAR_SCORE_CEILING ?? 5,
+      process.env.ELASTICSEARCH_SIMILAR_SCORE_CEILING ?? 1,
     ),
     // この確度未満は棄権して AI 調査経路に回す
     similarMinConfidence: Number(

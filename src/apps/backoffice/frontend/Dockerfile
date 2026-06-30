@@ -25,8 +25,12 @@ CMD ["pnpm", "run", "dev:frontend"]
 FROM deps AS build
 COPY --from=pruner /app/out/full/ .
 # src/Contexts は workspace package でないため turbo prune に含まれない。
-# @monitoring/* path alias の解決に必要なので手動でコピーする。
-COPY --from=pruner /app/src/Contexts ./src/Contexts
+# @monitoring/* alias の解決に必要なので Monitoring コンテキストをまるごとコピーする。
+# tsconfig の include は src のみ・vite は import されたファイルしかバンドルしないため、
+# 余分な .ts はこのビルド中間レイヤーに置かれるだけで成果物・コンパイル対象には混入しない。
+# contracts/ だけを絞り込むと contracts が同階層 domain 型を import した瞬間に本番ビルドだけ壊れる
+# （ローカル/`make up` は全ソース可視のため検知できない）ため、保守性を優先して全コピーとする。
+COPY --from=pruner /app/src/Contexts/Monitoring ./src/Contexts/Monitoring
 RUN pnpm run --filter @ec-monitoring-agent/backoffice-frontend build
 
 # ── runner: nginx で static 配信 + API リバースプロキシ ──

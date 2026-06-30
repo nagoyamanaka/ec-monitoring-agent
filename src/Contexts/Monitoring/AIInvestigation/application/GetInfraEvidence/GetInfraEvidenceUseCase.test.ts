@@ -10,6 +10,8 @@ import { ConsoleLogger } from "../../../../Shared/infrastructure/logging/Console
 import { MonitoringResourceNotFoundError } from "../../../AlertAnalysis/application/errors/MonitoringResourceNotFoundError.js";
 import { InfraInvestigationPort } from "../../domain/InfraInvestigationPort.js";
 import { InfraEvidence } from "../../domain/InfraEvidence.js";
+import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
+import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
 
 const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";
 
@@ -25,8 +27,33 @@ const makeEvent = () =>
     source: "unknown",
   });
 
-const makeAlert = () =>
-  Alert.createAsUnknown({ id: new AlertId(ALERT_ID), monitoringEvent: makeEvent() });
+// 直近コミット abc123 を「原因」として引用する報告書を持つアラート。
+// 証拠パネルは AI が引用したコミットだけ表示するため、引用が無いとコミットは落ちる。
+const makeReport = (citations: string[]) =>
+  new InvestigationReport({
+    summary: "調査要約",
+    confidence: 0.8,
+    severity: AlertSeverity.warning(),
+    investigationSteps: [],
+    suggestedActions: [],
+    suggestedPatternName: "PATTERN",
+    reviewStatus: ReviewStatus.pendingReview(),
+    investigatedAt: new Date("2026-01-01T00:03:00.000Z"),
+    isFallback: false,
+    impact: {
+      fault: "own",
+      scope: "注文処理",
+      scale: "数件",
+      affectedSubjects: ["order"],
+      citations,
+    },
+  });
+
+const makeAlert = (citations: string[] = ["abc123"]) =>
+  Alert.createAsUnknown({
+    id: new AlertId(ALERT_ID),
+    monitoringEvent: makeEvent(),
+  }).attachInvestigationReport(makeReport(citations));
 
 const makeEvidence = (): InfraEvidence => ({
   appLogs: [
@@ -95,6 +122,21 @@ describe("GetInfraEvidenceUseCase", () => {
     expect(response.evidence.recentCommits?.[0].committedAt).toBe(
       "2026-01-01T00:00:30.000Z",
     );
+    expect(response.evidence.terraformDiff?.summary).toBe("pool size 10→5");
+  });
+
+  it("AI が引用していないコミットは証拠から落とす（原因でないコミットは出さない）", async () => {
+    const alert = makeAlert(["別件の terraform 差分"]); // abc123 を引用しない
+    await alertRepo.save(alert);
+    const collect = vi.fn().mockResolvedValue(makeEvidence());
+    const port: InfraInvestigationPort = { collect };
+    const useCase = new GetInfraEvidenceUseCase(alertRepo, port, logger);
+
+    const response = await useCase.run(new AlertId(ALERT_ID));
+
+    expect(response.evidence.recentCommits).toBeUndefined();
+    // コミット以外の証拠（ログ・terraform）はそのまま残る。
+    expect(response.evidence.appLogs).toHaveLength(1);
     expect(response.evidence.terraformDiff?.summary).toBe("pool size 10→5");
   });
 });

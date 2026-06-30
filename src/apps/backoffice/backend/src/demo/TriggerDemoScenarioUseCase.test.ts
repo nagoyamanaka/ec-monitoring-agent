@@ -90,6 +90,30 @@ describe("TriggerDemoScenarioUseCase", () => {
     expect(ec.injectInfraFault).not.toHaveBeenCalled();
   });
 
+  it("シナリオ7（appcode-regression）は APPLICATION の合成イベントを実経路へ流す（注文/注入なし）", async () => {
+    const ec = fakeEcGateway();
+    const useCase = new TriggerDemoScenarioUseCase(ec, "p-1", fakeInfraStore(), collect);
+
+    const result = await useCase.run("7");
+
+    expect(result).toEqual({ scenarioId: "appcode-regression", label: "アプリコード退行", orderId: "" });
+
+    // 検知の入口だけ合成。UNKNOWN→AI 調査に乗る APPLICATION の CRITICAL イベントになる。
+    expect(collect.run).toHaveBeenCalledTimes(1);
+    const event = (collect.run as ReturnType<typeof vi.fn>).mock.calls[0][0] as MonitoringEvent;
+    expect(event.category.value).toBe("APPLICATION");
+    expect(event.isAlertable()).toBe(true);
+    expect(event.source).toBe("ec-backend");
+    // seed の類似コーパスと語彙が被らない eventName＝類似検索が誤って既知に寄せず UNKNOWN→AI 調査に乗る。
+    expect(event.eventName).toBe("ec.pricing.subtotal_mismatch");
+    // 日本語プローズを payload に入れない（kuromoji 無しの偶発一致→BM25 飽和→偽 KNOWN を防ぐ）。
+    expect(JSON.stringify(event.payload)).not.toMatch(/[ぁ-んァ-ヶ一-龠]/);
+
+    // 注文投入・障害注入は伴わない（合成検知のみ）。
+    expect(ec.placeOrder).not.toHaveBeenCalled();
+    expect(ec.injectInfraFault).not.toHaveBeenCalled();
+  });
+
   it("未知シナリオは UnsupportedScenarioError", async () => {
     const useCase = new TriggerDemoScenarioUseCase(fakeEcGateway(), "p-1", fakeInfraStore(), collect);
     await expect(useCase.run("nope")).rejects.toBeInstanceOf(UnsupportedScenarioError);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/InfraEvidence";
+import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/contracts/InfraEvidenceContract";
 import {
   evidenceSections,
   isEvidenceEmpty,
@@ -38,6 +38,7 @@ function makePrimitives(
         message: "tune pool",
         author: "alice",
         committedAt: "2026-01-01T00:00:00.000Z",
+        url: "https://github.com/o/r/commit/0123456789abcdef",
       },
     ],
     collectedAt: "2026-01-01T00:00:01.000Z",
@@ -53,6 +54,10 @@ describe("toEvidenceView", () => {
       message: "pool exhausted",
     });
     expect(view.recentCommits[0].shortSha).toBe("0123456");
+    // コミットの Web リンクは View に透過する（フロントで sha をクリック可能にする）。
+    expect(view.recentCommits[0].url).toBe(
+      "https://github.com/o/r/commit/0123456789abcdef",
+    );
     expect(view.terraformDiff?.summary).toBe("max_connections を縮小");
     // 構造化された resourceChanges（before→after）が写像される。
     expect(view.terraformDiff?.resourceChanges[0]).toEqual({

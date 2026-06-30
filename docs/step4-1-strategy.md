@@ -739,3 +739,59 @@ infra/terraform/
 - IaC を **WIF キーレス・modules＋単一 prod env・GCS remote state** で構成する理由
 
 ---
+
+## §12. モジュール間境界の設計判断：`InvestigationReport` と `SSEAlertNotifier`（2026-06 確定）
+
+> **問い**: `AIInvestigationPort` が `InvestigationReport`（AlertAnalysis 所有）を返り値に持つのは境界違反か。戦略的パターン（順応者 / 共有カーネル / 腐敗防止層）のどれを選ぶか。`SSEAlertNotifier` も同様に検討。
+
+### 前提の整理：ここは「コンテキスト間」ではなく「モジュール間」
+
+`順応者（Conformist）/ 共有カーネル（Shared Kernel）/ 腐敗防止層（ACL）` は**別々の Bounded Context 同士**の戦略的関係を表すパターン。しかし `AIInvestigation` / `AlertAnalysis` / `AlertNotification` は **`Monitoring` という単一 Bounded Context の内側のモジュール**（§8.3 参照）。依存方向は完全に一方向で循環なし：
+
+```
+AIInvestigation → AlertAnalysis（InvestigationReport, Alert, AlertId, ReviewStatus ...）
+AlertAnalysis  → AIInvestigation：0件
+```
+
+同一コンテキスト内のモジュール依存に戦略的パターンを持ち込むのは原則オーバーキル。
+
+### 結論：現状維持（順応者）で正しい
+
+**決め手は `InvestigationReport` の所有権**。
+
+- `Alert._investigationReport`（`Alert.ts:33`）で集約に保持され、`attachInvestigationReport()`（`Alert.ts:205`）で取り込まれる ＝ **AlertAnalysis 集約の一部**。
+- `AIInvestigationPort.investigate()` の存在目的は「`InvestigationReport` を生成すること」そのもの。AIInvestigation 側に**保護すべき独自の内部モデルが存在しない**。
+- ACL を挟んでも `InvestigationReport → InvestigationReport` の恒等マッピングになるだけ ＝ 純粋な儀式コスト。
+
+→ **翻訳すべきものがないから翻訳層を作らない。**
+
+### 他2案を採らない理由
+
+| 案 | 却下理由 |
+| --- | --- |
+| **共有カーネル（Shared へ移動）** | 所有者が AlertAnalysis（集約の一部）と明確。Shared に出すと所有権がぼやけ Shared が肥大化する。シリアライズ契約（`InvestigationReportPrimitives`）は**既に `AlertAnalysis/domain/contracts/AlertContract.ts` で共有済み**——リッチなドメインクラスは所有者に残し Primitives だけ共有する現状が正解。 |
+| **呼び出し元に ACL** | 上記の通り恒等マッピングになるだけ。 |
+
+### SSEAlertNotifier はむしろより正しい形
+
+`SSEAlertNotifier`（`AlertNotification/domain/SSEAlertNotifier.ts`）は `AlertPrimitives` / `RemediationResponsePrimitives` という **Primitives（契約）に依存し、リッチなドメインクラスを import しない**。これは Port より一段きれい。
+
+なぜ `AIInvestigationPort` と扱いが違ってよいかは**データの流れる向きが逆だから**：
+
+```
+AIInvestigationPort.investigate() の戻り値
+  → ドメインに "戻ってくる"（attachInvestigationReport で集約に入る）
+  → ドメインクラス（InvestigationReport）で受けるのが正しい
+
+SSEAlertNotifier の出力
+  → クライアントへ "出ていく"
+  → Primitives で配るのが正しい
+```
+
+両方ともそれぞれの向きにとって適切。いじる必要なし。
+
+### いつ見直すか（将来の継ぎ目）
+
+`AIInvestigation` を別デプロイ／別コンテキストとして物理分割するときだけ見直す。その際は `contracts/*Primitives` を公開言語（Published Language）に昇格させ、プロセス境界に ACL を置く。`contracts/` フォルダが既にその継ぎ目（seam）を用意しているため、**分割は後からでも安全に移行できる**。
+
+---

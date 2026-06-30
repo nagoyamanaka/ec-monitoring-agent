@@ -4,6 +4,7 @@ import { AlertRepository } from "../../../AlertAnalysis/domain/AlertRepository.j
 import { MonitoringResourceNotFoundError } from "../../../AlertAnalysis/application/errors/MonitoringResourceNotFoundError.js";
 import { InfraInvestigationPort } from "../../domain/InfraInvestigationPort.js";
 import { InfraEvidenceResponse } from "./InfraEvidenceResponse.js";
+import { restrictEvidenceToCitedCommits } from "./CitedCommitFilter.js";
 
 // アラート起因のインフラ証拠（アプリログ／Terraform差分／直近コミット）を read-only で取得する。
 // 証拠は調査時にも収集するが永続化していないため、表示要求時に再収集する（全 Gateway は read-only）。
@@ -29,6 +30,12 @@ export class GetInfraEvidenceUseCase {
     const evidence = await this.infraInvestigationPort.collect(
       alert.monitoringEvent,
     );
-    return new InfraEvidenceResponse(evidence);
+    // 直近コミットは収集時点では category 駆動で無条件に積まれている。原因でない証拠は出さない
+    // 方針に合わせ、AI 調査が引用したコミットだけに絞ってから返す（報告書が無ければコミットは落ちる）。
+    const relevant = restrictEvidenceToCitedCommits(
+      evidence,
+      alert.investigationReport,
+    );
+    return new InfraEvidenceResponse(relevant);
   }
 }

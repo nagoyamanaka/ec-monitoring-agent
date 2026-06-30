@@ -44,7 +44,8 @@ export class DraftRemediationUseCase {
         status: "skipped",
         pullRequestUrl: null,
         vulnerabilityCount: 0,
-        reason: "アラートに修正対象の脆弱性（payload.vulnerabilities）がありません",
+        reason:
+          "自動修正はコード上の修正対象を検出できた場合のみ実行されます。このアラートには対応できる対象がありませんでした。",
       });
       return;
     }

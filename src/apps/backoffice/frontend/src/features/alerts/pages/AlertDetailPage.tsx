@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
@@ -10,10 +10,19 @@ import {
 } from "../application/submitFeedback";
 import { reinvestigate } from "../application/reinvestigate";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
+import { AlertReviewPanel } from "../components/AlertReviewPanel";
 import { EvidencePanel } from "../components/EvidencePanel";
 import { RemediationPanel } from "../components/RemediationPanel";
 import { RelatedAlertsPanel } from "../components/RelatedAlertsPanel";
 import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
+
+/** 報告書の各ブロックをカードで括る共通スタイル（グルーピングで視線の止め所を作る）。 */
+const PANEL = "rounded-xl border border-slate-800/80 bg-slate-900/40 p-5";
+
+function formatAbsoluteTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
 
 /**
  * アラート詳細ページ（DefaultLayout＝デモUI非侵食・ディープリンク/別タブ用）。
@@ -73,6 +82,19 @@ export function AlertDetailPage() {
     [api, refreshAlert],
   );
 
+  // 報告書の共有はダウンロード（静的スナップショット＝引用リンクが死ぬ）より、生きた証跡を
+  // たどれるディープリンクのコピーを優先する。
+  const [copied, setCopied] = useState(false);
+  const handleCopyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      console.error("copy link failed", e);
+    }
+  }, []);
+
   return (
     <DefaultLayout
       headerSlot={
@@ -110,38 +132,52 @@ export function AlertDetailPage() {
 
         {status === "ready" && alert && (
           <article className="space-y-4">
-            <header className="space-y-2">
-              <div className="flex items-center gap-2">
-                <SeverityBadge level={alert.severity} />
-                <span className="rounded bg-slate-700/40 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-300">
-                  {alert.category}
-                </span>
+            <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800/80 pb-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <SeverityBadge level={alert.severity} />
+                  <span className="rounded bg-slate-700/40 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-300">
+                    {alert.category}
+                  </span>
+                </div>
+                <h2 className="text-xl font-semibold text-slate-50">
+                  {alert.eventName}
+                </h2>
+                <p className="text-xs text-slate-400">
+                  {alert.source} · {formatAbsoluteTime(alert.occurredOn)}
+                </p>
               </div>
-              <h2 className="text-lg font-semibold text-slate-100">
-                {alert.eventName}
-              </h2>
-              <p className="text-xs text-slate-400">{alert.source}</p>
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="shrink-0 rounded-md bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-200 ring-1 ring-inset ring-slate-700/60 transition hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              >
+                {copied ? "✓ コピーしました" : "🔗 リンクをコピー"}
+              </button>
             </header>
 
-            <AlertCardExpanded
-              alert={alert}
-              onDecision={handleDecision}
-              onReinvestigate={handleReinvestigate}
-              variant="full"
-            />
+            <AlertCardExpanded alert={alert} variant="full" className={PANEL} />
             <RelatedAlertsPanel
               alert={alert}
               lookup={(rid) => alerts.find((a) => a.id === rid)}
+              className={PANEL}
             />
             <RemediationPanel
               alert={alert}
               api={remediationApi}
               pushed={remediationByAlertId.get(alert.id) ?? null}
               live
+              className={PANEL}
             />
             {hasAiInvestigation(alert) && (
-              <EvidencePanel api={evidenceApi} alert={alert} />
+              <EvidencePanel api={evidenceApi} alert={alert} className={PANEL} />
             )}
+            {/* 判定は報告書の締めアクションとして末尾に置く（一覧ドロワーと配置統一）。 */}
+            <AlertReviewPanel
+              alert={alert}
+              onDecision={handleDecision}
+              onReinvestigate={handleReinvestigate}
+            />
           </article>
         )}
       </div>

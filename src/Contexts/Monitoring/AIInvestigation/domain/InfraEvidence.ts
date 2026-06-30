@@ -40,6 +40,37 @@ export type GitCommit = {
   readonly message: string;
   readonly author: string;
   readonly committedAt: Date;
+  // コミットの Web リンク（GitHub html_url）。証拠としてフロントで sha をクリック可能にする。
+  // ソースが提供しない場合もあるので任意。
+  readonly url?: string;
+};
+
+// あるコミットが変更した1ファイルのコード差分（unified diff）。
+// terraformDiff が「インフラに適用された事実」なのに対し、こちらは「アプリコードの変更内容」を表す相棒。
+// バイナリ/巨大ファイルでは patch は undefined になり得る。
+export type GitFileDiff = {
+  readonly filename: string;
+  readonly status: string; // added | modified | removed | renamed など
+  readonly additions: number;
+  readonly deletions: number;
+  // GitHub の unified diff（hunk 群）。トークン予算で末尾を切った場合は truncated=true。
+  readonly patch?: string;
+  readonly truncated?: boolean;
+};
+
+// 1コミットの詳細差分。fetch_recent_commits（一覧＝当たり付け）で疑わしい sha を見つけたあと、
+// その1件だけを深掘りする「詳細」。トークン肥大を避けるため InfraEvidence の事前収集には載せず、
+// エージェントが必要時にのみ引く（committedAt は Date／ワイヤ越えはしないので Primitives は持たない）。
+export type GitCommitDiff = {
+  readonly sha: string;
+  readonly message: string;
+  readonly author: string;
+  readonly committedAt: Date;
+  readonly files: GitFileDiff[];
+  // ファイル数が上限を超えて files を間引いた場合 true。
+  readonly filesTruncated?: boolean;
+  // コミットの Web リンク（GitHub html_url）。AI が根拠として参照リンクを提示できる。
+  readonly url?: string;
 };
 
 // Cloud Monitoring から相関取得した1メトリクスの要約（CPU / 接続数 / 5xx 等）。
@@ -61,43 +92,3 @@ export type InfraEvidence = {
   readonly metrics?: InfraMetric[];
   readonly collectedAt: Date;
 };
-
-// ワイヤ契約（HTTP レスポンス）。Date は ISO 文字列に正規化する。
-export type AppLogEntryPrimitives = Omit<AppLogEntry, "timestamp"> & {
-  readonly timestamp: string;
-};
-
-export type GitCommitPrimitives = Omit<GitCommit, "committedAt"> & {
-  readonly committedAt: string;
-};
-
-export type InfraEvidencePrimitives = {
-  readonly appLogs: AppLogEntryPrimitives[];
-  readonly terraformDiff?: TerraformDiff;
-  readonly recentCommits?: GitCommitPrimitives[];
-  readonly metrics?: InfraMetric[];
-  readonly collectedAt: string;
-};
-
-export function infraEvidenceToPrimitives(
-  evidence: InfraEvidence,
-): InfraEvidencePrimitives {
-  return {
-    appLogs: evidence.appLogs.map((log) => ({
-      ...log,
-      timestamp: log.timestamp.toISOString(),
-    })),
-    ...(evidence.terraformDiff ? { terraformDiff: evidence.terraformDiff } : {}),
-    ...(evidence.recentCommits
-      ? {
-          recentCommits: evidence.recentCommits.map((commit) => ({
-            ...commit,
-            committedAt: commit.committedAt.toISOString(),
-          })),
-        }
-      : {}),
-    // InfraMetric は Date を持たないのでそのまま透過。
-    ...(evidence.metrics ? { metrics: evidence.metrics } : {}),
-    collectedAt: evidence.collectedAt.toISOString(),
-  };
-}

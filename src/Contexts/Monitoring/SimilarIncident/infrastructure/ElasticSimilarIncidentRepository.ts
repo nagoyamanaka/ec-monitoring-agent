@@ -9,6 +9,7 @@ import {
   SimilarIncidentRepository,
   SimilarSearchQuery,
 } from "../domain/SimilarIncidentRepository.js";
+import { lexicalSimilarity } from "../domain/lexicalSimilarity.js";
 
 // similar-incidents インデックスのマッピング。
 // eventName は全文検索（fuzzy）と厳密一致（.keyword）の両方に使うので multi-field。
@@ -115,8 +116,10 @@ export class ElasticSimilarIncidentRepository
     return response.body.hits.hits.map((hit) => this.toEntity(hit._source));
   }
 
-  // ハイブリッド（字句）検索：eventName / resolvedNote へ fuzzy multi_match。
-  // 生 _score をそのまま返す（[0,1] への正規化は consumer の SimilarPatternRule が scoreCeiling で吸収する）。
+  // ハイブリッド検索：候補取得（recall/ランキング）は BM25 の fuzzy multi_match に任せるが、
+  // **分類 confidence には backend 非依存で有界な lexicalSimilarity（Jaccard, [0,1]）を使う**。
+  // 生 _score は無界でコーパス規模・アナライザに依存し、小コーパスで飽和して「無関係事例に 100% 類似」の
+  // 偽 KNOWN を生むため score としては返さない（InMemory と同義の [0,1] に揃える）。
   async search(query: SimilarSearchQuery): Promise<ScoredIncident[]> {
     const client = await this.client;
     const response = await client.search<EsSearchBody<IncidentDoc>>({
@@ -133,10 +136,18 @@ export class ElasticSimilarIncidentRepository
       },
     });
 
-    return response.body.hits.hits.map((hit) => ({
-      incident: this.toEntity(hit._source),
-      score: hit._score ?? 0,
-    }));
+    return response.body.hits.hits
+      .map((hit) => {
+        const incident = this.toEntity(hit._source);
+        return {
+          incident,
+          score: lexicalSimilarity(
+            query.text,
+            `${incident.eventName} ${incident.resolvedNote}`,
+          ),
+        };
+      })
+      .sort((a, b) => b.score - a.score);
   }
 
   private extractEventName(criteria: Criteria): string | null {

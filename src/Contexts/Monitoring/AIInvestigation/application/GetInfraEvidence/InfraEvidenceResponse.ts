@@ -1,9 +1,9 @@
 import { Response } from "../../../../Shared/domain/Response.js";
+import { InfraEvidence } from "../../domain/InfraEvidence.js";
 import {
-  InfraEvidence,
   InfraEvidencePrimitives,
   infraEvidenceToPrimitives,
-} from "../../domain/InfraEvidence.js";
+} from "../../domain/contracts/InfraEvidenceContract.js";
 
 export class InfraEvidenceResponse implements Response {
   public readonly evidence: InfraEvidencePrimitives;

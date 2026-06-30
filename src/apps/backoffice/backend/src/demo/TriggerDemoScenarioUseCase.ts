@@ -9,6 +9,9 @@ import {
   SecurityScanTranslator,
 } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/SecurityScanTranslator.js";
 import { CloudMonitoringAlertTranslator } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CloudMonitoringAlertTranslator.js";
+import { MonitoringEvent } from "../../../../../Contexts/Monitoring/Shared/domain/MonitoringEvent.js";
+import { MonitoringEventCategory } from "../../../../../Contexts/Monitoring/Shared/domain/MonitoringEventCategory.js";
+import { AlertSeverity } from "../../../../../Contexts/Monitoring/Shared/domain/AlertSeverity.js";
 
 export class UnsupportedScenarioError extends Error {
   constructor(scenarioId: string) {
@@ -37,6 +40,7 @@ const ALIASES: Record<string, string> = {
   "4": "infra-fault",
   "5": "security-vuln",
   "6": "infra-config-change",
+  "7": "appcode-regression",
 };
 
 // infra-fault は他シナリオと違い「注文の業務失敗」ではなくインフラ級異常の注入なので、
@@ -133,6 +137,37 @@ function buildInfraConfigChangeWebhook(): unknown {
   };
 }
 
+// appcode-regression は「テストは通過したアプリコード変更そのものが挙動を退行させた障害」。
+// 検知の入口だけ合成（APPLICATION の MonitoringEvent を直接 ingest 経路に通す）し、原因の実コード差分は
+// demo/regression ブランチに静的に積んだ実コミットに置く（AI が getCommitDiff で本物を引いて分析する）。
+// 4（経路B=GCP依存）と違いローカルでも実 Alert→AI 調査が走る。5/6 と同じ「正直な合成」。
+const APPCODE_REGRESSION_SCENARIO_ID = "appcode-regression";
+
+// 症状（WHAT）は Alert が運ぶ。原因（WHY）は demo ブランチの実コミット差分が運ぶ＝AI が両者を相関する。
+// source は調査の fetch_app_logs が引く対象サービス名（ec-backend）。occurredOn は now（証跡コミットは
+// ref 固定で壁時計非依存に発見されるので時刻整合は不要）。
+//
+// 【UNKNOWN に確実に倒す設計】eventName/payload は seed のインシデント（類似コーパス）と語彙を被らせない。
+//  - 唯一共有する "ec" は全 doc に出る低IDF語で BM25 寄与がほぼゼロ＝類似検索が誤って既知に寄せない。
+//  - payload に**日本語プローズを入れない**: kuromoji 無しの既定アナライザは和文を文字単位に割り、seed の
+//    和文 resolvedNote と大量に偶発一致して BM25 が飽和し confidence 100% の偽 KNOWN を生む（実害バグ）。
+//    短い英語の構造化フィールドのみにする。eventName も seed と被らない pricing 名前空間にする。
+function buildAppcodeRegressionEvent(): MonitoringEvent {
+  return new MonitoringEvent({
+    eventId: crypto.randomUUID(),
+    eventName: "ec.pricing.subtotal_mismatch",
+    aggregateId: crypto.randomUUID(),
+    occurredOn: new Date(),
+    category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.critical(),
+    source: "ec-backend",
+    payload: {
+      symptom: "subtotal rounding mismatch on fractional-priced items",
+      httpStatus: 500,
+    },
+  });
+}
+
 // 障害シナリオを EC 操作の合成で再現する facade。
 // EC の demo モードを設定 → 注文を投入 → EC が障害イベントを発火 → Monitoring が Alert 化（SSE配信）。
 export class TriggerDemoScenarioUseCase {
@@ -172,6 +207,14 @@ export class TriggerDemoScenarioUseCase {
       await this.collectMonitoringEventUseCase.run(event);
       // 注文を伴わない検知なので orderId は空。
       return { scenarioId: resolvedId, label: "構成変更障害", orderId: "" };
+    }
+
+    if (resolvedId === APPCODE_REGRESSION_SCENARIO_ID) {
+      // 入口だけ合成: APPLICATION の障害を直接 ingest 経路に通す。原因の実コード差分は
+      // demo/regression ブランチ（GITHUB_TARGET_REF）の実コミットにあり、AI が調査時に引く。
+      await this.collectMonitoringEventUseCase.run(buildAppcodeRegressionEvent());
+      // 注文を伴わない検知なので orderId は空。
+      return { scenarioId: resolvedId, label: "アプリコード退行", orderId: "" };
     }
 
     const recipe = RECIPES[resolvedId];
