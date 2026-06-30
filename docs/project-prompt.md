@@ -414,7 +414,7 @@ interface InfraEvidence {
 > **デモ実演の2経路（2026-06-29 整理）**:
 >
 > - **デモ卓 合成シナリオ5（脆弱性検知）**: DEMO CONSOLE のボタン押下で `TriggerDemoScenarioUseCase` が `SecurityScanTranslator`→`CollectMonitoringEventUseCase`（= 実 `/ingest/security-scan` と同一の変換・分類・調査経路）に合成ペイロードを直接通す。即時・確実で INITIALIZE DEMO で戻る。シナリオ1〜4と同じ「backend 経路を持つ合成注入」（偽ボタンではない）。ライブ実演はこちらを使う。
-> - **本物のCI証明（別役割）**: 実在依存を既知CVE版に pin した PR → 実 Trivy → 実 ingest。最も忠実だが、`ci.yml` は現状 `on: push: branches:[main]` のみで **PR では発火せず main merge の push でのみ走る**（PR時点で出すなら `pull_request:` トリガ追加が必要）。さらに `INGEST_URL`/`INGEST_TOKEN` + デプロイ済み到達可能 backend + 実在 HIGH/CRITICAL が揃って初めて検知が成立。レポート/PR の実リンクはライブでは出せない割り切り（実演コスパ優先）で、ナレーションで明示する。
+> - **本物のCI証明（別役割）**: 実在依存を既知CVE版に pin した PR → 実 Trivy → 実 ingest。最も忠実だが、`app.yml` は現状 `on: push: branches:[main]` のみで **PR では発火せず main merge の push でのみ走る**（PR時点で出すなら `pull_request:` トリガ追加が必要）。さらに `INGEST_URL`/`INGEST_TOKEN` + デプロイ済み到達可能 backend + 実在 HIGH/CRITICAL が揃って初めて検知が成立。レポート/PR の実リンクはライブでは出せない割り切り（実演コスパ優先）で、ナレーションで明示する。
 
 ```
 1. GitHub Actions（CI）が Trivy / npm audit を実行
@@ -472,7 +472,7 @@ interface InfraEvidence {
 
 > **設計のキモ（2026-06-29）— 証跡を「代表値」から「本物」へ一段上げる**: 「成果物が本物」と「本番にデプロイされている」は別の軸。原因コミットは**実在の git コミット**（demo 隔離ブランチ上）で、AI は `fetch_recent_commits`→`fetch_commit_diff` で**本物の差分**を引いて分析し、修正は**事前生成した実 draft PR**にリンクする。合成は検知の入口（Alert 発火）のみ＝シナリオ5/6 と同じ「正直な合成」の延長。評価者が「適当に言ってる」と疑うのは*サービスが実際にクラッシュしなかったから*ではなく*差分やPRが本物でない／クリックできないから*。直すべきはそっちで、それは安全に本物化できる。
 >
-> **なぜ main でなく demo ブランチを調査するか**: `ci.yml` は `on: push: branches:[main]` で push→build→deploy(Cloud Run/GCE 再起動)まで走る。原因コミットを main に積むと **live demo サービスが実際に壊れ、他シナリオまで人質**。よって「デプロイ経路（main）」と「証跡コミット（`demo/regression-*`）」を物理的に切り離す。本番では deployed ref（=main）を調査する物語だが、デモでは live を汚さないため退行を隔離ブランチに置き、AI が読むのは**実コミット・実差分**。**「main に入れて実デプロイ」は非推奨**＝デモ全体が人質になり、得る信頼は実差分+実ログ+実PRの上にほぼ上乗せしない。
+> **なぜ main でなく demo ブランチを調査するか**: `app.yml` は `on: push: branches:[main]` で push→build→deploy(Cloud Run/GCE 再起動)まで走る。原因コミットを main に積むと **live demo サービスが実際に壊れ、他シナリオまで人質**。よって「デプロイ経路（main）」と「証跡コミット（`demo/regression-*`）」を物理的に切り離す。本番では deployed ref（=main）を調査する物語だが、デモでは live を汚さないため退行を隔離ブランチに置き、AI が読むのは**実コミット・実差分**。**「main に入れて実デプロイ」は非推奨**＝デモ全体が人質になり、得る信頼は実差分+実ログ+実PRの上にほぼ上乗せしない。
 >
 > **実装（タスク35・完了）**: ① 調査対象 ref は use case 引数でなく **`GITHUB_TARGET_REF` env**（`config.github.targetRef`→`GitHubGatewayImpl`）。アプリ層は一切汚さない。本番は未設定＝既定ブランチを `since` で時間窓フィルタ／**デモは `demo/regression` を指す**。② **ref 固定時は `listRecentCommits` が tip コミットを `since` 無しで返す**＝静的に1回積んだ証跡コミットを審査員がいつ閲覧しても壁時計非依存で発見できる（**1次審査の非同期閲覧に対応・直前の再仕込み不要**）。③ `DefaultInfraInvestigationAdapter` の commit 収集 gating に **APPLICATION を追加**（SECURITY と並ぶ「直近コミットが原因候補」カテゴリ）。④ 証跡仕込みは **`scripts/stage-demo-branch.sh`**（main から `demo/regression` を作り `SubtotalAmount` に丸め誤りを実コミット。デプロイされない）。⑤ **前提: 差分は `fetch_commit_diff` ツールで引くため ADK パス（`useAdk`）が要る**（単一Gemini 事前収集は commit 一覧のみ＝差分は InfraEvidence に載せない設計）。
 
@@ -966,7 +966,7 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(
 
 実コード > step4系 > step1〜3/project-prompt を正の基準に、後追いの旧記述を実体へ寄せた。
 
-- シナリオ5: デモ卓 合成シナリオ（`SecurityScanTranslator`→`CollectMonitoringEventUseCase`・即時/確実）と、本物CI証明（`ci.yml` は PR 非発火・main merge 限定 + secrets/デプロイ前提）の**役割分離**を明記。レポート実リンクは出せない割り切りも明文化。
+- シナリオ5: デモ卓 合成シナリオ（`SecurityScanTranslator`→`CollectMonitoringEventUseCase`・即時/確実）と、本物CI証明（`app.yml` は PR 非発火・main merge 限定 + secrets/デプロイ前提）の**役割分離**を明記。レポート実リンクは出せない割り切りも明文化。
 - AIInvestigationPort: ADK（フェーズ2）は実装済み、`VertexLLMClient`（フェーズ1）は未実装で `StubLLMClient` が代替、と実装状況を注記。
 - シナリオXX（予兆/Forecast）: 未実装（設計案のみ）であることを明示。
 - 連動して step1（`Monitoring/Remediation` の AIInvestigation 内包・`Forecast` 未実装・ADK 実装済み）、step2（Payment コンテキスト・`InventoryFailureReason` VO化・補償フロー追記）、step3（`CollectMonitoringEventOnECEventPublished` への改名/再配置・実キュー名）を修正。

@@ -136,7 +136,7 @@ subscriber は EC 自前 DomainEvent（CollectMonitoringEventOnECEventPublished�
 そのまま投げても受からない（フィールド名も VulnerabilityID/PkgName と cveId/package で異なる）。
 
 採用方針 = 「A: CI 側 jq 変換 ＋ 案2: 最深刻を代表CVEに寄せる」＋「全件 payload 同梱」:
-  CI(.github/workflows/ci.yml security-scan job)
+  CI(.github/workflows/app.yml security-scan job)
     1. trivy fs --severity HIGH,CRITICAL --format json（--exit-code 0＝ビルドは落とさない）
     2. jq で HIGH/CRITICAL 抽出 → CRITICAL 優先で最深刻=代表CVEをトップレベル昇格
        → 全件を vulnerabilities[] に同梱 → 1回だけ POST /ingest/security-scan

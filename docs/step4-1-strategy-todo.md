@@ -27,7 +27,7 @@
 
 ## タスク 4: CI（GitHub Actions）骨組み 〔P1〕
 
-- [ ] `.github/workflows/ci.yml`: lint + test + build
+- [ ] `.github/workflows/app.yml`: lint + test + build
 - [ ] Trivy / `npm audit`（pnpm audit）ステップ追加（HIGH以上で検出）
 - [ ] 検出結果を `POST /ingest/security-scan` に送る step（`INGEST_TOKEN` ヘッダ）
 - [ ] Cloud Run への deploy step（とどける）
