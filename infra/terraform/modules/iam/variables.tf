@@ -7,19 +7,30 @@ variable "github_repository" {
   description = "owner/repo allowed to assume the deployer SA"
 }
 
+# CI が実際に impersonate する既存の WIF プール／プロバイダ／SA に揃える。
+# （旧 github-pool / ci-deployer は未使用のため統合・削除。詳細は移行 runbook 参照）
 variable "pool_id" {
   type    = string
-  default = "github-pool"
+  default = "github-actions-pool2"
 }
 
 variable "provider_id" {
   type    = string
-  default = "github-oidc"
+  default = "github-provider"
 }
 
 variable "deployer_sa_id" {
   type    = string
-  default = "ci-deployer"
+  default = "terraform-deployer"
+}
+
+# 既存 WIF プロバイダに設定済みの許可 audience（剥がさないよう明示）。
+variable "provider_allowed_audiences" {
+  type = list(string)
+  default = [
+    "https://github.com/nagoyamanaka",
+    "https://iam.googleapis.com/projects/442787395252/locations/global/workloadIdentityPools/github-actions-pool2/providers/github-provider",
+  ]
 }
 
 variable "deployer_roles" {

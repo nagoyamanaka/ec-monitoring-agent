@@ -41,6 +41,7 @@ import { LLMRemediationPlanner } from "../../../../Contexts/Monitoring/AIInvesti
 import { GitHubPullRequestGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestGateway.js";
 import { InProcessAdvisoryRemediation } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/InProcessAdvisoryRemediation.js";
 import { GitHubActionsRemediationDispatcher } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubActionsRemediationDispatcher.js";
+import { FixedLinkDemoRemediation } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/FixedLinkDemoRemediation.js";
 import { MongoRemediationRepository } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/MongoRemediationRepository.js";
 import { LLMInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/LLMInvestigationAdapter.js";
 import { GeminiLLMClient } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/aiinvestigation/GeminiLLMClient.js";
@@ -307,7 +308,10 @@ export class BackofficeApp {
     // どちらも RemediationExecutor の裏に隠れ、DraftRemediationUseCase はノータッチ。
     const remediationRepository = new MongoRemediationRepository(mongoClient);
     const remediationExecutor: RemediationExecutor =
-      config.remediation.mode === "dispatch"
+      config.remediation.mode === "demo"
+        ? // デモ/審査用：事前に1本だけ起票した本物の草案PRのURLを毎回返す（GitHub 非接触・PR増殖なし）。
+          new FixedLinkDemoRemediation(config.remediation.demoPullRequestUrl)
+        : config.remediation.mode === "dispatch"
         ? new GitHubActionsRemediationDispatcher(
             config.github.token,
             config.github.remediationRepo,

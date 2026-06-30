@@ -11,14 +11,14 @@ terraform {
 resource "google_iam_workload_identity_pool" "github" {
   project                   = var.project_id
   workload_identity_pool_id = var.pool_id
-  display_name              = "GitHub Actions"
+  display_name              = var.pool_id
 }
 
 resource "google_iam_workload_identity_pool_provider" "github" {
   project                            = var.project_id
   workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
   workload_identity_pool_provider_id = var.provider_id
-  display_name                       = "GitHub OIDC"
+  display_name                       = var.provider_id
 
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
@@ -30,6 +30,9 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
+    # 既存プロバイダ（手動作成）の許可 audience を明示し、import 後に剥がさない。
+    # CI（google-github-actions/auth）は audience 未指定でデフォルト（= プロバイダ URL）を使う。
+    allowed_audiences = var.provider_allowed_audiences
   }
 }
 
