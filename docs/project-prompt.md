@@ -213,14 +213,14 @@ Alert発生
   ↓ 収集した「障害コンテキスト」がリッチになるほど
 
 【レイヤー2：事例照合】AlertClassifier（SimilarPatternRule・Elastic）
-  └─ ハイブリッド検索（BM25 + ベクトル）で過去パターンと突合
+  └─ BM25 fuzzy multi_match（候補取得）+ Jaccard類似度（confidence算出）で過去パターンと突合
 
   ↓
 【レイヤー3：AI推定】AIInvestigationPort（LLMInvestigationAdapter ＋ GeminiLLMClient）
   └─ 収集した証拠 + 照合結果を統合してGeminiに渡し、原因候補ランキングを生成
 ```
 
-**シナジーの本質**: インフラ横断調査がElasticの入力（障害コンテキスト）を多次元に太らせることで、類似検索の精度が上がる。アプリログだけをクエリにするより、「アプリログ + Terraform差分 + GitHubコミット」を合わせた文脈でベクトル検索する方が照合精度が高い。
+**シナジーの本質**: インフラ横断調査がレイヤー3（Gemini）の入力コンテキストを多次元に太らせる。レイヤー2の Elastic クエリは `MonitoringEvent`（eventName + payload）から組み立てる（InfraEvidence は現状未使用）。SimilarIncident が蓄積されるほど類似マッチの精度が上がる。
 
 ### インフラ調査の設計原則（必ず守ること）
 
@@ -573,12 +573,12 @@ AlertClassifier（インターフェース）← AnalyzeAlertCommandHandler は�
 | 項目         | 内容                                                                                                                                                                             |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 実装クラス   | `SimilarPatternRule`（kind=SIMILARITY・Elastic client を内包）                                                                                                                   |
-| マッチ戦略   | hybrid search（BM25 + ベクトル検索）による類似スコアリング                                                                                                                       |
-| confidence   | Elasticsearchのスコアを正規化して返す                                                                                                                                            |
-| クエリ入力   | `InfraEvidence`（アプリログ + Terraform差分 + GitHubコミット）を含む多次元コンテキスト                                                                                           |
+| マッチ戦略   | BM25 fuzzy multi_match（候補取得）+ Jaccard類似度（confidence算出）。ベクトル検索は未使用                                                                                        |
+| confidence   | Elasticsearch の生 _score は使わず `lexicalSimilarity`（Jaccard, [0,1]）で独自算出。ES スコアは無界でコーパス規模依存のため分類 confidence としては使えない                        |
+| クエリ入力   | `MonitoringEvent`（eventName + payload）から自由文を組み立て。InfraEvidence は現状クエリ入力に未使用（将来の強化余地）                                                            |
 | インフラ依存 | Elastic Cloud（公式サイトから直接登録で14日間無料トライアル）                                                                                                                    |
 | 追加方法     | `ApplicationClassificationPolicy` の Rule 配列に足すだけ（`ClassificationRuleSorter` が SIMILARITY を EXACT_MATCH の次に自動配置）。`AlertClassifier` IF も Handler もノータッチ |
-| **完了条件** | `SimilarPatternRule` を Policy に追加し DI で差し替え可能。InfraEvidenceでクエリが強化されている状態                                                                             |
+| **完了条件** | `SimilarPatternRule` を Policy に追加し DI で差し替え可能。graded confidence で類似分類が動く状態                                                                                |
 | 注意         | **Elastic CloudはGCPマーケットプレイス経由で登録すると無料トライアルがない。公式サイトから登録する**                                                                             |
 
 **インフラ証拠とElasticのシナジー（v12追加）**:
