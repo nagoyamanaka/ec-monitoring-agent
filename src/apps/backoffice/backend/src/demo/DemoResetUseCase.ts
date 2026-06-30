@@ -5,7 +5,7 @@ import { KNOWN_ERROR_PATTERN_SEEDS } from "../../../../../Contexts/Monitoring/se
 import { DemoDataPort } from "./DemoDataPort.js";
 
 // デモ起動時のクリーンスレート化。
-// alert・既知パターンを全消去し、それぞれの seed 初期状態に戻す。
+// alert・既知パターン・リメディエーション記録を全消去し、seed 初期状態に戻す。
 export class DemoResetUseCase {
   constructor(
     private readonly demoDataPort: DemoDataPort,
@@ -16,6 +16,7 @@ export class DemoResetUseCase {
   async run(): Promise<{ alertsSeeded: number; patternsSeeded: number }> {
     await this.demoDataPort.clearAlerts();
     await this.demoDataPort.clearPatterns();
+    await this.demoDataPort.clearRemediations();
 
     for (const pattern of KNOWN_ERROR_PATTERN_SEEDS) {
       await this.knownErrorPatternRepository.save(pattern);

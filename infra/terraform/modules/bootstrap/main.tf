@@ -12,6 +12,9 @@ locals {
   services = [
     "run.googleapis.com",
     "compute.googleapis.com",
+    # IAP TCP forwarding（CI の gcloud compute ssh --tunnel-through-iap）に必須。
+    # 未有効だとトンネル確立時に 4033 'not authorized' で失敗する。
+    "iap.googleapis.com",
     "monitoring.googleapis.com",
     "logging.googleapis.com",
     "aiplatform.googleapis.com",
