@@ -34,12 +34,19 @@ curl -fsS -H "Authorization: Bearer $TOKEN" \
   -o /opt/app/docker-compose.prod.yml \
   "https://storage.googleapis.com/storage/v1/b/${compose_bucket}/o/${compose_object}?alt=media"
 
-# 5) イメージ参照とプロジェクトを .env に。シークレットは別途投入（Secret Manager → env）
+# 5) Secret Manager からシークレットを取得（VM SA = roles/secretmanager.secretAccessor）。
+#    $TOKEN は step2 のアクセストークンを再利用。payload.data は base64 なのでデコードする。
+INGEST_TOKEN=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+  "https://secretmanager.googleapis.com/v1/projects/${project_id}/secrets/INGEST_TOKEN/versions/latest:access" \
+  | sed -n 's/.*"data": *"\([^"]*\)".*/\1/p' | base64 -d)
+
+# 6) イメージ参照・プロジェクト・シークレットを .env に。
 cat > /opt/app/.env <<EOF
 GCP_PROJECT_ID=${project_id}
 IMAGE_EC=${image_ec}
 IMAGE_BACKOFFICE=${image_backoffice}
+INGEST_TOKEN=$INGEST_TOKEN
 EOF
 
-# 6) 起動（base + prod override）。イメージはpush済みなのでビルドをスキップ
+# 7) 起動（base + prod override）。イメージはpush済みなのでビルドをスキップ
 docker compose --env-file /opt/app/.env -f /opt/app/docker-compose.base.yml -f /opt/app/docker-compose.prod.yml up -d --no-build
