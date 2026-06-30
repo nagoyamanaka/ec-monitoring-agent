@@ -96,13 +96,15 @@ test-integration: infra-up
 	$(MAKE) infra-down; \
 	exit $$status
 
-## E2E: CI 用（Docker Compose でサービス起動 → mock モードで全テスト実行）
+## E2E: CI 用（Docker Compose でサービス起動 → stub モードで全テスト実行）
 ## infra-up が RabbitMQ を起動し直すと、既存のまま動いている backend は
 ## AMQP consumer の接続が切れたままになる（自動再接続しない）。
 ## そのため e2e 直前に backend を restart し、稼働中の broker へ確実に繋ぎ直す。
+## docker-compose.e2e.yml で AI_INVESTIGATION_STUB=true を上書き（ローカル開発時は false のまま）。
+DC_E2E := docker compose $(COMPOSE_FILES_$(ENV)) -f docker-compose.e2e.yml
 e2e: ec-up bo-up
-	$(DC) restart ec-backend backoffice-backend
-	$(DC) run --build --rm e2e
+	$(DC_E2E) restart ec-backend backoffice-backend
+	$(DC_E2E) run --build --rm e2e
 
 ## E2E: CD smoke 用（デプロイ済みサービスに対して実行 / URL を環境変数で渡す）
 ## 例: make e2e-prod EC_BASE_URL=https://ec.prod.example.com BACKOFFICE_BASE_URL=https://backoffice.prod.example.com

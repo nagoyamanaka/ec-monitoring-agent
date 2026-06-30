@@ -32,8 +32,8 @@ jobs:
         run: pnpm test
 
   # ── Job 2: E2E（Docker Compose でフルスタック起動）────────────────────────
-  # check が通ってから実行。AI_INVESTIGATION_STUB=true が local compose に設定済み
-  # なので Gemini API キーは不要。
+  # check が通ってから実行。docker-compose.e2e.yml で AI_INVESTIGATION_STUB=true を上書きするため
+  # Gemini API キーは不要。
   e2e:
     name: E2E (Docker Compose)
     runs-on: ubuntu-latest
@@ -64,7 +64,7 @@ jobs:
 
       - name: Run E2E suite
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.local.yml \
+          docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.e2e.yml \
             run --rm e2e
 
   # ── Job 3: frontend イメージ build & push → Cloud Run deploy ────────────────
