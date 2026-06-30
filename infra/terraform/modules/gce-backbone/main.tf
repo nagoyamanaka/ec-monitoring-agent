@@ -86,7 +86,10 @@ resource "google_compute_instance" "backbone" {
   allow_stopping_for_update = true
 
   lifecycle {
-    # startup-script 更新だけで再作成しない（手動 reset 運用）
-    ignore_changes = [metadata_startup_script]
+    # startup-script 更新だけで再作成しない（手動 reset 運用）。
+    # metadata["startup-script"] も無視: import 時に実体の startup-script が
+    # metadata map に載るが、設定側は metadata_startup_script 引数で与えているため、
+    # 無視しないと apply が稼働中 VM から startup-script を剥がして再起動時の自動復旧を壊す。
+    ignore_changes = [metadata_startup_script, metadata["startup-script"]]
   }
 }

@@ -12,6 +12,13 @@ export class RabbitMqConnection {
   private channel?: amqplib.ConfirmChannel;
   private connection?: amqplib.ChannelModel;
   private logger?: Logger;
+  /**
+   * channel の prefetch（未 ack のまま同時に配信を受ける上限）。
+   * 1 だと1メッセージを ack するまで次が一切配信されず、長時間ハンドラ（AI調査 ~100秒）が
+   * 全キューの処理を止める（ヘッドオブラインブロッキング）。完了後 ack（at-least-once）を保ったまま
+   * 並列度を上げるため設定可能にする。既定 1（従来挙動）。
+   */
+  private prefetchCount: number;
 
   /** stop() による意図的クローズか。true の間は再接続しない。 */
   private closing = false;
@@ -23,9 +30,14 @@ export class RabbitMqConnection {
    */
   private reestablish?: () => Promise<void>;
 
-  constructor(params: { connectionSettings: ConnectionSettings; logger?: Logger }) {
+  constructor(params: {
+    connectionSettings: ConnectionSettings;
+    logger?: Logger;
+    prefetchCount?: number;
+  }) {
     this.connectionSettings = params.connectionSettings;
     this.logger = params.logger;
+    this.prefetchCount = Math.max(1, params.prefetchCount ?? 1);
   }
 
   /**
@@ -200,7 +212,7 @@ export class RabbitMqConnection {
 
   private async amqpChannel(): Promise<amqplib.ConfirmChannel> {
     const channel = await this.connection!.createConfirmChannel();
-    await channel.prefetch(1);
+    await channel.prefetch(this.prefetchCount);
 
     return channel;
   }

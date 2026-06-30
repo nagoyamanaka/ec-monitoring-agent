@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "@shared/ui/cn";
-import type { StreamStatus } from "../infrastructure/AlertStream";
+import type { StreamStatus } from "../../infrastructure/AlertStream";
 
 export interface StreamStatusIndicatorProps {
   status: StreamStatus;

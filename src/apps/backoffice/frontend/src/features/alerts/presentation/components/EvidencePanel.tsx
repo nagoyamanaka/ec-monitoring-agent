@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 import { cn } from "@shared/ui/cn";
-import type { AlertView } from "../domain/AlertView";
+import type { AlertView } from "../../domain/AlertView";
 import {
   type EvidenceLogLevel,
   type EvidenceSection,
   type EvidenceTerraformAction,
   evidenceSections,
-} from "../domain/EvidenceView";
-import type { EvidenceApi } from "../infrastructure/evidenceApi";
-import { useEvidence } from "../presentation/hooks/useEvidence";
+} from "../../domain/EvidenceView";
+import type { EvidenceApi } from "../../infrastructure/evidenceApi";
+import { useEvidence } from "../hooks/useEvidence";
 
 export interface EvidencePanelProps {
   api: EvidenceApi;

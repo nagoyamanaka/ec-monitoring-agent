@@ -3,12 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { AlertsLayout } from "@shared/layouts/AlertsLayout";
 import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import { DemoDrawer } from "@features/demo/presentation/DemoDrawer";
-import { useAlertsData } from "../presentation/AlertsDataProvider";
+import { useAlertsData } from "../AlertsDataProvider";
 import {
   submitFeedback,
   type FeedbackDecision,
-} from "../application/submitFeedback";
-import { reinvestigate } from "../application/reinvestigate";
+} from "../../application/submitFeedback";
+import { reinvestigate } from "../../application/reinvestigate";
 import { AlertList } from "../components/AlertList";
 import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
 import { StreamStatusIndicator } from "../components/StreamStatusIndicator";

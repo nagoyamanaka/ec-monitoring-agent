@@ -1,4 +1,4 @@
-import type { ImpactView, ImpactFault } from "../domain/InvestigationReportView";
+import type { ImpactView, ImpactFault } from "../../domain/InvestigationReportView";
 
 export interface ImpactPanelProps {
   impact: ImpactView;

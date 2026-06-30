@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Card } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
-import type { AlertView } from "../domain/AlertView";
-import { alertReviewState, isAlertReviewed } from "../domain/alertReview";
-import type { FeedbackDecision } from "../application/submitFeedback";
+import type { AlertView } from "../../domain/AlertView";
+import { alertReviewState, isAlertReviewed } from "../../domain/alertReview";
+import type { FeedbackDecision } from "../../application/submitFeedback";
 
 export interface AlertReviewPanelProps {
   alert: AlertView;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AlertsHeader } from "./AlertsHeader";
-import { makeAlert, makeReport } from "../test-support/alertFixture";
+import { makeAlert, makeReport } from "../../test-support/alertFixture";
 
 describe("AlertsHeader", () => {
   it("画面の説明文を常に出す", () => {

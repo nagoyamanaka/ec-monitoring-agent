@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AlertCardExpanded } from "./AlertCardExpanded";
-import { makeAlert, makeReport } from "../test-support/alertFixture";
+import { makeAlert, makeReport } from "../../test-support/alertFixture";
 
 describe("AlertCardExpanded", () => {
   it("full は サマリ・調査ステップ・推奨アクションを表示する", () => {

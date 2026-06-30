@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AlertReviewPanel } from "./AlertReviewPanel";
-import { makeAlert } from "../test-support/alertFixture";
+import { makeAlert } from "../../test-support/alertFixture";
 
 describe("AlertReviewPanel", () => {
   it("承認は単一クリックで onDecision(approve) を呼ぶ", async () => {

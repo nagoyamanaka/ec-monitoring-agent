@@ -1,7 +1,7 @@
 import type {
   RemediationReviewView,
   RemediationVerdict,
-} from "../domain/InvestigationReportView";
+} from "../../domain/InvestigationReportView";
 
 export interface RemediationReviewPanelProps {
   review: RemediationReviewView;

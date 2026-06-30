@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RemediationPanel } from "./RemediationPanel";
-import type { RemediationApi } from "../infrastructure/remediationApi";
+import type { RemediationApi } from "../../infrastructure/remediationApi";
 import {
   toRemediationView,
   type RemediationResponsePrimitives,
-} from "../domain/RemediationView";
-import { makeAlert, makeReport } from "../test-support/alertFixture";
+} from "../../domain/RemediationView";
+import { makeAlert, makeReport } from "../../test-support/alertFixture";
 
 function view(overrides: Partial<RemediationResponsePrimitives> = {}) {
   return toRemediationView({

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AlertCard } from "./AlertCard";
-import { makeAlert } from "../test-support/alertFixture";
+import { makeAlert } from "../../test-support/alertFixture";
 
 describe("AlertCard", () => {
   it("カタログ未登録の eventName は主役にそのまま出す（フォールバック）", () => {

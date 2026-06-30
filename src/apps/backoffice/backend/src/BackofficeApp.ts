@@ -131,6 +131,8 @@ export class BackofficeApp {
         connection: { secure: false, hostname: config.rabbitmq.host, port: config.rabbitmq.port },
       },
       logger,
+      // 長時間の AI 調査ハンドラ（完了後 ack）が単一 prefetch=1 で全キューを止めるのを避ける。
+      prefetchCount: config.rabbitmq.prefetch,
     });
     await this.connection.connect();
 
@@ -195,6 +197,8 @@ export class BackofficeApp {
         new ADKInvestigationAgentRunner({
           model: config.gemini.model,
           maxLlmCalls: config.ai.adkMaxLlmCalls,
+          timeoutMs: config.ai.investigationTimeoutMs,
+          logger,
           cloudLoggingGateway,
           terraformGateway,
           githubGateway,

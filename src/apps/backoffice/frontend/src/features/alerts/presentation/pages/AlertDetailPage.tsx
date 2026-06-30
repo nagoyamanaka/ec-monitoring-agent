@@ -2,13 +2,13 @@ import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
-import { hasAiInvestigation } from "../domain/AlertView";
-import { useAlertsData } from "../presentation/AlertsDataProvider";
+import { hasAiInvestigation } from "../../domain/AlertView";
+import { useAlertsData } from "../AlertsDataProvider";
 import {
   submitFeedback,
   type FeedbackDecision,
-} from "../application/submitFeedback";
-import { reinvestigate } from "../application/reinvestigate";
+} from "../../application/submitFeedback";
+import { reinvestigate } from "../../application/reinvestigate";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { AlertReviewPanel } from "../components/AlertReviewPanel";
 import { EvidencePanel } from "../components/EvidencePanel";

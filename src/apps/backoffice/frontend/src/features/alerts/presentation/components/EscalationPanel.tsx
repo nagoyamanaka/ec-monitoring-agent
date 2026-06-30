@@ -1,4 +1,4 @@
-import type { EscalationView } from "../domain/InvestigationReportView";
+import type { EscalationView } from "../../domain/InvestigationReportView";
 
 export interface EscalationPanelProps {
   escalation: EscalationView;
