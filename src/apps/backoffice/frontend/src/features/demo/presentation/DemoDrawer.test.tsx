@@ -48,20 +48,26 @@ describe("DemoDrawer", () => {
 
     await waitFor(() => expect(screen.getByText("5")).toBeInTheDocument());
     expect(screen.getByText("決済タイムアウト")).toBeInTheDocument();
-    // app 枠は 完全一致/類似/未知 の3段。類似（準・既知）シナリオが出る。
-    expect(screen.getByText("類似障害（準・既知）")).toBeInTheDocument();
+    // app 枠は 完全一致/類似/未知 の3段。類似（準・既知）シナリオが出る（障害名で表示）。
+    expect(screen.getByText("DBコネクションプール枯渇")).toBeInTheDocument();
     expect(screen.getByText("在庫競合")).toBeInTheDocument();
   });
 
-  it("シナリオボタン押下で triggerScenario を呼ぶ", async () => {
+  it("シナリオ行を開いてトリガーで triggerScenario を呼ぶ", async () => {
     const api = fakeApi();
     render(<DemoDrawer api={api} />);
     await waitFor(() =>
       expect(screen.getByText("決済タイムアウト")).toBeInTheDocument(),
     );
 
+    // 行クリックはパネルを開くだけ（トリガーは開いたパネル内の実行ボタン）。
     await userEvent.click(
       screen.getByRole("button", { name: /決済タイムアウト/ }),
+    );
+    expect(api.triggerScenario).not.toHaveBeenCalled();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "決済タイムアウト を実行" }),
     );
     expect(api.triggerScenario).toHaveBeenCalledWith("1");
   });

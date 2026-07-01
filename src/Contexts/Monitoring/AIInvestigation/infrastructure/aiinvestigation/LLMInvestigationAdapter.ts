@@ -1,6 +1,7 @@
 import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { LLMTextClient } from "../../domain/LLMTextClient.js";
+import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { SYSTEM_INSTRUCTION, buildUserPrompt } from "./InvestigationPromptBuilder.js";
 import { parseLLMOutput } from "./LLMOutputParser.js";
@@ -25,6 +26,10 @@ export class LLMInvestigationAdapter implements AIInvestigationPort {
     // 証拠リンクの URL 基底（owner/repo・GCP project）。既定は環境変数。LLM には URL を作らせず、
     // 収集済み evidence の生フィールドからここで決定的に組み立てる（ハルシネーション URL 排除）。
     private readonly linkConfig: EvidenceLinkConfig = evidenceLinkConfigFromEnv(),
+    // 調査失敗（LLM 例外／パース不能）を観測するロガー（任意）。未注入なら無言（UT 既定）。
+    // これが無いと fallback（confidence=0・暫定表示）に落ちた理由が Cloud Logging に一切出ず、
+    // Vertex 側のエラー（認証/quota/location/model 未有効化 等）を追えない。
+    private readonly logger?: Logger,
   ) {}
 
   async investigate(context: InvestigationContext): Promise<InvestigationReport> {
@@ -33,12 +38,22 @@ export class LLMInvestigationAdapter implements AIInvestigationPort {
     let raw: string;
     try {
       raw = await this.llm.generate(SYSTEM_INSTRUCTION, prompt);
-    } catch {
+    } catch (error) {
+      await this.logger?.warn({
+        service: "backoffice-backend",
+        action: "ai_investigation_failed",
+        message: `AI調査がLLM例外でfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, error=${error instanceof Error ? error.message : String(error)}`,
+      });
       return buildFallbackReport();
     }
 
     const output = parseLLMOutput(raw);
     if (!output) {
+      await this.logger?.warn({
+        service: "backoffice-backend",
+        action: "ai_investigation_unparseable",
+        message: `AI調査の応答をパースできずfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}`,
+      });
       return buildFallbackReport();
     }
 

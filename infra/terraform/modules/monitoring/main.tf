@@ -68,6 +68,10 @@ resource "google_monitoring_alert_policy" "critical_log" {
     }
   }
 
+  # 注意: condition_matched_log（ログ一致）ポリシーは alert_strategy.auto_close を受け付けない
+  # （API が read-only 扱いで 400 を返す。ログ一致インシデントのクローズ挙動は Cloud Monitoring 固定）。
+  # そのため実 CM 経路（scenario 4）のインシデント残留は API/IaC からは制御できない。デモの反復・
+  # 時刻ずれ回避は合成注入版（scenario 4b＝GCP にインシデントを残さず started_at=now）で行う。
   alert_strategy {
     notification_rate_limit {
       period = "300s"

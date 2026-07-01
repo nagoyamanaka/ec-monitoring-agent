@@ -26,6 +26,11 @@ export interface AlertDetailDrawerProps {
   /** 表示対象。null なら閉（何も描画しない）。 */
   alert: AlertView | null;
   onClose: () => void;
+  /**
+   * 関連アラートを辿った先で「← 前のアラートに戻る」を出す（任意）。
+   * 渡された場合のみボタンを描画する＝探索履歴があるときだけ戻れる。
+   */
+  onBack?: () => void;
   onDecision?: (
     alertId: string,
     decision: FeedbackDecision,
@@ -99,6 +104,7 @@ function formatOccurrenceSummary(alert: {
 export function AlertDetailDrawer({
   alert,
   onClose,
+  onBack,
   onDecision,
   onReinvestigate,
   onGenerateReport,
@@ -142,6 +148,15 @@ export function AlertDetailDrawer({
         aria-hidden
       />
       <aside className="drawer-panel absolute inset-y-0 right-0 flex w-[clamp(480px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-1.5 border-b border-slate-700/60 px-5 py-2 text-left text-xs font-medium text-cyan-300 transition hover:bg-slate-800/50 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400"
+          >
+            <span aria-hidden>←</span> 前のアラートに戻る
+          </button>
+        )}
         <header className="flex items-start gap-3 border-b border-slate-700/60 px-5 py-4">
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -260,9 +275,11 @@ export function AlertDetailDrawer({
         <footer className="border-t border-slate-700/60 px-5 py-3">
           <Link
             to={`/alerts/${encodeURIComponent(alert.id)}`}
-            className="text-xs text-cyan-300 transition hover:text-cyan-200"
+            className="text-xs font-medium text-cyan-300 transition hover:text-cyan-200"
           >
-            詳細ページを開く →
+            {alert.report
+              ? "AI レポートを詳細ページで読む →"
+              : "詳細ページを開く →"}
           </Link>
         </footer>
       </aside>

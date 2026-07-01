@@ -3,6 +3,7 @@ import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { AlertId } from "../../../AlertAnalysis/domain/AlertId.js";
 import { AlertRepository } from "../../../AlertAnalysis/domain/AlertRepository.js";
 import { InvestigateAlertDomainEvent } from "../../../AlertAnalysis/domain/InvestigateAlertDomainEvent.js";
+import { SSEAlertNotifier } from "../../../AlertNotification/domain/SSEAlertNotifier.js";
 
 /**
  * オンデマンド AI 調査（POST /alerts/:id/report）。
@@ -18,6 +19,7 @@ export class RequestAlertInvestigationUseCase {
   constructor(
     private readonly alertRepository: AlertRepository,
     private readonly eventBus: EventBus,
+    private readonly sseNotifier: SSEAlertNotifier,
     private readonly logger: Logger,
   ) {}
 
@@ -33,6 +35,12 @@ export class RequestAlertInvestigationUseCase {
       });
       return;
     }
+
+    // 調査開始を即時に可視化する（ANALYZING へ遷移して push）。既知一致は自動起動しないため、
+    // これが無いと「ボタンを押したのに無反応（調査完了まで数十秒）」に見える。分類・レビューは保持。
+    const analyzing = alert.beginInvestigation();
+    await this.alertRepository.save(analyzing);
+    this.sseNotifier.notify(analyzing.toPrimitives());
 
     await this.eventBus.publish([
       new InvestigateAlertDomainEvent({

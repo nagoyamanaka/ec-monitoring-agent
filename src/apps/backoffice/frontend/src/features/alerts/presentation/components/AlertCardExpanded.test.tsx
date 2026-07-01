@@ -129,11 +129,11 @@ describe("AlertCardExpanded", () => {
 
   // 分類レビュー（承認/却下/再調査）UI は AlertReviewPanel に分離した
   // （末尾配置の統一・AlertReviewPanel.test.tsx で網羅）。ここでは扱わない。
-  it("再調査中（ANALYZING かつ既存内容あり）はバナーを出す", () => {
+  it("調査中（ANALYZING かつ既存内容あり）はバナーを出す", () => {
     render(
       <AlertCardExpanded alert={makeAlert({ id: "a-9", status: "ANALYZING" })} />,
     );
-    expect(screen.getByText(/再調査中/)).toBeInTheDocument();
+    expect(screen.getByText(/調査中です/)).toBeInTheDocument();
   });
 
   it("レポート未到着（分析中）はプレースホルダを出す", () => {

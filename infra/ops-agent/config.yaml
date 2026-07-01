@@ -32,8 +32,22 @@ logging:
       fields:
         severity:
           move_from: jsonPayload.severity
+    # ④ アプリの service/action を LogEntry の label へ昇格する。
+    #    同じ docker_containers ストリームに MongoDB / RabbitMQ の冗長ログが混ざり、
+    #    欲しいアプリログが埋もれる問題への対策。これらのミドルウェアログは service フィールドを
+    #    持たないため copy_from は no-op になり、ラベルはアプリの構造化ログにだけ付く。
+    #    → Logs Explorer で `labels."service"="backoffice-backend"` や
+    #      `labels."action"="ai_investigation_failed"` で一発絞り込みできる。
+    #    ※ 昇格しても jsonPayload.service/action は残る（可視性のため move でなく copy）。
+    promote_app_labels:
+      type: modify_fields
+      fields:
+        labels."service":
+          copy_from: jsonPayload.service
+        labels."action":
+          copy_from: jsonPayload.action
   service:
     pipelines:
       docker:
         receivers: [docker_containers]
-        processors: [parse_docker_wrapper, parse_app_log, map_severity]
+        processors: [parse_docker_wrapper, parse_app_log, map_severity, promote_app_labels]

@@ -57,14 +57,15 @@ export function AlertCardExpanded({
 
   return (
     <div className={cn("space-y-4 text-sm text-slate-200", className)}>
-      {/* 再調査中（人間の指摘を反映して AI が再分析中）。既存内容は下に残したまま明示する。 */}
+      {/* AI 調査中（オンデマンドのレポート生成 or 人間の指摘を反映した再調査）。
+          既存内容は下に残したまま、進行中であることを明示する。 */}
       {analyzingNow && (
-        <div className="flex items-center gap-2 rounded-md bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200 ring-1 ring-inset ring-cyan-500/30">
+        <div className="flex items-center gap-2 rounded-md bg-cyan-500/10 px-3 py-2.5 text-sm font-medium text-cyan-200 ring-1 ring-inset ring-cyan-500/30">
           <span
-            className="h-2 w-2 animate-pulse rounded-full bg-cyan-400"
+            className="h-2.5 w-2.5 animate-pulse rounded-full bg-cyan-400"
             aria-hidden
           />
-          AI が指摘を反映して再調査中です…
+          AI が調査中です… 完了すると原因候補と AI レポートが表示されます
         </div>
       )}
 

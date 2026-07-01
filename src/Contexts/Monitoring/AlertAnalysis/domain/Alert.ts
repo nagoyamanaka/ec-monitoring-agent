@@ -202,6 +202,29 @@ export class Alert extends AggregateRoot {
     });
   }
 
+  /**
+   * オンデマンド AI 調査の開始（既知一致など AI 自動起動なしで即確定した Alert に対する明示要求）。
+   * 状態を ANALYZING に遷移するだけで、分類・既存レポート・レビュー（feedback）は保持する
+   * ＝「分類の承認」を消さずに「今回paramの調査レポート生成中」だけを即時可視化する。
+   * reopenForReinvestigation（feedback をクリアする“やり直し”）とは別概念。
+   */
+  beginInvestigation(): Alert {
+    return new Alert({
+      id: this.id,
+      monitoringEvent: this._monitoringEvent,
+      severity: this._severity,
+      status: AlertStatus.analyzing(),
+      classification: this._classification,
+      investigationReport: this._investigationReport,
+      feedback: this._feedback,
+      correctFeedbackCount: this._correctFeedbackCount,
+      dedupKey: this._dedupKey,
+      occurrenceCount: this._occurrenceCount,
+      createdAt: this.createdAt,
+      updatedAt: new Date(),
+    });
+  }
+
   attachInvestigationReport(report: InvestigationReport): Alert {
     return new Alert({
       id: this.id,

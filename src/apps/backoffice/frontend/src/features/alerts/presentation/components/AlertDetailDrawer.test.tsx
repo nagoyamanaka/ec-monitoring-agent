@@ -86,7 +86,7 @@ describe("AlertDetailDrawer", () => {
   it("詳細ページへのリンクを出す", () => {
     renderDrawer({ alert: makeAlert({ id: "a-9" }), onClose: vi.fn() });
     expect(
-      screen.getByRole("link", { name: /詳細ページを開く/ }),
+      screen.getByRole("link", { name: /詳細ページ/ }),
     ).toHaveAttribute("href", "/alerts/a-9");
   });
 });

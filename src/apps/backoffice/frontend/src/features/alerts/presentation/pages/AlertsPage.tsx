@@ -45,24 +45,46 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
   // 直前のオーバレイ位置に復元できる（ドロワーは deep-link/共有可能にもなる）。
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("focus");
-  const openFocus = useCallback(
-    (id: string) => {
-      // push（replace しない）＝関連アラートを辿るたびに履歴を積み、戻るで遡れる。
+  const setFocus = useCallback(
+    (id: string | null) => {
       setParams((prev) => {
         const next = new URLSearchParams(prev);
-        next.set("focus", id);
+        if (id === null) next.delete("focus");
+        else next.set("focus", id);
         return next;
       });
     },
     [setParams],
   );
+  // オーバレイ内で辿ってきた前アラートの id を積む（ドロワーの「← 戻る」用）。
+  // ブラウザの戻るはモーダル表示中に気づかれにくいので、明示ボタンを出す（デグレ復旧）。
+  const [backStack, setBackStack] = useState<string[]>([]);
+  // 一覧からの新規オープンは探索の起点＝履歴をリセットする。
+  const openFocus = useCallback(
+    (id: string) => {
+      setBackStack([]);
+      setFocus(id);
+    },
+    [setFocus],
+  );
+  // 関連アラートを辿るときは現在地を積んでから遷移＝「戻る」で前のドロワーに復元できる。
+  const navigateRelated = useCallback(
+    (id: string) => {
+      setBackStack((s) => (selectedId ? [...s, selectedId] : s));
+      setFocus(id);
+    },
+    [setFocus, selectedId],
+  );
+  const goBack = useCallback(() => {
+    const prev = backStack[backStack.length - 1];
+    if (prev === undefined) return;
+    setBackStack((s) => s.slice(0, -1));
+    setFocus(prev);
+  }, [backStack, setFocus]);
   const closeFocus = useCallback(() => {
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete("focus");
-      return next;
-    });
-  }, [setParams]);
+    setBackStack([]);
+    setFocus(null);
+  }, [setFocus]);
   // 現役アラートは共有一覧から引く。一覧に無い id（＝解決済みアーカイブ：関連アラートの
   // back-link 先など。RESOLVED は一覧に出さない）は GET /alerts/:id で単発取得して開く。
   const inList = useMemo(
@@ -122,16 +144,18 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
     [api, refreshAlert],
   );
 
-  // 既知一致のオンデマンド AI 調査（202／レポート添付は SSE で届く）。
+  // 既知一致のオンデマンド AI 調査（202）。backend は要求受理時に ANALYZING へ遷移して即 push する
+  // ので調査中が即可視化される（レポート添付は完了後 SSE）。SSE 取りこぼしに備え自前でも再取得する。
   const handleGenerateReport = useCallback(
     async (alertId: string) => {
       try {
         await api.requestReport(alertId);
+        await refreshAlert(alertId);
       } catch (e) {
         console.error("report request failed", e);
       }
     },
-    [api],
+    [api, refreshAlert],
   );
 
   // 手動即時昇格（結晶化）。昇格後の一覧はパターン側なので再取得は不要だが、UI 整合のため対象を更新。
@@ -170,6 +194,7 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
       <AlertDetailDrawer
         alert={selected}
         onClose={closeFocus}
+        onBack={backStack.length > 0 ? goBack : undefined}
         onDecision={handleDecision}
         onReinvestigate={handleReinvestigate}
         onGenerateReport={handleGenerateReport}
@@ -180,7 +205,7 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
           selectedId ? remediationByAlertId.get(selectedId) ?? null : null
         }
         relatedLookup={relatedLookup}
-        onRelatedNavigate={openFocus}
+        onRelatedNavigate={navigateRelated}
       />
     </>
   );
