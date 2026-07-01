@@ -30,7 +30,11 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "protobufjs"
-    ]
+    ],
+    "overrides": {
+      "ansi-regex": "3.0.0",
+      "semver": "7.3.4"
+    }
   },
   "dependencies": {
     "@elastic/elasticsearch": "^7.17.0",
