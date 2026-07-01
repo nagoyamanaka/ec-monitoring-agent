@@ -63,6 +63,9 @@ export const config = {
       process.env.GITHUB_REMEDIATION_REPO ??
       process.env.GITHUB_TARGET_REPO ??
       "",
+    // 修正PRの base ブランチ。空＝既定ブランチ(main)。デモは main を汚さないため
+    // 事前用意の baseline ブランチ（脆弱な状態）を指し、そこへ修正 PR を向ける。
+    remediationBaseRef: process.env.GITHUB_REMEDIATION_BASE_REF ?? "",
   },
   remediation: {
     // "dispatch" = CI(GitHub Actions)のAIエージェントへ repository_dispatch（実修正+UT/E2E）。
@@ -74,7 +77,7 @@ export const config = {
       | "dispatch"
       | "advisory"
       | "demo",
-    // demo モードで返す、事前に手動起票した本物の草案PRのURL。
+    // demo モードで返す、事前に手動起票した本物の草案PRのURL（シナリオ5用）。
     demoPullRequestUrl: process.env.REMEDIATION_DEMO_PR_URL ?? "",
     // dispatch 経路で起動する repository_dispatch のイベント種別（ターゲットリポの workflow と一致させる）。
     dispatchEventType:

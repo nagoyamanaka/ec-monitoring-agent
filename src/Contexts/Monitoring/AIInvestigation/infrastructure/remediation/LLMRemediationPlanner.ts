@@ -114,7 +114,22 @@ export class LLMRemediationPlanner implements RemediationPlanner {
       branch,
       body,
       fileChanges: [{ path: "SECURITY_REMEDIATION.md", patch: fileContent }],
+      // 実修正: 各脆弱パッケージを fixedVersion へ固定する overrides を決定論的に組む
+      // （fixedVersion は Trivy 由来の実データ＝ハルシネーションなし）。gateway が
+      // base の package.json.pnpm.overrides にマージし、方針 md と併せて本物の diff にする。
+      packageOverrides: this.buildPackageOverrides(input),
     };
+  }
+
+  // 対象パッケージと fixedVersion が揃うものだけを overrides 化する（欠損は方針 md 側で言及）。
+  private buildPackageOverrides(
+    input: RemediationInput,
+  ): Record<string, string> {
+    const overrides: Record<string, string> = {};
+    for (const v of input.vulnerabilities) {
+      if (v.package && v.fixedVersion) overrides[v.package] = v.fixedVersion;
+    }
+    return overrides;
   }
 
   private buildPrompt(input: RemediationInput): string {

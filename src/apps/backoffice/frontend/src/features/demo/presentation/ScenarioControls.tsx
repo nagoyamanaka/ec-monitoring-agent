@@ -6,8 +6,9 @@
  *      一覧にライブで流れる経路A。main も外部も汚さない。
  *  B群 クラウド実検知（GCP限定）… 4。CRITICAL ログ + HTTP 500 を注入し GCP の Cloud Monitoring 経由で
  *      発報する経路B（ローカルでは Alert は出ない）。6 がこのローカル版なので穴ではなく役割分担。
- *  C群 合成注入 × 実 git 証跡 … 5〜7。検知の**入口だけ合成**し、変換→分類→AI 調査→PR 起票は実経路。
- *      原因/修正の証跡（コミット差分・PR）は demo/regression ブランチの**実物**で、AI が実際に引いて分析する
+ *  C群 合成注入 × 実 AI 調査 … 5〜7。検知の**入口だけ合成**し、変換→分類→AI 調査は実経路。
+ *      修正 PR 起票まで行うのは**シナリオ5のみ**（DevOps ループ）。実コミット差分の証跡を AI が
+ *      引くのは**シナリオ7のみ**（demo/regression ブランチの実物）。6 の apply 差分は合成
  *      （5=SecurityScanTranslator / 6=CloudMonitoringAlertTranslator / 7=APPLICATION 直接 ingest）。
  *
  * いずれも backend に対応経路を持つ合成注入で、エンドポイント不在の偽ボタンは作らない。
@@ -36,7 +37,7 @@ type ScenarioGroup = {
 
 /** 合成入力シナリオに付ける注記（badge の tooltip ＝ ポートフォリオの誤解防止コピー）。 */
 const SYNTHETIC_NOTE =
-  "検知の入口のみ合成。変換→分類→AI 調査→PR 起票は実経路。証跡（コミット差分・PR）は demo/regression ブランチの実物。代表値なのは外部コンソールリンク等のみ。";
+  "検知の入口のみ合成。変換→分類→AI 調査は実経路。修正 PR 起票はシナリオ5のみ、実コミット差分の証跡はシナリオ7（demo/regression）。代表値なのは外部コンソールリンク等のみ。";
 
 const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
   {
@@ -74,7 +75,7 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
     ],
   },
   {
-    title: "合成注入 × 実 git 証跡",
+    title: "合成注入 × 実 AI 調査",
     scenarios: [
       {
         id: "5",
@@ -153,9 +154,9 @@ export function ScenarioControls({ busy, onTrigger }: ScenarioControlsProps) {
       </div>
       <p className="rounded-md bg-slate-800/40 px-2.5 py-2 text-[11px] leading-relaxed text-slate-300 ring-1 ring-inset ring-slate-700/50">
         <span className="font-semibold text-amber-200">合成入力</span>{" "}
-        = 検知の入口のみ合成。変換→AI 調査→PR 起票は実経路（本番は実 CI/apply
-        から同じ経路）。証跡（コミット差分・PR）は demo/regression
-        ブランチの実物で、代表値なのは外部コンソールリンク等のみ。
+        = 検知の入口のみ合成。変換→分類→AI 調査は実経路（本番は実 CI/apply
+        から同じ経路）。修正 PR 起票はシナリオ5のみ、実コミット差分の証跡は
+        シナリオ7（demo/regression）。代表値なのは外部コンソールリンク等のみ。
       </p>
     </div>
   );

@@ -50,3 +50,46 @@ EOF
 
 # 7) 起動（base + prod override）。イメージはpush済みなのでビルドをスキップ
 docker compose --env-file /opt/app/.env -f /opt/app/docker-compose.base.yml -f /opt/app/docker-compose.prod.yml up -d --no-build
+
+# 8) Ops Agent: GCE 上の Docker コンテナのアプリ構造化ログ（JSON）を Cloud Logging へ転送する。
+#    既定の Ops Agent は systemd journal と /var/log しか見ず docker コンテナログを収集しないため、
+#    files receiver で json-file ドライバのログ（/var/lib/docker/containers/*/*-json.log）を tail し、
+#    二段 JSON パース（外＝docker wrapper の "log" 取り出し → 内＝アプリの構造化ログ）を行い、
+#    アプリの severity フィールドを LogEntry.severity に昇格させる。
+#    これで「アプリ CRITICAL ログ検知」ポリシー（severity>=CRITICAL AND resource.type=gce_instance）が
+#    発火し、webhook 経由で /ingest/cloud-monitoring に届く（経路B）。AI 調査の app ログ取得も同経路に乗る。
+if ! systemctl is-enabled google-cloud-ops-agent >/dev/null 2>&1; then
+  curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent.sh
+  bash add-google-cloud-ops-agent.sh --also-install
+fi
+
+mkdir -p /etc/google-cloud-ops-agent
+cat > /etc/google-cloud-ops-agent/config.yaml <<'YAML'
+logging:
+  receivers:
+    docker_containers:
+      type: files
+      include_paths:
+      - /var/lib/docker/containers/*/*-json.log
+  processors:
+    # ① docker json-file ラッパを解く（jsonPayload.log にアプリログ文字列が入る）
+    parse_docker_wrapper:
+      type: parse_json
+    # ② アプリの構造化ログ本体（jsonPayload.log の JSON 文字列）を展開する
+    parse_app_log:
+      type: parse_json
+      field: jsonPayload.log
+    # ③ アプリの severity を LogEntry.severity に昇格（ポリシーの severity 比較が効くようにする）
+    map_severity:
+      type: modify_fields
+      fields:
+        severity:
+          move_from: jsonPayload.severity
+  service:
+    pipelines:
+      docker:
+        receivers: [docker_containers]
+        processors: [parse_docker_wrapper, parse_app_log, map_severity]
+YAML
+
+systemctl restart google-cloud-ops-agent
