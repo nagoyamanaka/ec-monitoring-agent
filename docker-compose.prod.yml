@@ -49,6 +49,18 @@ services:
       GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT_ID}
       GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-pro}
+      # AI調査をADKマルチエージェント（7エージェント自律調査）に切替。未設定だと単一Gemini版に
+      # フォールバックしていた（＝本番でADKが使われていなかった原因はこのフラグ欠落）。Vertex 必須。
+      AI_INVESTIGATION_ADK: ${AI_INVESTIGATION_ADK:-true}
+      # 単一Gemini経路(GeminiLLMClient)の1呼び出しタイムアウト(ms)。旧ハードコード30秒だと
+      # gemini-2.5-pro が超過して毎回 fallback(confidence=0) に落ちていたため 90秒へ。
+      GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-90000}
+      # AI 調査のウォールクロック上限(ms)。config.ts の既定と同値だが、運用チューニング点として明示。
+      # ADK 7エージェント自律ループは実測 92-116秒で既定120秒だと並列時に暫定落ちするため 240秒。
+      AI_INVESTIGATION_TIMEOUT_MS: ${AI_INVESTIGATION_TIMEOUT_MS:-240000}
+      # RabbitMQ channel prefetch。1 だと長時間の AI 調査ハンドラが全キューを止める（HOLブロッキング）。
+      # config.ts の既定と同値だが、運用チューニング点として明示。
+      RABBITMQ_PREFETCH: ${RABBITMQ_PREFETCH:-3}
       # 検知 ingest（Cloud Monitoring webhook）認証トークン（§11.2）
       INGEST_TOKEN: ${INGEST_TOKEN}
       # SimilarPatternRule（graded confidence 分類）用

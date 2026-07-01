@@ -34,11 +34,13 @@ const RECIPES: Record<string, ScenarioRecipe> = {
 
 // 数字エイリアス（UIのシナリオ1/2/3/4/5）も受ける。
 // app 枠は 1=完全一致(既知) / 2=類似(準・既知) / 3=未知 の3段スペクトルにする。
+// 4b は 4（実 Cloud Monitoring 経路）の合成注入版＝デモ反復用（後述）。
 const ALIASES: Record<string, string> = {
   "1": "payment-timeout",
   "2": "similar-known",
   "3": "inventory-conflict",
   "4": "infra-fault",
+  "4b": "infra-fault-synthetic",
   "5": "security-vuln",
   "6": "infra-config-change",
   "7": "appcode-regression",
@@ -47,6 +49,35 @@ const ALIASES: Record<string, string> = {
 // infra-fault は他シナリオと違い「注文の業務失敗」ではなくインフラ級異常の注入なので、
 // payment/inventory のモード設定も注文投入も伴わない（EcDemoGateway.injectInfraFault のみ）。
 const INFRA_FAULT_SCENARIO_ID = "infra-fault";
+
+// infra-fault-synthetic は 4（infra-fault）の「デモ反復用」合成版。
+// 4 は実 CRITICAL ログ→実 Cloud Monitoring 発報（経路B）で真正だが、インシデントが GCP 側に開いたまま
+// 残り（閉じる公開 API が無い）、開いている間は再発火しても新規 webhook が飛ばず started_at も古いまま。
+// そこで scenario 6/5 と同じ「入口だけ合成」で、実 CM が送るのと同型の webhook を
+// CloudMonitoringAlertTranslator→CollectMonitoringEventUseCase に直接通す。
+// → started_at=now の新鮮な Alert が即・確実に立ち、GCP 側にインシデントを残さないのでデモ reset で完全に消える。
+//   eventName/category/severity は 4 と同一（condition_name を実ポリシーと合わせる）ため下流は完全に同じ経路。
+const INFRA_FAULT_SYNTHETIC_SCENARIO_ID = "infra-fault-synthetic";
+
+// 実ポリシー「アプリ CRITICAL ログ検知」の condition（display_name="CRITICAL log entries"）が発火した体の
+// 最小 webhook。translator は eventName=gcp.monitoring.critical_log_entries（slugify 一致）・
+// INFRASTRUCTURE・Critical を導く＝実 CM 発報（scenario 4）と同一の dedupKey/分類になる。
+function buildInfraFaultSyntheticWebhook(): unknown {
+  return {
+    incident: {
+      incident_id: crypto.randomUUID(),
+      resource_name: "ec-monitoring-backbone",
+      policy_name: "アプリ CRITICAL ログ検知",
+      condition_name: "CRITICAL log entries",
+      state: "open",
+      started_at: Math.floor(Date.now() / 1000),
+      severity: "Critical",
+      summary:
+        "デモ用インフラ障害（合成注入・実 Cloud Monitoring 経路と同一変換）: CRITICAL ログ + HTTP 500 相当",
+      resource: { type: "gce_instance", labels: { instance_id: "ec-monitoring-backbone" } },
+    },
+  };
+}
 
 // security-vuln は EC 操作でも IaC でもなく「CI(Trivy)の検知」を合成する。実機では ci.yml の
 // security-scan ジョブが /ingest/security-scan に POST する流れを、デモは正規ペイロードを
@@ -221,6 +252,18 @@ export class TriggerDemoScenarioUseCase {
       await this.ecDemoGateway.injectInfraFault();
       // 注文を伴わないので orderId は空。Cloud Monitoring 経由で Alert 化されるため即時の orderId 相関は無い。
       return { scenarioId: resolvedId, label: "インフラ障害", orderId: "" };
+    }
+
+    if (resolvedId === INFRA_FAULT_SYNTHETIC_SCENARIO_ID) {
+      // 4 と同じ根本原因証跡（直前の Cloud SQL apply）を記録してから、実 CM が送るのと同型の
+      // CRITICAL ログ発報 webhook を合成入力で流す。GCP 側にインシデントを残さず即・新鮮に再現する。
+      await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent());
+      const event = CloudMonitoringAlertTranslator.toMonitoringEvent(
+        buildInfraFaultSyntheticWebhook(),
+      );
+      await this.collectMonitoringEventUseCase.run(event);
+      // 注文を伴わない検知なので orderId は空。
+      return { scenarioId: resolvedId, label: "インフラ障害（合成・反復用）", orderId: "" };
     }
 
     if (resolvedId === INFRA_CONFIG_CHANGE_SCENARIO_ID) {

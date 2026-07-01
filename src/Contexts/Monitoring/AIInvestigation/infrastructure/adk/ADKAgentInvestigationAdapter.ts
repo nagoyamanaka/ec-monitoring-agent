@@ -1,5 +1,6 @@
 import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
+import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { buildUserPrompt } from "../aiinvestigation/InvestigationPromptBuilder.js";
 import { parseLLMOutput } from "../aiinvestigation/LLMOutputParser.js";
@@ -30,6 +31,9 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
     private readonly runner: InvestigationAgentRunner,
     // 証拠リンクの基底（owner/repo・GCP project）。LLM に URL を作らせず evidence から決定的に組む。
     private readonly linkConfig: EvidenceLinkConfig = evidenceLinkConfigFromEnv(),
+    // 調査失敗（runner 例外／パース不能）を観測するロガー（任意）。未注入なら無言（UT 既定）。
+    // これが無いと fallback（confidence=0・暫定表示）に落ちた理由が Cloud Logging に一切出ない。
+    private readonly logger?: Logger,
   ) {}
 
   async investigate(context: InvestigationContext): Promise<InvestigationReport> {
@@ -38,12 +42,22 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
     let raw: string;
     try {
       raw = await this.runner.run(seedPrompt);
-    } catch {
+    } catch (error) {
+      await this.logger?.warn({
+        service: "backoffice-backend",
+        action: "ai_investigation_failed",
+        message: `AI調査(ADK)がrunner例外でfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, error=${error instanceof Error ? error.message : String(error)}`,
+      });
       return buildFallbackReport();
     }
 
     const output = parseLLMOutput(raw);
     if (!output) {
+      await this.logger?.warn({
+        service: "backoffice-backend",
+        action: "ai_investigation_unparseable",
+        message: `AI調査(ADK)の最終出力をパースできずfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}`,
+      });
       return buildFallbackReport();
     }
 

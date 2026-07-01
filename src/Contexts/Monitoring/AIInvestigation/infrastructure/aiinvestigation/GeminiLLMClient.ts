@@ -2,8 +2,15 @@ import { GoogleGenAI } from "@google/genai";
 import { LLMTextClient } from "../../domain/LLMTextClient.js";
 import { LLMClientError } from "../errors/LLMClientError.js";
 
-const TIMEOUT_MS = 30_000;
-const MAX_ATTEMPTS = 2;
+// 1回の generateContent のクライアント側タイムアウト。gemini-2.5-pro は JSON 応答＋推論で
+// 30秒を超える回が多く、旧既定 30秒だと毎回「Gemini timeout」→ fallback（confidence=0）に落ちていた。
+// 既定を 90秒へ引き上げ、env で調整可能にする（ADK 経路の AI_INVESTIGATION_TIMEOUT_MS とは別軸の、
+// 単一Gemini経路の上限。高速化したい場合は GEMINI_MODEL=gemini-2.5-flash の併用も可）。
+const TIMEOUT_MS = Math.max(
+  1_000,
+  parseInt(process.env.GEMINI_TIMEOUT_MS ?? "90000"),
+);
+const MAX_ATTEMPTS = Math.max(1, parseInt(process.env.GEMINI_MAX_ATTEMPTS ?? "2"));
 
 /**
  * Gemini（@google/genai）固有の「text in → text out」実装。
