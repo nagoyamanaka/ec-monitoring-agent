@@ -112,4 +112,33 @@ describe("AlertReviewPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "✓ 承認" }));
     expect(onDecision).toHaveBeenCalledWith("a-9", "approve", undefined);
   });
+
+  it("未承認では『既知パターンへ昇格』を出さない（承認後ゲート）", () => {
+    // 既定 fixture は未知＋有効レポート＝昇格の材料は揃うが feedback は未着。
+    render(
+      <AlertReviewPanel
+        alert={makeAlert({ id: "a-9", feedback: null })}
+        onDecision={vi.fn()}
+        onPromote={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /既知パターンへ昇格/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("承認済みなら『既知パターンへ昇格』を出し onPromote を呼ぶ", async () => {
+    const onPromote = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AlertReviewPanel
+        alert={makeAlert({ id: "a-9", feedback: { isCorrect: true } })}
+        onDecision={vi.fn()}
+        onPromote={onPromote}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /既知パターンへ昇格/ }),
+    );
+    expect(onPromote).toHaveBeenCalledWith("a-9");
+  });
 });

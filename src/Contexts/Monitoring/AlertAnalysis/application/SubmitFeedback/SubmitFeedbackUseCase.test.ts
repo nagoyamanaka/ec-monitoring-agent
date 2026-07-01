@@ -289,4 +289,52 @@ describe("SubmitFeedbackUseCase", () => {
       expect(await findAllSimilar()).toHaveLength(1);
     });
   });
+
+  describe("承認によるクローズ（status 遷移）", () => {
+    const statusOf = async () =>
+      (await alertRepo.findById(new AlertId(ALERT_ID)))?.status.value;
+
+    it("承認すると RESOLVED になる（現役一覧から下ろす）", async () => {
+      const alert = Alert.createAsUnknown({
+        id: new AlertId(ALERT_ID),
+        monitoringEvent: makeEvent(),
+      }).attachInvestigationReport(makeReport());
+      await alertRepo.save(alert);
+      expect(await statusOf()).toBe("OPEN");
+
+      await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
+
+      expect(await statusOf()).toBe("RESOLVED");
+    });
+
+    it("誤承認→却下し直すと OPEN に戻す（現役一覧へ復帰）", async () => {
+      const alert = Alert.createAsUnknown({
+        id: new AlertId(ALERT_ID),
+        monitoringEvent: makeEvent(),
+      }).attachInvestigationReport(makeReport());
+      await alertRepo.save(alert);
+
+      await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
+      expect(await statusOf()).toBe("RESOLVED");
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        isCorrect: false,
+        operatorNote: "誤承認だった",
+      });
+      expect(await statusOf()).toBe("OPEN");
+    });
+
+    it("未承認からの却下は status を変えない（OPEN のまま）", async () => {
+      const alert = Alert.createAsUnknown({
+        id: new AlertId(ALERT_ID),
+        monitoringEvent: makeEvent(),
+      }).attachInvestigationReport(makeReport());
+      await alertRepo.save(alert);
+
+      await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: false });
+
+      expect(await statusOf()).toBe("OPEN");
+    });
+  });
 });

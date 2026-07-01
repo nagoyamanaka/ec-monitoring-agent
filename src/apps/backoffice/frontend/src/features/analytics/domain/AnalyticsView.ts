@@ -5,6 +5,19 @@
  * contracts に持たないため、ここで DTO を定義する（将来 contracts へ昇格可）。
  */
 
+/** 承認済み（過去にクローズした）アラートの一行サマリ（backend ApprovedAlertSummary と同形）。 */
+export type ApprovedAlertSummaryDto = {
+  readonly id: string;
+  readonly eventName: string;
+  readonly category: string;
+  readonly severity: string;
+  readonly classificationType: "known" | "unknown";
+  readonly patternName: string | null;
+  readonly occurredOn: string;
+  readonly occurrenceCount: number;
+  readonly operatorNote: string | null;
+};
+
 /** GET /analytics の生レスポンス（backend AnalyticsResponse と同形）。 */
 export type AnalyticsDto = {
   readonly totalAlerts: number;
@@ -15,6 +28,8 @@ export type AnalyticsDto = {
   readonly incorrectCount: number;
   /** フィードバック母数0のときは null（0除算回避）。 */
   readonly accuracy: number | null;
+  /** 承認済みアラート（過去の判断）。新しい順。旧backend互換で未定義を許容。 */
+  readonly approvedAlerts?: readonly ApprovedAlertSummaryDto[];
 };
 
 export type AnalyticsView = {
@@ -30,6 +45,8 @@ export type AnalyticsView = {
   readonly accuracyPercent: number | null;
   /** 既知分類の割合（0..1）。総数0なら0。 */
   readonly knownRatio: number;
+  /** 承認済みアラート（過去の判断）。新しい順。 */
+  readonly approvedAlerts: readonly ApprovedAlertSummaryDto[];
 };
 
 export function toAnalyticsView(dto: AnalyticsDto): AnalyticsView {
@@ -47,5 +64,6 @@ export function toAnalyticsView(dto: AnalyticsDto): AnalyticsView {
     accuracy: dto.accuracy,
     accuracyPercent,
     knownRatio,
+    approvedAlerts: dto.approvedAlerts ?? [],
   };
 }

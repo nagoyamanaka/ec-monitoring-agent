@@ -103,4 +103,22 @@ describe("GetAnalyticsUseCase", () => {
     expect(response.incorrectCount).toBe(1);
     expect(response.accuracy).toBeCloseTo(2 / 3);
   });
+
+  it("承認済み（正解フィードバック）のみ approvedAlerts に載せる", async () => {
+    await alertRepo.save(
+      makeKnownAlert().submitFeedback({ isCorrect: true, operatorNote: "既知どおり" }),
+    );
+    await alertRepo.save(makeKnownAlert().submitFeedback({ isCorrect: false })); // 却下は載せない
+    await alertRepo.save(makeUnknownAlert()); // 未レビューは載せない
+
+    const response = await useCase.run();
+
+    expect(response.approvedAlerts).toHaveLength(1);
+    const summary = response.approvedAlerts[0];
+    expect(summary.eventName).toBe("ec.some.unknown_event");
+    expect(summary.classificationType).toBe("known");
+    expect(summary.patternName).toBe("PAYMENT_TIMEOUT");
+    expect(summary.operatorNote).toBe("既知どおり");
+    expect(summary.category).toBe("APPLICATION");
+  });
 });

@@ -1,7 +1,11 @@
+import { Link } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
 import type { AnalyticsApi } from "../../infrastructure/analyticsApi";
-import type { AnalyticsView } from "../../domain/AnalyticsView";
+import type {
+  AnalyticsView,
+  ApprovedAlertSummaryDto,
+} from "../../domain/AnalyticsView";
 import { useAnalytics } from "../hooks/useAnalytics";
 
 export interface AnalyticsPageProps {
@@ -145,7 +149,106 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
           tone="rose"
         />
       </div>
+
+      {/* 承認済みアラート（過去の判断）。現役一覧＝要対処／ここ＝クローズ済みの判断記録。 */}
+      <ApprovedAlertsSection alerts={analytics.approvedAlerts} />
     </div>
+  );
+}
+
+const SEVERITY_DOT: Record<string, string> = {
+  CRITICAL: "bg-rose-500",
+  WARNING: "bg-amber-500",
+  INFO: "bg-sky-500",
+  PENDING: "bg-slate-500",
+};
+
+function formatRelativeTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const sec = Math.round((Date.now() - d.getTime()) / 1000);
+  if (sec < 60) return "たった今";
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}分前`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}時間前`;
+  return `${Math.round(hr / 24)}日前`;
+}
+
+function ApprovedAlertsSection({
+  alerts,
+}: {
+  alerts: readonly ApprovedAlertSummaryDto[];
+}) {
+  return (
+    <Card className="!bg-slate-900/40 !ring-slate-700/60">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+          承認済みアラート（過去の判断）
+        </h3>
+        <span className="text-xs text-slate-400">{alerts.length} 件</span>
+      </div>
+      <p className="mt-1 text-xs text-slate-400">
+        承認してクローズしたアラートの記録です。行をクリックすると詳細を開けます（既知パターンへの昇格もここから辿れます）。
+      </p>
+
+      {alerts.length === 0 ? (
+        <p className="py-8 text-center text-sm text-slate-400">
+          まだ承認済みのアラートはありません。
+        </p>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {alerts.map((alert) => (
+            <li key={alert.id}>
+              <Link
+                to={`/alerts?focus=${encodeURIComponent(alert.id)}`}
+                className="flex items-center gap-3 rounded-tremor-default bg-slate-800/40 px-3 py-2.5 ring-1 ring-inset ring-slate-700/60 transition hover:bg-slate-800/70 hover:ring-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              >
+                <span
+                  className={`h-2 w-2 shrink-0 rounded-full ${
+                    SEVERITY_DOT[alert.severity] ?? "bg-slate-500"
+                  }`}
+                  aria-hidden
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <code className="truncate text-sm font-medium text-slate-100">
+                      {alert.eventName}
+                    </code>
+                    {alert.occurrenceCount > 1 && (
+                      <span className="shrink-0 text-xs text-slate-400">
+                        重複 {alert.occurrenceCount}件
+                      </span>
+                    )}
+                  </div>
+                  <p className="truncate text-xs text-slate-400">
+                    <span
+                      className={
+                        alert.classificationType === "known"
+                          ? "text-emerald-300"
+                          : "text-cyan-300"
+                      }
+                    >
+                      {alert.classificationType === "known"
+                        ? "既知: "
+                        : "AI推定: "}
+                    </span>
+                    {alert.patternName ?? "（パターン未特定）"}
+                    {alert.operatorNote ? ` — ${alert.operatorNote}` : ""}
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs text-slate-500">
+                  {formatRelativeTime(alert.occurredOn)}
+                </span>
+                <span className="shrink-0 text-slate-600" aria-hidden>
+                  ›
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
