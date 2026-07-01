@@ -267,6 +267,7 @@ export class BackofficeApp {
       aiInvestigationPort,
       sseNotifier,
       logger,
+      knownErrorPatternRepository,
       infraInvestigationPort,
     );
     // 人手トリガーの再調査（タスク9c）。自動調査とは別 UseCase（やり直しの独立ライフサイクル）。
@@ -415,7 +416,6 @@ export class BackofficeApp {
     const demoResetUseCase = new DemoResetUseCase(
       new MongoDemoDataAdapter(mongoClient),
       knownErrorPatternRepository,
-      alertRepository,
     );
 
     this.server = new Server(config.port);

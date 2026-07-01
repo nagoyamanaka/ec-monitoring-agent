@@ -26,7 +26,7 @@ export function SystemStatus({ status, loading }: SystemStatusProps) {
   return (
     <div className="space-y-2">
       <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
-        STATUS OVERVIEW
+        現在の状態
       </h3>
       {loading && !status ? (
         <div className="h-12 animate-pulse rounded-md bg-slate-800/40" />

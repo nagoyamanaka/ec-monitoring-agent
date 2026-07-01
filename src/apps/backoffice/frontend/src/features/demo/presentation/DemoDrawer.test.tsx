@@ -69,12 +69,12 @@ describe("DemoDrawer", () => {
     render(<DemoDrawer api={api} />);
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "INITIALIZE DEMO" }),
+        screen.getByRole("button", { name: "デモをリセット" }),
       ).toBeEnabled(),
     );
 
     await userEvent.click(
-      screen.getByRole("button", { name: "INITIALIZE DEMO" }),
+      screen.getByRole("button", { name: "デモをリセット" }),
     );
     expect(api.reset).toHaveBeenCalled();
   });

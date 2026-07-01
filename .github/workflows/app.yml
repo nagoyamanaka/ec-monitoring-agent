@@ -211,8 +211,8 @@ jobs:
             --command="
               set -e
               if ! systemctl is-enabled google-cloud-ops-agent >/dev/null 2>&1; then
-                curl -fsSLO https://dl.google.com/cloudagents/add-google-cloud-ops-agent.sh
-                sudo bash add-google-cloud-ops-agent.sh --also-install
+                curl -fsSLO https://dl.google.com/cloudagents/add-google-cloud-ops-agent-repo.sh
+                sudo bash add-google-cloud-ops-agent-repo.sh --also-install
               fi
               TOKEN=\$(curl -sf -H 'Metadata-Flavor: Google' 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token' | sed -n 's/.*\"access_token\":\"\([^\"]*\)\".*/\1/p')
               sudo mkdir -p /etc/google-cloud-ops-agent

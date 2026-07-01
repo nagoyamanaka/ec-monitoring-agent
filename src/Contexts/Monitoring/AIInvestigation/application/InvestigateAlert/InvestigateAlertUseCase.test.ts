@@ -3,6 +3,7 @@ import { InvestigateAlertUseCase } from "./InvestigateAlertUseCase.js";
 import { InMemoryAlertRepository } from "../../../AlertAnalysis/infrastructure/persistence/InMemoryAlertRepository.js";
 import { Alert, AlertPrimitives } from "../../../AlertAnalysis/domain/Alert.js";
 import { AlertId } from "../../../AlertAnalysis/domain/AlertId.js";
+import { KnownErrorPatternRepository } from "../../../AlertAnalysis/domain/KnownErrorPatternRepository.js";
 import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
@@ -80,12 +81,27 @@ describe("InvestigateAlertUseCase", () => {
     vi.spyOn(logger, "write").mockResolvedValue(undefined);
   });
 
+  // 既知パターン文脈はデフォルト空（未知調査経路のテスト）。findAll 以外は使われない。
+  const emptyPatternRepo: KnownErrorPatternRepository = {
+    save: async () => {},
+    findById: async () => null,
+    findAll: async () => [],
+    removeBySourceAlertId: async () => {},
+  };
+
   const makeUseCase = (
     port: AIInvestigationPort,
     notifier: SSEAlertNotifier,
     similarRepo: SimilarIncidentRepository = makeSimilarRepo(),
   ) =>
-    new InvestigateAlertUseCase(alertRepo, similarRepo, port, notifier, logger);
+    new InvestigateAlertUseCase(
+      alertRepo,
+      similarRepo,
+      port,
+      notifier,
+      logger,
+      emptyPatternRepo,
+    );
 
   describe("Alert が存在しない（冪等性）", () => {
     it("何もせず return する（save も notify もされない）", async () => {
