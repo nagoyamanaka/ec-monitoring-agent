@@ -59,7 +59,7 @@ docker compose --env-file /opt/app/.env -f /opt/app/docker-compose.base.yml -f /
 #    これで「アプリ CRITICAL ログ検知」ポリシー（severity>=CRITICAL AND resource.type=gce_instance）が
 #    発火し、webhook 経由で /ingest/cloud-monitoring に届く（経路B）。AI 調査の app ログ取得も同経路に乗る。
 if ! systemctl is-enabled google-cloud-ops-agent >/dev/null 2>&1; then
-  curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent.sh
+  curl -fsSLO https://dl.google.com/cloudagents/add-google-cloud-ops-agent.sh
   bash add-google-cloud-ops-agent.sh --also-install
 fi
 
