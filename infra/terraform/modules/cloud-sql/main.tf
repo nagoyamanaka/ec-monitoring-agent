@@ -8,15 +8,15 @@ resource "google_sql_database_instance" "main" {
   database_version = "POSTGRES_15"
 
   settings {
-    # コスト最適化で縮小した（＝障害の起点）。本来は db-custom-2-7680。
-    tier              = "db-f1-micro"
+    # 障害前の容量へ復旧（AI 調査の apply 差分 before 値）。
+    tier              = "db-custom-2-7680"
     availability_type = "ZONAL"
     disk_size         = 10
 
     database_flags {
       name = "max_connections"
-      # 100 → 20 に縮小した（＝接続枯渇の直接要因）。
-      value = "20"
+      # 接続枯渇を解消するため障害前の 100 へ復旧。
+      value = "100"
     }
   }
 
