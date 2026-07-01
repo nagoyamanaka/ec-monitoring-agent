@@ -1,0 +1,36 @@
+# Ops Agent 設定（GCE backbone 用）。
+# GCE 上の Docker コンテナのアプリ構造化ログ（JSON）を Cloud Logging へ転送する。
+# 既定の Ops Agent は systemd journal と /var/log しか見ず docker コンテナログを収集しないため、
+# files receiver で json-file ドライバのログ（/var/lib/docker/containers/*/*-json.log）を tail し、
+# 二段 JSON パース（外＝docker wrapper の "log" 取り出し → 内＝アプリの構造化ログ）を行い、
+# アプリの severity フィールドを LogEntry.severity に昇格させる。
+# これで「アプリ CRITICAL ログ検知」ポリシー（severity>=CRITICAL AND resource.type=gce_instance）が
+# 発火し、webhook 経由で /ingest/cloud-monitoring に届く（経路B）。AI 調査の app ログ取得も同経路に乗る。
+#
+# 配布は compose と同様に GCS 経由（CI の Upload step → VM で curl 取得 → agent 再起動）。
+# 単一ソースとして startup-script（VM新規作成時）と CI deploy（現行VM）双方がこのファイルを使う。
+logging:
+  receivers:
+    docker_containers:
+      type: files
+      include_paths:
+      - /var/lib/docker/containers/*/*-json.log
+  processors:
+    # ① docker json-file ラッパを解く（jsonPayload.log にアプリログ文字列が入る）
+    parse_docker_wrapper:
+      type: parse_json
+    # ② アプリの構造化ログ本体（jsonPayload.log の JSON 文字列）を展開する
+    parse_app_log:
+      type: parse_json
+      field: jsonPayload.log
+    # ③ アプリの severity を LogEntry.severity に昇格（ポリシーの severity 比較が効くようにする）
+    map_severity:
+      type: modify_fields
+      fields:
+        severity:
+          move_from: jsonPayload.severity
+  service:
+    pipelines:
+      docker:
+        receivers: [docker_containers]
+        processors: [parse_docker_wrapper, parse_app_log, map_severity]

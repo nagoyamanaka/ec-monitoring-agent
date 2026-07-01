@@ -194,6 +194,31 @@ jobs:
         run: |
           gcloud storage cp docker-compose.yml gs://${{ vars.DEPLOY_BUCKET }}/docker-compose.yml
           gcloud storage cp docker-compose.prod.yml gs://${{ vars.DEPLOY_BUCKET }}/docker-compose.prod.yml
+          gcloud storage cp infra/ops-agent/config.yaml gs://${{ vars.DEPLOY_BUCKET }}/ops-agent-config.yaml
+
+      # startup-script は VM 新規作成時しか走らず（ignore_changes+ステートフル同居で再作成しない）、
+      # このジョブは現行 VM に SSH するだけなので、Ops Agent の導入・設定はここで冪等に適用する。
+      # 未導入なら install、設定は GCS の ops-agent-config.yaml を取得して反映し agent を再起動する。
+      # これで GCE 上 docker コンテナのアプリログ（severity 付き）が Cloud Logging に届き、経路B が成立する。
+      - name: Ensure Ops Agent (docker log forwarding)
+        run: |
+          gcloud compute ssh ${{ vars.GCE_INSTANCE }} \
+            --project=${{ vars.GCP_PROJECT_ID }} \
+            --zone=${{ vars.GCE_ZONE }} \
+            --tunnel-through-iap \
+            --quiet \
+            --ssh-flag="-o StrictHostKeyChecking=no" \
+            --command="
+              set -e
+              if ! systemctl is-enabled google-cloud-ops-agent >/dev/null 2>&1; then
+                curl -sSO https://dl.google.com/cloudagents/add-google-cloud-ops-agent.sh
+                sudo bash add-google-cloud-ops-agent.sh --also-install
+              fi
+              TOKEN=\$(curl -sf -H 'Metadata-Flavor: Google' 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token' | sed -n 's/.*\"access_token\":\"\([^\"]*\)\".*/\1/p')
+              sudo mkdir -p /etc/google-cloud-ops-agent
+              sudo curl -fsS -H \"Authorization: Bearer \$TOKEN\" -o /etc/google-cloud-ops-agent/config.yaml 'https://storage.googleapis.com/storage/v1/b/${{ vars.DEPLOY_BUCKET }}/o/ops-agent-config.yaml?alt=media'
+              sudo systemctl restart google-cloud-ops-agent
+            "
 
       - name: Deploy to GCE backbone (compose pull & up)
         run: |
