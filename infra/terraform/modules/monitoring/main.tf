@@ -9,11 +9,11 @@ terraform {
 
 # Cloud Monitoring → Webhook 通知チャネル → /ingest/cloud-monitoring（§11.2）
 #
-# 注意（wiring）: webhook_tokenauth は GCP 側がトークンを URL クエリに付与する。
-# ingest コントローラは x-ingest-token ヘッダ前提なので、いずれかの対応が要る:
-#   (a) コントローラを ?token= でも受理するよう拡張、または
-#   (b) basic 認証チャネル（webhook_basicauth）に切替。
-# ここでは tokenauth を採用。詳細は infra/terraform/README.md。
+# webhook_tokenauth は GCP 側がトークンを URL クエリ（?token=）に付与する。
+# auth_token を明示指定しないと GCP がランダム生成した値を付けるため、edge の
+# INGEST_TOKEN と一致せず ingest コントローラが 401 で弾く（経路B が webhook で切れる）。
+# ここで auth_token を INGEST_TOKEN と同値に固定して照合を通す。
+# コントローラは既に ?token= と x-ingest-token ヘッダの両経路を受理する実装。
 resource "google_monitoring_notification_channel" "ingest_webhook" {
   project      = var.project_id
   display_name = "ec-monitoring-agent ingest webhook"
@@ -21,6 +21,10 @@ resource "google_monitoring_notification_channel" "ingest_webhook" {
 
   labels = {
     url = var.ingest_webhook_url
+  }
+
+  sensitive_labels {
+    auth_token = var.ingest_token
   }
 }
 

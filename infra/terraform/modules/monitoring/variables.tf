@@ -7,6 +7,12 @@ variable "ingest_webhook_url" {
   description = "Cloud Run /ingest/cloud-monitoring の URL"
 }
 
+variable "ingest_token" {
+  type        = string
+  sensitive   = true
+  description = "webhook 通知チャネルの auth_token。edge の INGEST_TOKEN と一致させる（GCP が ?token= で付与し、ingest コントローラが照合する）。"
+}
+
 variable "cloud_run_service_name" {
   type = string
 }

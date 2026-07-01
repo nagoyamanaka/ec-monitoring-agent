@@ -83,10 +83,21 @@ module "logging" {
   depends_on = [module.bootstrap]
 }
 
+# webhook チャネルの auth_token を edge の INGEST_TOKEN と一致させるため、
+# 平文は tf に置かず Secret Manager（唯一の真実）から apply 時に読む。
+# deployer SA は roles/secretmanager.admin を持つのでアクセス可（新規付与不要）。
+data "google_secret_manager_secret_version" "ingest_token" {
+  project = var.project_id
+  secret  = "INGEST_TOKEN"
+
+  depends_on = [module.bootstrap]
+}
+
 module "monitoring" {
   source                 = "../../modules/monitoring"
   project_id             = var.project_id
   ingest_webhook_url     = "${module.cloud_run.service_uri}/ingest/cloud-monitoring"
+  ingest_token           = data.google_secret_manager_secret_version.ingest_token.secret_data
   cloud_run_service_name = module.cloud_run.service_name
   critical_log_metric    = module.logging.critical_log_metric
 
