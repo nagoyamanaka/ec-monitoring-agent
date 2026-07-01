@@ -40,7 +40,8 @@ export const ALERT_SEEDS: Alert[] = [
     },
   }).attachInvestigationReport(
     new InvestigationReport({
-      summary: "決済サービスへの接続が30秒でタイムアウトしました。外部決済APIのレスポンス遅延が原因と推定されます。",
+      summary:
+        "決済サービスへの接続が30秒でタイムアウトしました。外部決済APIのレスポンス遅延が原因と推定されます。",
       confidence: 0.95,
       severity: AlertSeverity.critical(),
       remediable: false,
@@ -101,7 +102,8 @@ export const ALERT_SEEDS: Alert[] = [
           "Stripe 外部決済 API の障害が根本原因。直近コミット・Terraform 差分との相関なし。自社コードではなくベンダー対応が必要",
         interimWorkaround:
           "決済処理をキューに積み Stripe 復旧後に再処理する。復旧まで注文確定を保留するか、銀行振込に案内する",
-        severityRationale: "過去30分で47件の決済失敗・継続中のリアルタイム障害。P1-15m SLA 相当",
+        severityRationale:
+          "過去30分で47件の決済失敗・継続中のリアルタイム障害。P1-15m SLA 相当",
         evidenceBundle: [
           "log:payment-timeout-cluster-20260622T085943Z",
           "similar:incident-stripe-outage-20260301",
@@ -121,7 +123,12 @@ export const ALERT_SEEDS: Alert[] = [
       eventName: "ec.inventory.reservation_failed",
       aggregateId: "product-seed-0042",
       occurredOn: ago(15),
-      payload: { productId: "product-seed-0042", reason: "INSUFFICIENT_STOCK", requestedQty: 5, availableQty: 2 },
+      payload: {
+        productId: "product-seed-0042",
+        reason: "INSUFFICIENT_STOCK",
+        requestedQty: 5,
+        availableQty: 2,
+      },
       category: MonitoringEventCategory.application(),
       severity: AlertSeverity.warning(),
       source: "inventory",
@@ -134,12 +141,19 @@ export const ALERT_SEEDS: Alert[] = [
       patternName: "INVENTORY_INSUFFICIENT",
       severity: AlertSeverity.warning(),
       confidence: ClassificationConfidence.certain(),
-      matchedConditions: [{ field: "reason", expectedValue: "INSUFFICIENT_STOCK", actualValue: "INSUFFICIENT_STOCK" }],
+      matchedConditions: [
+        {
+          field: "reason",
+          expectedValue: "INSUFFICIENT_STOCK",
+          actualValue: "INSUFFICIENT_STOCK",
+        },
+      ],
       unmatchedConditions: [],
     },
   }).attachInvestigationReport(
     new InvestigationReport({
-      summary: "商品 product-seed-0042 の在庫が不足しています。要求数5に対して在庫残2です。",
+      summary:
+        "商品 product-seed-0042 の在庫が不足しています。要求数5に対して在庫残2です。",
       confidence: 0.92,
       severity: AlertSeverity.warning(),
       // 自動修正（payload.vulnerabilities 起点）の対象ではない＝起票しても skip になるため false。
@@ -198,7 +212,10 @@ export const ALERT_SEEDS: Alert[] = [
       eventName: "ec.order.processing_failed",
       aggregateId: "order-seed-0099",
       occurredOn: ago(2),
-      payload: { orderId: "order-seed-0099", errorCode: "UNKNOWN_GATEWAY_ERROR" },
+      payload: {
+        orderId: "order-seed-0099",
+        errorCode: "UNKNOWN_GATEWAY_ERROR",
+      },
       category: MonitoringEventCategory.application(),
       severity: AlertSeverity.pending(),
       source: "order",
@@ -240,7 +257,8 @@ export const ALERT_SEEDS: Alert[] = [
       impact: {
         fault: "own",
         scope: "注文処理・決済連携フロー（order / payment サービス）",
-        scale: "直近2分で1件の注文処理失敗。決済タイムアウト波及でさらに拡大の可能性",
+        scale:
+          "直近2分で1件の注文処理失敗。決済タイムアウト波及でさらに拡大の可能性",
         affectedSubjects: ["order", "payment"],
         citations: [
           "log:order-processing-failed-20260622T085800Z",
@@ -269,52 +287,52 @@ export const ALERT_SEEDS: Alert[] = [
   // (0.3=フロントでは rose) を出す。fault="unknown"・suggestedPatternName 空（自動昇格しない）で
   // 「分からないときは正直に低く出す」を表現する。全件が高 confidence のデモは逆に信用を落とすため、
   // 1件この honest な未知ケースを混ぜて他の高 confidence を本物に見せる狙い。
-  Alert.createAsUnknown({
-    id: new AlertId("5eeda1e7-0005-4000-8000-000000000005"),
-    monitoringEvent: new MonitoringEvent({
-      eventId: "seed-event-0005-0000-0000-000000000005",
-      eventName: "ec.api.latency_spike",
-      aggregateId: "checkout-seed-0005",
-      occurredOn: ago(8),
-      payload: { service: "checkout", p99LatencyMs: 4200, baselineMs: 600 },
-      category: MonitoringEventCategory.application(),
-      severity: AlertSeverity.pending(),
-      source: "checkout",
-    }),
-  }).attachInvestigationReport(
-    new InvestigationReport({
-      summary:
-        "checkout の p99 レイテンシが断続的に急増していますが、根本原因を特定できませんでした。直近の自社変更・インフラ差分・外部APIの異常はいずれも確認できず、複数の仮説が残っています。",
-      confidence: 0.3,
-      severity: AlertSeverity.warning(),
-      remediable: false,
-      investigationSteps: [
-        "直近30分の Cloud Logging を確認 → 明確なエラーログは見つからず（散発的な遅延のみ）",
-        "直近の commit / terraform 差分を確認 → 障害時刻と相関する変更は無し",
-        "外部決済・在庫APIのレスポンスタイムを確認 → 異常な遅延は観測されず",
-        "CPU/メモリ使用率を確認 → 飽和はしておらず、容量起因とは断定できない",
-      ],
-      suggestedActions: [
-        "再現条件が不明なため、まずトレース（分散トレーシング）を有効化して遅延の発生区間を切り分けてください。",
-        "断続的なため、しきい値を下げて再発時のメトリクス・ログを追加採取し、確証が得られてから対処を判断してください。",
-      ],
-      // 確証が無いため自動昇格パターンは出さない（空＝学習・昇格の対象外）。
-      suggestedPatternName: "",
-      reviewStatus: ReviewStatus.pendingReview(),
-      investigatedAt: ago(6),
-      isFallback: false,
-      // 証拠不足で自責・他責を断定できない＝fault="unknown"。断定しないことを scope/scale でも明示する。
-      // unknown でも根拠（何を見て分からなかったか）は citations で示し、ハルシネーションガードを通す。
-      impact: {
-        fault: "unknown",
-        scope: "checkout フローの一部リクエストに断続的な遅延。影響範囲は切り分け中で確定できず",
-        scale: "p99 が約7倍（600ms→4200ms）に断続的に上昇。発生頻度・継続時間は確定できず",
-        affectedSubjects: ["checkout"],
-        citations: [
-          "log:checkout-latency-intermittent-20260622T085200Z",
-          "metric:checkout-p99-spike-20260622T085200Z",
-        ],
-      },
-    }),
-  ),
+  // Alert.createAsUnknown({
+  //   id: new AlertId("5eeda1e7-0005-4000-8000-000000000005"),
+  //   monitoringEvent: new MonitoringEvent({
+  //     eventId: "seed-event-0005-0000-0000-000000000005",
+  //     eventName: "ec.api.latency_spike",
+  //     aggregateId: "checkout-seed-0005",
+  //     occurredOn: ago(8),
+  //     payload: { service: "checkout", p99LatencyMs: 4200, baselineMs: 600 },
+  //     category: MonitoringEventCategory.application(),
+  //     severity: AlertSeverity.pending(),
+  //     source: "checkout",
+  //   }),
+  // }).attachInvestigationReport(
+  //   new InvestigationReport({
+  //     summary:
+  //       "checkout の p99 レイテンシが断続的に急増していますが、根本原因を特定できませんでした。直近の自社変更・インフラ差分・外部APIの異常はいずれも確認できず、複数の仮説が残っています。",
+  //     confidence: 0.3,
+  //     severity: AlertSeverity.warning(),
+  //     remediable: false,
+  //     investigationSteps: [
+  //       "直近30分の Cloud Logging を確認 → 明確なエラーログは見つからず（散発的な遅延のみ）",
+  //       "直近の commit / terraform 差分を確認 → 障害時刻と相関する変更は無し",
+  //       "外部決済・在庫APIのレスポンスタイムを確認 → 異常な遅延は観測されず",
+  //       "CPU/メモリ使用率を確認 → 飽和はしておらず、容量起因とは断定できない",
+  //     ],
+  //     suggestedActions: [
+  //       "再現条件が不明なため、まずトレース（分散トレーシング）を有効化して遅延の発生区間を切り分けてください。",
+  //       "断続的なため、しきい値を下げて再発時のメトリクス・ログを追加採取し、確証が得られてから対処を判断してください。",
+  //     ],
+  //     // 確証が無いため自動昇格パターンは出さない（空＝学習・昇格の対象外）。
+  //     suggestedPatternName: "",
+  //     reviewStatus: ReviewStatus.pendingReview(),
+  //     investigatedAt: ago(6),
+  //     isFallback: false,
+  //     // 証拠不足で自責・他責を断定できない＝fault="unknown"。断定しないことを scope/scale でも明示する。
+  //     // unknown でも根拠（何を見て分からなかったか）は citations で示し、ハルシネーションガードを通す。
+  //     impact: {
+  //       fault: "unknown",
+  //       scope: "checkout フローの一部リクエストに断続的な遅延。影響範囲は切り分け中で確定できず",
+  //       scale: "p99 が約7倍（600ms→4200ms）に断続的に上昇。発生頻度・継続時間は確定できず",
+  //       affectedSubjects: ["checkout"],
+  //       citations: [
+  //         "log:checkout-latency-intermittent-20260622T085200Z",
+  //         "metric:checkout-p99-spike-20260622T085200Z",
+  //       ],
+  //     },
+  //   }),
+  // ),
 ];

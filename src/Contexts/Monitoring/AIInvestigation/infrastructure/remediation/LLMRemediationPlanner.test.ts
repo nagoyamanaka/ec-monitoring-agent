@@ -69,6 +69,25 @@ describe("LLMRemediationPlanner", () => {
     expect(plan.title).toContain("Security remediation");
   });
 
+  it("packageOverrides に各脆弱パッケージ→fixedVersion を決定論的に組む（実修正の指示）", async () => {
+    const llm = fakeLLM(vi.fn().mockResolvedValue("x"));
+    const plan = await new LLMRemediationPlanner(llm).plan(INPUT);
+
+    expect(plan.packageOverrides).toEqual({ axios: "1.7.4", ws: "8.17.1" });
+  });
+
+  it("fixedVersion が無い脆弱性は packageOverrides から除外する", async () => {
+    const llm = fakeLLM(vi.fn().mockResolvedValue("x"));
+    const plan = await new LLMRemediationPlanner(llm).plan({
+      ...INPUT,
+      vulnerabilities: [
+        { cveId: "CVE-X", severity: "HIGH", package: "left-pad", version: "1.0.0", fixedVersion: null },
+      ],
+    });
+
+    expect(plan.packageOverrides).toEqual({});
+  });
+
   it("branch にはアラート短縮IDが含まれる", async () => {
     const llm = fakeLLM(vi.fn().mockResolvedValue("x"));
     const plan = await new LLMRemediationPlanner(llm).plan(INPUT);

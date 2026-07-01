@@ -323,7 +323,11 @@ export class BackofficeApp {
             new LLMRemediationPlanner(llmClient),
             // 結合テストは override で本物の GitHub HTTP 呼び出しだけを差し替える。
             this.overrides.remediationPort ??
-              new GitHubPullRequestGateway(config.github.token, config.github.remediationRepo),
+              new GitHubPullRequestGateway(
+                config.github.token,
+                config.github.remediationRepo,
+                config.github.remediationBaseRef,
+              ),
           );
     const draftRemediationUseCase = new DraftRemediationUseCase(
       alertRepository,

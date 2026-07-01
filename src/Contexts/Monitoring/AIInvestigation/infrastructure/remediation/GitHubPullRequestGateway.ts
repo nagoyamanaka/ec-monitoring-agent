@@ -1,19 +1,31 @@
 import { RemediationPlan, RemediationResult } from "../../domain/remediation/RemediationPlan.js";
 import { RemediationPort } from "../../domain/remediation/RemediationPort.js";
 
+// commit の author/committer を AI 名義にする。in-process 起票でも「AI が作った修正」の
+// 帰属を GitHub 上に残すため（起票トークンの持ち主＝人間とは区別する）。
+const AI_COMMIT_IDENTITY = {
+  name: "ai-remediation[bot]",
+  email: "ai-remediation@users.noreply.github.com",
+} as const;
+
 // write 操作（PR起票）の唯一の出口。read-only の GitHubGateway とは意図的に分離する。
 // GITHUB_TOKEN + GITHUB_REMEDIATION_REPO が未設定の場合は起票せず理由を返す。
 // draft: true で作成し、自動マージは行わない。
 export class GitHubPullRequestGateway implements RemediationPort {
   private readonly token: string;
   private readonly repo: string;
+  // PR の base ブランチ。空なら既定ブランチ（本番=main）。デモは main を汚さないため
+  // 事前に用意した baseline ブランチ（脆弱な状態）を指し、そこへ修正 PR を向ける。
+  private readonly baseRef: string;
 
   constructor(
     token: string = process.env.GITHUB_TOKEN ?? "",
     repo: string = process.env.GITHUB_REMEDIATION_REPO ?? "",
+    baseRef: string = process.env.GITHUB_REMEDIATION_BASE_REF ?? "",
   ) {
     this.token = token;
     this.repo = repo;
+    this.baseRef = baseRef;
   }
 
   async draftPullRequest(plan: RemediationPlan): Promise<RemediationResult> {
@@ -25,9 +37,14 @@ export class GitHubPullRequestGateway implements RemediationPort {
     }
 
     try {
-      const defaultBranch = await this.getDefaultBranch();
-      const baseSha = await this.getBranchSha(defaultBranch);
+      const baseBranch = this.baseRef || (await this.getDefaultBranch());
+      const baseSha = await this.getBranchSha(baseBranch);
       await this.createBranch(plan.branch, baseSha);
+
+      // 実依存の修正: base の package.json を読み、pnpm.overrides をマージして本物の diff にする。
+      if (plan.packageOverrides && Object.keys(plan.packageOverrides).length > 0) {
+        await this.applyPackageOverrides(plan.branch, plan.packageOverrides);
+      }
 
       for (const change of plan.fileChanges) {
         await this.upsertFile(plan.branch, change.path, change.patch);
@@ -37,7 +54,7 @@ export class GitHubPullRequestGateway implements RemediationPort {
         title: plan.title,
         body: plan.body,
         head: plan.branch,
-        base: defaultBranch,
+        base: baseBranch,
       });
 
       return { created: true, pullRequestUrl: prUrl };
@@ -45,6 +62,33 @@ export class GitHubPullRequestGateway implements RemediationPort {
       const reason = error instanceof Error ? error.message : "Unknown error";
       return { created: false, reason };
     }
+  }
+
+  // 起票ブランチ上の package.json を取得し、pnpm.overrides に安全版をマージして書き戻す。
+  // 既存フィールド（onlyBuiltDependencies 等）は保持し、対象パッケージの版だけを差し替える。
+  private async applyPackageOverrides(
+    branch: string,
+    overrides: Readonly<Record<string, string>>,
+  ): Promise<void> {
+    const existing = await this.request(
+      "GET",
+      `/repos/${this.repo}/contents/package.json?ref=${encodeURIComponent(branch)}`,
+    );
+    const decoded = Buffer.from(
+      (existing as { content: string }).content,
+      "base64",
+    ).toString("utf-8");
+    const pkg = JSON.parse(decoded) as {
+      pnpm?: { overrides?: Record<string, string> };
+      [key: string]: unknown;
+    };
+
+    const pnpm = (pkg.pnpm ??= {});
+    pnpm.overrides = { ...(pnpm.overrides ?? {}), ...overrides };
+
+    // 末尾改行付き 2 スペース整形（一般的な package.json の体裁に合わせ diff を最小化）。
+    const merged = `${JSON.stringify(pkg, null, 2)}\n`;
+    await this.upsertFile(branch, "package.json", merged);
   }
 
   private async getDefaultBranch(): Promise<string> {
@@ -90,6 +134,9 @@ export class GitHubPullRequestGateway implements RemediationPort {
       message: `fix: update ${path}`,
       content: encoded,
       branch,
+      // commit を AI 名義にする（人間の起票トークンとは別に「AI が作った修正」を明示）。
+      author: AI_COMMIT_IDENTITY,
+      committer: AI_COMMIT_IDENTITY,
     };
     if (existingSha) body["sha"] = existingSha;
 
