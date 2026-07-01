@@ -24,19 +24,22 @@ import {
  */
 describe("backoffice E2E: unknown-investigation path (stub AI)", () => {
   let mongo: MongoClient;
-  // 在庫0商品で予約失敗 → ec.inventory.reservation_failed。orderId で相関させる。
-  const orderId = crypto.randomUUID();
 
   beforeAll(async () => {
-    // 既存 Alert を消して reservation_failed を第1観測にする（dedup 回避）
-    await clearAlerts();
     mongo = connectMonitoringDb();
     await mongo.connect();
-    // この eventName を既知化するパターンが残っていないことを保証（未知経路を確実に通す）
+    // ① 既知パターンの削除を Alert クリアより先に行う。
+    //   ec/orders（直前ファイル）の在庫不足テストも ec.inventory.reservation_failed
+    //   (reason=INSUFFICIENT_STOCK) を発火する。これは seed 済みの既知パターンに一致するため、
+    //   その遅延イベントがパターン削除より前に着弾すると「既知」Alert が立ち、
+    //   dedup で後続（このテストの観測）を畳み込んでしまい investigationReport が付かず未知経路が壊れる。
+    //   先にパターンを消しておけば、遅延イベントが来ても必ず「未知」で分類される。
     await mongo
       .db()
       .collection(KNOWN_ERROR_PATTERNS_COLLECTION)
       .deleteMany({ eventNamePattern: EVENT_NAMES.inventoryReservationFailed });
+    // ② 既存 Alert を消して reservation_failed を第1観測にする（dedup 回避）
+    await clearAlerts();
   });
 
   afterAll(async () => {
@@ -48,16 +51,18 @@ describe("backoffice E2E: unknown-investigation path (stub AI)", () => {
     await setInventoryMode("SUCCESS");
     // 決済成功 → 注文受付(201) → 在庫0で予約失敗 → 補償経由で InventoryReservationFailedDomainEvent
     await placeEcOrder({
-      orderId,
+      orderId: crypto.randomUUID(),
       customerId: crypto.randomUUID(),
       productId: PRODUCT_OUT_OF_STOCK,
     });
 
-    // 調査完了（レポート添付）まで待つ
+    // dedup で reservation_failed は eventName 単位の1件に畳み込まれるため eventName で相関する。
+    // clear 直後に現れるのは自分の観測か遅延した先行観測のどちらかだが、既知パターンは削除済みなので
+    // いずれも「未知」→ AI調査ループ → InvestigationReport 添付、まで進む（payload.orderId には依存しない）。
+    // 調査完了（レポート添付）まで待つ。
     const alert = await pollAlert(
       (a) =>
         a.monitoringEvent.eventName === EVENT_NAMES.inventoryReservationFailed &&
-        a.monitoringEvent.payload.orderId === orderId &&
         a.investigationReport !== null,
     );
 

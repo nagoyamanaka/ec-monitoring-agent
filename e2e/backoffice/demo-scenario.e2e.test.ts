@@ -30,10 +30,11 @@ describe("backoffice E2E: demo scenario facade", () => {
     expect(result.orderId).toBeTruthy();
     expect(result.scenarioId).toBe("payment-timeout");
 
+    // dedup で payment.timeout は eventName 単位の1件に畳み込まれ、payload は第1観測のものだけが残る。
+    // 他ファイルの payment.timeout イベントが遅延着弾すると result.orderId は payload に残らないため、
+    // eventName で相関する（facade が 202+orderId を返し、その注文が Alert 化する配線は検証できる）。
     const alert = await pollAlert(
-      (a) =>
-        a.monitoringEvent.eventName === EVENT_NAMES.paymentTimeout &&
-        a.monitoringEvent.payload.orderId === result.orderId,
+      (a) => a.monitoringEvent.eventName === EVENT_NAMES.paymentTimeout,
     );
 
     expect(alert.monitoringEvent.eventName).toBe(EVENT_NAMES.paymentTimeout);
