@@ -311,23 +311,11 @@
 
 ## stretchⅡ: 予兆ブリーフィング UI
 
-> **着手条件**: P0 ＋ P1 ＋ 既存stretch 着地後。設計は `step4-4`「予兆ブリーフィングUI」節。既存featureは無傷で `features/forecast/` を新設するだけ。
-
-### タスク 13: forecast feature slice 〔stretchⅡ〕
-
-- 【新規】`features/forecast/domain/ForecastView.ts`（RiskItem→level色）/ `RiskLevel.ts`（純関数のみ）
-- 【新規】`features/forecast/infrastructure/forecastApi.ts`（POST /forecast, GET /forecast）/ `application/triggerForecast.ts`
-- 【新規】`presentation/pages/ForecastPage.tsx`（リスク一覧・level降順）
-- 【新規】`components/RiskCard.tsx`（window・subject・level バッジ・confidenceゲージ・reasoning）/ **`CitationList.tsx`（引用チップ＝根拠の明示・ハルシネーション否定の可視化・本機能の体験の肝）**
-- 【修正】`App.tsx` に `/forecast` 追加（`FORECAST_ENABLED` off時はナビ非表示）
-- `shared/`（HttpClient/SeverityBadge/layouts）流用。`SeverityBadge` を RiskLevel に転用
-- デモシナリオ6（録画）: `/forecast` トリガー → 引用付きリスク降下演出
-
-> **共通化の継ぎ目（タスク9e 相関との共有・2026-06 調査）**: `CitationList`（引用＝根拠の id 提示）と タスク9e の `RelatedAlertsPanel`（相関アラートの id 提示）は**同型**＝「**LLM が出した _id + ラベル + 根拠_ を、一覧 lookup で実在 Alert へ解決し、解決できれば詳細リンク付きカード／できなければ素のリンク＋ラベルへ degrade**」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（step4-2 タスク12）、相関 alertId も実在 Alert id なので、両者とも `/alerts/:id` へ解決でき引用検証（§7.3 偽引用を落とす）と同じ動線になる。
+> **【移動済み】** 予兆（stretchⅡ）の UI タスク13 は `docs/step6-final-sprint-todo.md`（タスク F7）へ集約した（7/10 締切のファイナルスプリントで本命1本を実装するため）。設計本体（`step4-4`「予兆ブリーフィングUI」節・既存feature無傷・`features/forecast/` 新設・`CitationList` と `RelatedAlertsPanel` の `shared/ui` 共通化の継ぎ目メモ）は step6 F7 に転記済み。
 >
-> - **本タスク着手時に共通化する**: `domain/relatedAlerts.ts` の `toRelatedAlertViews(refs, lookup)`（id→解決 or degrade）と `RelatedAlertsPanel` のカード描画を `shared/ui` へ昇格（例 `shared/ui/ReferencedAlertCard` ＋ resolver）し、`RelatedAlertsPanel` と `CitationList` の両方が消費する。`relationLabel`（既に `precursor:予兆` を含む）も同様に転用可。`SeverityBadge`/`RiskLevel` 転用は既述のとおり。
-> - **今は共通化しない（YAGNI）**: forecast は stretchⅡ で未実装＝**第二の消費者がまだ存在しない**。消費者が無いうちの抽出は投機的一般化（既存方針「死蔵スキャフォルドは作らない」と矛盾）。**本タスクで `CitationList` を実装する時に、上記 `RelatedAlertsPanel` を `shared/ui` へ引き上げて両者で共有**する＝そのタイミングが正しい抽出点。
-> - **backend は context を跨いで型共有しない**: 相関は Monitoring（`InvestigationReportPrimitives.relatedAlerts`）、引用は Forecast（`RiskItem.citations`）の別 BC。`RelatedAlertPrimitives` を Forecast から import すると BC 結合になるので**しない**。共通なのは「LLM 出力を防御的に正規化→実在 id 照合」という*パターン*だけ（型は各 BC に持つ）。
+> | 旧番号 | 内容 | 移動先 |
+> | --- | --- | --- |
+> | タスク13 | forecast feature slice（ForecastPage/RiskCard/CitationList・`/forecast` ルート・共通化の継ぎ目） | step6 F7 |
 
 ---
 

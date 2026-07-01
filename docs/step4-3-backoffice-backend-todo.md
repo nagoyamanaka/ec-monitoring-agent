@@ -273,22 +273,12 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 
 ## stretchⅡ: 予兆ブリーフィング 配線
 
-> **着手条件**: P0 ＋ P1 ＋ 既存stretch 着地後。設計は `step4-3`「予兆ブリーフィング配線」節。既存配線は無傷で、ルート1系統＋DIを追加するだけ。
-
-### タスク 13: forecast ルート・コントローラ 〔stretchⅡ〕
-
-- 【新規】`routes/forecastRoutes.ts` ＋ `ForecastPostController`（POST /forecast → `ForecastRiskCommandHandler`）/ `ForecastGetController`（GET /forecast → 最新 RiskForecast）
-- `routes/index.ts` に登録（既存ルートはノータッチ）
-
-### タスク 14: DI 追記 ＋ Schedule seed 〔stretchⅡ〕
-
-- 【修正】`BackofficeApp.ts`：read-only依存を new して `ForecastRiskCommandHandler` を Bus 登録
-  - **★継ぎ目**: `signalSources: ForecastSignalSource[]` を組み立てて渡す（Gateway を名指ししない）。`PullRequestSignalSource`（GitHub）/ `PendingPlanSignalSource`（Terraform〔メソッド追加済〕）/ `ScheduleSignalSource`（ScheduleSource）の3つ
-  - `ForecastMemoryRepository` / **ForecastPort=GeminiForecastAdapter★差し替え点**
-- 起動時 `ForecastMemoryRepository.warmUp()` を `BackofficeApp.buildSimilarIncidentRepository(rules)` 呼び出しと並行して `start()` 内に追加する（SimilarIncident の warmUp は `buildSimilarIncidentRepository` 内に内包済み）
-- 【新規】`ScheduleSource` の seed 実装（JSON/config）。`DEMO_ENABLED` 配下で投入
-- 【修正】`config.ts`：`FORECAST_ENABLED`（既定off）/ `FORECAST_HORIZON`（既定 "今週末"）追加
-- **write は発生しない**（全Gateway read-only）。リメディエーション要時のみ既存 `RemediationPort` 再利用
+> **【移動済み】** 予兆（stretchⅡ）の配線タスク13・14 は `docs/step6-final-sprint-todo.md`（タスク F6）へ集約した（7/10 締切のファイナルスプリントで本命1本を実装するため）。設計本体（`step4-3`「予兆ブリーフィング配線」節・既存配線無傷・ルート1系統＋DI追加）は変更なし。
+>
+> | 旧番号 | 内容 | 移動先 |
+> | --- | --- | --- |
+> | タスク13 | forecast ルート・コントローラ（POST/GET /forecast） | step6 F6 |
+> | タスク14 | DI 追記（signalSources 配列）＋ Schedule seed ＋ config（FORECAST_ENABLED/HORIZON） | step6 F6 |
 
 ---
 
