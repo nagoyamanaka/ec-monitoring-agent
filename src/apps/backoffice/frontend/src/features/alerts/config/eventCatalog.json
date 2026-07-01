@@ -18,5 +18,17 @@
   "security.vulnerability_detected": {
     "title": "脆弱性の検知",
     "description": "依存パッケージ等にセキュリティ脆弱性が検出された。"
+  },
+  "ec.db.connection_pool_exhausted": {
+    "title": "DBコネクションプール枯渇",
+    "description": "DB コネクションプールが枯渇。既知パターンには完全一致しないが、過去の解決済み事例に高類似（約67%）で『準・既知』に確度付き分類し、AI 生調査なしで即確定。"
+  },
+  "ec.pricing.subtotal_mismatch": {
+    "title": "アプリコード退行",
+    "description": "テストは通過したアプリコード変更が挙動を退行させた障害（小計の丸め誤り）。AI が実コミット差分を読んで原因を特定する。"
+  },
+  "gcp.monitoring.cloud_sql_instance_unhealthy_after_configuration_change": {
+    "title": "構成変更障害",
+    "description": "IaC 変更（Cloud SQL 設定縮小の terraform apply）適用直後に DB インスタンスが不安定化。AI が apply 差分を root cause として特定する。"
   }
 }

@@ -60,6 +60,9 @@ export function AlertReviewPanel({
   className,
 }: AlertReviewPanelProps) {
   const [submitting, setSubmitting] = useState<ReviewAction | null>(null);
+  // 昇格の完了通知。昇格は Alert 本体を変えず SSE も出さない（パターン側の結晶化）ため、
+  // フロントで「焼き付けた」ことを明示する。成功後トグルを success 表示に差し替える。
+  const [promoted, setPromoted] = useState(false);
   // 却下フロー：理由/修正方針の入力を開いているか・入力中の note。
   const [rejecting, setRejecting] = useState(false);
   const [note, setNote] = useState("");
@@ -94,6 +97,7 @@ export function AlertReviewPanel({
     setSubmitting("promote");
     try {
       await onPromote(alert.id);
+      setPromoted(true);
     } finally {
       setSubmitting(null);
     }
@@ -272,15 +276,30 @@ export function AlertReviewPanel({
           {canPromote && (
             <button
               type="button"
-              disabled={submitting !== null}
+              disabled={submitting !== null || promoted}
               onClick={promote}
               title="この障害を既知パターンへ焼き付けます。以後の同型障害は完全一致の高速パスで即・無料・決定論に既知分類されます。"
-              className="min-w-[9rem] rounded-md bg-emerald-500/15 px-3 py-1.5 text-center text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-500/30 transition hover:bg-emerald-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+              className={cn(
+                "min-w-[9rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold ring-1 ring-inset transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
+                promoted
+                  ? "bg-emerald-500/25 text-emerald-200 ring-emerald-400/60 disabled:opacity-100"
+                  : "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30 hover:bg-emerald-500/25 disabled:opacity-50",
+              )}
             >
-              {submitting === "promote" ? "昇格中…" : "既知パターンへ昇格"}
+              {submitting === "promote"
+                ? "昇格中…"
+                : promoted
+                  ? "✓ 既知パターンへ昇格済み"
+                  : "既知パターンへ昇格"}
             </button>
           )}
         </div>
+      )}
+      {promoted && (
+        <p className="flex items-start gap-1.5 border-t border-slate-700/40 pt-2 text-[11px] leading-snug text-emerald-300">
+          <span aria-hidden>✓</span>
+          この障害を既知パターンへ焼き付けました。次回の同型障害は完全一致の高速パスで即・既知に分類されます。
+        </p>
       )}
       {reviewState === "REJECTED" && alert.feedback?.operatorNote && (
         <p className="text-[11px] leading-snug text-slate-300">

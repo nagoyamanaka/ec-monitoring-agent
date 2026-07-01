@@ -14,10 +14,10 @@ export interface SystemStatusProps {
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-md bg-slate-800/40 px-2 py-1.5 text-center ring-1 ring-inset ring-slate-700/50">
-      <div className="text-base font-semibold tabular-nums text-slate-100">
+      <div className="text-lg font-semibold tabular-nums text-slate-50">
         {value}
       </div>
-      <div className="text-[11px] text-slate-400">{label}</div>
+      <div className="text-xs text-slate-300">{label}</div>
     </div>
   );
 }
@@ -25,9 +25,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 export function SystemStatus({ status, loading }: SystemStatusProps) {
   return (
     <div className="space-y-2">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
-        現在の状態
-      </h3>
+      <h3 className="text-sm font-semibold text-slate-100">現在の状態</h3>
       {loading && !status ? (
         <div className="h-12 animate-pulse rounded-md bg-slate-800/40" />
       ) : (

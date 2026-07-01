@@ -240,7 +240,7 @@ export class TriggerDemoScenarioUseCase {
       // reset が seed した解決済み事例と字句類似で一致 → SimilarPatternRule が準・既知に分類。
       await this.collectMonitoringEventUseCase.run(buildSimilarKnownEvent());
       // 注文を伴わない検知なので orderId は空。
-      return { scenarioId: resolvedId, label: "類似障害（準・既知）", orderId: "" };
+      return { scenarioId: resolvedId, label: "DBコネクションプール枯渇", orderId: "" };
     }
 
     if (resolvedId === APPCODE_REGRESSION_SCENARIO_ID) {

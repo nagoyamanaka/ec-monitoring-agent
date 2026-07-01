@@ -223,9 +223,13 @@ export class BackofficeApp {
             config.github.remediationRepo,
           ),
         }),
+        undefined,
+        logger,
       );
     } else {
-      aiInvestigationPort = new LLMInvestigationAdapter(llmClient);
+      // linkConfig は既定（env 由来）を使うため undefined を渡す（JS の既定引数が適用される）。
+      // logger を注入し、LLM 例外／パース不能で fallback に落ちた理由を Cloud Logging に残す。
+      aiInvestigationPort = new LLMInvestigationAdapter(llmClient, undefined, logger);
     }
     const infraInvestigationPort =
       this.overrides.infraInvestigationPort ??
@@ -283,6 +287,7 @@ export class BackofficeApp {
     const requestAlertInvestigationUseCase = new RequestAlertInvestigationUseCase(
       alertRepository,
       eventBus,
+      sseNotifier,
       logger,
     );
     const requestAlertInvestigationCommandHandler =
