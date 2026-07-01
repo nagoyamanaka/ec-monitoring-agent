@@ -19,10 +19,13 @@ logging:
     # ① docker json-file ラッパを解く（jsonPayload.log にアプリログ文字列が入る）
     parse_docker_wrapper:
       type: parse_json
-    # ② アプリの構造化ログ本体（jsonPayload.log の JSON 文字列）を展開する
+    # ② アプリの構造化ログ本体（① で jsonPayload.log に入った JSON 文字列）を展開する。
+    # 注意: OTel 世代の Ops Agent（otelopscol）では後段プロセッサの field 参照は
+    # LogEntry 記法の "jsonPayload.log" ではなく bare key の "log" でないと解決されず、
+    # 指定ミスは無言で no-op になる（severity 昇格が効かず経路B が切れる）。
     parse_app_log:
       type: parse_json
-      field: jsonPayload.log
+      field: log
     # ③ アプリの severity を LogEntry.severity に昇格（ポリシーの severity 比較が効くようにする）
     map_severity:
       type: modify_fields
