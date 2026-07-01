@@ -30,12 +30,12 @@ export function DemoDrawer({ api, onAfterReset }: DemoDrawerProps) {
 
   return (
     <section
-      aria-label="DEMO CONSOLE"
+      aria-label="デモコンソール"
       className="space-y-4 rounded-tremor-default bg-slate-900/40 p-4 ring-1 ring-inset ring-slate-700/60"
     >
       <div className="flex items-center gap-2">
         <span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-fuchsia-300 ring-1 ring-inset ring-fuchsia-500/30">
-          🕹️ DEMO CONSOLE
+          🕹️ デモコンソール
         </span>
       </div>
 
@@ -47,12 +47,10 @@ export function DemoDrawer({ api, onAfterReset }: DemoDrawerProps) {
           type="button"
           disabled={busy !== null}
           onClick={() => reset()}
-          title="アラート・既知パターンを seed 初期状態に戻す"
+          title="アラート一覧を空に戻し、既知パターン（学習済みの知識ベース）を初期状態に再投入する"
           className="w-full rounded-md bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-700/60 transition hover:bg-rose-500/10 hover:text-rose-200 hover:ring-rose-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
         >
-          {/* {busy === "reset" ? "INITIALIZING…" : "INITIALIZE DEMO"}  */}
-          {/* 遷移が速すぎてUX悪化してるのでいったんコメントアウト */}
-          INITIALIZE DEMO
+          デモをリセット
         </button>
         {error && (
           <p className="text-[11px] text-rose-300">

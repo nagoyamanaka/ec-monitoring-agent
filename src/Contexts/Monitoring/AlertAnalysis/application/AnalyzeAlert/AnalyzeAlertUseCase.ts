@@ -49,6 +49,16 @@ export class AnalyzeAlertUseCase {
       });
       await this.alertRepository.save(alert);
       this.sseNotifier.notify(alert.toPrimitives());
+      // 既知一致でも調査レポートは AI が「今回の具体パラメータ」に合わせて書く
+      // （前回学習時と値が変わりうるため。報告の整合性は作業者に必須）。既知パターンは
+      // InvestigateAlertUseCase 側で文脈（knownPatterns）として渡り grounding される。
+      // dedup で畳み込まれた重複観測（上の early return）はここへ来ないため再調査しない。
+      await this.eventBus.publish([
+        new InvestigateAlertDomainEvent({
+          alertId: alertId.value,
+          monitoringEvent: monitoringEvent.toPrimitives(),
+        }),
+      ]);
       await this.logger.info({
         service: "backoffice-backend",
         action: "alert_classified_known",

@@ -42,7 +42,7 @@ export function connectMonitoringDb(): MongoClient {
 // 重複観測を畳み込む（recordOccurrence は最初の observation の payload を保持）。
 // 各テストは自分の orderId/customerId が Alert の payload に乗ることを期待するため、
 // テスト開始前に既存 Alert を消して「自分の event を第1観測にする」必要がある。
-// （demo/reset は seed Alert を投入してしまうので使わず、直接削除する）
+// （demo/reset はパターンのみ再投入するが、他テストの残存 Alert は消さないので直接削除する）
 export async function clearAlerts(): Promise<void> {
   const client = connectMonitoringDb();
   await client.connect();

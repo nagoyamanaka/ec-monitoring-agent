@@ -9,6 +9,7 @@ import { Order } from "../../../../Shared/domain/criteria/Order.js";
 import { Alert } from "../../../AlertAnalysis/domain/Alert.js";
 import { AlertId } from "../../../AlertAnalysis/domain/AlertId.js";
 import { AlertRepository } from "../../../AlertAnalysis/domain/AlertRepository.js";
+import { KnownErrorPatternRepository } from "../../../AlertAnalysis/domain/KnownErrorPatternRepository.js";
 import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { ReviewStatus } from "../../../AlertAnalysis/domain/ReviewStatus.js";
@@ -33,6 +34,7 @@ export class InvestigateAlertUseCase {
     private readonly aiInvestigationPort: AIInvestigationPort,
     private readonly sseNotifier: SSEAlertNotifier,
     private readonly logger: Logger,
+    private readonly knownErrorPatternRepository: KnownErrorPatternRepository,
     private readonly infraInvestigationPort: InfraInvestigationPort | null = null,
   ) {}
 
@@ -57,11 +59,12 @@ export class InvestigateAlertUseCase {
     monitoringEvent: MonitoringEvent,
     selfId: AlertId,
   ): Promise<InvestigationContext> {
-    const [similarIncidents, infraEvidence, candidateAlerts] =
+    const [similarIncidents, infraEvidence, candidateAlerts, knownPatterns] =
       await Promise.all([
         this.findSimilarIncidents(monitoringEvent),
         this.collectInfraEvidence(monitoringEvent),
         this.collectCandidateAlerts(selfId),
+        this.findMatchingKnownPatterns(monitoringEvent),
       ]);
 
     return {
@@ -71,7 +74,7 @@ export class InvestigateAlertUseCase {
         payload: monitoringEvent.payload,
         severity: monitoringEvent.severity.value,
       },
-      knownPatterns: [],
+      knownPatterns,
       similarIncidents: similarIncidents.map((incident) => ({
         eventName: incident.eventName,
         occurredOn: incident.occurredOn.toISOString(),
@@ -127,6 +130,32 @@ export class InvestigateAlertUseCase {
         message: `インフラ証拠収集に失敗しました（調査継続）：${(error as Error).message}`,
       });
       return undefined;
+    }
+  }
+
+  // このイベントに関連する既知パターンを AI 調査の grounding 文脈として収集する。
+  // 既知一致した Alert では該当パターンが必ず含まれ、AI は「今回の具体パラメータ」に
+  // 合わせた報告を、過去の学習（パターンの description）を踏まえて書く。
+  // ベストエフォート（失敗時は空配列で調査継続）。
+  private async findMatchingKnownPatterns(
+    monitoringEvent: MonitoringEvent,
+  ): Promise<InvestigationContext["knownPatterns"]> {
+    try {
+      const patterns = await this.knownErrorPatternRepository.findAll();
+      return patterns
+        .filter((p) => p.eventNamePattern === monitoringEvent.eventName)
+        .map((p) => ({
+          name: p.name,
+          description: p.description,
+          eventNamePattern: p.eventNamePattern,
+        }));
+    } catch (error) {
+      await this.logger.warn({
+        service: "backoffice-backend",
+        action: "known_patterns_collect_failed",
+        message: `既知パターン文脈の収集に失敗しました（調査継続）：${(error as Error).message}`,
+      });
+      return [];
     }
   }
 
