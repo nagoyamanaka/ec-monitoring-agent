@@ -75,9 +75,12 @@ export function AlertReviewPanel({
     !!onGenerateReport &&
     alert.classification.type === "known" &&
     alert.report === null;
-  // 未知で有効な調査レポートがあれば「既知へ昇格（結晶化）」を出す。
+  // 未知で有効な調査レポートがあり、かつ「承認済み」のときだけ「既知へ昇格（結晶化）」を出す。
+  // 承認＝分類が正しいと確定＝この障害を既知パターンへ焼き付けてよい、という導線ゲート。
+  // 未承認の障害を先に既知化してしまう事故を防ぎ、「承認→昇格」の順序を UI で強制する。
   const canPromote =
     !!onPromote &&
+    reviewState === "APPROVED" &&
     alert.classification.type === "unknown" &&
     alert.report !== null &&
     !alert.report.isFallback;

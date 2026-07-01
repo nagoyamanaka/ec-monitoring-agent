@@ -36,12 +36,16 @@ describe("useAlerts", () => {
     act(() => stream.emit(makeAlert({ id: "b" })));
     expect(result.current.alerts.map((a) => a.id)).toEqual(["b", "a"]);
 
-    // 同一 ID a の更新は位置を保って置換（ANALYZING→OPEN/RESOLVED 相当）
-    act(() => stream.emit(makeAlert({ id: "a", status: "RESOLVED" })));
+    // 同一 ID a の更新は位置を保って置換（ANALYZING→OPEN 相当）
+    act(() => stream.emit(makeAlert({ id: "a", status: "ANALYZING" })));
     expect(result.current.alerts.map((a) => a.id)).toEqual(["b", "a"]);
     expect(result.current.alerts.find((a) => a.id === "a")?.status).toBe(
-      "RESOLVED",
+      "ANALYZING",
     );
+
+    // 承認でクローズ（RESOLVED）した a は現役一覧から取り除く
+    act(() => stream.emit(makeAlert({ id: "a", status: "RESOLVED" })));
+    expect(result.current.alerts.map((a) => a.id)).toEqual(["b"]);
   });
 
   it("取得失敗時は error 遷移する", async () => {
