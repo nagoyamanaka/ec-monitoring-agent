@@ -63,33 +63,10 @@ if ! systemctl is-enabled google-cloud-ops-agent >/dev/null 2>&1; then
   bash add-google-cloud-ops-agent.sh --also-install
 fi
 
+# 設定は compose 同様 GCS から取得（単一ソース: infra/ops-agent/config.yaml → CI が ops-agent-config.yaml として push）。
 mkdir -p /etc/google-cloud-ops-agent
-cat > /etc/google-cloud-ops-agent/config.yaml <<'YAML'
-logging:
-  receivers:
-    docker_containers:
-      type: files
-      include_paths:
-      - /var/lib/docker/containers/*/*-json.log
-  processors:
-    # ① docker json-file ラッパを解く（jsonPayload.log にアプリログ文字列が入る）
-    parse_docker_wrapper:
-      type: parse_json
-    # ② アプリの構造化ログ本体（jsonPayload.log の JSON 文字列）を展開する
-    parse_app_log:
-      type: parse_json
-      field: jsonPayload.log
-    # ③ アプリの severity を LogEntry.severity に昇格（ポリシーの severity 比較が効くようにする）
-    map_severity:
-      type: modify_fields
-      fields:
-        severity:
-          move_from: jsonPayload.severity
-  service:
-    pipelines:
-      docker:
-        receivers: [docker_containers]
-        processors: [parse_docker_wrapper, parse_app_log, map_severity]
-YAML
+curl -fsS -H "Authorization: Bearer $TOKEN" \
+  -o /etc/google-cloud-ops-agent/config.yaml \
+  "https://storage.googleapis.com/storage/v1/b/${compose_bucket}/o/ops-agent-config.yaml?alt=media"
 
 systemctl restart google-cloud-ops-agent
