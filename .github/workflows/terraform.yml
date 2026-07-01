@@ -17,6 +17,12 @@ permissions:
   id-token: write # WIF の OIDC トークン取得に必須
   pull-requests: write
 
+# PR の plan と merge-push の plan/apply が同じ tfstate ロックを奪い合うと
+# 後発の plan が即失敗する（1回目失敗→rerun成功の原因）。同一グループで直列化する。
+concurrency:
+  group: terraform-prod
+  cancel-in-progress: false
+
 defaults:
   run:
     working-directory: infra/terraform/envs/prod
@@ -48,7 +54,7 @@ jobs:
 
       - run: terraform validate
 
-      - run: terraform plan -no-color -input=false
+      - run: terraform plan -no-color -input=false -lock-timeout=5m
 
   apply:
     # main への push（または手動）でのみ apply。environment 承認ゲートを噛ませる。
@@ -69,4 +75,4 @@ jobs:
 
       - run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="prefix=ec-monitoring-agent/prod"
 
-      - run: terraform apply -auto-approve -input=false
+      - run: terraform apply -auto-approve -input=false -lock-timeout=5m
