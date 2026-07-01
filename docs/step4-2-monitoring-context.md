@@ -1797,3 +1797,46 @@ interface EventLogRepository {
 - stretchⅡ の `ForecastRiskCommandHandler` の `signalSources` 配列に**追加するだけ**。突合・引用検証・read-model はそのまま流用。
 
 > **実装はしない（設計のみ）**: 薄い／障害寄りの現行 DomainEvent では予兆の母集団が不足しデモ価値が出ないため、本節は ADR と設計で「予知ができる設計になっている」ことを示すに留める（`step4-1` §7.10）。
+
+---
+
+## 相談メモ（v-current・分類スペクトルの確定とデモ整理）
+
+> 実装済みの意思決定を記録する。上位の設計思想（Classifier/Policy/Rule・結晶化・検知境界）は不変で、本節はその上での運用確定。
+
+### 決定1: 既知・類似（高信頼）は AI 調査を自動起動しない＝オンデマンド化
+
+- **背景**: 一時「既知一致でも今回paramで AI がレポートを書く」ため `AnalyzeAlert` が既知でも `InvestigateAlertDomainEvent` を publish していた。これは crystallization（結晶化）の売り＝「再発は**1秒・無料・決定論**で既知分類」という高速過去調査の価値を毎回の LLM 呼び出しで潰していた。
+- **確定**: `AnalyzeAlert` の既知分岐は **publish しない**。既知/類似（準・既知）は即・無料・決定論で確定する。「今回の具体パラメータに合わせた調査レポート」が要るときだけ作業者が明示要求する：
+  - `POST /alerts/:id/report` → `RequestAlertInvestigationUseCase` が `InvestigateAlertDomainEvent` を発火 → 既存の非同期調査ループ（`InvestigateAlertUseCase`）を再利用。`InvestigateAlertUseCase` は該当 eventName の既知パターンを `knownPatterns` として grounding に載せるので、過去の学習を踏まえた報告になる。結果はレポート添付として SSE で push（202）。
+- **効果**: 未知だけが自動で AI 調査に乗る（従来の設計思想に回帰）。ホットパスに LLM のレイテンシ・コスト・非決定性を載せない。デモは「1回目 未知→AI調査→承認→昇格。2回目 1秒で既知確定。必要なら『AIレポート生成』で今回paramの報告」を別ビートで見せられる。
+
+### 決定2: 手動即時昇格ボタン（回数不問の結晶化）
+
+- 自動昇格（`SubmitFeedbackUseCase.maybeAutoPromote`・`correctFeedbackCount>=N`）はデモで N 回フィードバックを積むのが面倒。**明示ボタン**を新設：`POST /alerts/:id/promote` → `PromoteAlertUseCase` が回数不問でこの Alert を既知パターンへ結晶化する。
+- 結晶化ロジックは自動昇格と共通のドメインファクトリ `crystallizePatternFromAlert(alert, namePrefix)` に集約（DRY）。手動は `PROMOTED_*`、自動は `AUTO_PROMOTED_*` 接頭辞で由来を区別するが分類挙動は同一（eventName のみマッチ・`sourceAlertId` 保持で承認撤回に対応）。有効な調査レポート（非 fallback）が無い Alert は `AlertNotPromotableError`(400) で弾く。
+
+### 決定3: app デモシナリオ 1–3 を「完全一致 / 類似 / 未知」の3段スペクトルに
+
+- **1 完全一致（既知）**: `payment-timeout`（実トリガ）。KnownPatternRule が EXACT で即確定。
+- **2 類似（準・既知）**: `similar-known`（合成入力・新規）。`ec.db.connection_pool_exhausted` を注入。既知パターンには未一致だが、reset が seed する解決済み事例（`ResolvedIncidentSeed`）と字句類似 **0.667** で一致 → `SimilarPatternRule` が `source=SIMILARITY`・confidence≈0.67 の graded 分類を返す。**AI 生調査は回さず確度を提示**。
+- **3 未知**: `inventory-conflict`（実トリガ）。既知にも類似にも当たらず ADK マルチエージェント調査へ。
+- **配線**: `DemoResetUseCase` に `SimilarIncidentRepository` を注入し、reset で解決済み事例を1件 idempotent に再 index。`buildSimilarIncidentRepository` は **ES 未設定でも InMemory の Jaccard で `SimilarPatternRule` を分類に載せる**（コーパス空なら Rule 棄権＝従来等価・E2E 無傷）。つまり **ES 実デプロイはデモ必須でない**（ES は「本番グレードのハイブリッド検索」という口上に留め、体験は InMemory で成立）。「類似◯%」を一枠デモに立てることで初めて confidence／Elastic が意味を持つ（立てないなら死荷重、の裏返し）。
+
+### 決定4: シナリオ6/7 は「予知化」せず**フレーミング修正**に留める
+
+- 6（構成変更障害）/7（アプリコード退行）は「検知できる体でログを合成注入」に見えるのが弱点。ただし**本システムの設計は「検知は境界の外」**（Cloud Monitoring/CI/Trivy が検知者、我々は ingest→調査→修正起案の層）なので、6/7 は "外部検知器からの ingest" として**正当**。嘘になるのは UI/口上で「自分で検知した」と示した場合のみ。
+- **対応**: 削除でも予知転用でもなく、文言を「検知は既存 SRE 基盤（Cloud Monitoring/CI）が担当。我々の価値は検知後の調査自動化と修正起案」に統一する（`ScenarioControls` の脚注・バッジ note は既にこの方向）。判定員に問われても「検知は上流、我々は統合」で防御可（§検知ソースと ingest 境界／`step4-1` §2.5 と一致）。予知は6/7転用でなく別枠で最小追加する方針（下記）。
+
+### 予知（Forecast）の当面の方針（stretchⅡ以降・今回は未着手）
+
+Forecast BC（タスク19–29）は設計のみでコード0。時間制約から**今回は予知シナリオを追加しない**。着手する場合の方針を確定しておく：
+
+- **本数**: 多くて2つまで。まずは1つ。転用でなく新枠で足す（6/7 は現状維持）。
+- **予兆の種別**（`step4-1` 7章）:
+  - (a) 会社イベントカレンダー（例: セール→トラフィック3倍予測）。**最も具体的でデモ映えする**ので第一候補。schedule シグナル＋過去インシデント引用（`SimilarIncident.sourceAlertId` → citation で**実在 Alert id**に解決）で「来週のセール→過去の類似スパイク障害を引用してDBメモリ逼迫を予報」が語れる。
+  - (b) インフラ定量アラート（**CPU/メモリに限定**＝『詳細システムパフォーマンス』の範囲）。単体では閾値アラートに近く"予測"として弱い。
+  - (c) a+b 複合。物語は最強だが工数大。時間があれば (a) か (c)-lite（schedule＋過去1件引用）。
+- **概念的支柱**: ベイトソン「起きていないことも情報」＝時間経過で"起きていない"ことが因果の結果になる。予報は「まだ起きていないが起こりうる」を引用付きで提示する。
+- **UI 上の優先度混線への対処**: 「今起きている障害（reactive）」と「来週かもしれないリスク（proactive）」を1リストで比較すると優先度が壊れる。理想は now を境にした**タイムライン**（左=過去/現在の検知、右=未来の予報、ドラッグでズーム、下に範囲連動リスト）だが工数大。**当面は予兆を別パネル/タブ（「予兆ブリーフィング」）に物理分離**するだけで混線は安く解ける。タイムラインはスライドで見せる"ビジョン"に留め、実装は後日。
+- **母集団の前提**: 現行の障害寄り DomainEvent では予兆の母集団が薄い。正常系イベントを太らせる（stretchⅢ タスク26–29）のが本命だが、デモは (a) の schedule シグナル＋既存 SimilarIncident 引用で最小成立させる。

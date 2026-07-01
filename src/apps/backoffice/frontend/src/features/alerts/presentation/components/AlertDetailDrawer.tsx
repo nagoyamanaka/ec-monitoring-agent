@@ -36,6 +36,10 @@ export interface AlertDetailDrawerProps {
     alertId: string,
     operatorNote: string,
   ) => void | Promise<void>;
+  /** 既知一致 Alert のオンデマンド AI レポート生成。 */
+  onGenerateReport?: (alertId: string) => void | Promise<void>;
+  /** 未知 Alert の手動即時昇格（結晶化）。 */
+  onPromote?: (alertId: string) => void | Promise<void>;
   /** 渡された場合のみ証拠パネルを表示する（composition root で注入）。 */
   evidenceApi?: EvidenceApi;
   /** 渡された場合のみリメディエーションパネルを表示する（composition root で注入）。 */
@@ -97,6 +101,8 @@ export function AlertDetailDrawer({
   onClose,
   onDecision,
   onReinvestigate,
+  onGenerateReport,
+  onPromote,
   evidenceApi,
   remediationApi,
   pushedRemediation,
@@ -227,7 +233,10 @@ export function AlertDetailDrawer({
             lookup={relatedLookup}
             onNavigate={onRelatedNavigate}
           />
-          {remediationApi && (
+          {/* 自動修正（コード上の CVE 修正 PR）は payload.vulnerabilities を持つ SECURITY 検知だけが
+              実際の修正対象を持つ。他カテゴリは AI が remediable=true と言っても実行は skip（対象なし）に
+              なりノイズなので、パネル自体を SECURITY に限定して出す。 */}
+          {remediationApi && alert.category === "SECURITY" && (
             <RemediationPanel
               alert={alert}
               api={remediationApi}
@@ -243,6 +252,8 @@ export function AlertDetailDrawer({
             alert={alert}
             onDecision={onDecision}
             onReinvestigate={onReinvestigate}
+            onGenerateReport={onGenerateReport}
+            onPromote={onPromote}
           />
         </div>
 

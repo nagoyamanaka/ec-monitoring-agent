@@ -33,6 +33,10 @@ export interface AlertsApi {
     input: ReinvestigateInput,
     signal?: AbortSignal,
   ): Promise<void>;
+  /** 既知一致 Alert に今回paramでの AI 調査レポートをオンデマンド要求する（202／結果は SSE で届く）。 */
+  requestReport(id: string, signal?: AbortSignal): Promise<void>;
+  /** この Alert を回数不問で既知パターンへ手動即時昇格（結晶化）する。 */
+  promote(id: string, signal?: AbortSignal): Promise<void>;
 }
 
 type AlertsResponse = { alerts: AlertPrimitives[] };
@@ -64,6 +68,22 @@ export function createAlertsApi(http: HttpClient): AlertsApi {
       await http.post<unknown>(
         `/alerts/${encodeURIComponent(id)}/reinvestigate`,
         input,
+        { signal },
+      );
+    },
+
+    async requestReport(id, signal) {
+      await http.post<unknown>(
+        `/alerts/${encodeURIComponent(id)}/report`,
+        {},
+        { signal },
+      );
+    },
+
+    async promote(id, signal) {
+      await http.post<unknown>(
+        `/alerts/${encodeURIComponent(id)}/promote`,
+        {},
         { signal },
       );
     },

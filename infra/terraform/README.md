@@ -149,5 +149,5 @@ terraform apply
 ## 既知の wiring 注意点（コード側の後続作業）
 
 - **worker/edge のコード分離（§11.3）**: 現状アプリは backoffice が worker(EDA subscriber)+API の一体。Cloud Run edge は当面同一イメージを `min=max=1` 運用で「API+subscriber が両方動く」状態になる。SSE Pub/Sub（`RedisSSEAlertNotifier`）＋ read-model projection（`REDIS_URL` 利用）を実装して初めて多インスタンス・scale-to-zero の物語が成立する。`REDIS_URL` は compose/Cloud Run 両方に注入済み（アプリ未読込なら no-op）。
-- **webhook トークン（§11.2・解決済み）**: `webhook_tokenauth` は GCP がトークンを URL クエリ（`?token=`）に付与する。ingest コントローラは `?token=` と `x-ingest-token` ヘッダの両方を受理する。チャネルの `sensitive_labels.auth_token` を Secret Manager の `INGEST_TOKEN` と同値に固定して照合を通す（monitoring モジュール）。auth_token 未指定だと GCP がランダム生成し 401 になるので注意。
+- **webhook 認証（§11.2・解決済み）**: `webhook_tokenauth` の token は GCP 生成で固定できず（許可ラベルは `url` のみ）、edge の `INGEST_TOKEN` と一致させられない。そこで `webhook_basicauth` を採用し、`sensitive_labels.password` を Secret Manager の `INGEST_TOKEN` と同値に固定（monitoring モジュール）。GCP は `Authorization: Basic base64(username:password)` を送り、ingest コントローラが Basic のパスワードを `INGEST_TOKEN` と照合する（`x-ingest-token` ヘッダ経路＝CI も併存）。
 - **ES メモリ**: backbone は `e2-standard-2`(8GB)。ES heap は compose で `-Xms512m -Xmx512m`。逼迫するなら `gce-backbone` の `machine_type` を `e2-standard-4` に上げる（無料クレジット内）。

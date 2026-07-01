@@ -24,11 +24,25 @@ export interface AlertReviewPanelProps {
     alertId: string,
     operatorNote: string,
   ) => void | Promise<void>;
+  /**
+   * 既知一致 Alert（AI 自動調査なしで即確定）に対する「今回paramでの AI レポートをオンデマンド生成」。
+   * 渡されない、または既にレポートがある場合はボタンを出さない。
+   */
+  onGenerateReport?: (alertId: string) => void | Promise<void>;
+  /**
+   * 未知 Alert を「回数不問で既知パターンへ手動即時昇格（結晶化）」する。
+   * 渡されない、または結晶化材料（非 fallback レポート）が無い場合はボタンを出さない。
+   */
+  onPromote?: (alertId: string) => void | Promise<void>;
   className?: string;
 }
 
-/** レビュー操作の送信中状態。3 種それぞれで個別にスピナー/無効化する。 */
-type ReviewAction = FeedbackDecision | "reinvestigate";
+/** レビュー操作の送信中状態。各種それぞれで個別にスピナー/無効化する。 */
+type ReviewAction =
+  | FeedbackDecision
+  | "reinvestigate"
+  | "generate-report"
+  | "promote";
 
 /**
  * 分類レビュー（承認/却下／却下して AI 再調査）。報告書の締めアクションとして
@@ -41,6 +55,8 @@ export function AlertReviewPanel({
   alert,
   onDecision,
   onReinvestigate,
+  onGenerateReport,
+  onPromote,
   className,
 }: AlertReviewPanelProps) {
   const [submitting, setSubmitting] = useState<ReviewAction | null>(null);
@@ -50,6 +66,38 @@ export function AlertReviewPanel({
   const reviewed = isAlertReviewed(alert);
   const reviewState = alertReviewState(alert);
   const trimmedNote = note.trim();
+
+  // 既知一致でレポート未着なら「オンデマンド生成」を出す（既知は AI を自動起動しないため）。
+  const canGenerateReport =
+    !!onGenerateReport &&
+    alert.classification.type === "known" &&
+    alert.report === null;
+  // 未知で有効な調査レポートがあれば「既知へ昇格（結晶化）」を出す。
+  const canPromote =
+    !!onPromote &&
+    alert.classification.type === "unknown" &&
+    alert.report !== null &&
+    !alert.report.isFallback;
+
+  const generateReport = async () => {
+    if (submitting || !onGenerateReport) return;
+    setSubmitting("generate-report");
+    try {
+      await onGenerateReport(alert.id);
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const promote = async () => {
+    if (submitting || !onPromote) return;
+    setSubmitting("promote");
+    try {
+      await onPromote(alert.id);
+    } finally {
+      setSubmitting(null);
+    }
+  };
 
   const decide = async (decision: FeedbackDecision, operatorNote?: string) => {
     if (submitting || !onDecision) return;
@@ -206,6 +254,34 @@ export function AlertReviewPanel({
           </button>
         </div>
       </div>
+      {(canGenerateReport || canPromote) && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-700/40 pt-2">
+          {canGenerateReport && (
+            <button
+              type="button"
+              disabled={submitting !== null}
+              onClick={generateReport}
+              title="既知分類は即確定（AI 自動起動なし）。今回の値に合わせた調査レポートを AI に生成させます。"
+              className="min-w-[9rem] rounded-md bg-cyan-500/15 px-3 py-1.5 text-center text-xs font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+            >
+              {submitting === "generate-report"
+                ? "AIレポート生成中…"
+                : "AIレポートを生成"}
+            </button>
+          )}
+          {canPromote && (
+            <button
+              type="button"
+              disabled={submitting !== null}
+              onClick={promote}
+              title="この障害を既知パターンへ焼き付けます。以後の同型障害は完全一致の高速パスで即・無料・決定論に既知分類されます。"
+              className="min-w-[9rem] rounded-md bg-emerald-500/15 px-3 py-1.5 text-center text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-500/30 transition hover:bg-emerald-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+            >
+              {submitting === "promote" ? "昇格中…" : "既知パターンへ昇格"}
+            </button>
+          )}
+        </div>
+      )}
       {reviewState === "REJECTED" && alert.feedback?.operatorNote && (
         <p className="text-[11px] leading-snug text-slate-300">
           却下理由：「{alert.feedback.operatorNote}」

@@ -49,16 +49,11 @@ export class AnalyzeAlertUseCase {
       });
       await this.alertRepository.save(alert);
       this.sseNotifier.notify(alert.toPrimitives());
-      // 既知一致でも調査レポートは AI が「今回の具体パラメータ」に合わせて書く
-      // （前回学習時と値が変わりうるため。報告の整合性は作業者に必須）。既知パターンは
-      // InvestigateAlertUseCase 側で文脈（knownPatterns）として渡り grounding される。
-      // dedup で畳み込まれた重複観測（上の early return）はここへ来ないため再調査しない。
-      await this.eventBus.publish([
-        new InvestigateAlertDomainEvent({
-          alertId: alertId.value,
-          monitoringEvent: monitoringEvent.toPrimitives(),
-        }),
-      ]);
+      // 既知一致は即・無料・決定論で確定させる＝結晶化した高速パスの価値（再発は1秒で既知分類）。
+      // ここでは AI 調査を自動起動しない（InvestigateAlertDomainEvent を publish しない）。
+      // 「今回の具体パラメータに合わせた調査レポート」が要るときは作業者が明示要求し
+      // （POST /alerts/:id/report → InvestigateAlertUseCase が knownPatterns を grounding に生成）、
+      // ホットパスに LLM のレイテンシ・コスト・非決定性を毎回載せない。
       await this.logger.info({
         service: "backoffice-backend",
         action: "alert_classified_known",

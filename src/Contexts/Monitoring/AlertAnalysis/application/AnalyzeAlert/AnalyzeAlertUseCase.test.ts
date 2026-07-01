@@ -127,7 +127,7 @@ describe("AnalyzeAlertUseCase", () => {
       expect(notified[0].id).toBe(ALERT_ID);
     });
 
-    it("InvestigateAlertDomainEvent が publish される（既知でも今回の値で AI 報告を生成）", async () => {
+    it("InvestigateAlertDomainEvent は publish されない（既知は即確定・AI調査はオンデマンド）", async () => {
       const { notifier } = makeSpyNotifier();
       const useCase = makeUseCase([PAYMENT_TIMEOUT_PATTERN], notifier);
       const publishSpy = vi.spyOn(bus, "publish");
@@ -136,7 +136,7 @@ describe("AnalyzeAlertUseCase", () => {
 
       const events = publishSpy.mock.calls.flat(2);
       const investigateEvent = events.find((e) => e instanceof InvestigateAlertDomainEvent);
-      expect(investigateEvent).toBeDefined();
+      expect(investigateEvent).toBeUndefined();
     });
   });
 

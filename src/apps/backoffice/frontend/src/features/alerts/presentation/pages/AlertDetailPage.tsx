@@ -82,6 +82,31 @@ export function AlertDetailPage() {
     [api, refreshAlert],
   );
 
+  // 既知一致のオンデマンド AI 調査（202／レポート添付は SSE で届く）。
+  const handleGenerateReport = useCallback(
+    async (alertId: string) => {
+      try {
+        await api.requestReport(alertId);
+      } catch (e) {
+        console.error("report request failed", e);
+      }
+    },
+    [api],
+  );
+
+  // 手動即時昇格（結晶化）。
+  const handlePromote = useCallback(
+    async (alertId: string) => {
+      try {
+        await api.promote(alertId);
+        await refreshAlert(alertId);
+      } catch (e) {
+        console.error("promote request failed", e);
+      }
+    },
+    [api, refreshAlert],
+  );
+
   // 報告書の共有はダウンロード（静的スナップショット＝引用リンクが死ぬ）より、生きた証跡を
   // たどれるディープリンクのコピーを優先する。
   const [copied, setCopied] = useState(false);
@@ -162,13 +187,16 @@ export function AlertDetailPage() {
               lookup={(rid) => alerts.find((a) => a.id === rid)}
               className={PANEL}
             />
-            <RemediationPanel
-              alert={alert}
-              api={remediationApi}
-              pushed={remediationByAlertId.get(alert.id) ?? null}
-              live
-              className={PANEL}
-            />
+            {/* 自動修正は実際の修正対象（payload.vulnerabilities）を持つ SECURITY 検知のみ。 */}
+            {alert.category === "SECURITY" && (
+              <RemediationPanel
+                alert={alert}
+                api={remediationApi}
+                pushed={remediationByAlertId.get(alert.id) ?? null}
+                live
+                className={PANEL}
+              />
+            )}
             {hasAiInvestigation(alert) && (
               <EvidencePanel api={evidenceApi} alert={alert} className={PANEL} />
             )}
@@ -177,6 +205,8 @@ export function AlertDetailPage() {
               alert={alert}
               onDecision={handleDecision}
               onReinvestigate={handleReinvestigate}
+              onGenerateReport={handleGenerateReport}
+              onPromote={handlePromote}
             />
           </article>
         )}

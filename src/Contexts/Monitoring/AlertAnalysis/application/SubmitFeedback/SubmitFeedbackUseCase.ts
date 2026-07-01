@@ -1,14 +1,12 @@
 import { EvidenceWeightedPromotionPolicy } from "@monitoring/AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
-import { Uuid } from "../../../../Shared/domain/value-object/Uuid.js";
 import { ResolvedIncident } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { SimilarIncidentRepository } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { Alert } from "../../domain/Alert.js";
 import { AlertId } from "../../domain/AlertId.js";
-import { investigationItemText } from "../../domain/InvestigationReport.js";
 import { AlertRepository } from "../../domain/AlertRepository.js";
-import { KnownErrorPattern } from "../../domain/KnownErrorPattern.js";
 import { KnownErrorPatternRepository } from "../../domain/KnownErrorPatternRepository.js";
+import { crystallizePatternFromAlert } from "../../domain/promotion/crystallizePatternFromAlert.js";
 import { PatternPromotionPolicy } from "../../domain/promotion/PatternPromotionPolicy.js";
 import { MonitoringResourceNotFoundError } from "../errors/MonitoringResourceNotFoundError.js";
 
@@ -96,20 +94,10 @@ export class SubmitFeedbackUseCase {
   private async maybeAutoPromote(alert: Alert): Promise<void> {
     if (!this.promotionPolicy.shouldPromote(alert)) return;
 
-    const report = alert.investigationReport;
-    if (report === null) return; // ポリシーが保証済みだが型を絞るためのガード
-    const eventName = alert.monitoringEvent.eventName;
-    const pattern = KnownErrorPattern.create({
-      id: Uuid.random().value,
-      name: `AUTO_PROMOTED_${eventName.toUpperCase()}`,
-      description: report.summary,
-      eventNamePattern: eventName,
-      payloadConditions: [], // 自動昇格は eventName のみでマッチ（安全側）
-      severity: report.severity,
-      suggestedAction: report.suggestedActions.map(investigationItemText).join("\n"),
-      // 承認のやり直し（承認→却下）で結晶化を撤回できるよう由来 Alert を記録する。
-      sourceAlertId: alert.id.value,
-    }).promote();
+    // 結晶化（Alert→KnownErrorPattern の焼き付け）は手動即時昇格と共通のファクトリに集約。
+    // 自動昇格は AUTO_PROMOTED 接頭辞で由来を明示する。
+    const pattern = crystallizePatternFromAlert(alert, "AUTO_PROMOTED");
+    if (pattern === null) return; // ポリシーが保証済みだが型を絞るためのガード
 
     await this.knownErrorPatternRepository.save(pattern);
 
