@@ -208,6 +208,9 @@ jobs:
               # GCS から最新の compose を VM へ再取得（VM SA = roles/storage.objectViewer）。
               # これをしないと起動時に取得した古い compose のまま up され、変数参照のずれ等が起きる。
               TOKEN=\$(curl -sf -H 'Metadata-Flavor: Google' 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token' | sed -n 's/.*\"access_token\":\"\([^\"]*\)\".*/\1/p')
+              # 起動時の docker login トークンは ~1h で失効するため、pull 前にVM SAの
+              # 新しいアクセストークンで AR に再ログインする（VM SA = roles/artifactregistry.reader）。
+              echo \"\$TOKEN\" | sudo docker login -u oauth2accesstoken --password-stdin 'https://${{ vars.AR_HOST }}'
               sudo curl -fsS -H \"Authorization: Bearer \$TOKEN\" -o /opt/app/docker-compose.base.yml 'https://storage.googleapis.com/storage/v1/b/${{ vars.DEPLOY_BUCKET }}/o/docker-compose.yml?alt=media'
               sudo curl -fsS -H \"Authorization: Bearer \$TOKEN\" -o /opt/app/docker-compose.prod.yml 'https://storage.googleapis.com/storage/v1/b/${{ vars.DEPLOY_BUCKET }}/o/docker-compose.prod.yml?alt=media'
               sudo docker compose \
