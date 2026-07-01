@@ -11,11 +11,16 @@ import {
   PRODUCT_IN_STOCK,
   KNOWN_ERROR_PATTERNS_COLLECTION,
 } from "./support.js";
-// Note: ec/orders.e2e.test.ts also fires a payment.timeout event. Since Vitest
-// transitions between test files almost instantly, that event may still be
-// in-flight when this test's beforeAll clears alerts. We therefore call
-// clearAlerts() a second time, right before placing the order, to eliminate
-// the dedup-collision race.
+// Note: ec/orders.e2e.test.ts (runs immediately before this file) also fires a
+// payment.timeout event. Alert は dedupKey(source::category::eventName) 単位で
+// 畳み込まれ、payload は「最初の観測」のものだけが残る（occurrenceCount が増えるだけ）。
+// つまり CI のようにバックエンドがコールドスタートで先行イベントの配信が遅れると、
+// ec/orders の payment.timeout がこのテストの clearAlerts 後に第1観測として着弾し、
+// 自分の customerId は payload に残らない。したがって payload.customerId で相関するのは
+// dedup 設計上そもそも不安定なので、この Alert は eventName で相関させる
+// （payment.timeout の未解決 Alert は clear 直後には1件しか存在しえない）。
+// clearAlerts() を注文投入の直前にもう一度呼ぶのは、先行 Alert を確実に消してから
+// 観測を始めるため。
 
 /**
  * 【既知パターン経路 E2E】Gemini を一切呼ばない・決定論的・無料の縦串テスト。
@@ -27,8 +32,6 @@ import {
 describe("backoffice E2E: known-pattern path (no AI)", () => {
   let mongo: MongoClient;
   const SEED_PATTERN_ID = "e2e-known-payment-timeout";
-  // この顧客IDで発火した payment.timeout イベントだけを相関させる
-  const customerId = crypto.randomUUID();
 
   beforeAll(async () => {
     // 既存 Alert を消して payment.timeout を第1観測にする（dedup 回避）
@@ -70,14 +73,15 @@ describe("backoffice E2E: known-pattern path (no AI)", () => {
     // 在庫ありで予約は通り、決済が TIMEOUT → PaymentTimeoutDomainEvent 発火（EC は 400 を返す）
     await placeEcOrder({
       orderId: crypto.randomUUID(),
-      customerId,
+      customerId: crypto.randomUUID(),
       productId: PRODUCT_IN_STOCK,
     });
 
+    // dedup で payment.timeout は1件に畳み込まれるため eventName で相関する。
+    // clear 直後に現れる payment.timeout Alert は自分の観測か、遅延した先行観測の
+    // どちらかだが、いずれも seed パターン（eventName 一致のみ）で「既知」に分類される。
     const alert = await pollAlert(
-      (a) =>
-        a.monitoringEvent.eventName === EVENT_NAMES.paymentTimeout &&
-        a.monitoringEvent.payload.customerId === customerId,
+      (a) => a.monitoringEvent.eventName === EVENT_NAMES.paymentTimeout,
     );
 
     expect(alert.classification.type).toBe("known");
