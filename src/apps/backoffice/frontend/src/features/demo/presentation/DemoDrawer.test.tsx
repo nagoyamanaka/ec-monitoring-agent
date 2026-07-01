@@ -48,7 +48,9 @@ describe("DemoDrawer", () => {
 
     await waitFor(() => expect(screen.getByText("5")).toBeInTheDocument());
     expect(screen.getByText("決済タイムアウト")).toBeInTheDocument();
-    expect(screen.getByText("在庫不足")).toBeInTheDocument();
+    // app 枠は 完全一致/類似/未知 の3段。類似（準・既知）シナリオが出る。
+    expect(screen.getByText("類似障害（準・既知）")).toBeInTheDocument();
+    expect(screen.getByText("在庫競合")).toBeInTheDocument();
   });
 
   it("シナリオボタン押下で triggerScenario を呼ぶ", async () => {

@@ -9,6 +9,8 @@ describe("reinvestigate", () => {
       getAlert: vi.fn(),
       submitFeedback: vi.fn(),
       reinvestigate: vi.fn().mockResolvedValue(undefined),
+      requestReport: vi.fn().mockResolvedValue(undefined),
+      promote: vi.fn().mockResolvedValue(undefined),
     } satisfies AlertsApi;
     const signal = new AbortController().signal;
 

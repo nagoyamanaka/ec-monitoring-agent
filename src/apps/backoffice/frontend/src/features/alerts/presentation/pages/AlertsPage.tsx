@@ -1,5 +1,6 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import type { AlertView } from "../../domain/AlertView";
 import { AlertsLayout } from "@shared/layouts/AlertsLayout";
 import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import { DemoDrawer } from "@features/demo/presentation/DemoDrawer";
@@ -62,10 +63,33 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
       return next;
     });
   }, [setParams]);
-  const selected = useMemo(
+  // 現役アラートは共有一覧から引く。一覧に無い id（＝解決済みアーカイブ：関連アラートの
+  // back-link 先など。RESOLVED は一覧に出さない）は GET /alerts/:id で単発取得して開く。
+  const inList = useMemo(
     () => alerts.find((a) => a.id === selectedId) ?? null,
     [alerts, selectedId],
   );
+  const [fetched, setFetched] = useState<AlertView | null>(null);
+  useEffect(() => {
+    if (!selectedId || inList) {
+      setFetched(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .getAlert(selectedId)
+      .then((a) => {
+        if (!cancelled) setFetched(a);
+      })
+      .catch(() => {
+        if (!cancelled) setFetched(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, inList, api]);
+  const selected =
+    inList ?? (fetched && fetched.id === selectedId ? fetched : null);
   // 関連アラート（タスク9e）の日時/severity 補完用。一覧から alertId を解決する。
   const relatedLookup = useCallback(
     (id: string) => alerts.find((a) => a.id === id),
@@ -98,6 +122,31 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
     [api, refreshAlert],
   );
 
+  // 既知一致のオンデマンド AI 調査（202／レポート添付は SSE で届く）。
+  const handleGenerateReport = useCallback(
+    async (alertId: string) => {
+      try {
+        await api.requestReport(alertId);
+      } catch (e) {
+        console.error("report request failed", e);
+      }
+    },
+    [api],
+  );
+
+  // 手動即時昇格（結晶化）。昇格後の一覧はパターン側なので再取得は不要だが、UI 整合のため対象を更新。
+  const handlePromote = useCallback(
+    async (alertId: string) => {
+      try {
+        await api.promote(alertId);
+        await refreshAlert(alertId);
+      } catch (e) {
+        console.error("promote request failed", e);
+      }
+    },
+    [api, refreshAlert],
+  );
+
   return (
     <>
       <AlertsLayout
@@ -123,6 +172,8 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
         onClose={closeFocus}
         onDecision={handleDecision}
         onReinvestigate={handleReinvestigate}
+        onGenerateReport={handleGenerateReport}
+        onPromote={handlePromote}
         evidenceApi={evidenceApi}
         remediationApi={remediationApi}
         pushedRemediation={

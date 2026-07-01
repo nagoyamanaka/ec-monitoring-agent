@@ -11,6 +11,8 @@ import { GetKnownErrorPatternsQueryHandler } from "../../../../Contexts/Monitori
 import { GetKnownErrorPatternsUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/GetKnownErrorPatterns/GetKnownErrorPatternsUseCase.js";
 import { PromotePatternCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromotePattern/PromotePatternCommandHandler.js";
 import { PromotePatternUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromotePattern/PromotePatternUseCase.js";
+import { PromoteAlertCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromoteAlert/PromoteAlertCommandHandler.js";
+import { PromoteAlertUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromoteAlert/PromoteAlertUseCase.js";
 import { SubmitFeedbackCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommandHandler.js";
 import { SubmitFeedbackUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackUseCase.js";
 import { ApplicationClassificationPolicy } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/policies/ApplicationClassificationPolicy.js";
@@ -22,11 +24,14 @@ import { ClassificationRule } from "../../../../Contexts/Monitoring/AlertAnalysi
 import { MongoAlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoAlertRepository.js";
 import { ReadModelCachingAlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/ReadModelCachingAlertRepository.js";
 import { RedisAlertReadModelStore } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/readmodel/RedisAlertReadModelStore.js";
+import { AlertReadModelStore } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/readmodel/AlertReadModelStore.js";
 import { AlertRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/AlertRepository.js";
 import { MongoKnownErrorPatternRepository } from "../../../../Contexts/Monitoring/AlertAnalysis/infrastructure/persistence/MongoKnownErrorPatternRepository.js";
 import { InvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/InvestigateAlert/InvestigateAlertUseCase.js";
 import { ReinvestigateAlertUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/ReinvestigateAlert/ReinvestigateAlertUseCase.js";
 import { ReinvestigateAlertCommandHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/ReinvestigateAlert/ReinvestigateAlertCommandHandler.js";
+import { RequestAlertInvestigationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/RequestInvestigation/RequestAlertInvestigationUseCase.js";
+import { RequestAlertInvestigationCommandHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/RequestInvestigation/RequestAlertInvestigationCommandHandler.js";
 import { GetInfraEvidenceUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceUseCase.js";
 import { GetInfraEvidenceQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetInfraEvidence/GetInfraEvidenceQueryHandler.js";
 import { DraftRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/DraftRemediation/DraftRemediationUseCase.js";
@@ -149,10 +154,15 @@ export class BackofficeApp {
 
     // read-model（案②）: Valkey 有効時のみ cache-aside デコレータで包む。
     // 無効時は MongoAlertRepository を素通し＝現状動作（Mongo 直読）を一切変えない。
-    const alertRepository: AlertRepository = valkey.enabled
+    // demo reset は Mongo を直 delete するため、read-model の一覧キャッシュを無効化する必要がある
+    // （さもないと reset 後も GET /alerts が古い一覧を返す）。store 参照を demo reset へ渡す。
+    const alertReadModelStore: AlertReadModelStore | null = valkey.enabled
+      ? new RedisAlertReadModelStore(valkey)
+      : null;
+    const alertRepository: AlertRepository = alertReadModelStore
       ? new ReadModelCachingAlertRepository(
           new MongoAlertRepository(mongoClient),
-          new RedisAlertReadModelStore(valkey),
+          alertReadModelStore,
         )
       : new MongoAlertRepository(mongoClient);
     const knownErrorPatternRepository = new MongoKnownErrorPatternRepository(mongoClient);
@@ -261,6 +271,23 @@ export class BackofficeApp {
     const promotePatternUseCase = new PromotePatternUseCase(knownErrorPatternRepository, logger);
     const promotePatternCommandHandler = new PromotePatternCommandHandler(promotePatternUseCase);
 
+    // 手動即時昇格（この Alert を回数不問で既知パターンへ結晶化）。
+    const promoteAlertUseCase = new PromoteAlertUseCase(
+      alertRepository,
+      knownErrorPatternRepository,
+      logger,
+    );
+    const promoteAlertCommandHandler = new PromoteAlertCommandHandler(promoteAlertUseCase);
+
+    // オンデマンド AI 調査（既知一致は自動起動しない → 作業者要求で InvestigateAlertDomainEvent を発火）。
+    const requestAlertInvestigationUseCase = new RequestAlertInvestigationUseCase(
+      alertRepository,
+      eventBus,
+      logger,
+    );
+    const requestAlertInvestigationCommandHandler =
+      new RequestAlertInvestigationCommandHandler(requestAlertInvestigationUseCase);
+
     const investigateAlertUseCase = new InvestigateAlertUseCase(
       alertRepository,
       similarIncidentRepository,
@@ -354,6 +381,8 @@ export class BackofficeApp {
         analyzeAlertCommandHandler,
         submitFeedbackCommandHandler,
         promotePatternCommandHandler,
+        promoteAlertCommandHandler,
+        requestAlertInvestigationCommandHandler,
         draftRemediationCommandHandler,
         reinvestigateAlertCommandHandler,
       ]),
@@ -414,8 +443,10 @@ export class BackofficeApp {
       collectMonitoringEventUseCase,
     );
     const demoResetUseCase = new DemoResetUseCase(
-      new MongoDemoDataAdapter(mongoClient),
+      new MongoDemoDataAdapter(mongoClient, alertReadModelStore),
       knownErrorPatternRepository,
+      similarIncidentRepository,
+      alertRepository,
     );
 
     this.server = new Server(config.port);
@@ -462,13 +493,17 @@ export class BackofficeApp {
   }
 
   // ES 設定時は Elasticsearch を SimilarIncident の永続＋類似検索に使い、SimilarPatternRule を分類に追加する。
-  // 未設定時は InMemory にフォールバック（従来挙動＝完全一致のみ・分類は変えない）。
+  // 未設定時も InMemory の字句類似（Jaccard [0,1]）で SimilarPatternRule を載せ、graded confidence
+  // （類似・準既知）をデモ/ローカルでも成立させる。コーパスが空なら search は空→Rule 棄権なので
+  // 従来挙動（完全一致のみ）と等価で E2E も無傷（E2E は解決済み事例を index しない）。
   private async buildSimilarIncidentRepository(
     rules: ClassificationRule[],
   ): Promise<SimilarIncidentRepository> {
     if (!config.elasticsearch.url) {
       const inMemory = new InMemorySimilarIncidentRepository();
       await inMemory.warmUp([]);
+      // InMemory の search は有界な Jaccard [0,1] を返すので scoreCeiling は既定(1)でよい。
+      rules.push(new SimilarPatternRule(inMemory));
       return inMemory;
     }
 

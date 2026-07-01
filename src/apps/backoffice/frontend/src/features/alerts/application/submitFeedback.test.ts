@@ -31,6 +31,8 @@ describe("submitFeedback", () => {
       getAlert: vi.fn(),
       submitFeedback: vi.fn().mockResolvedValue(undefined),
       reinvestigate: vi.fn().mockResolvedValue(undefined),
+      requestReport: vi.fn().mockResolvedValue(undefined),
+      promote: vi.fn().mockResolvedValue(undefined),
     } satisfies AlertsApi;
     const signal = new AbortController().signal;
 

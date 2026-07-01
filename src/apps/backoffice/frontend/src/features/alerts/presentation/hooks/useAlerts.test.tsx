@@ -11,6 +11,8 @@ function fakeApi(initial: ReturnType<typeof makeAlert>[]): AlertsApi {
     getAlert: vi.fn(),
     submitFeedback: vi.fn().mockResolvedValue(undefined),
     reinvestigate: vi.fn().mockResolvedValue(undefined),
+    requestReport: vi.fn().mockResolvedValue(undefined),
+    promote: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -48,6 +50,8 @@ describe("useAlerts", () => {
       getAlert: vi.fn(),
       submitFeedback: vi.fn(),
       reinvestigate: vi.fn(),
+      requestReport: vi.fn(),
+      promote: vi.fn(),
     };
     const { result } = renderHook(() => useAlerts(api, new MockAlertStream()));
 
