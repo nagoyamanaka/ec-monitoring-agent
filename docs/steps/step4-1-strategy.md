@@ -5,10 +5,10 @@
 >
 > | 順  | スコープ            | 設計ドキュメント                      | TODO                                       |
 > | --- | ------------------- | ------------------------------------- | ------------------------------------------ |
-> | 1   | 戦略設計            | `docs/step4-1-strategy.md`（本書）    | `docs/step4-1-strategy-todo.md`            |
-> | 2   | context/Monitoring  | `docs/step4-2-monitoring-context.md`  | `docs/step4-2-monitoring-context-todo.md`  |
-> | 3   | backoffice/backend  | `docs/step4-3-backoffice-backend.md`  | `docs/step4-3-backoffice-backend-todo.md`  |
-> | 4   | backoffice/frontend | `docs/step4-4-backoffice-frontend.md` | `docs/step4-4-backoffice-frontend-todo.md` |
+> | 1   | 戦略設計            | `docs/steps/step4-1-strategy.md`（本書）    | `docs/steps/step4-1-strategy-todo.md`            |
+> | 2   | context/Monitoring  | `docs/steps/step4-2-monitoring-context.md`  | `docs/steps/step4-2-monitoring-context-todo.md`  |
+> | 3   | backoffice/backend  | `docs/steps/step4-3-backoffice-backend.md`  | `docs/steps/step4-3-backoffice-backend-todo.md`  |
+> | 4   | backoffice/frontend | `docs/steps/step4-4-backoffice-frontend.md` | `docs/steps/step4-4-backoffice-frontend-todo.md` |
 
 ---
 

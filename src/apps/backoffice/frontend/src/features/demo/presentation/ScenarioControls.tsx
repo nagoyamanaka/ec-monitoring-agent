@@ -113,7 +113,7 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
         id: "4",
         label: "インフラ障害（実 Cloud Monitoring）",
         description:
-          "CRITICAL ログ + HTTP 500 → 実 Cloud Monitoring 経由で発報（GCP のみ・真正性の見せ場）。インシデントは GCP 側に残り時刻も発報時のまま（閉じる公開 API は無し）。反復・時刻ずれ回避には合成版（4b）を推奨。",
+          "CRITICAL ログ + HTTP 500 → 実 Cloud Monitoring 経由で発報（GCP のみ・真正性の見せ場）。⏱ Cloud Monitoring のポリシー評価を挟むため、注入からアラート検知まで約1分のラグがあります（実検知経路ゆえの遅延）。インシデントは GCP 側に残り時刻も発報時のまま（閉じる公開 API は無し）。反復・時刻ずれ回避には合成版（4b）を推奨。",
         realness: "cloud",
       },
       {

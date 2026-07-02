@@ -47,11 +47,14 @@ services:
       # 無料クレジットが適用され、API キーは不要。
       GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-true}
       GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT_ID}
-      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      # モデル到達リージョン。.env.local と揃えて asia-northeast1 に固定（config.ts の既定は global）。
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-asia-northeast1}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-pro}
       # AI調査をADKマルチエージェント（7エージェント自律調査）に切替。未設定だと単一Gemini版に
       # フォールバックしていた（＝本番でADKが使われていなかった原因はこのフラグ欠落）。Vertex 必須。
       AI_INVESTIGATION_ADK: ${AI_INVESTIGATION_ADK:-true}
+      # ADK 自律ループの LLM 呼び出し上限（トークン暴走の安全弁）。config.ts 既定と同値だが明示。
+      AI_INVESTIGATION_ADK_MAX_LLM_CALLS: ${AI_INVESTIGATION_ADK_MAX_LLM_CALLS:-16}
       # 単一Gemini経路(GeminiLLMClient)の1呼び出しタイムアウト(ms)。旧ハードコード30秒だと
       # gemini-2.5-pro が超過して毎回 fallback(confidence=0) に落ちていたため 90秒へ。
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-90000}
@@ -63,6 +66,23 @@ services:
       RABBITMQ_PREFETCH: ${RABBITMQ_PREFETCH:-3}
       # 検知 ingest（Cloud Monitoring webhook）認証トークン（§11.2）
       INGEST_TOKEN: ${INGEST_TOKEN}
+      # AI 調査の証拠収集（GitHubGatewayImpl）＋証拠リンク生成（evidenceLinks）で使う。
+      # 両方揃わないとコミット収集を丸ごとスキップし、コミットのディープリンクも出せない
+      # （調査レポートに「実コミットへのリンク」が出なかった原因はこの2変数の欠落）。
+      # GITHUB_TOKEN は read-only（repo:contents 読み取り）で足り、値だけは Secret Manager から供給する
+      # （startup-script が .env に注入。以下 REPO/REF/REMEDIATION は非シークレットなので default で持つ）。
+      GITHUB_TARGET_REPO: ${GITHUB_TARGET_REPO:-nagoyamanaka/ec-monitoring-agent}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      # 調査が見る ref。demo/regression 固定で、審査員がいつ見ても壁時計非依存で証跡コミットを拾う
+      # （未設定だと本番は既定ブランチ main を時間窓で絞り、デモ証跡が窓外に落ちる）。
+      GITHUB_TARGET_REF: ${GITHUB_TARGET_REF:-demo/regression}
+      # 修正PRの起票先／レビュー対象 PR の所在（シナリオ5/7）。
+      GITHUB_REMEDIATION_REPO: ${GITHUB_REMEDIATION_REPO:-nagoyamanaka/ec-monitoring-agent}
+      # 修正PRの base ブランチ（脆弱な状態を用意した baseline へ向ける・シナリオ5）。
+      GITHUB_REMEDIATION_BASE_REF: ${GITHUB_REMEDIATION_BASE_REF:-demo/security-baseline}
+      # リメディ実行戦略。advisory=in-processで方針PRを実起票（.env.local と同値）。
+      # ※ config.ts の既定は "demo"（GitHub 非接触の固定URL）。ここを advisory にすると実PRを起票する。
+      REMEDIATION_MODE: ${REMEDIATION_MODE:-demo}
       # SimilarPatternRule（graded confidence 分類）用
       ELASTICSEARCH_URL: http://elasticsearch:9200
       # read-model projection ＋ SSE Pub/Sub（base の REDIS_URL=redis://valkey:6379 を継承）

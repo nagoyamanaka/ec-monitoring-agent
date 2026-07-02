@@ -50,7 +50,17 @@ terraform apply
    ```
 
    - **Gemini は API キー不要**。Vertex AI 経由（`GOOGLE_GENAI_USE_VERTEXAI=true`）で呼び、認証は Cloud Run / GCE の SA（`roles/aiplatform.user` 付与済み）＝ADC。課金は GCP プロジェクト（＝$300 無料クレジット）に乗る。`GEMINI_API_KEY` Secret は作らない（AI Studio フォールバックを使う場合のみ手動で追加）。
-   - モデルのリージョンは `GOOGLE_CLOUD_LOCATION`（既定 `global`）。リージョン固定したい場合は `asia-northeast1` 等に変更。
+   - モデルのリージョンは `GOOGLE_CLOUD_LOCATION`（config.ts 既定 `global` / compose は `asia-northeast1` に固定）。変えたい場合は compose か `.env` で上書き。
+
+   - **GITHUB_TOKEN（AI 調査のコミット収集＋証拠リンク＋修正PR起票）**。read-only の fine-grained PAT（対象 repo の Contents: Read、修正PRを実起票するなら Pull requests: Write）を投入する。secret 箱は `bootstrap` の `secret_ids` で作成済み。**平文は絶対に git / tfvars に置かない**（INGEST_TOKEN と同じ扱い）:
+
+     ```bash
+     printf '%s' "<github-pat>" | gcloud secrets versions add GITHUB_TOKEN --data-file=- --project=<PROJECT_ID>
+     ```
+
+     - **未投入でも起動は止まらない**（startup-script は取得失敗を空にフォールバックし、`GitHubGatewayImpl` は空トークンなら silent skip）。ただし空だとコミットの収集・証拠リンクは出ない。
+     - **反映タイミング**: `.env` は GCE の startup-script が VM 起動時に書く。稼働中 VM には自動反映されないので、投入後に **(a) VM を reset/再作成** するか、**(b) 暫定で `/opt/app/.env` を手編集**して `docker compose --env-file /opt/app/.env -f docker-compose.base.yml -f docker-compose.prod.yml up -d backoffice-backend` で再起動する。
+     - PAT を露出・誤コミットした場合は **GitHub 側で即 revoke → 再発行 → この version 追加をやり直す**（Secret Manager の旧 version も `gcloud secrets versions destroy` で破棄）。
 
 2. **イメージを Artifact Registry に push**（`terraform output artifact_repo` のパスへ `ec-backend` / `backoffice-backend`）。
 3. **compose を deploy bucket にアップロード**（GCE startup-script が pull する）:
@@ -110,7 +120,7 @@ infra/terraform/teardown.sh
 | VPC / subnet / VPC Access connector |                                                |
 | Artifact Registry リポジトリ        | push 済みイメージも一緒に消える                |
 | GCS deploy バケット                 | `force_destroy=true` のため中身ごと削除        |
-| Secret Manager secrets              | `INGEST_TOKEN` バージョンも含めて削除          |
+| Secret Manager secrets              | `INGEST_TOKEN` / `GITHUB_TOKEN` バージョンも含めて削除 |
 | Monitoring / Logging リソース       | アラートポリシー・通知チャネル・ログメトリクス |
 
 ### 2. tfstate 用 GCS バケットを手動削除

@@ -1,6 +1,6 @@
 # Step 4-5 TODO: GCP 完結型デプロイ＆可観測性
 
-> 対応設計: `docs/step4-5-backoffice-infra.md`
+> 対応設計: `docs/steps/step4-5-backoffice-infra.md`
 > 前提: step4-2 P0 / step4-3 P0・P1 が完了済み（アプリは動く）。本 TODO は **作成済みの IaC（`infra/terraform/`）を実機で動かす**残作業。
 > **上から順に実行できるよう依存順に並べてある**。各タスクの `前提:` を満たしてから着手すること。
 > 優先度: **P0=動かすライン必須** / **P1=可観測性の仕上げ** / **stretch=任意**。

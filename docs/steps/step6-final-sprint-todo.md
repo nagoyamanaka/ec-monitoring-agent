@@ -1,9 +1,11 @@
 # Step 6 TODO: ファイナルスプリント（予兆 × デモ防御）
 
-> 対応設計: `docs/step6-final-sprint-strategy.md`
+> 対応設計: `docs/steps/step6-final-sprint-strategy.md`
 > **予兆（F系）は `step4-1/2/3/4` の todo から stretchⅡ 予兆タスクを本ファイルへ集約したもの**（旧ファイルにはポインタ stub を残置）。旧タスク番号を各所に併記＝トレーサビリティ維持。
 > 優先度: **P0**（本命1本の録画品質）/ **stretch**（余力時）/ **設計のみ**（ハッカソン後）。
-> 着手条件: フェーズ0〜3 着地済み（✅）。予兆は `feature/forecast` ブランチ・`FORECAST_ENABLED` 既定 off・**録画前提**・write ゼロ。main は常時 685緑・提出可能を維持。
+> 着手条件: フェーズ0〜3 着地済み（✅）。予兆は `feature/forecast` ブランチ・`FORECAST_ENABLED` 既定 off・**録画前提**・write ゼロ。main は常時 全テスト緑（7/2時点 694）・提出可能を維持。
+> 公式確定情報（strategy §1.5）: 一次提出物＝公開リポジトリ＋**デプロイURL（動作確認できる状態必須＝無人安定性が一次から効く）**＋ProtoPedia（動画・アーキ図必須・ストーリー）。最終ピッチ＝Google渋谷ライブ。審査観点に「実運用を見据えたDevOpsプロセス」が明記＝D4 追加。
+> 実行体制（strategy §1.6）: **F1〜F7 実装は Claude Code に委譲**。人間の約6時間は F8（seed/録画）・デプロイ検証に全振り。スマホ4時間は提出資料（`docs/steps/step6-submission-prompt.md` を使用）。**F9 は切り確定**。
 
 ---
 
@@ -53,6 +55,7 @@
 ### タスク F6: forecast ルート・コントローラ ＋ DI ＋ seed 〔P0〕（旧 step4-3 タスク13・14）
 
 - 【新規】`routes/forecastRoutes.ts` ＋ `ForecastPostController`（POST /forecast → `ForecastRiskCommandHandler`）/ `ForecastGetController`（GET /forecast → 最新 RiskForecast）。`routes/index.ts` に登録（既存ルートはノータッチ）
+- **【審査対応】GET /forecast は事前生成済みの最新 RiskForecast を返す**＝審査員の非同期閲覧（デプロイURL審査）に Gemini 待ちゼロ・課金ゼロで耐える。提出前に POST を1回打ってキャッシュを温めておく。POST は `DEMO_ENABLED` 配下
 - 【修正】`BackofficeApp.ts`：read-only依存を new して `ForecastRiskCommandHandler` を Bus 登録
   - **★継ぎ目**: `signalSources: ForecastSignalSource[]` を組み立てて渡す（Gateway を名指ししない）。`PullRequestSignalSource`（GitHub）/ `PendingPlanSignalSource`（Terraform）/ `ScheduleSignalSource`（ScheduleSource）の3つ
   - `ForecastMemoryRepository` / **ForecastPort=GeminiForecastAdapter★差し替え点**
@@ -83,9 +86,9 @@
 - 【引用検証の可視化】意図的に偽引用を混ぜたケースで**ドロップされる**ことをデモで見せられるようにする（ハルシネーション・ガードの実演）
 - 【録画】「実際に動いた1回を録る」（捏造NG・`step4-1` §7.6）
 
-### タスク F9: 2本目シナリオ（seed 替えのみ）〔stretch・余力時〕
+### ~~タスク F9: 2本目シナリオ（seed 替えのみ）~~〔**切り確定**（時間制約・strategy §1.6）〕
 
-- 新規コードは書かない。§3.2 の別ドメイン seed（例: 決済プロバイダ障害告知 × 過去決済タイムアウト記憶）を追加し「同一機構が別ドメインでも効く」汎用性を示す。間に合わなければ即切り。
+- ~~新規コードは書かない。§3.2 の別ドメイン seed を追加し汎用性を示す。~~ 「同一機構で源を足すだけ」の汎用性は ProtoPedia ストーリー／アーキ図の `ForecastSignalSource[]` 継ぎ目で**語りで**示す。
 
 ---
 
@@ -101,15 +104,21 @@
 
 ### タスク D2: 認知負荷トリム〔取り: Lisa〕
 
-- 【UI】デモ卓（`ScenarioControls`）で1シナリオ選択時に他群を畳む（段階開示の徹底・同時表示概念を削減）
-- realness バッジ／確度スペクトルの説明文を「読む物」から「一目で分かる」へ圧縮（文言短縮・凡例のホバー化など）
+- [x] 【UI】デモ卓（`ScenarioControls`）のシナリオ単位開示・調査中表示・昇格通知・戻る導線・アラート名日本語化（✅ 12f517e で着地）
+- [ ] realness バッジ／確度スペクトルの説明文を「読む物」から「一目で分かる」へ圧縮（文言短縮・凡例のホバー化など）＝残りはこれのみ
 - 既存の段階開示方針の延長＝新規概念は増やさない
 
-### タスク D3: ライブ脆さ対策〔取り: David〕
+### タスク D3: ライブ脆さ対策〔取り: David・**最終ピッチ=渋谷ライブ確定で重要度up**〕
 
-- 【明文化】AI経路タイムアウト時のフォールバック導線（`GEMINI_TIMEOUT_MS`/`AI_INVESTIGATION_TIMEOUT_MS`・fallback confidence の見え方）をデモ台本に記述
+- 【明文化】AI経路タイムアウト時のフォールバック導線（`GEMINI_TIMEOUT_MS`/`AI_INVESTIGATION_TIMEOUT_MS`・fallback confidence の見え方）をデモ台本に記述。fallback でも証拠リンクが残る改善（evidenceLinks 温存）は着地済み＝「失敗しても空にならない」ことを台本の保険として明記
+- 【真因】ADK 散文出力（JSONでなく地の文が返る）の rawSnippet ログで真因を確定し、プロンプト側で JSON 強制を締める（fallback 率を下げる＝ライブ耐性の本丸）
 - 【退避】録画テイクを正とし、ライブは「録画済みを再現する」位置づけにする（`AI_INVESTIGATION_STUB` の決定的応答経路を演出上どう使うか整理）
-- 【確認】予兆導入後も main が 685緑・提出可能を維持（`feature/forecast` を merge する条件＝全緑）
+- 【確認】予兆導入後も main が全テスト緑・提出可能を維持（`feature/forecast` を merge する条件＝全緑）
+
+### タスク D4: DevOpsドッグフーディング可視化〔取り: 公式審査観点「実運用を見据えたDevOpsプロセス」〕
+
+- 【整理】自リポジトリの CI/CD が本プロダクト自身の運用である事実を1枚図に: app.yml（typecheck/UT/E2E→build→Cloud Run/GCE deploy）・Trivy→実 ingest（シナリオ5の実経路）・terraform.yml（plan/apply・state lock 対策済み）・ai-remediation.yml（dispatch→実修正→テストゲート→draft PR）
+- 【デモ導線】「監視対象のECも、監視するエージェント自身も、同じ DevOps ループの中にいる」をデモ or 録画のどこで見せるか決める（発表資料側と分担）
 
 ---
 

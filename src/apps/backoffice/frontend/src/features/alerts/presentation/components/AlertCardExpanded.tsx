@@ -76,8 +76,8 @@ export function AlertCardExpanded({
             {known ? "該当パターン（既知）" : "AI 推定パターン"}
           </h4>
           <p className="text-slate-100">{reason.patternName}</p>
-          {/* 類似既知（SIMILARITY）の back-link は「関連アラート」パネル（RelatedAlertsPanel）に
-              AI 相関と統合して提示する（ドロワー/詳細でマウント・タスク9e）。 */}
+          {/* 類似既知（SIMILARITY）の back-link は RelatedAlertsPanel の「過去の同型事例」
+              セクションに確度チップ付きで提示する（ドロワー/詳細でマウント・タスク9e）。 */}
         </section>
       )}
 

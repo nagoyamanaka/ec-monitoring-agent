@@ -3,7 +3,7 @@
 > **変更履歴（v18→v19）**
 > 検知境界（detection boundary）を明文化。検知基盤に Cloud Monitoring を採用（Datadog 不採用＝有料・物語矛盾／Cloud Monitoring は無料枠・GCP 要件加点）。
 > 検知ソースを peer な ingest アダプタ化（`CloudMonitoringAlertIngestController`・`POST /ingest/cloud-monitoring` 実装）。EC 自前イベントは Datadog 不在のデモ stand-in と位置づけ。
-> 検知の被り対策3層（category オーナーシップ／dedupKey＋occurrenceCount／AI 相関委譲）。`MonitoringEvent.dedupKey()`・`Alert.occurrenceCount`・`AnalyzeAlert` dedup を実装。詳細は `docs/step4-1-strategy.md` §2.5。
+> 検知の被り対策3層（category オーナーシップ／dedupKey＋occurrenceCount／AI 相関委譲）。`MonitoringEvent.dedupKey()`・`Alert.occurrenceCount`・`AnalyzeAlert` dedup を実装。詳細は `docs/steps/step4-1-strategy.md` §2.5。
 >
 > **変更履歴（v11→v12）**
 > インフラ横断調査パイプラインを設計に追加。
@@ -13,11 +13,11 @@
 >
 > | Step                                 | 詳細設計ドキュメント                                                                  | ステータス      |
 > | ------------------------------------ | ------------------------------------------------------------------------------------- | --------------- |
-> | Step 1: ディレクトリ構成             | `docs/step1-directory-structure.md`                                                   | ✅ 確定         |
-> | Step 2: ドメインモデル設計（EC）     | `docs/step2-domain-model.md`                                                          | ✅ 確定         |
-> | Step 3: アプリケーション層設計（EC） | `docs/step3-application-layer.md`                                                     | ✅ 確定         |
-> | Step 4: Monitoring（4分割）          | `docs/step4-1-strategy.md` 〜 `step4-4-backoffice-frontend.md`（各 `*-todo.md` 付き） | ✅ 確定         |
-> | Step 5: ADR                          | `docs/step5-adr.md`                                                                   | 🔲 次のステップ |
+> | Step 1: ディレクトリ構成             | `docs/steps/step1-directory-structure.md`                                                   | ✅ 確定         |
+> | Step 2: ドメインモデル設計（EC）     | `docs/steps/step2-domain-model.md`                                                          | ✅ 確定         |
+> | Step 3: アプリケーション層設計（EC） | `docs/steps/step3-application-layer.md`                                                     | ✅ 確定         |
+> | Step 4: Monitoring（4分割）          | `docs/steps/step4-1-strategy.md` 〜 `step4-4-backoffice-frontend.md`（各 `*-todo.md` 付き） | ✅ 確定         |
+> | Step 5: ADR                          | `docs/steps/step5-adr.md`                                                                   | 🔲 次のステップ |
 
 ---
 
@@ -130,10 +130,10 @@ src/
 
 ## コンテキスト構成（設計対象）
 
-> **ディレクトリ構成の詳細は `docs/step1-directory-structure.md` を参照**
-> **ドメインモデルの詳細は `docs/step2-domain-model.md` を参照**
-> **アプリケーション層の詳細は `docs/step3-application-layer.md` を参照**
-> **Monitoringコンテキストの詳細は `docs/step4-2-monitoring-context.md` を参照（戦略は `step4-1`、backendは `step4-3`、frontendは `step4-4`）**
+> **ディレクトリ構成の詳細は `docs/steps/step1-directory-structure.md` を参照**
+> **ドメインモデルの詳細は `docs/steps/step2-domain-model.md` を参照**
+> **アプリケーション層の詳細は `docs/steps/step3-application-layer.md` を参照**
+> **Monitoringコンテキストの詳細は `docs/steps/step4-2-monitoring-context.md` を参照（戦略は `step4-1`、backendは `step4-3`、frontendは `step4-4`）**
 
 ```
 src/Contexts/
@@ -190,7 +190,7 @@ RabbitMQ
   - (a) **category オーナーシップ**: APPLICATION は EC イベント、INFRASTRUCTURE/CAPACITY は Cloud Monitoring が権威。同じものを両者に監視させず被りを構造的に消す。
   - (b) **dedupKey ＋ occurrenceCount**: 同一 dedupKey（`source::category::eventName`）の未解決 Alert は新規作成せず発生回数を加算（UI は「×N」）。アラート嵐・重複表示を抑制。`AnalyzeAlertUseCase` の classify 前で判定。
   - (c) **異症状・同一根本原因**は dedup でなく AI 調査の相関に委譲（エンジン化しない・ADR）。
-- 詳細・ADR は `docs/step4-1-strategy.md` §2.5 を参照。
+- 詳細・ADR は `docs/steps/step4-1-strategy.md` §2.5 を参照。
 
 ---
 
@@ -530,7 +530,7 @@ reactive（事後対応）から **proactive（事前予防）** へのシフト
 
 ## Monitoringコンテキスト設計方針
 
-> 詳細は `docs/step4-2-monitoring-context.md` を参照。以下は実装時に必ず守る制約のサマリー。
+> 詳細は `docs/steps/step4-2-monitoring-context.md` を参照。以下は実装時に必ず守る制約のサマリー。
 
 ### AlertClassifierの分類アーキテクチャ（Classifier / Policy / Rule の3層）
 
@@ -912,10 +912,10 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(
 
 | Step       | 詳細設計ドキュメント                                                                                                | ステータス      |
 | ---------- | ------------------------------------------------------------------------------------------------------------------- | --------------- |
-| **Step 1** | `docs/step1-directory-structure.md`                                                                                 | ✅ **確定済み** |
-| **Step 2** | `docs/step2-domain-model.md`                                                                                        | ✅ **確定済み** |
-| **Step 3** | `docs/step3-application-layer.md`                                                                                   | ✅ **確定済み** |
-| **Step 4** | `docs/step4-{1-strategy,2-monitoring-context,3-backoffice-backend,4-backoffice-frontend}.md`（各 `*-todo.md` 付き） | ✅ **確定済み** |
+| **Step 1** | `docs/steps/step1-directory-structure.md`                                                                                 | ✅ **確定済み** |
+| **Step 2** | `docs/steps/step2-domain-model.md`                                                                                        | ✅ **確定済み** |
+| **Step 3** | `docs/steps/step3-application-layer.md`                                                                                   | ✅ **確定済み** |
+| **Step 4** | `docs/steps/step4-{1-strategy,2-monitoring-context,3-backoffice-backend,4-backoffice-frontend}.md`（各 `*-todo.md` 付き） | ✅ **確定済み** |
 | **Step 5** | ADR                                                                                                                 | 🔲 次のステップ |
 
 ### Step 5で作成するADR
@@ -1034,7 +1034,7 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(
 - 「とどける」の見せ場を Cloud Run（一部）に載せる方針とEDAとのトレードオフをADR項目化
 - バックオフィスAPIに `/ingest/security-scan` / `/alerts/:id/remediation/*` を追加
 - Step 5 ADR項目に6件追加
-- 詳細は `docs/step4-2-monitoring-context.md`（ADKマルチエージェント／セキュリティ＋リメディエーション節）を参照
+- 詳細は `docs/steps/step4-2-monitoring-context.md`（ADKマルチエージェント／セキュリティ＋リメディエーション節）を参照
 - Step4 を4スコープに分割（戦略/Monitoring/backoffice-backend/backoffice-frontend）し各 `*-todo.md` を新設。フロントは feature-sliced（校正版）に方針確定
 
 ### v13（インフラ・ビルドツール整備）

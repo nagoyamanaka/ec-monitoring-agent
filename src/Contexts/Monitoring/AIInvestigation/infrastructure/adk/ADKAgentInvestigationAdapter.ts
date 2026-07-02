@@ -3,7 +3,7 @@ import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { buildUserPrompt } from "../aiinvestigation/InvestigationPromptBuilder.js";
-import { parseLLMOutput } from "../aiinvestigation/LLMOutputParser.js";
+import { parseLLMOutput, rawSnippet } from "../aiinvestigation/LLMOutputParser.js";
 import {
   toInvestigationReport,
   buildFallbackReport,
@@ -38,6 +38,8 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
 
   async investigate(context: InvestigationContext): Promise<InvestigationReport> {
     const seedPrompt = buildUserPrompt(context);
+    // fallback（例外／パース不能）でも収集済み証拠のリンクは残せるよう、先に決定的に組んでおく。
+    const evidenceLinks = buildEvidenceLinks(context.infraEvidence, this.linkConfig);
 
     let raw: string;
     try {
@@ -48,7 +50,7 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
         action: "ai_investigation_failed",
         message: `AI調査(ADK)がrunner例外でfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, error=${error instanceof Error ? error.message : String(error)}`,
       });
-      return buildFallbackReport();
+      return buildFallbackReport(evidenceLinks);
     }
 
     const output = parseLLMOutput(raw);
@@ -56,12 +58,13 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
       await this.logger?.warn({
         service: "backoffice-backend",
         action: "ai_investigation_unparseable",
-        message: `AI調査(ADK)の最終出力をパースできずfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}`,
+        // rawLen だけでは「なぜパースできなかったか」を本番で追えないため、生出力の先頭を
+        // 改行を潰した1行スニペットで残す（JSON でなく散文が返ったか等を判別する）。
+        message: `AI調査(ADK)の最終出力をパースできずfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}, rawSnippet=${rawSnippet(raw)}`,
       });
-      return buildFallbackReport();
+      return buildFallbackReport(evidenceLinks);
     }
 
-    const evidenceLinks = buildEvidenceLinks(context.infraEvidence, this.linkConfig);
     return toInvestigationReport(output, evidenceLinks);
   }
 }

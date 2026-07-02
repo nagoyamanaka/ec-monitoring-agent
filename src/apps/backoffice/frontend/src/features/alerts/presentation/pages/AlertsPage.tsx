@@ -205,6 +205,7 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
           selectedId ? remediationByAlertId.get(selectedId) ?? null : null
         }
         relatedLookup={relatedLookup}
+        alerts={alerts}
         onRelatedNavigate={navigateRelated}
       />
     </>

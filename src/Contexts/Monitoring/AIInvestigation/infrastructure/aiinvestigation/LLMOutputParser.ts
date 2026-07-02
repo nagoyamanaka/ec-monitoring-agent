@@ -152,6 +152,16 @@ function toRemediationReview(value: unknown): RemediationReviewPrimitives | unde
   };
 }
 
+/**
+ * パース不能で fallback に落ちた際、生出力の先頭を Cloud Logging に安全に残すための1行スニペット化。
+ * 改行・連続空白を単一スペースに潰して1行にし、先頭 max 文字で頭打ちにする（ログ肥大とPII/巨大diff流出を抑える）。
+ * rawLen と併せて「JSON でなく散文が返ったか」「途中で切れたか」を本番で判別する材料にする。
+ */
+export function rawSnippet(text: string, max = 500): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  return oneLine.length > max ? `${oneLine.slice(0, max)}…` : oneLine;
+}
+
 export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
   try {
     const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);

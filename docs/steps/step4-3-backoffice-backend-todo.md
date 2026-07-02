@@ -1,6 +1,6 @@
 # Step 4-3 TODO: backoffice/backend 実装
 
-> 対応設計: `docs/step4-3-backoffice-backend.md`
+> 対応設計: `docs/steps/step4-3-backoffice-backend.md`
 > 前提: `step4-2`（Monitoringコンテキスト）のP0が完了していること。優先度: **P0** / **P1** / **stretch**。
 > 参考実装: `src/apps/ec/backend/`（EcBackendApp.ts / config.ts / routes / controllers / middleware / subscribers）。
 >
@@ -265,7 +265,7 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 >
 > **「B 残作業」の意味**: 検知 webhook 結線は A=terraform 側（`webhook_tokenauth` チャネルが `?token=` を送る・実装済み）／ B=アプリ側（コントローラが `?token=` を受理する・本タスク）の2段。A は IaC スケルトンで先に入っていたため、残っていた B（アプリ側受理）をこのタスクで埋める、という意味。terraform コメントの選択肢(a)＝コントローラ拡張を採用（(b) basicauth 切替は不採用）。
 >
-> **移動先・正となる記述**: デプロイ垂直疎通の前提条件のため `docs/step4-5-backoffice-infra.todo.md` の **「タスク T1: ingest コントローラの URL クエリトークン対応 〔P0〕✅」** に移動・集約した（タイトルが変わっているため検索時は "URL クエリトークン" で引くこと）。内容はそちらを正とする。
+> **移動先・正となる記述**: デプロイ垂直疎通の前提条件のため `docs/steps/step4-5-backoffice-infra.todo.md` の **「タスク T1: ingest コントローラの URL クエリトークン対応 〔P0〕✅」** に移動・集約した（タイトルが変わっているため検索時は "URL クエリトークン" で引くこと）。内容はそちらを正とする。
 >
 > **実装状況**: ✅ 完了済み。[`CloudMonitoringAlertIngestController.run()`](../src/apps/backoffice/backend/src/controllers/ingest/CloudMonitoringAlertIngestController.ts) が header／`?token=` クエリの両経路を受理し、不一致は 401。`SecurityScanIngestPostController`（CI が叩く側＝ヘッダ送出可能）はヘッダ前提のまま。T1 のテスト項目（`ingest.int.test.ts` の `?token=` 受理／不一致 401）も含め step4-5 T1 で完結している。
 
@@ -273,7 +273,7 @@ INGEST_URL/INGEST_TOKEN は GitHub Secrets。INGEST_URL 未設定時は scan-onl
 
 ## stretchⅡ: 予兆ブリーフィング 配線
 
-> **【移動済み】** 予兆（stretchⅡ）の配線タスク13・14 は `docs/step6-final-sprint-todo.md`（タスク F6）へ集約した（7/10 締切のファイナルスプリントで本命1本を実装するため）。設計本体（`step4-3`「予兆ブリーフィング配線」節・既存配線無傷・ルート1系統＋DI追加）は変更なし。
+> **【移動済み】** 予兆（stretchⅡ）の配線タスク13・14 は `docs/steps/step6-final-sprint-todo.md`（タスク F6）へ集約した（7/10 締切のファイナルスプリントで本命1本を実装するため）。設計本体（`step4-3`「予兆ブリーフィング配線」節・既存配線無傷・ルート1系統＋DI追加）は変更なし。
 >
 > | 旧番号 | 内容 | 移動先 |
 > | --- | --- | --- |

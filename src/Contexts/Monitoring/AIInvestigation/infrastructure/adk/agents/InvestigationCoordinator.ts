@@ -38,10 +38,17 @@ export function createInvestigationCoordinator(params: {
 1. まず root_cause_analyst で初期仮説と確度を得る。
 2. 確証に証拠が不足していれば evidence_collector で狙い撃ちに証拠を追加収集し、再び root_cause_analyst で分析し直す。
    これを確度が十分になるか、これ以上証拠が得られないと判断するまで繰り返す。
-3. 根本原因が確定したら impact_triage を呼び、impact（fault/scope/scale/affectedSubjects と各 citations）を埋める。
+   ただし入力に knownPatterns（既知パターン一致）が与えられている場合、根本原因は既知パターンと
+   similarIncidents を根拠に確定してよく、evidence_collector の反復は省略すること
+   （呼び出し予算は impact_triage / runbook_escalation に優先して使う）。
+3. 根本原因が確定したら【必ず】impact_triage を呼び、impact（fault/scope/scale/affectedSubjects と各 citations）を埋める。
+   impact_triage を呼ばずに impact を自分で書いて出力してはならない。最終 JSON を出力する前に必ず
+   impact_triage を呼ぶこと（呼んだ結果 citation が出せなかった場合のみ impact を省略できる）。
 4. impact.fault で出口を振り分ける:
    - own（自社コード/IaC 起因）でコードで直せる → remediation_planner を呼び、修正可否と方針（suggestedActions）を得る。
-   - external（外部/ベンダー起因）または運用対応が要る → runbook_escalation を呼び、escalation 草案を埋める。
+   - external（外部/ベンダー起因）または運用対応が要る →【必ず】runbook_escalation を呼び、escalation 草案を埋める。
+     runbook_escalation を呼ばずに escalation を自分で書いて出力してはならない（宛先の捏造になる）。
+     呼んだ結果、体制マスタから宛先（team）を引けなかった場合のみ escalation を省略できる。
    - 自責・他責の両方がありうる場合は両方（remediation_planner と runbook_escalation）を呼び、人間の判断に委ねる。
    - unknown のときは断定せず、確度の高い側を起案する（証拠不足なら escalation を省略してよい）。
 5. 既に修正PRが起票済みで PR 番号が分かる場合（advisory モードでは草案PRも対象）に限り、remediation_reviewer を
