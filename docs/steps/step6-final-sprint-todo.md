@@ -31,7 +31,7 @@ todo実施後に
 > **相関（step4-4 タスク9e）との共通化メモ**: `RiskItem.citations`（引用＝根拠 id）と実装済み AI 相関（`InvestigationReportPrimitives.relatedAlerts`）は**同型パターン**＝「LLM が _id + ラベル + 根拠_ を出し、防御的に正規化してから実在レコードへ照合」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（step4-2 タスク12）なので実在 Alert に解決できる。
 > **ただし context を跨いだ型共有はしない**: 相関は Monitoring BC、引用は Forecast BC の別物。`RelatedAlertPrimitives` を Forecast から import しない（BC 結合を避ける）。共通なのは*手順*（防御的正規化＋citations 必須プロンプト＋実在照合）だけ。`GeminiForecastAdapter`（F4）の safeParse/clamp/fallback は `LLMOutputParser`/`InvestigationReportMapper` を**参考にする**（コピー元）。frontend 共通化は F7 のメモを正とする。
 
-### タスク F2: ForecastMemory projection（突合キーB）〔P0〕（旧 step4-2 タスク20）
+### タスク F2: ForecastMemory projection（突合キーB）〔P0〕（旧 step4-2 タスク20）✅
 
 - 【新規】`Forecast/domain/ForecastMemory.ts`（`ForecastMemoryEntry`=incidentId/subject/trigger/outcome、`ForecastMemoryRepository`：warmUp/findBySubjects）
 - 【新規】`infrastructure/` 実装（Resolved から subject 投影）。`ForecastMemoryEntry.incidentId` は `SimilarIncident.sourceAlertId`（step4-2 タスク12 の back-link）を投影元にすれば citation を**実在する Alert id**に解決でき引用検証（§7.3）が効く
@@ -71,6 +71,7 @@ todo実施後に
 - 【新規】`ScheduleSource` の seed 実装（JSON/config）。`DEMO_ENABLED` 配下で投入
 - 【修正】`config.ts`：`FORECAST_ENABLED`（既定off）/ `FORECAST_HORIZON`（既定 "今週末"）追加
 - **write は発生しない**（全Gateway read-only）
+- **【確認済み方針・2026-07-03】定期実行（cron/setInterval）はやらない**: 審査員の非同期閲覧に対し「たまたま失敗した最新予報」を見せるリスクと Gemini 課金が増えるだけで掴みに寄与しない。手動 POST（デモ卓）＋提出前キャッシュ温めで無人安定性を取る。Bus 登録済みハンドラなので本運用の定期化は `FORECAST_ENABLED` 配下に1本足すだけ＝stretchⅢ と併せて「語り」で示す。SSE push も設計上任意のまま＝デモではページを開けば足りる（D2 認知負荷と整合）
 
 ### タスク F7: forecast feature slice（UI）〔P0〕（旧 step4-4 タスク13）
 
@@ -80,6 +81,7 @@ todo実施後に
 - 【新規】`components/RiskCard.tsx`（window・subject・level バッジ・confidenceゲージ・reasoning）/ **`CitationList.tsx`（引用チップ＝根拠の明示・ハルシネーション否定の可視化・本機能の体験の肝）**
 - 【修正】`App.tsx` に `/forecast` 追加（`FORECAST_ENABLED` off時はナビ非表示）
 - `shared/`（HttpClient/SeverityBadge/layouts）流用。`SeverityBadge` を RiskLevel に転用
+- 【任意・安ければ】アラート一覧側に予兆への**導線1個だけ**（例: ナビバッジ「予兆: HIGH 1件」・`FORECAST_ENABLED` 時のみ）。一覧へ予報コンテンツは混載しない（reactive/proactive の優先度混線を避ける step4-2 の決定を維持）。D1 の「では実際に起きたら？」の逆方向遷移がデモで滑らかになる
 
 > **共通化の継ぎ目（タスク9e 相関との共有）**: `CitationList`（引用 id 提示）と `RelatedAlertsPanel`（相関 id 提示）は**同型**。**本タスク実装時に** `domain/relatedAlerts.ts` の `toRelatedAlertViews(refs, lookup)` と `RelatedAlertsPanel` のカード描画を `shared/ui` へ昇格（例 `shared/ui/ReferencedAlertCard` ＋ resolver）し両者で共有する＝正しい抽出点（第二の消費者が現れる今）。**先行抽出はしない（YAGNI）**。backend は BC を跨いで型共有しない（相関=Monitoring / 引用=Forecast）。
 

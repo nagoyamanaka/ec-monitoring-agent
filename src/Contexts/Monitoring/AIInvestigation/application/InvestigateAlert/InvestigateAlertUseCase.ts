@@ -20,6 +20,7 @@ import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { InfraInvestigationPort } from "../../domain/InfraInvestigationPort.js";
 import { InfraEvidence } from "../../domain/InfraEvidence.js";
+import { deriveForecastSubject } from "../../../Forecast/domain/forecastSubject.js";
 
 // 類似インシデントは文脈強化用なので件数を絞る（トークン上限 3,500 を意識）
 const SIMILAR_INCIDENT_LIMIT = 5;
@@ -48,7 +49,11 @@ export class InvestigateAlertUseCase {
     if (alert === null) return this.logSkipped(alertId);
 
     const context = await this.buildInvestigationContext(monitoringEvent, alertId);
-    const report = await this.investigate(context, alertId);
+    const report = this.enrichWithForecastSubject(
+      await this.investigate(context, alertId),
+      monitoringEvent,
+      context,
+    );
 
     await this.attachAndNotify(alert, report);
     await this.logInvestigated(alertId, report);
@@ -193,6 +198,23 @@ export class InvestigateAlertUseCase {
       });
       return this.fallbackReport(context);
     }
+  }
+
+  // Forecast 突合キー（F2）: 調査時点の文脈から subject を導出して埋める。
+  // fallback レポートも category から導出できるので一律に通す（既に持つ場合は保持）。
+  private enrichWithForecastSubject(
+    report: InvestigationReport,
+    monitoringEvent: MonitoringEvent,
+    context: InvestigationContext,
+  ): InvestigationReport {
+    if (report.subject) return report;
+    return report.withSubject(
+      deriveForecastSubject({
+        suggestedPatternName: report.suggestedPatternName,
+        category: monitoringEvent.category.value,
+        terraformResources: context.infraEvidence?.terraformDiff?.changedResources,
+      }),
+    );
   }
 
   // レポートを添付して保存し、フロントに push する

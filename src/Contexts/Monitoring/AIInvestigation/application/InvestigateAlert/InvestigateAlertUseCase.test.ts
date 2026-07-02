@@ -190,6 +190,62 @@ describe("InvestigateAlertUseCase", () => {
     });
   });
 
+  describe("Forecast 突合キー（F2）：subject の導出", () => {
+    it("保存されたレポートに suggestedPatternName 由来の subject が埋まる", async () => {
+      await alertRepo.save(makeUnknownAlert());
+      const { notifier } = makeSpyNotifier();
+      const port: AIInvestigationPort = {
+        investigate: async () => makeReport(), // suggestedPatternName: "DB_POOL_EXHAUSTION"
+      };
+      const useCase = makeUseCase(port, notifier);
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      });
+
+      const saved = await alertRepo.findById(new AlertId(ALERT_ID));
+      expect(saved?.investigationReport?.subject).toBe("db_pool_exhaustion");
+    });
+
+    it("レポートが既に subject を持つ場合は上書きしない", async () => {
+      await alertRepo.save(makeUnknownAlert());
+      const { notifier } = makeSpyNotifier();
+      const port: AIInvestigationPort = {
+        investigate: async () => makeReport().withSubject("checkout"),
+      };
+      const useCase = makeUseCase(port, notifier);
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      });
+
+      const saved = await alertRepo.findById(new AlertId(ALERT_ID));
+      expect(saved?.investigationReport?.subject).toBe("checkout");
+    });
+
+    it("fallback レポートにも category 由来の subject が埋まる", async () => {
+      await alertRepo.save(makeUnknownAlert());
+      const { notifier } = makeSpyNotifier();
+      const port: AIInvestigationPort = {
+        investigate: async () => {
+          throw new Error("Gemini API timeout");
+        },
+      };
+      const useCase = makeUseCase(port, notifier);
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      });
+
+      const saved = await alertRepo.findById(new AlertId(ALERT_ID));
+      expect(saved?.investigationReport?.isFallback).toBe(true);
+      expect(saved?.investigationReport?.subject).toBe("application");
+    });
+  });
+
   describe("異常系：AI調査が例外を投げる", () => {
     it("fallback レポートが添付され status は OPEN で保存される", async () => {
       await alertRepo.save(makeUnknownAlert());

@@ -48,6 +48,9 @@ export class InvestigationReport {
   // 修正PRの自動レビュー結果（タスク36・RV段階）。未指定は undefined（旧データ・PR 未起票・
   // fallback 互換）。pullRequestUrl 空のレビューはマッパ側で落とす。
   readonly remediationReview?: RemediationReviewPrimitives;
+  // Forecast 突合キー（ForecastMemory projection が解決済み事例のタグとして読む）。
+  // 調査時に deterministic に導出して埋める（LLM 出力ではない）。未指定は undefined（旧データ互換）。
+  readonly subject?: string;
 
   constructor(params: {
     summary: string;
@@ -64,6 +67,7 @@ export class InvestigationReport {
     impact?: ImpactAssessmentPrimitives;
     escalation?: EscalationDraftPrimitives;
     remediationReview?: RemediationReviewPrimitives;
+    subject?: string;
   }) {
     this.summary = params.summary;
     this.confidence = params.confidence;
@@ -79,10 +83,15 @@ export class InvestigationReport {
     this.impact = params.impact;
     this.escalation = params.escalation;
     this.remediationReview = params.remediationReview;
+    this.subject = params.subject;
   }
 
   withReviewStatus(reviewStatus: ReviewStatus): InvestigationReport {
     return new InvestigationReport({ ...this, reviewStatus });
+  }
+
+  withSubject(subject: string): InvestigationReport {
+    return new InvestigationReport({ ...this, subject });
   }
 
   toPrimitives(): InvestigationReportPrimitives {
@@ -101,6 +110,7 @@ export class InvestigationReport {
       ...(this.impact ? { impact: this.impact } : {}),
       ...(this.escalation ? { escalation: this.escalation } : {}),
       ...(this.remediationReview ? { remediationReview: this.remediationReview } : {}),
+      ...(this.subject ? { subject: this.subject } : {}),
     };
   }
 
@@ -120,6 +130,7 @@ export class InvestigationReport {
       impact: primitives.impact,
       escalation: primitives.escalation,
       remediationReview: primitives.remediationReview,
+      subject: primitives.subject,
     });
   }
 }
