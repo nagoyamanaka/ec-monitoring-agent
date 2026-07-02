@@ -8,18 +8,18 @@
 >
 > | 順  | スコープ            | 設計ドキュメント                      | TODO                                       |
 > | --- | ------------------- | ------------------------------------- | ------------------------------------------ |
-> | 1   | 戦略設計            | `docs/step4-1-strategy.md`            | `docs/step4-1-strategy-todo.md`            |
-> | 2   | context/Monitoring  | `docs/step4-2-monitoring-context.md`  | `docs/step4-2-monitoring-context-todo.md`  |
-> | 3   | backoffice/backend  | `docs/step4-3-backoffice-backend.md`  | `docs/step4-3-backoffice-backend-todo.md`  |
-> | 4   | backoffice/frontend | `docs/step4-4-backoffice-frontend.md` | `docs/step4-4-backoffice-frontend-todo.md` |
+> | 1   | 戦略設計            | `docs/steps/step4-1-strategy.md`            | `docs/steps/step4-1-strategy-todo.md`            |
+> | 2   | context/Monitoring  | `docs/steps/step4-2-monitoring-context.md`  | `docs/steps/step4-2-monitoring-context-todo.md`  |
+> | 3   | backoffice/backend  | `docs/steps/step4-3-backoffice-backend.md`  | `docs/steps/step4-3-backoffice-backend-todo.md`  |
+> | 4   | backoffice/frontend | `docs/steps/step4-4-backoffice-frontend.md` | `docs/steps/step4-4-backoffice-frontend-todo.md` |
 >
 > 前提となる設計:
 >
-> - ディレクトリ構成: `docs/step1-directory-structure.md`
-> - ドメインモデル: `docs/step2-domain-model.md`
-> - アプリケーション層: `docs/step3-application-layer.md`
-> - 戦略・スコープ・優先度: `docs/step4-1-strategy.md`
-> - プロジェクト全体方針: `docs/project-prompt.md`
+> - ディレクトリ構成: `docs/steps/step1-directory-structure.md`
+> - ドメインモデル: `docs/steps/step2-domain-model.md`
+> - アプリケーション層: `docs/steps/step3-application-layer.md`
+> - 戦略・スコープ・優先度: `docs/steps/step4-1-strategy.md`
+> - プロジェクト全体方針: `docs/steps/project-prompt.md`
 >
 > **整合性メモ（v12時点）**: 本ドキュメントは以下をリポジトリのコード・上位ドキュメントに整合させて更新済み。
 >
@@ -217,7 +217,7 @@ export class MonitoringEventCategory extends EnumValueObject<MonitoringEventCate
 | Cloud Monitoring（Alerting Policy 発火） | `CloudMonitoringAlertIngestController` ＋ `CloudMonitoringAlertTranslator`（`POST /ingest/cloud-monitoring`） | INFRASTRUCTURE / CAPACITY | 実装済み                                |
 | CI / Trivy                               | `SecurityScanIngestController`（`POST /ingest/security-scan`）                                                | SECURITY                  | 設計                                    |
 
-> **category オーナーシップ（被り対策の主防御）**: APPLICATION は EC イベント、INFRASTRUCTURE/CAPACITY は Cloud Monitoring が権威。同じものを両ソースに監視させない＝検知の被りを構造的に消す。残る同一シグナルの重複は `dedupKey`（§MonitoringEvent）で畳む。詳細は `docs/step4-1-strategy.md` §2.5。
+> **category オーナーシップ（被り対策の主防御）**: APPLICATION は EC イベント、INFRASTRUCTURE/CAPACITY は Cloud Monitoring が権威。同じものを両ソースに監視させない＝検知の被りを構造的に消す。残る同一シグナルの重複は `dedupKey`（§MonitoringEvent）で畳む。詳細は `docs/steps/step4-1-strategy.md` §2.5。
 >
 > `CloudMonitoringAlertTranslator` は webhook payload を防御的に読み、condition_name をスラグ化して `eventName=gcp.monitoring.<slug>` に正規化（dedup 粒度）。CPU/接続数等の飽和系は CAPACITY、それ以外は INFRASTRUCTURE。closed/回復通知は `severity=info`＝観測のみ。
 

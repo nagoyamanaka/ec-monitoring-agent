@@ -1,6 +1,6 @@
 # Step 4-4 TODO: backoffice/frontend 実装
 
-> 対応設計: `docs/step4-4-backoffice-frontend.md`（feature-sliced・校正版）
+> 対応設計: `docs/steps/step4-4-backoffice-frontend.md`（feature-sliced・校正版）
 > 前提: `step4-3` のAPI/SSEが利用可能。優先度: **P0** / **P1** / **stretch**。
 > 構成は feature-sliced（`features/<feature>/{domain,application,infrastructure,presentation}` ＋ `shared/`）。domainは型＋純関数のみ。
 > **デザインテーマ（タスク0で確定）**: 「**ダーク観測コンソール × Tremor**」をベース、デモ演出のみネオン系アニメを部分採用（タスク12）。配色トークン・参考URL・採用理由は `step4-4-backoffice-frontend.md`「デザインテーマ」節を正とする。可視化は Tremor（ゲージ/ドーナツ/チャート＝危険度ランク色・confidence割合・予兆グラフ）を `shared/ui/` に薄くラップして使う。
@@ -12,7 +12,7 @@
 
 ### タスク 0: step1 フロント節の更新 〔P0・ドキュメント〕 ✅
 
-- [x] 【修正】`docs/step1-directory-structure.md` のフロント構成図を layer-first → feature-sliced に差し替え（step4-4を正とする旨を明記）。設計判断メモの表・構成図・依存関係サマリー・正準注記の4箇所を更新済み
+- [x] 【修正】`docs/steps/step1-directory-structure.md` のフロント構成図を layer-first → feature-sliced に差し替え（step4-4を正とする旨を明記）。設計判断メモの表・構成図・依存関係サマリー・正準注記の4箇所を更新済み
 - [x] デザインテーマを決定（**ダーク観測コンソール × Tremor**、演出のみネオン系を部分採用）。配色トークン・参考URL・採用理由は `step4-4-backoffice-frontend.md`「デザインテーマ」節に記載済み
 
 ### タスク 1: shared 基盤 〔P0〕 ✅
@@ -311,7 +311,7 @@
 
 ## stretchⅡ: 予兆ブリーフィング UI
 
-> **【移動済み】** 予兆（stretchⅡ）の UI タスク13 は `docs/step6-final-sprint-todo.md`（タスク F7）へ集約した（7/10 締切のファイナルスプリントで本命1本を実装するため）。設計本体（`step4-4`「予兆ブリーフィングUI」節・既存feature無傷・`features/forecast/` 新設・`CitationList` と `RelatedAlertsPanel` の `shared/ui` 共通化の継ぎ目メモ）は step6 F7 に転記済み。
+> **【移動済み】** 予兆（stretchⅡ）の UI タスク13 は `docs/steps/step6-final-sprint-todo.md`（タスク F7）へ集約した（7/10 締切のファイナルスプリントで本命1本を実装するため）。設計本体（`step4-4`「予兆ブリーフィングUI」節・既存feature無傷・`features/forecast/` 新設・`CitationList` と `RelatedAlertsPanel` の `shared/ui` 共通化の継ぎ目メモ）は step6 F7 に転記済み。
 >
 > | 旧番号 | 内容 | 移動先 |
 > | --- | --- | --- |

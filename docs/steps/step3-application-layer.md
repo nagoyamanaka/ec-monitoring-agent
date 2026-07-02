@@ -1,7 +1,7 @@
 # Step 3: アプリケーション層設計（ECドメイン）
 
 > 本ドキュメントは設計エージェント向けプロンプト v8 の Step 3 詳細設計です。
-> ディレクトリ構成は `docs/step1-directory-structure.md`、ドメインモデルは `docs/step2-domain-model.md` を参照してください。
+> ディレクトリ構成は `docs/steps/step1-directory-structure.md`、ドメインモデルは `docs/steps/step2-domain-model.md` を参照してください。
 
 ---
 

@@ -108,7 +108,7 @@ QueryHandler インターフェース（src/Contexts/Shared/domain/QueryHandler.
    - createdAt / updatedAt は .toISOString() で文字列化する
    - totalAmount は items.subtotalAmount().value を使う（OrderItemsに subtotalAmount() メソッドあり）
 
-参考ドキュメント: docs/step3-application-layer.md の「GetOrderQueryHandler」「GetOrderUseCase」セクション
+参考ドキュメント: docs/steps/step3-application-layer.md の「GetOrderQueryHandler」「GetOrderUseCase」セクション
 
 # ~~タスク 7: ReserveInventoryUseCase 実装 + ReserveInventoryOnOrderPlaced リファクタ~~ ✅ 完了済み
 
@@ -156,7 +156,7 @@ src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryCommandHa
 - ProductId: src/Contexts/EC/Inventory/domain/ProductId.ts
 - InventoryReservationFailedDomainEvent: src/Contexts/EC/Inventory/domain/InventoryReservationFailedDomainEvent.ts
 
-処理フロー（All-or-Nothing、docs/step3-application-layer.md の「ReserveInventoryCommandHandler 処理フロー」を厳守）:
+処理フロー（All-or-Nothing、docs/steps/step3-application-layer.md の「ReserveInventoryCommandHandler 処理フロー」を厳守）:
 
 【Phase 1: 全商品の在庫確認（読み取り）】
 
@@ -185,7 +185,7 @@ CommandHandler インターフェースを implements すること。
 subscribedTo() { return ReserveInventoryCommand; }
 ```
 
-参考ドキュメント: docs/step3-application-layer.md の「ReserveInventoryCommandHandler」セクション
+参考ドキュメント: docs/steps/step3-application-layer.md の「ReserveInventoryCommandHandler」セクション
 ※ InventoryRepository の reserveStock / incrementStock メソッドのシグネチャは既存の InventoryRepository.ts を確認して合わせること
 
 # ~~タスク 8: CompensateOrderOnInventoryFailed Subscriber 実装~~ ✅ 完了済み
@@ -240,7 +240,7 @@ DomainEventSubscriber<InventoryReservationFailedDomainEvent> を implements す�
 
 既存の ReserveInventoryOnOrderPlaced（src/Contexts/EC/Inventory/application/ReserveInventory/ReserveInventoryOnOrderPlaced.ts）を参考にして実装すること。
 
-参考ドキュメント: docs/step3-application-layer.md の「CompensateOrderOnInventoryFailed」セクション
+参考ドキュメント: docs/steps/step3-application-layer.md の「CompensateOrderOnInventoryFailed」セクション
 
 # ~~タスク 9: errorHandler ミドルウェア + server.ts 実装~~ ✅ 完了済み
 
@@ -263,7 +263,7 @@ EC backend の Express サーバーをセットアップしてください。
 作成ファイル: src/apps/ec/backend/src/middleware/errorHandler.ts
 
 DomainError → 400、OrderResourceNotFoundError → 404、ApplicationError → 400、InfrastructureError → 500、その他 → 500 にマッピング。
-docs/step3-application-layer.md の「errorHandler でのマッピング」セクションのコードを参考にすること。
+docs/steps/step3-application-layer.md の「errorHandler でのマッピング」セクションのコードを参考にすること。
 
 【作業2】server.ts の実装
 src/apps/ec/backend/src/server.ts に以下を実装する:
@@ -282,4 +282,4 @@ src/apps/ec/backend/src/server.ts に以下を実装する:
 DI は手動 new で構築すること（IoC コンテナは不使用）。
 MongoClientFactory / RabbitMqConnection の初期化は既存の infrastructure コードを参照すること。
 
-参考ドキュメント: docs/step3-application-layer.md 全体
+参考ドキュメント: docs/steps/step3-application-layer.md 全体

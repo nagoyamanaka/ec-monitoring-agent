@@ -1,11 +1,11 @@
 # Step 4-2 TODO: Monitoring コンテキスト実装
 
-> 対応設計: `docs/step4-2-monitoring-context.md`
+> 対応設計: `docs/steps/step4-2-monitoring-context.md`
 > このスコープが最重要・最大。**依存順**に並べ、優先度: **P0必須**（提出ライン） / **P1差別化** / **stretch**。
 > 各タスク完了ごとにコミット。P0が全部通れば「提出可能」状態。
 >
 > **実装プロンプト雛形**（各タスクで使う）:
-> 「`/home/shigeyasu/Project/ec-monitoring-agent` の TypeScript DDD プロジェクトで、下記ファイルを新規作成。CodelyTV パターン準拠（AggregateRoot/DomainEvent/VO/CommandHandler）。参考: `docs/step4-2-monitoring-context.md` の該当節。テストは隣にコロケーション（`*.test.ts`）。」
+> 「`/home/shigeyasu/Project/ec-monitoring-agent` の TypeScript DDD プロジェクトで、下記ファイルを新規作成。CodelyTV パターン準拠（AggregateRoot/DomainEvent/VO/CommandHandler）。参考: `docs/steps/step4-2-monitoring-context.md` の該当節。テストは隣にコロケーション（`*.test.ts`）。」
 >
 > **application 層の実装方針（共通・全タスク適用）**:
 >
@@ -369,11 +369,11 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 
 ### タスク 31: Cloud Monitoring webhook → INFRASTRUCTURE/CAPACITY 正規化の検証・拡張 〔stretchⅠ〕→ **step4-5 T7 へ移動**
 
-> translator 本体・UT は実装済み。残る「実機 payload での検証・fixture 追加」はデプロイ後作業のため `docs/step4-5-backoffice-infra.todo.md` タスク T7 に移動・集約した。内容はそちらを正とする。
+> translator 本体・UT は実装済み。残る「実機 payload での検証・fixture 追加」はデプロイ後作業のため `docs/steps/step4-5-backoffice-infra.todo.md` タスク T7 に移動・集約した。内容はそちらを正とする。
 
 ### タスク 32: CloudMonitoringGateway（pull・メトリクス相関）〔stretchⅠ / 次フェーズ〕→ **step4-5 T13 へ移動**
 
-> デプロイ着地後の任意タスクのため `docs/step4-5-backoffice-infra.todo.md` タスク T13 に移動・集約した。内容はそちらを正とする。
+> デプロイ着地後の任意タスクのため `docs/steps/step4-5-backoffice-infra.todo.md` タスク T13 に移動・集約した。内容はそちらを正とする。
 
 ### タスク 33: Terraform 証拠を「変更ファイル名」→「apply 適用差分（イベント捕捉）」へ格上げ 〔stretchⅠ〕✅ 完了済み
 
@@ -406,7 +406,7 @@ Gemini Enterprise / Elastic Agent などベンダー跨ぎのオーケストレ�
 
 ## stretchⅡ: 予兆ブリーフィング（reactive → proactive）
 
-> **【移動済み】** 予兆（stretchⅡ）のタスク19〜23 は `docs/step6-final-sprint-todo.md`（タスク F1〜F5）へ集約した。7/10 締切のファイナルスプリントで**本命1本の録画品質まで**実装する方針に格上げしたため。設計本体（`step4-1` 7章＋`step4-2`「予兆ブリーフィング」節・突合キー (B)・既存P0無傷）は変更なし。
+> **【移動済み】** 予兆（stretchⅡ）のタスク19〜23 は `docs/steps/step6-final-sprint-todo.md`（タスク F1〜F5）へ集約した。7/10 締切のファイナルスプリントで**本命1本の録画品質まで**実装する方針に格上げしたため。設計本体（`step4-1` 7章＋`step4-2`「予兆ブリーフィング」節・突合キー (B)・既存P0無傷）は変更なし。
 >
 > | 旧番号 | 内容 | 移動先 |
 > | --- | --- | --- |

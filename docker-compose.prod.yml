@@ -54,7 +54,7 @@ services:
       # フォールバックしていた（＝本番でADKが使われていなかった原因はこのフラグ欠落）。Vertex 必須。
       AI_INVESTIGATION_ADK: ${AI_INVESTIGATION_ADK:-true}
       # ADK 自律ループの LLM 呼び出し上限（トークン暴走の安全弁）。config.ts 既定と同値だが明示。
-      AI_INVESTIGATION_ADK_MAX_LLM_CALLS: ${AI_INVESTIGATION_ADK_MAX_LLM_CALLS:-8}
+      AI_INVESTIGATION_ADK_MAX_LLM_CALLS: ${AI_INVESTIGATION_ADK_MAX_LLM_CALLS:-16}
       # 単一Gemini経路(GeminiLLMClient)の1呼び出しタイムアウト(ms)。旧ハードコード30秒だと
       # gemini-2.5-pro が超過して毎回 fallback(confidence=0) に落ちていたため 90秒へ。
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-90000}

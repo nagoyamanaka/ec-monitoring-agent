@@ -1,7 +1,7 @@
 # Step 2: ドメインモデル設計（ECドメイン）
 
 > 本ドキュメントは設計エージェント向けプロンプト由来の Step 2 詳細設計です。
-> Step 1のディレクトリ構成は `docs/step1-directory-structure.md` を参照してください。
+> Step 1のディレクトリ構成は `docs/steps/step1-directory-structure.md` を参照してください。
 > **2026-06-29 実コード照合**: Payment（決済）コンテキスト・`InventoryFailureReason` VO 化・補償フロー
 > （`CompensateOrder*`）を現コードに合わせて追記。対象は Orders / Inventory / Payment の3集約相当。
 
@@ -601,7 +601,7 @@ PaymentGateway.run()   ← 決済（Order 確定の前段）
 
 ## アプリケーション層との接続（Step 3 で実装済み）
 
-> 以下は本ドメインモデルを駆動するアプリ層。詳細は `docs/step3-application-layer.md`。
+> 以下は本ドメインモデルを駆動するアプリ層。詳細は `docs/steps/step3-application-layer.md`。
 
 - `PlaceOrderUseCase`: 決済（`PaymentGateway.run()`）→ `Order.place()` → 永続化 → `OrderPlacedDomainEvent` publish。決済失敗時は `PaymentTimeoutDomainEvent` を publish し `PlaceOrderFailedError` を throw。
 - `ReserveInventoryUseCase` / `ReserveInventoryOnOrderPlaced` Subscriber: `InventoryRepository.reserveStock()` の結果に基づき `Inventory.reserve()` を呼ぶ。キュー命名 `ec-backend.ec.order.placed.reserve-inventory-on-order-placed`。

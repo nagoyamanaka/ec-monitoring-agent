@@ -1,6 +1,6 @@
 # Step 4-1 TODO: 戦略・前提セットアップ
 
-> 対応設計: `docs/step4-1-strategy.md`
+> 対応設計: `docs/steps/step4-1-strategy.md`
 > このスコープは「コードを書く前に固める意思決定・環境」。各タスクに優先度: **P0必須** / **P1差別化** / **stretch**。
 > 進める順番: このスコープ → step4-2 → step4-3 → step4-4。
 
@@ -48,14 +48,14 @@
 
 ## タスク 7: 意思決定のロック（ADR Step5の種）〔P0・ドキュメント〕
 
-- [ ] a2a不使用 / ADK in-process / category弁別子 / read-write分離 / Cloud Run折衷 を ADR 化（`docs/step5-adr.md`）
+- [ ] a2a不使用 / ADK in-process / category弁別子 / read-write分離 / Cloud Run折衷 を ADR 化（`docs/steps/step5-adr.md`）
   - **a2a不使用の補強（2026-06-23 確定）**: マルチエージェント統合を3パターンに分離して論じる＝①ADK in-process（調査/推論・密結合・関数呼び出し）／②dispatch+callback（実行/修正・疎・タスク委譲）／③A2A facade（外部相互運用・stretch候補・コア外）。①②とも「会話」でなく「タスク委譲/関数呼び出し」なので A2A 不要。トポロジは hub-and-spoke（mesh でない）。詳細は `step4-2` タスク18 コメント＋タスク30
 - [ ] 参照: `project-prompt.md` の「Step5で作成するADR」一覧
 
 ## タスク 8: 予兆ブリーフィングの意思決定ロック 〔stretchⅡ・ドキュメント〕
 
 > 設計は今固める（安い・物語が跳ねる）。詳細は `step4-1-strategy.md` 7章。
-> **実装タスク（旧 step4-2/3/4 の stretchⅡ 予兆タスク）は `docs/step6-final-sprint-todo.md`（F1〜F9）へ集約・7/10 締切で本命1本を実装する方針に格上げ。締切戦略は `docs/step6-final-sprint-strategy.md`。本タスク（ADR種）はここに残す（ADR 一覧＝タスク7・9 と同居のため）。**
+> **実装タスク（旧 step4-2/3/4 の stretchⅡ 予兆タスク）は `docs/steps/step6-final-sprint-todo.md`（F1〜F9）へ集約・7/10 締切で本命1本を実装する方針に格上げ。締切戦略は `docs/steps/step6-final-sprint-strategy.md`。本タスク（ADR種）はここに残す（ADR 一覧＝タスク7・9 と同居のため）。**
 
 - [ ] ADR に追加: 予測を統計MLでなく **LLM推論＋引用検証** で構成する理由（データ依存を切る）
 - [ ] ADR に追加: join を自前ルールエンジンでなく **LLM委譲＋3点足場（正規化/引用縛り/引用検証）** にする理由
