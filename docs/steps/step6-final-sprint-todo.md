@@ -21,7 +21,7 @@ todo実施後に
 
 > 出すシナリオは §3 の**DB接続枯渇 1本を本命**、2本目は同一機構の seed 替え（stretch）。既存P0パイプライン無傷・突合キーは (B) 構造化タグ。
 
-### タスク F1: Forecast ドメイン型 〔P0〕（旧 step4-2 タスク19）
+### タスク F1: Forecast ドメイン型 〔P0〕（旧 step4-2 タスク19）✅
 
 - 【新規】`Forecast/domain/ForecastSignal.ts`（id/kind/subject/when/desc/source・kind=FUTURE_CHANGE|SCHEDULE|MEMORY）
 - 【新規】`RiskForecast.ts`（forecastId/generatedAt/horizon/risks[]/isFallback、`RiskItem`=window/subject/level/confidence/**citations**/reasoning）
