@@ -290,24 +290,10 @@ describe("SubmitFeedbackUseCase", () => {
     });
   });
 
-  describe("承認によるクローズ（status 遷移）", () => {
-    const statusOf = async () =>
-      (await alertRepo.findById(new AlertId(ALERT_ID)))?.status.value;
+  describe("承認しても status は据え置き（現役一覧・詳細に残す）", () => {
+    const alertOf = async () => alertRepo.findById(new AlertId(ALERT_ID));
 
-    it("承認すると RESOLVED になる（現役一覧から下ろす）", async () => {
-      const alert = Alert.createAsUnknown({
-        id: new AlertId(ALERT_ID),
-        monitoringEvent: makeEvent(),
-      }).attachInvestigationReport(makeReport());
-      await alertRepo.save(alert);
-      expect(await statusOf()).toBe("OPEN");
-
-      await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
-
-      expect(await statusOf()).toBe("RESOLVED");
-    });
-
-    it("誤承認→却下し直すと OPEN に戻す（現役一覧へ復帰）", async () => {
+    it("承認しても OPEN のまま（一覧から消さない）だが isApproved になる", async () => {
       const alert = Alert.createAsUnknown({
         id: new AlertId(ALERT_ID),
         monitoringEvent: makeEvent(),
@@ -315,17 +301,13 @@ describe("SubmitFeedbackUseCase", () => {
       await alertRepo.save(alert);
 
       await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
-      expect(await statusOf()).toBe("RESOLVED");
 
-      await useCase.run({
-        alertId: new AlertId(ALERT_ID),
-        isCorrect: false,
-        operatorNote: "誤承認だった",
-      });
-      expect(await statusOf()).toBe("OPEN");
+      const saved = await alertOf();
+      expect(saved?.status.value).toBe("OPEN");
+      expect(saved?.isApproved()).toBe(true);
     });
 
-    it("未承認からの却下は status を変えない（OPEN のまま）", async () => {
+    it("却下では isApproved にならない（OPEN のまま畳み込み対象に残す）", async () => {
       const alert = Alert.createAsUnknown({
         id: new AlertId(ALERT_ID),
         monitoringEvent: makeEvent(),
@@ -334,7 +316,9 @@ describe("SubmitFeedbackUseCase", () => {
 
       await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: false });
 
-      expect(await statusOf()).toBe("OPEN");
+      const saved = await alertOf();
+      expect(saved?.status.value).toBe("OPEN");
+      expect(saved?.isApproved()).toBe(false);
     });
   });
 });

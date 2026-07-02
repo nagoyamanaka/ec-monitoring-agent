@@ -88,6 +88,9 @@ export function AlertCard({
   const title = eventTitle(alert.eventName);
   const category = categoryInfo(alert.category);
   const reason = alertReason(alert);
+  // 承認済み（対処済み）は現役一覧に残すが、行全体を暗くして未処理と視覚的に区別する
+  // （並びは alertSort が最下部へ沈める。ラベルは右レールの AlertStatusBadge=「承認済み」）。
+  const approved = alert.feedback?.isCorrect === true;
 
   return (
     <button
@@ -95,11 +98,14 @@ export function AlertCard({
       aria-pressed={selected}
       data-testid="alert-card"
       data-alert-id={alert.id}
+      data-approved={approved || undefined}
       onClick={() => onSelect?.(alert.id)}
       onAnimationEnd={() => justResolved && setJustResolved(false)}
       className={cn(
         "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition",
         justResolved && "resolve-flash",
+        // 承認済みは減光＋彩度を落として沈める（hover で一時的に戻して閲覧しやすく）。
+        approved && !selected && "opacity-55 saturate-50 hover:opacity-90",
         selected
           ? "bg-slate-800/50 ring-cyan-500/50"
           : "bg-slate-900/30 ring-slate-700/60 hover:bg-slate-800/30 hover:ring-slate-600",

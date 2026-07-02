@@ -33,21 +33,13 @@ export class SubmitFeedbackUseCase {
       throw new MonitoringResourceNotFoundError("Alert", alertId.value);
     }
 
-    // 再レビュー（判定のやり直し）に備え、直前の判定を見て遷移ベースで学習・状態を反映する。
+    // 再レビュー（判定のやり直し）に備え、直前の判定を見て遷移ベースで学習を反映する。
     // 「現在の判定が承認のときだけ解決済みインシデントが1件ある」状態を保つ。
+    // 承認しても status は OPEN のまま（現役一覧・詳細に出し続ける）。承認＝対処済みの扱いは
+    // dedup 側で担う（AnalyzeAlertUseCase は承認済みへは畳み込まず、再発火を新規アラートとして開く）。
     const wasApproved = alert.feedback?.isCorrect === true;
-    const reviewed = alert.submitFeedback({ isCorrect, operatorNote });
-    // 承認＝インシデントのクローズ（RESOLVED で現役一覧から下ろす）。承認→却下のやり直しでは
-    // クローズを取り消して現役一覧へ戻す。単なる却下（未承認からの却下）は状態を変えない。
-    const updatedAlert = isCorrect
-      ? reviewed.resolve()
-      : wasApproved
-        ? reviewed.reopen()
-        : reviewed;
+    const updatedAlert = alert.submitFeedback({ isCorrect, operatorNote });
     await this.alertRepository.save(updatedAlert);
-    // 注記: フィードバックは SSE push せず、送信元クライアントが GET /alerts/:id を再取得して反映する
-    // （AlertsPage の handleDecision→refreshAlert）。承認で RESOLVED になった Alert は一覧マージ側で
-    // 現役一覧から落とす（frontend alertMerge）。
 
     if (isCorrect) {
       // 非承認→承認の遷移時のみ index（再承認での二重 index を防ぐ）。

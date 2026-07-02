@@ -37,10 +37,13 @@ export class MongoAlertRepository
   }
 
   async findOpenByDedupKey(dedupKey: string): Promise<Alert | null> {
+    // 承認済み（feedback.isCorrect=true＝対処済み）へは畳み込まない。未承認の現役インシデントだけ対象。
+    // $ne:true は feedback 未設定（null/欠落）・却下(false)を含み、承認だけを除外する。
     const doc = await this.collection().findOne(
       {
         dedupKey,
         status: { $in: ["OPEN", "ANALYZING"] },
+        "feedback.isCorrect": { $ne: true },
       } as unknown as Filter<Document>,
       { sort: { updatedAt: -1 } },
     );

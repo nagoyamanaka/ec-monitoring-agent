@@ -1,6 +1,6 @@
 import type { AlertView } from "../../domain/AlertView";
 import type { AlertsStatus } from "../hooks/useAlerts";
-import { sortForTriage } from "../../domain/alertSort";
+import { sortAlerts } from "../../domain/alertSort";
 import { AlertCard } from "./AlertCard";
 import { AlertsHeader } from "./AlertsHeader";
 
@@ -79,7 +79,7 @@ function AlertListBody({
 
   return (
     <div className="space-y-3">
-      {sortForTriage(alerts).map((alert) => (
+      {sortAlerts(alerts).map((alert) => (
         <AlertCard
           key={alert.id}
           alert={alert}

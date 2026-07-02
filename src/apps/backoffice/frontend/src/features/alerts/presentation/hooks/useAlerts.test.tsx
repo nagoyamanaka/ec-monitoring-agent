@@ -42,10 +42,6 @@ describe("useAlerts", () => {
     expect(result.current.alerts.find((a) => a.id === "a")?.status).toBe(
       "ANALYZING",
     );
-
-    // 承認でクローズ（RESOLVED）した a は現役一覧から取り除く
-    act(() => stream.emit(makeAlert({ id: "a", status: "RESOLVED" })));
-    expect(result.current.alerts.map((a) => a.id)).toEqual(["b"]);
   });
 
   it("取得失敗時は error 遷移する", async () => {

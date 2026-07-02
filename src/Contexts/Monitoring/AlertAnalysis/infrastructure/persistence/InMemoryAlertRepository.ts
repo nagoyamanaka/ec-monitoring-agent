@@ -24,11 +24,13 @@ export class InMemoryAlertRepository implements AlertRepository {
   }
 
   async findOpenByDedupKey(dedupKey: string): Promise<Alert | null> {
+    // 承認済み（対処済み）へは畳み込まない＝未承認の現役インシデントだけを畳み込み対象にする。
     const open = Array.from(this.store.values())
       .filter(
         (alert) =>
           alert.dedupKey === dedupKey &&
-          (alert.status.isOpen() || alert.status.isAnalyzing()),
+          (alert.status.isOpen() || alert.status.isAnalyzing()) &&
+          !alert.isApproved(),
       )
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     return open[0] ?? null;

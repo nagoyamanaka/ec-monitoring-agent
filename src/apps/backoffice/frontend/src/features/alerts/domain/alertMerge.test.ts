@@ -57,17 +57,11 @@ describe("mergeAlert", () => {
     expect(result.map((a) => a.id)).toEqual(["a"]);
   });
 
-  it("RESOLVED は現役一覧から取り除く（承認でクローズ）", () => {
+  it("承認済み（feedback.isCorrect）でも一覧に残す＝位置を保って置換する", () => {
     const list = [alert("a"), alert("b"), alert("c")];
-    const result = mergeAlert(list, alert("b", { status: "RESOLVED" }));
-    expect(result.map((a) => a.id)).toEqual(["a", "c"]);
-  });
-
-  it("一覧に無い id の RESOLVED は追加しない（コピーを返す）", () => {
-    const list = [alert("a")];
-    const result = mergeAlert(list, alert("z", { status: "RESOLVED" }));
-    expect(result.map((a) => a.id)).toEqual(["a"]);
-    expect(result).not.toBe(list);
+    const result = mergeAlert(list, alert("b", { feedback: { isCorrect: true } }));
+    expect(result.map((a) => a.id)).toEqual(["a", "b", "c"]);
+    expect(result[1].feedback?.isCorrect).toBe(true);
   });
 });
 
