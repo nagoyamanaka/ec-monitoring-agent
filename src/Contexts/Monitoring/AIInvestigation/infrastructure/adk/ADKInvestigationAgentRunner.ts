@@ -5,6 +5,7 @@ import {
   type Event,
 } from "@google/adk";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
+import { InvestigationProgressNotifier } from "../../domain/InvestigationProgressNotifier.js";
 import { InvestigationAgentRunner } from "./InvestigationAgentRunner.js";
 import {
   buildInvestigationTools,
@@ -40,6 +41,11 @@ export type ADKInvestigationAgentRunnerConfig = InvestigationToolDeps &
   readonly timeoutMs?: number;
   /** 調査の所要時間・打ち切り有無を観測するためのロガー（タイムアウト肉薄の監視用）。 */
   readonly logger: Logger;
+  /**
+   * 実行イベント（ツール呼び出し／サブエージェント委譲）のライブ中継先（タスク E1(b)）。
+   * agentTrace ログと同じイベントタップを SSE にも流す。未注入なら中継なし（ログのみ）。
+   */
+  readonly progressNotifier?: InvestigationProgressNotifier;
 };
 
 function extractText(event: Event): string {
@@ -66,6 +72,7 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
   private readonly maxLlmCalls: number;
   private readonly timeoutMs: number;
   private readonly logger: Logger;
+  private readonly progressNotifier: InvestigationProgressNotifier | undefined;
 
   constructor(config: ADKInvestigationAgentRunnerConfig) {
     const tools = buildInvestigationTools(config);
@@ -84,9 +91,13 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
     this.maxLlmCalls = config.maxLlmCalls;
     this.timeoutMs = config.timeoutMs ?? 120_000;
     this.logger = config.logger;
+    this.progressNotifier = config.progressNotifier;
   }
 
-  async run(seedPrompt: string): Promise<string> {
+  async run(
+    seedPrompt: string,
+    options?: { alertId?: string },
+  ): Promise<string> {
     const startedAt = Date.now();
     const deadline = startedAt + this.timeoutMs;
     let finalText = "";
@@ -103,10 +114,26 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
       runConfig: { maxLlmCalls: this.maxLlmCalls },
     });
 
+    const alertId = options?.alertId;
+
     for await (const event of stream) {
       eventCount++;
       for (const call of getFunctionCalls(event)) {
         agentTrace.push(`${event.author ?? "?"}→${call.name ?? "?"}`);
+        // agentTrace と同じ実イベントを SSE にライブ中継する（E1(b)・捏造なし）。
+        // best-effort: 中継の失敗で調査本体を止めない。
+        if (alertId && this.progressNotifier) {
+          try {
+            this.progressNotifier.notifyInvestigationProgress({
+              alertId,
+              agent: event.author ?? "unknown",
+              tool: call.name ?? "unknown",
+              at: new Date().toISOString(),
+            });
+          } catch {
+            // 通知失敗は無視（調査継続）。トレースはログに残る。
+          }
+        }
       }
       if (isFinalResponse(event)) {
         finalText = extractText(event);

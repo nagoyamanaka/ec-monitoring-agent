@@ -1,7 +1,13 @@
 import type { AlertPrimitives } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
 import type { RemediationResponsePrimitives } from "@monitoring/AIInvestigation/domain/contracts/RemediationContract";
+import type { InvestigationProgressPrimitives } from "@monitoring/AIInvestigation/domain/contracts/InvestigationProgressContract";
 import { type AlertView, toAlertView } from "../domain/AlertView";
-import type { AlertStream, RemediationPushed, StreamStatus } from "./AlertStream";
+import type {
+  AlertStream,
+  InvestigationProgressPushed,
+  RemediationPushed,
+  StreamStatus,
+} from "./AlertStream";
 
 const DEFAULT_URL = "/alerts/stream";
 const RECONNECT_DELAY_MS = 3_000;
@@ -32,6 +38,7 @@ export class SSEAlertStream implements AlertStream {
     onAlert: (alert: AlertView) => void,
     onStatus?: (status: StreamStatus) => void,
     onRemediation?: (remediation: RemediationPushed) => void,
+    onInvestigationProgress?: (progress: InvestigationProgressPushed) => void,
   ): () => void {
     let source: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -54,6 +61,18 @@ export class SSEAlertStream implements AlertStream {
       if (!event.data || !onRemediation) return;
       try {
         onRemediation(JSON.parse(event.data) as RemediationResponsePrimitives);
+      } catch {
+        // 壊れた1行は黙って捨てる
+      }
+    };
+
+    // 名前付きイベント "investigation-progress"（ADK 調査の実行イベント・E1(b)）。
+    const handleInvestigationProgress = (event: MessageEvent<string>) => {
+      if (!event.data || !onInvestigationProgress) return;
+      try {
+        onInvestigationProgress(
+          JSON.parse(event.data) as InvestigationProgressPrimitives,
+        );
       } catch {
         // 壊れた1行は黙って捨てる
       }
@@ -87,6 +106,10 @@ export class SSEAlertStream implements AlertStream {
       source.onopen = () => emitStatus("open");
       source.onmessage = handleMessage;
       source.addEventListener("remediation", handleRemediation);
+      source.addEventListener(
+        "investigation-progress",
+        handleInvestigationProgress,
+      );
       source.onerror = handleError;
     };
 

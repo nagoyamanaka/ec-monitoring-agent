@@ -25,7 +25,25 @@ export interface AlertsHeaderProps {
   onFilterToggle?: (filter: AlertListFilter) => void;
 }
 
-/** クリック可能な件数チップ。0件は淡色化して無効（絞っても空になるだけ）。 */
+/** 絞り込みチップ群の導線ラベルに使う漏斗（フィルタ）アイコン。 */
+function FunnelIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden
+      className={cn("h-3 w-3", className)}
+    >
+      <path d="M1.5 2h13a.5.5 0 0 1 .39.812L10 9.05V13a.5.5 0 0 1-.276.447l-3 1.5A.5.5 0 0 1 6 14.5V9.05L1.11 2.812A.5.5 0 0 1 1.5 2Z" />
+    </svg>
+  );
+}
+
+/**
+ * クリック可能な件数チップ。0件は淡色化して無効（絞っても空になるだけ）。
+ * 「押せる」ことが見た目で分かるよう、選択中は ✓＋✕（解除）を、非選択は hover で
+ * リングを強調する（E2: バッジと誤認されない導線）。
+ */
 function FilterChip({
   label,
   count,
@@ -47,21 +65,31 @@ function FilterChip({
       disabled={empty || !onToggle}
       onClick={onToggle}
       className={cn(
-        "rounded-full px-2.5 py-0.5 font-medium ring-1 ring-inset transition",
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-medium ring-1 ring-inset transition",
         toneCls,
         empty && "opacity-40",
-        !empty && onToggle && "cursor-pointer hover:brightness-125",
+        !empty && onToggle && "cursor-pointer hover:brightness-125 hover:ring-2",
         active && "ring-2",
       )}
       title={
         empty
-          ? undefined
+          ? `${label}は現在 0 件です`
           : active
             ? "クリックで絞り込みを解除"
             : `クリックで${label}のみ表示`
       }
     >
+      {active && (
+        <span aria-hidden className="font-semibold">
+          ✓
+        </span>
+      )}
       {label} {count}件
+      {active && (
+        <span aria-hidden className="ml-0.5 opacity-70">
+          ✕
+        </span>
+      )}
     </button>
   );
 }
@@ -97,9 +125,17 @@ export function AlertsHeader({
         承認するとその判断を学習し、次回から即時判定になります。
       </p>
 
-      {/* 作業指標になる数だけ出す（総件数は出さない）。チップはクリックで絞り込み。 */}
+      {/* 作業指標になる数だけ出す（総件数は出さない）。
+          絞り込みチップは導線ラベル（漏斗＋「クリックで絞り込み」）でグルーピングし、
+          クリックできない状態表示（分析中）は区切りの右へ分離する（E2）。 */}
       {status === "ready" && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
+          {onFilterToggle && (
+            <span className="inline-flex items-center gap-1 text-slate-400">
+              <FunnelIcon />
+              クリックで絞り込み:
+            </span>
+          )}
           <FilterChip
             label="レビュー待ち"
             count={pending}
@@ -109,11 +145,6 @@ export function AlertsHeader({
               onFilterToggle ? () => onFilterToggle("pending") : undefined
             }
           />
-          {analyzing > 0 && (
-            <span className="rounded-full bg-cyan-500/15 px-2.5 py-0.5 font-medium text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
-              分析中 {analyzing}件
-            </span>
-          )}
           <FilterChip
             label="CRITICAL"
             count={critical}
@@ -123,6 +154,14 @@ export function AlertsHeader({
               onFilterToggle ? () => onFilterToggle("critical") : undefined
             }
           />
+          {analyzing > 0 && (
+            <>
+              <span aria-hidden className="h-3.5 w-px bg-slate-700" />
+              <span className="rounded-full bg-cyan-500/15 px-2.5 py-0.5 font-medium text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
+                分析中 {analyzing}件
+              </span>
+            </>
+          )}
         </div>
       )}
     </div>

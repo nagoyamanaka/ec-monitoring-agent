@@ -198,6 +198,23 @@ export class BackofficeApp {
       ? new StubLLMClient()
       : new GeminiLLMClient();
 
+    // SSE 通知の差し替え（stretchⅠ・案1）。REDIS_URL 設定時のみ Valkey Pub/Sub 版に載せ替える。
+    //  - worker: publish のみ（SSE クライアントを持たないので fan-out 購読は張らない）
+    //  - edge/all: publish ＋ 購読して接続中クライアントへ fan-out
+    // REDIS_URL 未設定（ローカル/テスト/all 既定）は従来の in-process notifier のまま。
+    // ADK runner の進行イベント中継（E1(b)）が使うため、AIInvestigationPort より先に組む。
+    const serveSse = config.role !== "worker";
+    let sseNotifier: SSEAlertNotifier;
+    if (valkey.enabled) {
+      const redisNotifier = new RedisSSEAlertNotifier(valkey);
+      if (serveSse) {
+        await redisNotifier.startFanOut();
+      }
+      sseNotifier = redisNotifier;
+    } else {
+      sseNotifier = new EventEmitterSSEAlertNotifier();
+    }
+
     // ★差し替えポイント（AIInvestigationPort）: 優先度 stub > ADK > 単一Gemini。
     //  - stub: ローカルE2E（Gemini課金・非決定性を排除）
     //  - ADK : マルチエージェント自律調査（タスク18・Vertex 必須）
@@ -210,6 +227,8 @@ export class BackofficeApp {
           maxLlmCalls: config.ai.adkMaxLlmCalls,
           timeoutMs: config.ai.investigationTimeoutMs,
           logger,
+          // 実行イベント（ツール呼び出し）を SSE "investigation-progress" へライブ中継（E1(b)）。
+          progressNotifier: sseNotifier,
           cloudLoggingGateway,
           terraformGateway,
           githubGateway,
@@ -239,22 +258,6 @@ export class BackofficeApp {
         githubGateway,
         cloudMonitoringGateway,
       );
-    // SSE 通知の差し替え（stretchⅠ・案1）。REDIS_URL 設定時のみ Valkey Pub/Sub 版に載せ替える。
-    //  - worker: publish のみ（SSE クライアントを持たないので fan-out 購読は張らない）
-    //  - edge/all: publish ＋ 購読して接続中クライアントへ fan-out
-    // REDIS_URL 未設定（ローカル/テスト/all 既定）は従来の in-process notifier のまま。
-    const serveSse = config.role !== "worker";
-    let sseNotifier: SSEAlertNotifier;
-    if (valkey.enabled) {
-      const redisNotifier = new RedisSSEAlertNotifier(valkey);
-      if (serveSse) {
-        await redisNotifier.startFanOut();
-      }
-      sseNotifier = redisNotifier;
-    } else {
-      sseNotifier = new EventEmitterSSEAlertNotifier();
-    }
-
     const analyzeAlertUseCase = new AnalyzeAlertUseCase(
       alertRepository,
       classifier,

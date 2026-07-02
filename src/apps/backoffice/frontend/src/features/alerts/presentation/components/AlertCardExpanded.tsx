@@ -21,6 +21,12 @@ export interface AlertCardExpandedProps {
    * 表示する射影。既定は要約（一覧オーバレイ/ドロワー）。詳細ページは "full" を渡し報告用フルを出す。
    */
   variant?: AlertReportVariant;
+  /**
+   * ANALYZING 中の告知（バナー/プレースホルダ）を本コンポーネントが出すか。
+   * 調査パイプラインビュー（InvestigationPipelinePanel・E1）を隣にマウントする親は
+   * false を渡して二重告知を避ける。既定 true（単体使用時の従来挙動）。
+   */
+  analyzingNotice?: boolean;
   className?: string;
 }
 
@@ -37,6 +43,7 @@ function formatValue(value: unknown): string {
 export function AlertCardExpanded({
   alert,
   variant = "summary",
+  analyzingNotice = true,
   className,
 }: AlertCardExpandedProps) {
   const full = variant === "full";
@@ -47,7 +54,9 @@ export function AlertCardExpanded({
   const analyzingNow = alert.status === "ANALYZING";
 
   // 分析中（既知でもなく調査レポートも無い＝初回調査）はプレースホルダ
+  // （パイプラインビューが隣にある親では出さない＝他に出せる内容も無いので null）。
   if (reason.kind === "analyzing" && !report && !known) {
+    if (!analyzingNotice) return null;
     return (
       <div className={cn("text-sm text-slate-300", className)}>
         AI が未知障害を調査中です…
@@ -59,7 +68,7 @@ export function AlertCardExpanded({
     <div className={cn("space-y-4 text-sm text-slate-200", className)}>
       {/* AI 調査中（オンデマンドのレポート生成 or 人間の指摘を反映した再調査）。
           既存内容は下に残したまま、進行中であることを明示する。 */}
-      {analyzingNow && (
+      {analyzingNow && analyzingNotice && (
         <div className="flex items-center gap-2 rounded-md bg-cyan-500/10 px-3 py-2.5 text-sm font-medium text-cyan-200 ring-1 ring-inset ring-cyan-500/30">
           <span
             className="h-2.5 w-2.5 animate-pulse rounded-full bg-cyan-400"

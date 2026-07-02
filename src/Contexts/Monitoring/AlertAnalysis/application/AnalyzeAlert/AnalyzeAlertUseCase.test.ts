@@ -48,6 +48,7 @@ const makeSpyNotifier = () => {
   const notifier: SSEAlertNotifier = {
     notify: (p) => { notified.push(p); },
     notifyRemediation: () => {},
+    notifyInvestigationProgress: () => {},
     addConnection: () => {},
     removeConnection: () => {},
   };

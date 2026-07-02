@@ -136,21 +136,21 @@ todo実施後に
 > **根拠**: ローカル実機を Playwright で実操作して評価（既知アラート到達 **実測867ms**・ANALYZING 59秒・空状態・500エラー状態・狭幅480pxまで確認）。実装は **Claude Code**、人間はレビューのみ。F 系（予兆）と並行可（衝突は `shared/ui` 程度）。**merge 条件 = 全テスト緑＋RTL テスト同時更新**。
 > 狙い: 審査観点3（ユーザビリティ）だけでなく、E1 は観点1（自律的判断の可視化）に直撃。デプロイURL審査（無人）と動画の両方で効く。
 
-### タスク E1: AI調査ライブ・タイムライン 〔P0・最大の wow〕
+### タスク E1: AI調査ライブ・タイムライン 〔P0・最大の wow〕完了✅
 
 **問題（実測）**: 未知アラートの調査中、ドロワーは「AI が証拠を解析しています…」の静的1行が **60〜120秒**続く（今回実測59秒）。7エージェントの自律調査という最大の売りが、審査員には「ローディング」にしか見えない＝死んだ時間。
 
-- (a) 【P0・安全】ANALYZING 中のドロワー/カードに**調査パイプラインビュー**: 経過時間タイマー（実測値）＋エージェント台帳（Coordinator/EvidenceCollector/RootCauseAnalyst/ImpactTriage…の役割1行）＋不確定プログレス。完了時に `InvestigationReport` の調査ステップ（`InvestigationStepPrimitives`）を**タイムラインとして順次アニメ表示**（ツール別アイコン: ログ/Terraform/コミット/類似DB）。捏造なし＝実データのみ、進行中は「完了時に確定」と正直に表示
-- (b) 【P1・wow最大】**実 ADK イベントの SSE 中継**: f640add で agentTrace をログ化済み＝同じイベントタップを `SSEAlertNotifier` の新イベント種（investigation-progress）に乗せ、フロントで「いま EvidenceCollector が fetch_commit_diff を実行中」を**ライブ表示**。実イベントのみ中継（演出の捏造はしない）。変更点: `ADKInvestigationAgentRunner`（タップ追加）→ notifier 注入 → `AlertsDataProvider`（イベント購読）→ E1(a) のタイムラインに合流
+- [x] (a) 【P0・安全】ANALYZING 中のドロワー/カードに**調査パイプラインビュー**: 経過時間タイマー（実測値）＋エージェント台帳（Coordinator/EvidenceCollector/RootCauseAnalyst/ImpactTriage…の役割1行）＋不確定プログレス。完了時に `InvestigationReport` の調査ステップ（`InvestigationStepPrimitives`）を**タイムラインとして順次アニメ表示**（ツール別アイコン: ログ/Terraform/コミット/類似DB）。捏造なし＝実データのみ、進行中は「完了時に確定」と正直に表示（✅ `InvestigationPipelinePanel` 新設。ドロワー＝ライブ＋完了タイムライン／詳細ページ＝ライブのみ（full の調査ステップと重複させない）。ANALYZING 告知はパネルに一本化＝`AlertCardExpanded` の `analyzingNotice` で抑止・EvidencePanel の静的「解析しています…」は分析中は非表示。完了タイムラインは**ライブで完了を見届けたときだけ**流す）
+- [x] (b) 【P1・wow最大】**実 ADK イベントの SSE 中継**: f640add で agentTrace をログ化済み＝同じイベントタップを `SSEAlertNotifier` の新イベント種（investigation-progress）に乗せ、フロントで「いま EvidenceCollector が fetch_commit_diff を実行中」を**ライブ表示**。実イベントのみ中継（演出の捏造はしない）。変更点: `ADKInvestigationAgentRunner`（タップ追加）→ notifier 注入 → `AlertsDataProvider`（イベント購読）→ E1(a) のタイムラインに合流（✅ 契約 `InvestigationProgressPrimitives`（contracts 単一ソース・alertId/agent/tool/at）＋`InvestigationProgressNotifier` ポート。相関キーは `InvestigationContext.alertId`（プロンプトには載せない）。EventEmitter/Redis 両 notifier 対応（専用 channel `monitoring:sse:investigation-progress`）。再調査の run 切り分けはクリア処理でなく `progressForRun(alert.updatedAt)` のクライアント側フィルタ）
 
-### タスク E2: アラートカードの情報設計 〔P0〕
+### タスク E2: アラートカードの情報設計 〔P0〕完了✅
 
 **問題（実測）**: 1カードにバッジ6個（severity/カテゴリ/時刻/該当パターン/状態/分類）＝概念過多。`該当: PROMOTED_EC.DB.CONNECTION_POOL_EXHAUSTED` と**生の内部IDが露出**。さらに**上部チップ「レビュー待ち 0件」とカードの「レビュー待ち」バッジが矛盾**する実バグを確認。
 
 - [x] 【バグ】チップ集計とカードバッジの状態算出を単一ソース化（レビュー待ち件数が一覧と常に一致）（✅ `alertWorkState` を domain/alertReview に新設し AlertsHeader / AlertStatusBadge 双方が使用。既知=report無しの取りこぼしと ANALYZING の混入を解消）
 - [x] 該当パターンの人間化: `PROMOTED_` プレフィックス→結晶化アイコン＋日本語名（eventCatalog 流用）。生IDはツールチップ/詳細へ降格（✅ alertReason が `(AUTO_)?PROMOTED_` を検出し crystallized+eventTitle へ写像。カードは ◈＋人間語・tooltip に生ID、詳細（AlertCardExpanded）は結晶化チップ＋パターンID行）
 - [x] バッジの軸分離: severity（左ボーダー色＝既存）/ 状態（右端）/ 分類根拠（1チップ）に整理し、カード上のバッジを最大3に（✅ カードから SeverityBadge チップ・UnknownFaultBadge を撤去（sr-only で読み上げは温存・コンポーネントは削除）＝category/状態/確信度の3チップ）
-- [x] 上部チップ（レビュー待ち/CRITICAL）を**クリック可能フィルタ**に（0件時は淡色化）（✅ AlertsHeader の FilterChip＋matchesAlertFilter 単一ソース・AlertList が絞り込み。0件は淡色+disabled・再クリック/解除リンクで解除）
+- [x] 上部チップ（レビュー待ち/CRITICAL）を**クリック可能フィルタ**に（0件時は淡色化）（✅ AlertsHeader の FilterChip＋matchesAlertFilter 単一ソース・AlertList が絞り込み。0件は淡色+disabled・再クリック/解除リンクで解除。**導線の明示**: 漏斗アイコン＋「クリックで絞り込み:」ラベルでチップ群をグルーピング・選択中は ✓＋✕・hover でリング強調・クリック不可の「分析中」チップは区切り線の右へ分離＝バッジと誤認されない）
 - [x] タイムスタンプを `ja-JP` ロケールに統一（実測: ドロワーが `7/2/2026, 2:16:55 PM` と英語式）（✅ `shared/format/dateTime.ts`（formatDateTimeJa/formatTimeJa）へ一本化・各所のローカル formatter を削除）
 
 ### タスク E3: fallback 体験の格上げ 〔P0・D3連動〕
@@ -161,7 +161,7 @@ todo実施後に
 - fallback でも evidenceLinks（温存済み）を「収集済みの証拠リンク」として表示（backend は対応済み・UI 側の出し分け）
 - 「AI推定: 」空文字の抑止（fallback 時は「調査失敗・再調査可」の定型文）
 
-### タスク E4: 審査員ファーストラン 〔P0・デプロイURL審査に直撃〕
+### タスク E4: 審査員ファーストラン 〔P0・デプロイURL審査に直撃〕完了✅
 
 **問題（実測）**: ①リセット直後の空一覧は「現在アクティブなアラートはありません。」のみ＝**次の一手の案内ゼロ**。②起動直後に「アラートの取得に失敗しました。HTTP 500 Internal Server Error」と**生のHTTPエラーが露出**（自動リトライなし・審査員がコールドアクセスすると最初に見る画面になり得る）。③リセット後「1 アラート」表示 vs 空一覧の軸不一致。
 
@@ -211,7 +211,7 @@ todo実施後に
 - 【UI】ドロワーのレポート冒頭に1行サマリ: 「**92秒**で Cloud Logging・GitHub・類似事例DB を横断し、**証拠62件**を収集して原因を推定」＝数字は全部実測
 - 【UI】既知アラートには対比を1行: 「既知パターン一致＝**1秒未満・AI コストゼロ**で確定（初回調査の結晶化）」→ 学習ループの経済性を毎回想起させる
 
-### タスク G2: 一覧のバリューストリップ ＋ 5秒ポジショニング 〔P0・Marcus 直撃〕
+### タスク G2: 一覧のバリューストリップ ＋ 5秒ポジショニング 〔P0・Marcus 直撃〕完了✅
 
 **狙い**: デプロイURLを開いた審査員が**5秒**で「何の価値か」を掴める。現状のヘッダー文「AI が検知・分類・調査したアラートのレビュー一覧です」は**機構の説明**であって価値の主張ではない。
 

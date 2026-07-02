@@ -12,6 +12,7 @@ import { reinvestigate } from "../../application/reinvestigate";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { AlertReviewPanel } from "../components/AlertReviewPanel";
 import { EvidencePanel } from "../components/EvidencePanel";
+import { InvestigationPipelinePanel } from "../components/InvestigationPipelinePanel";
 import { RemediationPanel } from "../components/RemediationPanel";
 import { RelatedAlertsPanel } from "../components/RelatedAlertsPanel";
 import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
@@ -43,6 +44,7 @@ export function AlertDetailPage() {
     refreshAlert,
     reconnectStream,
     remediationByAlertId,
+    investigationProgressByAlertId,
     api,
     evidenceApi,
     remediationApi,
@@ -177,7 +179,20 @@ export function AlertDetailPage() {
               </button>
             </header>
 
-            <AlertCardExpanded alert={alert} variant="full" className={PANEL} />
+            {/* AI 調査ライブ・タイムライン（E1）。ANALYZING 告知はここに一本化し、
+                完了タイムラインは full 射影の「調査ステップ」と重複するため出さない。 */}
+            <InvestigationPipelinePanel
+              key={alert.id}
+              alert={alert}
+              progress={investigationProgressByAlertId.get(alert.id) ?? []}
+              showCompletionTimeline={false}
+            />
+            <AlertCardExpanded
+              alert={alert}
+              variant="full"
+              analyzingNotice={false}
+              className={PANEL}
+            />
             <RelatedAlertsPanel
               alert={alert}
               lookup={(rid) => alerts.find((a) => a.id === rid)}

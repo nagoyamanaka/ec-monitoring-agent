@@ -45,10 +45,10 @@ flowchart LR
 | --- | --- |
 | AI | **Gemini 2.5 Pro**（Vertex AI・ADC）＋ **Google ADK**（in-process マルチエージェント）。ポート DI で単一 Gemini ⇄ ADK を差し替え |
 | バックエンド | TypeScript / Express・**DDD + Clean Architecture + CQRS + EDA**（CodelyTV パターン準拠）・RabbitMQ・MongoDB・Elasticsearch・Valkey |
-| フロントエンド | React（ダーク観測コンソール・SSE ライブ・証拠パネル・承認 UI） |
+| フロントエンド | React（ダーク観測コンソール・SSE ライブ・**AI調査ライブタイムライン**・証拠パネル・承認 UI） |
 | インフラ | **Cloud Run**（frontend / edge）＋ **Compute Engine**（EDA 常駐系）・Terraform・Cloud Monitoring / Cloud Logging（OTel 直送） |
 | CI/CD | GitHub Actions（typecheck/UT/E2E → build → deploy／Trivy → 実 ingest／AI リメディ workflow／terraform plan・apply） |
-| テスト | Vitest（BDD）**726件・112ファイル**＋ Playwright E2E |
+| テスト | Vitest（BDD）**744件・114ファイル**＋ Playwright E2E |
 
 ## クイックスタート（ローカル）
 
@@ -77,6 +77,6 @@ make e2e         # E2E
 
 ## ステータス（2026-07-02）
 
-- 実装済み: 検知境界＋3系統 ingest／分類3層（既知・類似・未知）／ADK 7エージェント調査／学習ループ・昇格／リメディエーション（advisory・dispatch）／SSE UI／Cloud Run + GCE デプロイ／CI/CD 一式
+- 実装済み: 検知境界＋3系統 ingest／分類3層（既知・類似・未知）／ADK 7エージェント調査（**実行イベントの SSE ライブ中継＝調査タイムライン可視化**）／学習ループ・昇格／リメディエーション（advisory・dispatch）／SSE UI／Cloud Run + GCE デプロイ／CI/CD 一式
 - 開発中: **予兆ブリーフィング**（未来シグナル×記憶→引用検証付きリスク予報。[todo](docs/steps/step6-final-sprint-todo.md)）
 - 設計のみ（ハッカソン後）: イベントソーシング基盤（[step4-1 §7.10](docs/steps/step4-1-strategy.md)）

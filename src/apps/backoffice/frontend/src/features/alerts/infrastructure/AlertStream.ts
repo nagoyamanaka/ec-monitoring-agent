@@ -1,4 +1,5 @@
 import type { RemediationResponsePrimitives } from "@monitoring/AIInvestigation/domain/contracts/RemediationContract";
+import type { InvestigationProgressPrimitives } from "@monitoring/AIInvestigation/domain/contracts/InvestigationProgressContract";
 import type { AlertView } from "../domain/AlertView";
 
 /**
@@ -12,6 +13,9 @@ export type StreamStatus = "connecting" | "open" | "closed";
 /** SSE "remediation" イベントの payload（backend の RemediationResponsePrimitives と同一契約）。 */
 export type RemediationPushed = RemediationResponsePrimitives;
 
+/** SSE "investigation-progress" イベントの payload（backend と同一契約・実イベントのみ）。 */
+export type InvestigationProgressPushed = InvestigationProgressPrimitives;
+
 /**
  * Alert の push 抽象（SSE の関心事を隠蔽する port）。
  * SSE は infrastructure の関心事なので interface で抽象化し、hook が消費する。
@@ -20,6 +24,7 @@ export type RemediationPushed = RemediationResponsePrimitives;
  * 1本の接続で「アラート集約のライフサイクル事象」を多重化して配る:
  * - 既定イベント = alert の生成/分析中/調査完了（onAlert）
  * - "remediation" イベント = リメディ確定（onRemediation）
+ * - "investigation-progress" イベント = ADK 調査の実行イベントのライブ中継（onInvestigationProgress・E1(b)）
  * 重い外部証拠（evidence）はここに乗せず pull on-demand に残す（broadcast する小さな事実 / pull する重い詳細）。
  */
 export interface AlertStream {
@@ -27,11 +32,13 @@ export interface AlertStream {
    * alert 受信ごとに onAlert を呼ぶ。戻り値は購読解除関数（unmount で呼ぶ）。
    * onStatus（任意）には接続状態の変化を通知する（ライブ表示用・実装は best-effort）。
    * onRemediation（任意）には "remediation" イベントを通知する。
+   * onInvestigationProgress（任意）には "investigation-progress" イベントを通知する。
    */
   subscribe(
     onAlert: (alert: AlertView) => void,
     onStatus?: (status: StreamStatus) => void,
     onRemediation?: (remediation: RemediationPushed) => void,
+    onInvestigationProgress?: (progress: InvestigationProgressPushed) => void,
   ): () => void;
 
   /**

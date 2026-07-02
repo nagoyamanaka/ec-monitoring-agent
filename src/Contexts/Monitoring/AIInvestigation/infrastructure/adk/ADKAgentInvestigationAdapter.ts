@@ -43,7 +43,11 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
 
     let raw: string;
     try {
-      raw = await this.runner.run(seedPrompt);
+      // alertId があれば実行イベントのライブ中継（investigation-progress）の相関キーとして渡す。
+      raw = await this.runner.run(
+        seedPrompt,
+        context.alertId ? { alertId: context.alertId } : undefined,
+      );
     } catch (error) {
       await this.logger?.warn({
         service: "backoffice-backend",

@@ -2,6 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import type { AlertView } from "../../domain/AlertView";
 import { mergeAlert, mergeAlerts } from "../../domain/alertMerge";
 import { type RemediationView, toRemediationView } from "../../domain/RemediationView";
+import {
+  type InvestigationProgressView,
+  toInvestigationProgressView,
+} from "../../domain/investigationProgress";
 import type { AlertsApi } from "../../infrastructure/alertsApi";
 import type { AlertStream, StreamStatus } from "../../infrastructure/AlertStream";
 import { useAlertStream } from "./useAlertStream";
@@ -26,7 +30,19 @@ export type UseAlertsResult = {
   readonly reconnectStream: () => void;
   /** SSE "remediation" イベントで届いた最新のリメディ確定（alertId→View）。ドロワーへ live 反映する。 */
   readonly remediationByAlertId: ReadonlyMap<string, RemediationView>;
+  /**
+   * SSE "investigation-progress" で届いた ADK 調査の実行イベント（alertId→時系列）。
+   * 調査パイプラインビュー（E1）がライブ表示する。実イベントのみ・run の切り分けは
+   * 表示側が alert.updatedAt（ANALYZING 遷移時刻）で行う（progressForRun）。
+   */
+  readonly investigationProgressByAlertId: ReadonlyMap<
+    string,
+    readonly InvestigationProgressView[]
+  >;
 };
+
+/** 1 Alert あたり保持する進行イベントの上限（暴走時のメモリ保険。通常の調査は数十件）。 */
+const PROGRESS_EVENTS_MAX = 100;
 
 /**
  * 初回取得失敗時の自動リトライ設定。Cloud Run のコールドスタート中に審査員が
@@ -54,6 +70,10 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
   const [remediationByAlertId, setRemediationByAlertId] = useState<
     ReadonlyMap<string, RemediationView>
   >(new Map());
+  const [investigationProgressByAlertId, setInvestigationProgressByAlertId] =
+    useState<ReadonlyMap<string, readonly InvestigationProgressView[]>>(
+      new Map(),
+    );
   const [fetchKey, setFetchKey] = useState(0);
 
   const refreshAlerts = useCallback(() => setFetchKey((k) => k + 1), []);
@@ -65,8 +85,11 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
     setStatus("loading");
     setError(null);
     setRetrying(false);
-    // リセット時は既存一覧をクリアして再取得開始であることを明示する
-    if (fetchKey > 0) setAlerts([]);
+    // リセット時は既存一覧をクリアして再取得開始であることを明示する（進行イベントも道連れ）
+    if (fetchKey > 0) {
+      setAlerts([]);
+      setInvestigationProgressByAlertId(new Map());
+    }
 
     const attemptFetch = (attempt: number) => {
       api
@@ -122,6 +145,17 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
       });
       setLastUpdatedAt(new Date());
     },
+    (progress) => {
+      // 調査進行イベント（E1）。alert 単位の時系列に追記（上限超過は古い方から捨てる）。
+      // 一覧の lastUpdatedAt は動かさない（一覧データの反映ではないため）。
+      const view = toInvestigationProgressView(progress);
+      setInvestigationProgressByAlertId((prev) => {
+        const next = new Map(prev);
+        const events = [...(next.get(view.alertId) ?? []), view];
+        next.set(view.alertId, events.slice(-PROGRESS_EVENTS_MAX));
+        return next;
+      });
+    },
   );
 
   const refreshAlert = useCallback(
@@ -146,5 +180,6 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
     refreshAlerts,
     reconnectStream,
     remediationByAlertId,
+    investigationProgressByAlertId,
   };
 }

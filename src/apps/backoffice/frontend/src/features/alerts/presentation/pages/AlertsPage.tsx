@@ -42,6 +42,7 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
     refreshAlerts,
     reconnectStream,
     remediationByAlertId,
+    investigationProgressByAlertId,
     api,
     evidenceApi,
     remediationApi,
@@ -218,6 +219,11 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
         remediationApi={remediationApi}
         pushedRemediation={
           selectedId ? remediationByAlertId.get(selectedId) ?? null : null
+        }
+        investigationProgress={
+          selectedId
+            ? investigationProgressByAlertId.get(selectedId) ?? []
+            : []
         }
         relatedLookup={relatedLookup}
         alerts={alerts}

@@ -3,6 +3,12 @@ import { InfraEvidence } from "./InfraEvidence.js";
 export type { InfraEvidence };
 
 export interface InvestigationContext {
+  /**
+   * 調査対象の Alert id。進行イベントのライブ中継（investigation-progress）の相関キーで、
+   * プロンプトには載せない（InvestigationPromptBuilder は本フィールドを直列化しない）。
+   * 未設定なら中継なしで調査だけ行う（後方互換）。
+   */
+  readonly alertId?: string;
   readonly errorEvent: {
     eventName: string;
     occurredOn: string;

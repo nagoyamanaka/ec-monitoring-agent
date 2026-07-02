@@ -17,8 +17,13 @@ const context: InvestigationContext = {
 
 /** エージェント・グラフ（ADK）を呼ばずにアダプタのオーケストレーションだけを検証するフェイク。 */
 class FakeAgentRunner implements InvestigationAgentRunner {
+  lastOptions: { alertId?: string } | undefined;
   constructor(private readonly behavior: { text?: string; error?: Error }) {}
-  async run(): Promise<string> {
+  async run(
+    _seedPrompt: string,
+    options?: { alertId?: string },
+  ): Promise<string> {
+    this.lastOptions = options;
     if (this.behavior.error) throw this.behavior.error;
     return this.behavior.text ?? "";
   }
@@ -44,6 +49,19 @@ describe("ADKAgentInvestigationAdapter", () => {
     expect(report.isFallback).toBe(false);
     expect(report.summary).toBe("DB接続枯渇");
     expect(report.severity.value).toBe(AlertSeverities.CRITICAL);
+  });
+
+  it("context.alertId を進行イベント相関キーとして runner へ引き渡す（未設定なら渡さない）", async () => {
+    const withId = new FakeAgentRunner({ text: validJson });
+    await new ADKAgentInvestigationAdapter(withId).investigate({
+      ...context,
+      alertId: "alert-1",
+    });
+    expect(withId.lastOptions).toEqual({ alertId: "alert-1" });
+
+    const withoutId = new FakeAgentRunner({ text: validJson });
+    await new ADKAgentInvestigationAdapter(withoutId).investigate(context);
+    expect(withoutId.lastOptions).toBeUndefined();
   });
 
   it("エージェント実行が例外を投げたらfallbackを返す", async () => {

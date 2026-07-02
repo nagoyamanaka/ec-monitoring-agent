@@ -56,6 +56,7 @@ const makeSpyNotifier = () => {
       notified.push(p);
     },
     notifyRemediation: () => {},
+    notifyInvestigationProgress: () => {},
     addConnection: () => {},
     removeConnection: () => {},
   };

@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { AlertPrimitives } from "../../AlertAnalysis/domain/Alert.js";
 import { RemediationResponsePrimitives } from "../../AIInvestigation/domain/contracts/RemediationContract.js";
+import { InvestigationProgressPrimitives } from "../../AIInvestigation/domain/contracts/InvestigationProgressContract.js";
 import { SSEAlertNotifier } from "../domain/SSEAlertNotifier.js";
 
 // オンメモリ（シングルプロセス前提）の SSE 通知実装。
@@ -27,6 +28,11 @@ export class EventEmitterSSEAlertNotifier implements SSEAlertNotifier {
   notifyRemediation(remediation: RemediationResponsePrimitives): void {
     // 名前付きイベント "remediation" ＝frontend は addEventListener("remediation") で受ける。
     this.broadcast(JSON.stringify(remediation), "remediation");
+  }
+
+  notifyInvestigationProgress(progress: InvestigationProgressPrimitives): void {
+    // 名前付きイベント "investigation-progress" ＝ADK 調査の実行イベントのライブ中継（E1(b)）。
+    this.broadcast(JSON.stringify(progress), "investigation-progress");
   }
 
   // 全接続へ1メッセージを書き込む。event 名があれば `event:` 行を付ける。

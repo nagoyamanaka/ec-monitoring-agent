@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { AlertPrimitives } from "../../AlertAnalysis/domain/Alert.js";
 import { RemediationResponsePrimitives } from "../../AIInvestigation/domain/contracts/RemediationContract.js";
+import { InvestigationProgressPrimitives } from "../../AIInvestigation/domain/contracts/InvestigationProgressContract.js";
 import { SSEAlertNotifier } from "../domain/SSEAlertNotifier.js";
 import { EventEmitterSSEAlertNotifier } from "./EventEmitterSSEAlertNotifier.js";
 import { ValkeyConnection } from "../../../Shared/infrastructure/valkey/ValkeyConnection.js";
@@ -24,6 +25,8 @@ import { ValkeyConnection } from "../../../Shared/infrastructure/valkey/ValkeyCo
 export class RedisSSEAlertNotifier implements SSEAlertNotifier {
   static readonly ALERT_CHANNEL = "monitoring:sse:alert";
   static readonly REMEDIATION_CHANNEL = "monitoring:sse:remediation";
+  static readonly INVESTIGATION_PROGRESS_CHANNEL =
+    "monitoring:sse:investigation-progress";
 
   constructor(
     private readonly valkey: ValkeyConnection,
@@ -39,12 +42,19 @@ export class RedisSSEAlertNotifier implements SSEAlertNotifier {
       [
         RedisSSEAlertNotifier.ALERT_CHANNEL,
         RedisSSEAlertNotifier.REMEDIATION_CHANNEL,
+        RedisSSEAlertNotifier.INVESTIGATION_PROGRESS_CHANNEL,
       ],
       (channel, message) => {
         try {
           const payload = JSON.parse(message);
           if (channel === RedisSSEAlertNotifier.REMEDIATION_CHANNEL) {
             this.local.notifyRemediation(payload as RemediationResponsePrimitives);
+          } else if (
+            channel === RedisSSEAlertNotifier.INVESTIGATION_PROGRESS_CHANNEL
+          ) {
+            this.local.notifyInvestigationProgress(
+              payload as InvestigationProgressPrimitives,
+            );
           } else {
             this.local.notify(payload as AlertPrimitives);
           }
@@ -66,6 +76,13 @@ export class RedisSSEAlertNotifier implements SSEAlertNotifier {
     void this.valkey.publish(
       RedisSSEAlertNotifier.REMEDIATION_CHANNEL,
       JSON.stringify(remediation),
+    );
+  }
+
+  notifyInvestigationProgress(progress: InvestigationProgressPrimitives): void {
+    void this.valkey.publish(
+      RedisSSEAlertNotifier.INVESTIGATION_PROGRESS_CHANNEL,
+      JSON.stringify(progress),
     );
   }
 

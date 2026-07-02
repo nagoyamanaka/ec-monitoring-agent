@@ -85,15 +85,33 @@ describe("RedisSSEAlertNotifier", () => {
         },
       ]);
     });
+
+    it("notifyInvestigationProgress は investigation-progress channel に publish する", () => {
+      const progress = {
+        alertId: "alert-1",
+        agent: "evidence_collector",
+        tool: "fetch_commit_diff",
+        at: "2026-07-03T00:00:00.000Z",
+      };
+      notifier.notifyInvestigationProgress(progress);
+
+      expect(valkey.published).toEqual([
+        {
+          channel: RedisSSEAlertNotifier.INVESTIGATION_PROGRESS_CHANNEL,
+          message: JSON.stringify(progress),
+        },
+      ]);
+    });
   });
 
   describe("subscribe→fan-out 側（edge）", () => {
-    it("startFanOut で両 channel を購読する", async () => {
+    it("startFanOut で全 channel を購読する", async () => {
       await notifier.startFanOut();
 
       expect(valkey.subscribedChannels).toEqual([
         RedisSSEAlertNotifier.ALERT_CHANNEL,
         RedisSSEAlertNotifier.REMEDIATION_CHANNEL,
+        RedisSSEAlertNotifier.INVESTIGATION_PROGRESS_CHANNEL,
       ]);
     });
 
@@ -124,6 +142,27 @@ describe("RedisSSEAlertNotifier", () => {
 
       expect(res.writes).toEqual([
         `event: remediation\ndata: ${JSON.stringify(remediation)}\n\n`,
+      ]);
+    });
+
+    it("investigation-progress channel の受信は名前付きイベント investigation-progress で fan-out する", async () => {
+      await notifier.startFanOut();
+      const res = fakeResponse();
+      notifier.addConnection(res);
+
+      const progress = {
+        alertId: "alert-9",
+        agent: "investigation_coordinator",
+        tool: "impact_triage",
+        at: "2026-07-03T00:00:00.000Z",
+      };
+      valkey.deliver(
+        RedisSSEAlertNotifier.INVESTIGATION_PROGRESS_CHANNEL,
+        JSON.stringify(progress),
+      );
+
+      expect(res.writes).toEqual([
+        `event: investigation-progress\ndata: ${JSON.stringify(progress)}\n\n`,
       ]);
     });
 

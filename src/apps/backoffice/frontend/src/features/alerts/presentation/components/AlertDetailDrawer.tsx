@@ -11,6 +11,7 @@ import {
 import { alertConfidence } from "../../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../../domain/eventCatalog";
 import { categoryInfo } from "../../domain/alertCategory";
+import type { InvestigationProgressView } from "../../domain/investigationProgress";
 import type { FeedbackDecision } from "../../application/submitFeedback";
 import type { EvidenceApi } from "../../infrastructure/evidenceApi";
 import type { RemediationApi } from "../../infrastructure/remediationApi";
@@ -19,6 +20,7 @@ import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertReviewPanel } from "./AlertReviewPanel";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { EvidencePanel } from "./EvidencePanel";
+import { InvestigationPipelinePanel } from "./InvestigationPipelinePanel";
 import { RemediationPanel } from "./RemediationPanel";
 import { RelatedAlertsPanel } from "./RelatedAlertsPanel";
 import { ExactMatchBadge } from "./ExactMatchBadge";
@@ -52,6 +54,8 @@ export interface AlertDetailDrawerProps {
   remediationApi?: RemediationApi;
   /** SSE で届いた選択中アラートのリメディ確定（live 反映用）。 */
   pushedRemediation?: RemediationView | null;
+  /** SSE で届いた選択中アラートの調査進行イベント（調査パイプラインビュー・E1 のライブ表示用）。 */
+  investigationProgress?: readonly InvestigationProgressView[];
   /** 関連アラートの alertId → AlertView 解決（一覧から渡す。関連の日時/severity 補完用）。 */
   relatedLookup?: (id: string) => AlertView | undefined;
   /** 一覧のアラート集合。完全一致分類の「過去の同型事例」（同 eventName の対処済み）を引くのに使う。 */
@@ -110,6 +114,7 @@ export function AlertDetailDrawer({
   evidenceApi,
   remediationApi,
   pushedRemediation,
+  investigationProgress,
   relatedLookup,
   alerts,
   onRelatedNavigate,
@@ -241,7 +246,18 @@ export function AlertDetailDrawer({
               />
             </div>
           ) : null}
-          <AlertCardExpanded alert={alert} variant="summary" />
+          {/* AI 調査ライブ・タイムライン（E1）: ANALYZING 中はパイプライン、完了直後はステップの
+              順次アニメ。ANALYZING 告知は本パネルに一本化（AlertCardExpanded 側は抑止）。 */}
+          <InvestigationPipelinePanel
+            key={alert.id}
+            alert={alert}
+            progress={investigationProgress}
+          />
+          <AlertCardExpanded
+            alert={alert}
+            variant="summary"
+            analyzingNotice={false}
+          />
           <RelatedAlertsPanel
             alert={alert}
             lookup={relatedLookup}
@@ -259,7 +275,8 @@ export function AlertDetailDrawer({
               live
             />
           )}
-          {evidenceApi && hasAiInvestigation(alert) && (
+          {/* 分析中の証拠プレースホルダはパイプラインビュー（上）が代替するため完了後のみ出す。 */}
+          {evidenceApi && hasAiInvestigation(alert) && !analyzing && (
             <EvidencePanel api={evidenceApi} alert={alert} />
           )}
           {/* 判定は末尾に統一配置（詳細ページと同じ）。 */}
