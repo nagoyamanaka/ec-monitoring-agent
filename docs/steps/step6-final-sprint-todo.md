@@ -48,10 +48,12 @@ todo実施後に
   - `ScheduleSignalSource`（`ScheduleSource.list` → SCHEDULE）
 - 設計判断: 正規化（subject/when/desc 付与）を各 Source 内に閉じ、Handler は `ForecastSignalSource[]` を回すだけ＝stretchⅢ の源追加が容易
 
-### タスク F4: ForecastPort ＋ Gemini アダプタ 〔P0〕（旧 step4-2 タスク22）
+### タスク F4: ForecastPort ＋ Gemini アダプタ 〔P0〕（旧 step4-2 タスク22）✅
 
 - 【新規】`Forecast/domain/ForecastPort.ts` / `ForecastContext.ts`
 - 【新規】`infrastructure/GeminiForecastAdapter.ts`（既存Geminiアダプタ踏襲・JSON固定・**citations必須をプロンプト強制**・safeParse・confidenceクランプ・fallback）
+- 【設計判断・実装済み】**ADK は意図的に非使用**: 入力（シグナル）は Handler が Source 群から事前収集済みで、LLM の仕事は突合・格付けの1ショット合成＝ツールコール型の動的探索（ADK の価値）が不要。D3/I1 で実測済みの ADK 脆さ（無言ドロップ・散文・JSON途中切断）を無人閲覧経路（GET /forecast・録画）に持ち込まず、`responseMimeType=application/json` 強制の単発 generateContent で構造化を堅くする。`LLMTextClient`（GeminiLLMClient＝Vertex/AI Studio 切替・timeout・リトライ持ち）を注入するコンポジション。後から agentic 化したければ `ForecastPort` 差し替えのみ（Handler ノータッチ）
+- 【実装メモ】citations 空の RiskItem はアダプタでは落とさない（「空は不正」の drop は F5 引用検証へ集約＝実在照合と同じ場所・二重実装回避）。未知 level は LOW 丸め（盛らない側）・level降順/confidence降順ソートはアダプタが保証。fallback は throw せず `isFallback=true`・risks 空（UT 13ケース・全791テスト緑）
 
 ### タスク F5: ForecastRiskCommandHandler 〔P0〕（旧 step4-2 タスク23）
 
