@@ -78,7 +78,9 @@ export const config = {
       | "advisory"
       | "demo",
     // demo モードで返す、事前に手動起票した本物の草案PRのURL（シナリオ5用）。
-    demoPullRequestUrl: process.env.REMEDIATION_DEMO_PR_URL ?? "",
+    demoPullRequestUrl:
+      process.env.REMEDIATION_DEMO_PR_URL ??
+      "https://github.com/nagoyamanaka/ec-monitoring-agent/pull/29",
     // dispatch 経路で起動する repository_dispatch のイベント種別（ターゲットリポの workflow と一致させる）。
     dispatchEventType:
       process.env.REMEDIATION_DISPATCH_EVENT_TYPE ?? "ai-remediation",

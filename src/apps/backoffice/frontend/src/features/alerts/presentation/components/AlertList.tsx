@@ -1,8 +1,13 @@
+import { useState } from "react";
 import type { AlertView } from "../../domain/AlertView";
 import type { AlertsStatus } from "../hooks/useAlerts";
 import { sortAlerts } from "../../domain/alertSort";
 import { AlertCard } from "./AlertCard";
-import { AlertsHeader } from "./AlertsHeader";
+import {
+  AlertsHeader,
+  matchesAlertFilter,
+  type AlertListFilter,
+} from "./AlertsHeader";
 
 export interface AlertListProps {
   alerts: AlertView[];
@@ -35,17 +40,44 @@ export function AlertList({
   selectedId,
   onSelect,
 }: AlertListProps) {
+  // ヘッダチップ（レビュー待ち/CRITICAL）による絞り込み。同じチップの再クリックで解除。
+  const [filter, setFilter] = useState<AlertListFilter | null>(null);
+  const toggleFilter = (next: AlertListFilter) =>
+    setFilter((cur) => (cur === next ? null : next));
+  const visible = filter
+    ? alerts.filter((a) => matchesAlertFilter(a, filter))
+    : alerts;
+
   return (
     <div className="w-full max-w-4xl space-y-4">
-      <AlertsHeader alerts={alerts} status={status} />
-      <AlertListBody
+      <AlertsHeader
         alerts={alerts}
+        status={status}
+        activeFilter={filter}
+        onFilterToggle={toggleFilter}
+      />
+      {filter && (
+        <p className="text-xs text-slate-400">
+          {filter === "pending" ? "レビュー待ち" : "CRITICAL"}のみ表示中（
+          {visible.length}件）
+          <button
+            type="button"
+            onClick={() => setFilter(null)}
+            className="ml-2 font-medium text-cyan-300 hover:text-cyan-200"
+          >
+            解除
+          </button>
+        </p>
+      )}
+      <AlertListBody
+        alerts={visible}
         status={status}
         error={error}
         retrying={retrying}
         onRetry={onRetry}
         selectedId={selectedId}
         onSelect={onSelect}
+        filtered={filter !== null}
       />
     </div>
   );
@@ -72,7 +104,8 @@ function AlertListBody({
   onRetry,
   selectedId,
   onSelect,
-}: AlertListProps) {
+  filtered = false,
+}: AlertListProps & { filtered?: boolean }) {
   if (status === "loading") {
     return (
       <div className="space-y-3" aria-busy>
@@ -122,6 +155,14 @@ function AlertListBody({
   }
 
   if (alerts.length === 0) {
+    // 絞り込み中の 0 件は「アクティブ無し」ではない（解除導線は上の注記が担う）。
+    if (filtered) {
+      return (
+        <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-400 ring-1 ring-inset ring-slate-700/50">
+          絞り込み条件に一致するアラートはありません。
+        </div>
+      );
+    }
     return (
       <div className="space-y-2 rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm ring-1 ring-inset ring-slate-700/50">
         <p className="text-slate-300">現在アクティブなアラートはありません。</p>

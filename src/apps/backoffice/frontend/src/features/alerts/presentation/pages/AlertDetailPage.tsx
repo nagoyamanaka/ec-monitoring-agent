@@ -15,14 +15,10 @@ import { EvidencePanel } from "../components/EvidencePanel";
 import { RemediationPanel } from "../components/RemediationPanel";
 import { RelatedAlertsPanel } from "../components/RelatedAlertsPanel";
 import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
+import { formatDateTimeJa } from "@shared/format/dateTime";
 
 /** 報告書の各ブロックをカードで括る共通スタイル（グルーピングで視線の止め所を作る）。 */
 const PANEL = "rounded-xl border border-slate-800/80 bg-slate-900/40 p-5";
-
-function formatAbsoluteTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
-}
 
 /**
  * アラート詳細ページ（DefaultLayout＝デモUI非侵食・ディープリンク/別タブ用）。
@@ -169,7 +165,7 @@ export function AlertDetailPage() {
                   {alert.eventName}
                 </h2>
                 <p className="text-xs text-slate-400">
-                  {alert.source} · {formatAbsoluteTime(alert.occurredOn)}
+                  {alert.source} · {formatDateTimeJa(alert.occurredOn)}
                 </p>
               </div>
               <button

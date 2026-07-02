@@ -89,6 +89,31 @@ describe("AlertList", () => {
     expect(screen.getByText("cpu.high")).toBeInTheDocument();
   });
 
+  it("CRITICAL チップのクリックで一覧を絞り込み、再クリック（解除）で全件へ戻す", async () => {
+    render(
+      <AlertList
+        status="ready"
+        error={null}
+        alerts={[
+          makeAlert({
+            id: "a",
+            severity: "CRITICAL",
+            eventName: "latency.spike",
+          }),
+          makeAlert({ id: "b", severity: "WARNING", eventName: "cpu.high" }),
+        ]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "CRITICAL 1件" }));
+    expect(screen.getByText("latency.spike")).toBeInTheDocument();
+    expect(screen.queryByText("cpu.high")).not.toBeInTheDocument();
+    expect(screen.getByText(/CRITICALのみ表示中/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "CRITICAL 1件" }));
+    expect(screen.getByText("cpu.high")).toBeInTheDocument();
+    expect(screen.queryByText(/のみ表示中/)).not.toBeInTheDocument();
+  });
+
   it("行クリックで onSelect を呼ぶ", async () => {
     const onSelect = vi.fn();
     render(
@@ -99,7 +124,7 @@ describe("AlertList", () => {
         alerts={[makeAlert({ id: "a", eventName: "latency.spike" })]}
       />,
     );
-    await userEvent.click(screen.getByRole("button"));
+    await userEvent.click(screen.getByTestId("alert-card"));
     expect(onSelect).toHaveBeenCalledWith("a");
   });
 });

@@ -148,10 +148,10 @@ todo実施後に
 **問題（実測）**: 1カードにバッジ6個（severity/カテゴリ/時刻/該当パターン/状態/分類）＝概念過多。`該当: PROMOTED_EC.DB.CONNECTION_POOL_EXHAUSTED` と**生の内部IDが露出**。さらに**上部チップ「レビュー待ち 0件」とカードの「レビュー待ち」バッジが矛盾**する実バグを確認。
 
 - [x] 【バグ】チップ集計とカードバッジの状態算出を単一ソース化（レビュー待ち件数が一覧と常に一致）（✅ `alertWorkState` を domain/alertReview に新設し AlertsHeader / AlertStatusBadge 双方が使用。既知=report無しの取りこぼしと ANALYZING の混入を解消）
-- 該当パターンの人間化: `PROMOTED_` プレフィックス→結晶化アイコン＋日本語名（eventCatalog 流用）。生IDはツールチップ/詳細へ降格
-- バッジの軸分離: severity（左ボーダー色＝既存）/ 状態（右端）/ 分類根拠（1チップ）に整理し、カード上のバッジを最大3に
-- 上部チップ（レビュー待ち/CRITICAL）を**クリック可能フィルタ**に（0件時は淡色化）
-- タイムスタンプを `ja-JP` ロケールに統一（実測: ドロワーが `7/2/2026, 2:16:55 PM` と英語式）
+- [x] 該当パターンの人間化: `PROMOTED_` プレフィックス→結晶化アイコン＋日本語名（eventCatalog 流用）。生IDはツールチップ/詳細へ降格（✅ alertReason が `(AUTO_)?PROMOTED_` を検出し crystallized+eventTitle へ写像。カードは ◈＋人間語・tooltip に生ID、詳細（AlertCardExpanded）は結晶化チップ＋パターンID行）
+- [x] バッジの軸分離: severity（左ボーダー色＝既存）/ 状態（右端）/ 分類根拠（1チップ）に整理し、カード上のバッジを最大3に（✅ カードから SeverityBadge チップ・UnknownFaultBadge を撤去（sr-only で読み上げは温存・コンポーネントは削除）＝category/状態/確信度の3チップ）
+- [x] 上部チップ（レビュー待ち/CRITICAL）を**クリック可能フィルタ**に（0件時は淡色化）（✅ AlertsHeader の FilterChip＋matchesAlertFilter 単一ソース・AlertList が絞り込み。0件は淡色+disabled・再クリック/解除リンクで解除）
+- [x] タイムスタンプを `ja-JP` ロケールに統一（実測: ドロワーが `7/2/2026, 2:16:55 PM` と英語式）（✅ `shared/format/dateTime.ts`（formatDateTimeJa/formatTimeJa）へ一本化・各所のローカル formatter を削除）
 
 ### タスク E3: fallback 体験の格上げ 〔P0・D3連動〕
 
@@ -215,9 +215,9 @@ todo実施後に
 
 **狙い**: デプロイURLを開いた審査員が**5秒**で「何の価値か」を掴める。現状のヘッダー文「AI が検知・分類・調査したアラートのレビュー一覧です」は**機構の説明**であって価値の主張ではない。
 
-- 【copy】ヘッダー下の説明文を価値訴求に書き換え: 例「アラート発火後の**調査・評価・報告**を AI エージェントが肩代わりします。既知は1秒で確定、未知は証拠つきで原因を提示」（機構説明はツールチップ/ガイドへ降格）
-- 【UI】一覧上部に**実績ストリップ**（Analytics の実データを read）: 「自動トリアージ n 件 ／ 既知即決 n 件 ／ AI 調査 n 件 ／ 昇格 n 件」— デモを触るほど数字が増える＝価値が蓄積して見える
-- 【接続】ストリップのクリックで Analytics へ（E6 の対比タイル・昇格ファネルが受け皿）
+- [x] 【copy】ヘッダー下の説明文を価値訴求に書き換え: 例「アラート発火後の**調査・評価・報告**を AI エージェントが肩代わりします。既知は1秒で確定、未知は証拠つきで原因を提示」（機構説明はツールチップ/ガイドへ降格）（✅ AlertsHeader。機構3ステップは FirstRunGuide が担う）
+- [x] 【UI】一覧上部に**実績ストリップ**（Analytics の実データを read）: 「自動トリアージ n 件 ／ 既知即決 n 件 ／ AI 調査 n 件 ／ 昇格 n 件」— デモを触るほど数字が増える＝価値が蓄積して見える（✅ ValueStrip 新設・lastUpdatedAt で再取得＝SSE 着弾のたび数字が伸びる。昇格数は GET /analytics に promotedPatternCount を同梱（既存 patterns query 再利用））
+- [x] 【接続】ストリップのクリックで Analytics へ（E6 の対比タイル・昇格ファネルが受け皿）（✅ ストリップ全体をボタン化し /analytics へ遷移）
 
 ### タスク G3: 提出資料の Marcus レンズ磨き 〔P0・スマホ時間・doc のみ〕
 

@@ -32,5 +32,7 @@ describe("analyticsRoutes (integration)", () => {
     expect(res.status).toBe(200);
     expect(typeof res.body.totalAlerts).toBe("number");
     expect(res.body.totalAlerts).toBeGreaterThanOrEqual(2);
+    // 昇格（結晶化）パターン数はバリューストリップの成果指標として同梱する
+    expect(typeof res.body.promotedPatternCount).toBe("number");
   });
 });

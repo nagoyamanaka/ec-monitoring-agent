@@ -69,13 +69,31 @@ export function AlertCardExpanded({
         </div>
       )}
 
-      {/* 推定原因（該当パターン / AI 推定パターン） */}
+      {/* 推定原因（該当パターン / AI 推定パターン）。
+          結晶化パターンは人間語＋◈で出し、生ID（PROMOTED_...）は詳細の従属行へ降格。 */}
       {reason.kind !== "analyzing" && (
         <section className="space-y-1">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
             {known ? "該当パターン（既知）" : "AI 推定パターン"}
           </h4>
-          <p className="text-slate-100">{reason.patternName}</p>
+          {reason.kind === "known" && reason.crystallized ? (
+            <>
+              <p className="text-slate-100">
+                <span aria-hidden className="text-emerald-300">
+                  ◈{" "}
+                </span>
+                {reason.patternName}
+                <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/25">
+                  結晶化（承認により学習）
+                </span>
+              </p>
+              <p className="text-xs text-slate-400">
+                パターンID: <code>{reason.rawPatternName}</code>
+              </p>
+            </>
+          ) : (
+            <p className="text-slate-100">{reason.patternName}</p>
+          )}
           {/* 類似既知（SIMILARITY）の back-link は RelatedAlertsPanel の「過去の同型事例」
               セクションに確度チップ付きで提示する（ドロワー/詳細でマウント・タスク9e）。 */}
         </section>

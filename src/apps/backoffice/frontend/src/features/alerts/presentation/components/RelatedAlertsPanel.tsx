@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { cn } from "@shared/ui/cn";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import { formatDateTimeJa } from "@shared/format/dateTime";
 import type { AlertView } from "../../domain/AlertView";
 import { eventTitle } from "../../domain/eventCatalog";
 import {
@@ -29,11 +30,6 @@ export interface RelatedAlertsPanelProps {
    */
   onNavigate?: (id: string) => void;
   className?: string;
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
 const ROW_CLASS =
@@ -97,7 +93,7 @@ function AlertRowBody({
         {row.resolved && row.severity && <SeverityBadge level={row.severity} />}
         {row.resolved && row.occurredOn && (
           <span className="ml-auto text-[11px] text-slate-400">
-            {formatTime(row.occurredOn)}
+            {formatDateTimeJa(row.occurredOn)}
           </span>
         )}
       </div>

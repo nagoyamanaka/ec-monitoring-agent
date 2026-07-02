@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ConfidenceGauge } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import { formatDateTimeJa, formatTimeJa } from "@shared/format/dateTime";
 import {
   type AlertView,
   isAnalyzing,
@@ -63,11 +64,6 @@ export interface AlertDetailDrawerProps {
   onRelatedNavigate?: (id: string) => void;
 }
 
-function formatAbsoluteTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
-}
-
 /**
  * 重複観測の期間サマリ。occurrenceCount ≥ 2 のときのみ表示する。
  * createdAt（初回）〜 updatedAt（最新）のスパンを「N分間」「N時間」等に丸める。
@@ -92,7 +88,7 @@ function formatOccurrenceSummary(alert: {
     span = `${Math.round(spanMs / 3_600_000)} 時間`;
   }
 
-  return `${span}に ${alert.occurrenceCount} 回観測（初回 ${first.toLocaleTimeString()} → 最新 ${last.toLocaleTimeString()}）`;
+  return `${span}に ${alert.occurrenceCount} 回観測（初回 ${formatTimeJa(first)} → 最新 ${formatTimeJa(last)}）`;
 }
 
 /**
@@ -193,7 +189,7 @@ export function AlertDetailDrawer({
                   ·{" "}
                 </>
               )}
-              {alert.source} · {formatAbsoluteTime(alert.occurredOn)}
+              {alert.source} · {formatDateTimeJa(alert.occurredOn)}
             </p>
             {occurrenceSummary && (
               <p className="text-xs text-amber-300/80">
