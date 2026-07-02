@@ -17,4 +17,7 @@ export type ForecastSignal = {
   readonly when: string; // 時間窓（例: "Fri merge予定" / "Sat 20:00-23:00"）
   readonly desc: string; // 要約（例: "max_connections 100→40 に縮小"）
   readonly source: string; // 出所（例: "github.pr#123" / "schedule.seed" / "incident.7"）
+  // 証拠への deep link（PR html_url / plan の CI run 等・任意）。
+  // 引用チップ（F7）が citation → 実在の証拠へ解決するのに使う＝ハルシネーション否定の可視化。
+  readonly url?: string;
 };

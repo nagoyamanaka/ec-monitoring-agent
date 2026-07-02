@@ -38,7 +38,7 @@ todo実施後に
 - 【補足】`trigger`/`outcome` 文も `resolvedNote`（index 時に AI調査 summary をフォールバック充填）から導出できる
 - 【修正】`InvestigationReport` に optional `subject?: string` 追記（後方互換）＋ `InvestigateAlertUseCase` で導出して埋める ← **唯一の既存P0変更点**（要リグレッションテスト）
 
-### タスク F3: Gateway 未来シグナル取得メソッド ＋ ForecastSignalSource 実装 〔P0〕（旧 step4-2 タスク21）
+### タスク F3: Gateway 未来シグナル取得メソッド ＋ ForecastSignalSource 実装 〔P0〕（旧 step4-2 タスク21）✅
 
 - 【修正】`GitHubGateway` に `listOpenPullRequests()`（未マージ）/ `TerraformGateway` に `getPendingPlan()`（未適用）を追加（**read-only維持**）
 - 各 `*Impl.ts` に実装追加

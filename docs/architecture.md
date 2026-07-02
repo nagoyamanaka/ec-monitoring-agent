@@ -195,6 +195,6 @@ src/
 
 ## 10. 未実装（設計のみ）
 
-- **予兆ブリーフィング（Forecast）**: 未来シグナル×記憶の引用付きリスク予報。設計確定・実装は [docs/steps/step6-final-sprint-todo.md](steps/step6-final-sprint-todo.md) F1〜F8 で進行。着地済み: F1 ドメイン型（`Monitoring/Forecast/domain/`：`ForecastSignal`/`RiskForecast`/`Schedule`/`ScheduleSource`/`ForecastSignalSource`）、F2 ForecastMemory projection（突合キー(B)：`ForecastMemory`/`forecastSubject` 導出・照合規約/`ResolvedAlertForecastMemoryRepository`。`InvestigationReport` に optional `subject` を追記し調査時に deterministic 導出＝唯一の既存P0変更点）。
+- **予兆ブリーフィング（Forecast）**: 未来シグナル×記憶の引用付きリスク予報。設計確定・実装は [docs/steps/step6-final-sprint-todo.md](steps/step6-final-sprint-todo.md) F1〜F8 で進行。着地済み: F1 ドメイン型（`Monitoring/Forecast/domain/`：`ForecastSignal`/`RiskForecast`/`Schedule`/`ScheduleSource`/`ForecastSignalSource`）、F2 ForecastMemory projection（突合キー(B)：`ForecastMemory`/`forecastSubject` 導出・照合規約/`ResolvedAlertForecastMemoryRepository`。`InvestigationReport` に optional `subject` を追記し調査時に deterministic 導出＝唯一の既存P0変更点）、F3 未来シグナル（`GitHubGateway.listOpenPullRequests`/`TerraformGateway.getPendingPlan`＋`PendingInfraPlanStore`、Source 3実装 `PullRequestSignalSource`/`PendingPlanSignalSource`/`ScheduleSignalSource`＝正規化を Source 内に閉じ Handler は配列を回すだけ・全て read-only・失敗時は源単位で空縮退）。
 - **イベントソーシング基盤（stretchⅢ）**: ハッカソン後。[docs/steps/step4-1-strategy.md](steps/step4-1-strategy.md) §7.10。
 - `VertexLLMClient`（独立クラスとしては未実装。Vertex AI 経路は `GeminiLLMClient` の `GOOGLE_GENAI_USE_VERTEXAI=true` で実現済み）。

@@ -11,6 +11,8 @@ import type {
 } from "../../../domain/InfraEvidence.js";
 import type { ScoredIncident } from "../../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import type { SimilarIncident } from "../../../../SimilarIncident/domain/SimilarIncident.js";
+import type { TerraformGateway } from "../../infrainvestigation/TerraformGateway.js";
+import type { GitHubGateway } from "../../infrainvestigation/GitHubGateway.js";
 
 const ISO = "2026-01-15T12:00:00.000Z";
 const DATE = new Date(ISO);
@@ -23,16 +25,35 @@ function call(
   return tool.runAsync({ args, toolContext: {} as never });
 }
 
+// gateway は予兆（Forecast）用メソッドも持つ。本テストの関心外なので空実装で埋めるヘルパー。
+function fakeTerraformGateway(
+  overrides: Partial<TerraformGateway> = {},
+): TerraformGateway {
+  return {
+    getAppliedDiff: async () => null,
+    getPendingPlan: async () => [],
+    ...overrides,
+  };
+}
+
+function fakeGitHubGateway(
+  overrides: Partial<GitHubGateway> = {},
+): GitHubGateway {
+  return {
+    listRecentCommits: async () => [],
+    getCommitDiff: async () => null,
+    listOpenPullRequests: async () => [],
+    ...overrides,
+  };
+}
+
 function makeDeps(
   overrides: Partial<InvestigationToolDeps> = {},
 ): InvestigationToolDeps {
   return {
     cloudLoggingGateway: { getAppLogs: async () => [] },
-    terraformGateway: { getAppliedDiff: async () => null },
-    githubGateway: {
-      listRecentCommits: async () => [],
-      getCommitDiff: async () => null,
-    },
+    terraformGateway: fakeTerraformGateway(),
+    githubGateway: fakeGitHubGateway(),
     similarIncidentRepository: {
       findSimilar: async () => [],
       index: async () => {},
@@ -178,7 +199,7 @@ describe("fetch_terraform_diff", () => {
 
   it("差分を返す", async () => {
     const deps = makeDeps({
-      terraformGateway: { getAppliedDiff: async () => DIFF },
+      terraformGateway: fakeTerraformGateway({ getAppliedDiff: async () => DIFF }),
     });
     const result = await call(tool(1, deps), { sinceIso: ISO });
     expect(result).toEqual(DIFF);
@@ -196,12 +217,12 @@ describe("fetch_terraform_diff", () => {
   it("sinceIso の Date 変換が getAppliedDiff.since に渡る", async () => {
     let captured: unknown;
     const deps = makeDeps({
-      terraformGateway: {
+      terraformGateway: fakeTerraformGateway({
         getAppliedDiff: async (params) => {
           captured = params;
           return null;
         },
-      },
+      }),
     });
     await call(tool(1, deps), { sinceIso: ISO });
     expect((captured as { since: Date }).since).toEqual(DATE);
@@ -209,11 +230,11 @@ describe("fetch_terraform_diff", () => {
 
   it("ゲートウェイが throw したら { error } を返す", async () => {
     const deps = makeDeps({
-      terraformGateway: {
+      terraformGateway: fakeTerraformGateway({
         getAppliedDiff: async () => {
           throw new Error("tf api error");
         },
-      },
+      }),
     });
     const result = await call(tool(1, deps), { sinceIso: ISO });
     expect(result).toEqual({ error: "tf api error" });
@@ -232,10 +253,9 @@ describe("fetch_recent_commits", () => {
 
   it("GitCommit の committedAt を ISO 文字列に変換して返す", async () => {
     const deps = makeDeps({
-      githubGateway: {
+      githubGateway: fakeGitHubGateway({
         listRecentCommits: async () => [COMMIT],
-        getCommitDiff: async () => null,
-      },
+      }),
     });
     const result = await call(tool(2, deps), { sinceIso: ISO });
     expect(result).toEqual([
@@ -251,13 +271,12 @@ describe("fetch_recent_commits", () => {
   it("limit が指定されたとき listRecentCommits に渡す", async () => {
     let captured: unknown;
     const deps = makeDeps({
-      githubGateway: {
+      githubGateway: fakeGitHubGateway({
         listRecentCommits: async (params) => {
           captured = params;
           return [];
         },
-        getCommitDiff: async () => null,
-      },
+      }),
     });
     await call(tool(2, deps), { sinceIso: ISO, limit: 3 });
     expect((captured as { limit?: number }).limit).toBe(3);
@@ -266,13 +285,12 @@ describe("fetch_recent_commits", () => {
   it("limit が省略されたとき listRecentCommits の引数にキーを含めない", async () => {
     let captured: unknown;
     const deps = makeDeps({
-      githubGateway: {
+      githubGateway: fakeGitHubGateway({
         listRecentCommits: async (params) => {
           captured = params;
           return [];
         },
-        getCommitDiff: async () => null,
-      },
+      }),
     });
     await call(tool(2, deps), { sinceIso: ISO });
     expect("limit" in (captured as object)).toBe(false);
@@ -280,12 +298,11 @@ describe("fetch_recent_commits", () => {
 
   it("ゲートウェイが throw したら { error } を返す", async () => {
     const deps = makeDeps({
-      githubGateway: {
+      githubGateway: fakeGitHubGateway({
         listRecentCommits: async () => {
           throw new Error("gh api error");
         },
-        getCommitDiff: async () => null,
-      },
+      }),
     });
     const result = await call(tool(2, deps), { sinceIso: ISO });
     expect(result).toEqual({ error: "gh api error" });
@@ -313,10 +330,9 @@ describe("fetch_commit_diff", () => {
 
   it("GitCommitDiff の committedAt を ISO 文字列に変換して返す", async () => {
     const deps = makeDeps({
-      githubGateway: {
-        listRecentCommits: async () => [],
+      githubGateway: fakeGitHubGateway({
         getCommitDiff: async () => COMMIT_DIFF,
-      },
+      }),
     });
     const result = await call(tool(3, deps), { sha: "abc1234" });
     expect(result).toEqual({ ...COMMIT_DIFF, committedAt: ISO });
@@ -325,13 +341,12 @@ describe("fetch_commit_diff", () => {
   it("sha を getCommitDiff に渡す", async () => {
     let captured: unknown;
     const deps = makeDeps({
-      githubGateway: {
-        listRecentCommits: async () => [],
+      githubGateway: fakeGitHubGateway({
         getCommitDiff: async (params) => {
           captured = params;
           return null;
         },
-      },
+      }),
     });
     await call(tool(3, deps), { sha: "deadbeef" });
     expect((captured as { sha: string }).sha).toBe("deadbeef");
@@ -348,12 +363,11 @@ describe("fetch_commit_diff", () => {
 
   it("ゲートウェイが throw したら { error } を返す", async () => {
     const deps = makeDeps({
-      githubGateway: {
-        listRecentCommits: async () => [],
+      githubGateway: fakeGitHubGateway({
         getCommitDiff: async () => {
           throw new Error("gh api error");
         },
-      },
+      }),
     });
     const result = await call(tool(3, deps), { sha: "abc1234" });
     expect(result).toEqual({ error: "gh api error" });
