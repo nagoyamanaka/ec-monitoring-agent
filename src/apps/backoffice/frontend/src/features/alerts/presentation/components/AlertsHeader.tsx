@@ -1,4 +1,5 @@
 import type { AlertView } from "../../domain/AlertView";
+import { alertWorkState } from "../../domain/alertReview";
 import type { AlertsStatus } from "../hooks/useAlerts";
 
 export interface AlertsHeaderProps {
@@ -10,13 +11,17 @@ export interface AlertsHeaderProps {
  * 一覧のオリエンテーション（この画面が何か）を伝えるヘッダ。
  * 初見でも「AI が分類・調査したアラートを人がレビューする画面」だと分かるよう、
  * 説明文・件数サマリを出す。件数は ready 時のみ（loading 中の 0 件表示を避ける）。
+ * レビュー待ち/分析中はカードバッジと同じ alertWorkState（単一ソース）で数え、
+ * チップの件数と一覧のバッジ表示が常に一致することを保証する。
  */
 export function AlertsHeader({ alerts, status }: AlertsHeaderProps) {
   const critical = alerts.filter((a) => a.severity === "CRITICAL").length;
   const pending = alerts.filter(
-    (a) => a.report?.reviewStatus === "PENDING_REVIEW",
+    (a) => alertWorkState(a) === "PENDING",
   ).length;
-  const analyzing = alerts.filter((a) => a.status === "ANALYZING").length;
+  const analyzing = alerts.filter(
+    (a) => alertWorkState(a) === "ANALYZING",
+  ).length;
 
   return (
     <div className="space-y-3">

@@ -15,6 +15,8 @@ import type { HttpClient } from "@shared/api/HttpClient";
 export type DemoStatus = {
   readonly demoEnabled: boolean;
   readonly totalAlerts: number;
+  /** 現役（非 RESOLVED）件数。一覧と同じ軸＝状態タイルはこちらを出す。 */
+  readonly activeAlerts: number;
   readonly promotedPatternCount: number;
   readonly patternCount: number;
 };

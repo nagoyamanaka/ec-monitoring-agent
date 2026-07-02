@@ -48,7 +48,7 @@ flowchart LR
 | フロントエンド | React（ダーク観測コンソール・SSE ライブ・証拠パネル・承認 UI） |
 | インフラ | **Cloud Run**（frontend / edge）＋ **Compute Engine**（EDA 常駐系）・Terraform・Cloud Monitoring / Cloud Logging（OTel 直送） |
 | CI/CD | GitHub Actions（typecheck/UT/E2E → build → deploy／Trivy → 実 ingest／AI リメディ workflow／terraform plan・apply） |
-| テスト | Vitest（BDD）**694件・110ファイル**＋ Playwright E2E |
+| テスト | Vitest（BDD）**716件・111ファイル**＋ Playwright E2E |
 
 ## クイックスタート（ローカル）
 

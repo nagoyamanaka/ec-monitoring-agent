@@ -16,6 +16,9 @@ export class DemoStatusGetController {
       res.json({
         demoEnabled: true,
         totalAlerts: analytics.totalAlerts,
+        // 一覧（GET /alerts）と同じ軸の件数。UI の状態タイルはこちらを表示する
+        // （totalAlerts は RESOLVED seed を含むため一覧と食い違う）。
+        activeAlerts: analytics.activeAlertCount,
         promotedPatternCount: patterns.patterns.filter((p) => p.isPromoted).length,
         patternCount: patterns.patterns.length,
       });

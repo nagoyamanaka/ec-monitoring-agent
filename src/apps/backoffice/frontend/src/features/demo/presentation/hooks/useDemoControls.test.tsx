@@ -8,6 +8,7 @@ function status(overrides: Partial<DemoStatus> = {}): DemoStatus {
   return {
     demoEnabled: true,
     totalAlerts: 2,
+    activeAlerts: 2,
     promotedPatternCount: 0,
     patternCount: 4,
     ...overrides,

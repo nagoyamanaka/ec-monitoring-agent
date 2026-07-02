@@ -16,19 +16,50 @@ describe("AlertList", () => {
     expect(container.querySelector("[aria-busy]")).toBeInTheDocument();
   });
 
-  it("error 時は失敗メッセージとエラー内容を出す", () => {
+  it("error 時は失敗メッセージを出し、生のエラー内容は折りたたみ詳細へ降格する", () => {
     render(
       <AlertList
         alerts={[]}
         status="error"
-        error={new Error("boom")}
+        error={new Error("HTTP 500 Internal Server Error")}
       />,
     );
     expect(screen.getByText(/取得に失敗/)).toBeInTheDocument();
-    expect(screen.getByText(/boom/)).toBeInTheDocument();
+    // 生エラーは <details> 配下（初期は折りたたみ）
+    expect(screen.getByText("技術詳細")).toBeInTheDocument();
+    expect(screen.getByText(/HTTP 500/)).toBeInTheDocument();
   });
 
-  it("ready かつ空なら空表示を出す", () => {
+  it("自動リトライ中は再試行中の文言を出す", () => {
+    render(
+      <AlertList
+        alerts={[]}
+        status="error"
+        retrying
+        error={new Error("HTTP 500 Internal Server Error")}
+      />,
+    );
+    expect(
+      screen.getByText(/自動で再試行しています/),
+    ).toBeInTheDocument();
+  });
+
+  it("リトライ使い切り後は再試行ボタンで onRetry を呼ぶ", async () => {
+    const onRetry = vi.fn();
+    render(
+      <AlertList
+        alerts={[]}
+        status="error"
+        retrying={false}
+        onRetry={onRetry}
+        error={new Error("HTTP 500")}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "再試行" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("ready かつ空ならデモ卓への CTA と確度スペクトルの説明を出す", () => {
     render(
       <AlertList
         alerts={[]}
@@ -39,6 +70,8 @@ describe("AlertList", () => {
     expect(
       screen.getByText(/アクティブなアラートはありません/),
     ).toBeInTheDocument();
+    expect(screen.getByText(/デモ操作卓からシナリオを注入/)).toBeInTheDocument();
+    expect(screen.getByText(/完全一致（確定）/)).toBeInTheDocument();
   });
 
   it("一覧を順序どおり描画する", () => {

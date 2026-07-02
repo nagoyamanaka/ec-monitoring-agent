@@ -2,7 +2,9 @@ import type { DemoStatus } from "../infrastructure/demoApi";
 
 /**
  * デモの現在状態（件数）パネル。backend /demo/status が返す
- * alert 総数・既知パターン数・自動昇格パターン数を出す。
+ * アクティブ alert 数・既知パターン数・自動昇格パターン数を出す。
+ * alert 件数は一覧（GET /alerts）と同じ軸（非 RESOLVED）＝リセット直後に
+ * 「タイルは 1 なのに一覧は空」の食い違いを起こさない。
  * 学習ループの可視化（フィードバック→昇格でパターンが増える）の即時確認に使う。
  */
 
@@ -30,7 +32,10 @@ export function SystemStatus({ status, loading }: SystemStatusProps) {
         <div className="h-12 animate-pulse rounded-md bg-slate-800/40" />
       ) : (
         <div className="grid grid-cols-3 gap-1.5">
-          <Stat label="アラート" value={status?.totalAlerts ?? "—"} />
+          <Stat
+            label="アクティブアラート"
+            value={status?.activeAlerts ?? "—"}
+          />
           <Stat label="パターン" value={status?.patternCount ?? "—"} />
           <Stat label="昇格済み" value={status?.promotedPatternCount ?? "—"} />
         </div>
