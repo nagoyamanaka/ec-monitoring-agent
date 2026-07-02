@@ -185,6 +185,7 @@ export function AlertDetailPage() {
             <RelatedAlertsPanel
               alert={alert}
               lookup={(rid) => alerts.find((a) => a.id === rid)}
+              alerts={alerts}
               className={PANEL}
             />
             {/* 自動修正は実際の修正対象（payload.vulnerabilities）を持つ SECURITY 検知のみ。 */}

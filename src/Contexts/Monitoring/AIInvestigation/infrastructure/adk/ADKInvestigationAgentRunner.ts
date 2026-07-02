@@ -1,4 +1,9 @@
-import { InMemoryRunner, isFinalResponse, type Event } from "@google/adk";
+import {
+  InMemoryRunner,
+  isFinalResponse,
+  getFunctionCalls,
+  type Event,
+} from "@google/adk";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationAgentRunner } from "./InvestigationAgentRunner.js";
 import {
@@ -87,6 +92,10 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
     let finalText = "";
     let eventCount = 0;
     let timedOut = false;
+    // どのエージェントがどのツール（AgentTool＝サブエージェント委譲を含む）を呼んだかの実行トレース。
+    // これが無いと「サブエージェントが呼ばれなかった」のか「呼ばれたが出力がガードで落ちた」のかを
+    // 本番ログで切り分けられない（impact/escalation 不在の一次調査はまずこのトレースを見る）。
+    const agentTrace: string[] = [];
 
     const stream = this.runner.runEphemeral({
       userId: USER_ID,
@@ -96,6 +105,9 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
 
     for await (const event of stream) {
       eventCount++;
+      for (const call of getFunctionCalls(event)) {
+        agentTrace.push(`${event.author ?? "?"}→${call.name ?? "?"}`);
+      }
       if (isFinalResponse(event)) {
         finalText = extractText(event);
       }
@@ -107,10 +119,12 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
 
     // 調査の所要・打ち切り・最終応答長を観測する。timedOut=true（上限到達で打ち切り）や
     // finalTextLen=0（最終応答に未到達）は fallback（暫定表示）の典型。timeoutMs への肉薄を監視する。
+    // agentTrace は「呼び出し元→ツール/サブエージェント」の時系列で、impact_triage / runbook_escalation
+    // が実際に呼ばれたかをここで確定させる。
     await this.logger.info({
       service: "backoffice-backend",
       action: "adk_investigation_run_completed",
-      message: `ADK調査実行：elapsedMs=${Date.now() - startedAt}, events=${eventCount}, timedOut=${timedOut}, maxLlmCalls=${this.maxLlmCalls}, finalTextLen=${finalText.length}`,
+      message: `ADK調査実行：elapsedMs=${Date.now() - startedAt}, events=${eventCount}, timedOut=${timedOut}, maxLlmCalls=${this.maxLlmCalls}, finalTextLen=${finalText.length}, agentTrace=[${agentTrace.join(" > ") || "(no tool calls)"}]`,
     });
 
     return finalText;

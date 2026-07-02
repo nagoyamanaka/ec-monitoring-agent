@@ -53,6 +53,8 @@ export interface AlertDetailDrawerProps {
   pushedRemediation?: RemediationView | null;
   /** 関連アラートの alertId → AlertView 解決（一覧から渡す。関連の日時/severity 補完用）。 */
   relatedLookup?: (id: string) => AlertView | undefined;
+  /** 一覧のアラート集合。完全一致分類の「過去の同型事例」（同 eventName の対処済み）を引くのに使う。 */
+  alerts?: readonly AlertView[];
   /**
    * 関連アラートを開く（任意）。渡されると関連行はルート遷移せず本ハンドラで選択を差し替える
    * ＝デモの舞台（/alerts）に留まったまま探索でき、戻るで前のドロワーに復元できる。
@@ -113,6 +115,7 @@ export function AlertDetailDrawer({
   remediationApi,
   pushedRemediation,
   relatedLookup,
+  alerts,
   onRelatedNavigate,
 }: AlertDetailDrawerProps) {
   useEffect(() => {
@@ -246,6 +249,7 @@ export function AlertDetailDrawer({
           <RelatedAlertsPanel
             alert={alert}
             lookup={relatedLookup}
+            alerts={alerts}
             onNavigate={onRelatedNavigate}
           />
           {/* 自動修正（コード上の CVE 修正 PR）は payload.vulnerabilities を持つ SECURITY 検知だけが
