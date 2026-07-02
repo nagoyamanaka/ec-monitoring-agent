@@ -212,5 +212,24 @@ describe("AnalyzeAlertUseCase", () => {
       const events = publishSpy.mock.calls.flat(2);
       expect(events.find((e) => e instanceof InvestigateAlertDomainEvent)).toBeUndefined();
     });
+
+    it("承認済みへは畳み込まず、再発火を新規アラートとして開く（既知昇格の高速パス）", async () => {
+      const { notifier } = makeSpyNotifier();
+      const useCase = makeUseCase([PAYMENT_TIMEOUT_PATTERN], notifier);
+
+      // 1件目を作り、オペレーターが承認（＝対処済み）にする
+      await useCase.run({ alertId: new AlertId(ALERT_ID), monitoringEvent: makePaymentTimeoutEvent() });
+      const first = await alertRepo.findById(new AlertId(ALERT_ID));
+      await alertRepo.save(first!.submitFeedback({ isCorrect: true }));
+
+      // 同一 dedupKey の再発火は畳み込まれず新規 Alert が開く
+      await useCase.run({ alertId: new AlertId(SECOND_ALERT_ID), monitoringEvent: makePaymentTimeoutEvent() });
+
+      const second = await alertRepo.findById(new AlertId(SECOND_ALERT_ID));
+      expect(second).not.toBeNull();
+      expect(second?.classification.type).toBe("known");
+      // 承認済みの1件目は回数が増えていない（畳み込まれていない）
+      expect((await alertRepo.findById(new AlertId(ALERT_ID)))?.occurrenceCount).toBe(1);
+    });
   });
 });

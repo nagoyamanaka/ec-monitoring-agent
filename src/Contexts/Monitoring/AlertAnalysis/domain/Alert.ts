@@ -93,6 +93,15 @@ export class Alert extends AggregateRoot {
     return this._feedback;
   }
 
+  /**
+   * オペレーターが分類を承認済み（＝対処済み）か。承認後は現役一覧には残すが、
+   * 同型障害の再観測をこの Alert へ畳み込まない（dedup 窓から外す）判定に使う。
+   * これにより承認後の再発火は新規アラートとして開き、昇格済みなら即・既知の高速パスに乗る。
+   */
+  isApproved(): boolean {
+    return this._feedback?.isCorrect === true;
+  }
+
   get correctFeedbackCount(): number {
     return this._correctFeedbackCount;
   }
@@ -233,51 +242,6 @@ export class Alert extends AggregateRoot {
       status: AlertStatus.open(),
       classification: this._classification,
       investigationReport: report,
-      feedback: this._feedback,
-      correctFeedbackCount: this._correctFeedbackCount,
-      dedupKey: this._dedupKey,
-      occurrenceCount: this._occurrenceCount,
-      createdAt: this.createdAt,
-      updatedAt: new Date(),
-    });
-  }
-
-  /**
-   * インシデントのクローズ（status → RESOLVED）。承認（分類が正しいと確定）した時点で
-   * 「対処すべき現役アラート」ではなくなるため現役一覧から下ろす。分類・レポート・レビューは保持し
-   * 過去の判断として analytics から辿れる。RESOLVED は dedup の畳み込み窓（OPEN/ANALYZING）から
-   * 外れるので、同型障害が再発すると畳み込まれず classify に到達し、昇格済みなら即・既知の高速パスに乗る。
-   */
-  resolve(): Alert {
-    return new Alert({
-      id: this.id,
-      monitoringEvent: this._monitoringEvent,
-      severity: this._severity,
-      status: AlertStatus.resolved(),
-      classification: this._classification,
-      investigationReport: this._investigationReport,
-      feedback: this._feedback,
-      correctFeedbackCount: this._correctFeedbackCount,
-      dedupKey: this._dedupKey,
-      occurrenceCount: this._occurrenceCount,
-      createdAt: this.createdAt,
-      updatedAt: new Date(),
-    });
-  }
-
-  /**
-   * クローズの取り消し（status → OPEN）。承認→却下のやり直し（誤承認の訂正）で、
-   * resolve() で下ろしたアラートを現役一覧へ戻す。reopenForReinvestigation（ANALYZING へ戻し
-   * feedback をクリアする“再調査”）とは別概念で、状態のみ OPEN に戻し分類・レポート・feedback は保持する。
-   */
-  reopen(): Alert {
-    return new Alert({
-      id: this.id,
-      monitoringEvent: this._monitoringEvent,
-      severity: this._severity,
-      status: AlertStatus.open(),
-      classification: this._classification,
-      investigationReport: this._investigationReport,
       feedback: this._feedback,
       correctFeedbackCount: this._correctFeedbackCount,
       dedupKey: this._dedupKey,
