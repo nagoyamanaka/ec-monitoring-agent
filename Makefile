@@ -100,11 +100,17 @@ test-integration: infra-up
 ## infra-up が RabbitMQ を起動し直すと、既存のまま動いている backend は
 ## AMQP consumer の接続が切れたままになる（自動再接続しない）。
 ## そのため e2e 直前に backend を restart し、稼働中の broker へ確実に繋ぎ直す。
-## docker-compose.e2e.yml で AI_INVESTIGATION_STUB=true を上書き（ローカル開発時は false のまま）。
+## docker-compose.e2e.yml で AI_INVESTIGATION_STUB=true を上書きする。この上書きは restart /
+## depends_on 経由で backend コンテナ自体を e2e overlay 構成へ「再作成」するため、テスト終了後も
+## STUB のまま残る。そのままデモ/録画すると「[STUB] 未知の障害パターン（推定）」が露出するので、
+## 末尾で local 構成の backend に up し直して原状復帰する（録画・提出前は STUB 非露出を要確認）。
 DC_E2E := docker compose $(COMPOSE_FILES_$(ENV)) -f docker-compose.e2e.yml
 e2e: ec-up bo-up
 	$(DC_E2E) restart ec-backend backoffice-backend
-	$(DC_E2E) run --build --rm e2e
+	$(DC_E2E) run --build --rm e2e; \
+	status=$$?; \
+	$(DC) up -d ec-backend backoffice-backend; \
+	exit $$status
 
 ## E2E: CD smoke 用（デプロイ済みサービスに対して実行 / URL を環境変数で渡す）
 ## 例: make e2e-prod EC_BASE_URL=https://ec.prod.example.com BACKOFFICE_BASE_URL=https://backoffice.prod.example.com

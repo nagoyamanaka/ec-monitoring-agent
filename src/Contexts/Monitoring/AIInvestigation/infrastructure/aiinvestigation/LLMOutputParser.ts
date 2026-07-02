@@ -196,3 +196,123 @@ export function parseLLMOutput(text: string): LLMInvestigationOutput | null {
     return null;
   }
 }
+
+/** 修復のための括弧スタック1段。afterColon はオブジェクト内で「次の文字列は値」を判別する。 */
+type ContainerFrame = { char: "{" | "["; afterColon: boolean };
+
+/**
+ * 途中で切断された JSON テキストを「最後に完成した値」まで巻き戻し、開いたままの括弧を
+ * 閉じて構文的に完全な JSON へ修復する（fallback 第4原因＝最終出力の mid-string 切断への防御）。
+ *
+ * 文字列中の括弧・エスケープを状態機械で追跡し、値（文字列・数値・リテラル・入れ子の閉じ）が
+ * 完成するたびにその位置と未クローズ括弧をスナップショットする。オブジェクトのキー文字列の
+ * 直後では切らない（`{"key"` + 閉じ括弧は不正な JSON になるため）。
+ * JSON が始まらない・値が1つも完成していない・括弧が対応しない場合は null。
+ */
+function repairTruncatedJson(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+  const s = text.slice(start);
+  const stack: ContainerFrame[] = [];
+  let inString = false;
+  let escaped = false;
+  let stringIsValue = false;
+  let cutEnd = -1;
+  let cutStack: ContainerFrame["char"][] = [];
+
+  const snapshot = (end: number): void => {
+    cutEnd = end;
+    cutStack = stack.map((frame) => frame.char);
+  };
+
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]!;
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (c === "\\") {
+        escaped = true;
+      } else if (c === '"') {
+        inString = false;
+        if (stringIsValue) snapshot(i + 1);
+      }
+      continue;
+    }
+    switch (c) {
+      case '"': {
+        const top = stack[stack.length - 1];
+        inString = true;
+        stringIsValue = !top || top.char === "[" || top.afterColon;
+        break;
+      }
+      case "{":
+      case "[":
+        stack.push({ char: c, afterColon: false });
+        break;
+      case "}":
+      case "]":
+        if (stack.length === 0) return null;
+        stack.pop();
+        snapshot(i + 1);
+        break;
+      case ":": {
+        const top = stack[stack.length - 1];
+        if (top?.char === "{") top.afterColon = true;
+        break;
+      }
+      case ",": {
+        const top = stack[stack.length - 1];
+        if (top?.char === "{") top.afterColon = false;
+        // カンマ直前＝直前の値（数値・true/false/null を含む）の完成点。カンマ自体は含めない。
+        snapshot(i);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  if (cutEnd <= 0) return null;
+  const closers = cutStack
+    .reverse()
+    .map((c) => (c === "{" ? "}" : "]"))
+    .join("");
+  return s.slice(0, cutEnd) + closers;
+}
+
+/**
+ * 途切れた LLM 出力から完成済みフィールドを best-effort で回収するサルベージパース。
+ *
+ * parseLLMOutput が null（切断で構文不正／必須フィールド未達）でも、summary さえ完成して
+ * いれば部分レポートとして成立させる（fallback の「自動調査に失敗しました」より、正しい
+ * 分析の断片を見せる方が価値が高い）。summary を回収できない場合は null＝fallback が正直。
+ * 欠けたフィールドは安全側の既定値に丸める（confidence=0・severity はマッパ側で WARNING に丸む）。
+ */
+export function salvageLLMOutput(text: string): LLMInvestigationOutput | null {
+  const repaired = repairTruncatedJson(text);
+  if (repaired === null) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(repaired);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const o = parsed as Record<string, unknown>;
+  if (typeof o["summary"] !== "string" || o["summary"].trim() === "") return null;
+
+  return {
+    summary: o["summary"],
+    confidence: typeof o["confidence"] === "number" ? o["confidence"] : 0,
+    severity: toStringField(o["severity"]),
+    investigationSteps: toStringArray(o["investigationSteps"]),
+    suggestedActions: toStringArray(o["suggestedActions"]),
+    suggestedPatternName: toStringField(o["suggestedPatternName"]),
+    remediable: o["remediable"] === true,
+    relatedAlerts: toRelatedAlerts(o["relatedAlerts"]),
+    impact: toImpact(o["impact"]),
+    escalation: toEscalation(o["escalation"]),
+    remediationReview: toRemediationReview(o["remediationReview"]),
+  };
+}

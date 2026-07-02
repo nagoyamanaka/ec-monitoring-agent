@@ -97,6 +97,7 @@ todo実施後に
 - 【検証】`POST /forecast` → HIGH リスク＋引用3系統＋confidence が安定して出る seed に調整
 - 【引用検証の可視化】意図的に偽引用を混ぜたケースで**ドロップされる**ことをデモで見せられるようにする（ハルシネーション・ガードの実演）
 - 【録画】「実際に動いた1回を録る」（捏造NG・`step4-1` §7.6）
+- 【録画・提出前チェック】`make e2e` 実行後は一覧に「AI推定: [STUB] 未知の障害パターン（推定）」が出ていないこと（STUB 残留）を確認（I2 で自動原状復帰済み・念のための目視1行）
 
 ### ~~タスク F9: 2本目シナリオ（seed 替えのみ）~~〔**切り確定**（時間制約・strategy §1.6）〕
 
@@ -271,12 +272,14 @@ todo実施後に
 
 - 【実測 2026-07-03】シナリオ7（アプリコード退行＝実コミット差分が売りの本丸）が fallback。rawSnippet ログで真因確定: **finalText は正しい JSON（e12b655 正引用・confidence 0.95・修正方針まで正確）だが 794 字で mid-string 切断**→ safeParse 失敗 → UI は「自動調査に失敗しました」。分析は正解なのに失敗表示＝一次審査（無人デプロイ URL）でのデモ即死パターン
 - 対策（いずれか/併用）: ① parse 失敗時に**最終合成のみ1回リトライ** ② **途切れ JSON のサルベージパース**（完成済みフィールド summary/confidence/steps を best-effort 回収し、fallback でなく部分レポートとして表示） ③ 最終出力の maxOutputTokens 引き上げ
+- ✅ 実装済み（2026-07-03）: **②＋③を採用**。② `salvageLLMOutput`（`LLMOutputParser`）＝括弧/文字列の状態機械で「最後に完成した値」まで巻き戻して修復パースし、summary が回収できれば部分レポート（isFallback=false）として返す。ADK/単一Gemini 両アダプタに組み込み、回収時は `ai_investigation_salvaged` を warn ログ（rawLen/rawSnippet 付き＝切断頻度の観測点）。③ Coordinator の `generateContentConfig.maxOutputTokens=65535` 明示（gemini-2.5 系は思考トークンも上限を消費するため既定値頼みにしない）。①は `runEphemeral` がセッション破棄する契約のため「最終合成のみ」の安価なリトライが組めず見送り（全グラフ再走＝2分追加は demo に不適）
 - 検証: シナリオ7を複数回実走し fallback 率が下がることを確認（E2E は stub のため実走でのみ検証可能）
 
 ### タスク I2: make e2e がローカル環境を STUB のまま残す罠 〔P0・録画/デモ前の事故防止〕
 
 - 【実測】`make e2e` の `docker compose run e2e` が depends_on 経由で backoffice-backend を **e2e overlay（AI_INVESTIGATION_STUB=true）で再作成**し、終了後もそのまま残る。次にデモ/録画すると一覧に「AI推定: **[STUB] 未知の障害パターン（推定）**」が露出（Makefile コメント「ローカル開発時は false のまま」は実態と不一致）
 - 対策: `e2e` ターゲット末尾に `$(DC) up -d ec-backend backoffice-backend` を追加して local 構成へ原状復帰（+コメント修正）。**録画・提出前チェックリストにも「make e2e 後は STUB 確認」を1行**
+- ✅ 実装済み（2026-07-03）: `e2e` ターゲット末尾で exit status を保持しつつ `$(DC) up -d ec-backend backoffice-backend` で原状復帰（`test-integration` と同じ status 温存パターン）。Makefile コメントを実態（overlay 再作成が残留する）に合わせて修正。チェック1行は F8 の【録画・提出前チェック】に追加
 
 ### タスク I3: investigationSteps への evidenceLinks 全件連結ノイズ 〔P0→P1・レポート信頼性〕
 

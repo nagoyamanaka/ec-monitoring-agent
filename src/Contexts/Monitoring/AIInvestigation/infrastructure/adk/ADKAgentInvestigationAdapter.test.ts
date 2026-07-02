@@ -3,6 +3,8 @@ import { ADKAgentInvestigationAdapter } from "./ADKAgentInvestigationAdapter.js"
 import { InvestigationAgentRunner } from "./InvestigationAgentRunner.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { AlertSeverities } from "../../../Shared/domain/AlertSeverity.js";
+import { Logger } from "../../../../Shared/domain/logging/Logger.js";
+import { StructuredLog } from "../../../../Shared/domain/logging/StructuredLog.js";
 
 const context: InvestigationContext = {
   errorEvent: {
@@ -26,6 +28,13 @@ class FakeAgentRunner implements InvestigationAgentRunner {
     this.lastOptions = options;
     if (this.behavior.error) throw this.behavior.error;
     return this.behavior.text ?? "";
+  }
+}
+
+class RecordingLogger extends Logger {
+  logs: StructuredLog[] = [];
+  async write(log: StructuredLog): Promise<void> {
+    this.logs.push(log);
   }
 }
 
@@ -83,6 +92,26 @@ describe("ADKAgentInvestigationAdapter", () => {
     const report = await adapter.investigate(context);
 
     expect(report.isFallback).toBe(true);
+  });
+
+  it("最終出力が途中切断されたJSONなら fallback でなく部分レポートを回収する（タスク I1）", async () => {
+    // シナリオ7実発生系: 正しい JSON が値文字列の途中で切断されている
+    const truncated = validJson.slice(0, validJson.indexOf('"DB_CONNECTION_EXHAUSTION"') + 5);
+    const logger = new RecordingLogger();
+    const adapter = new ADKAgentInvestigationAdapter(
+      new FakeAgentRunner({ text: truncated }),
+      undefined,
+      logger,
+    );
+
+    const report = await adapter.investigate(context);
+
+    expect(report.isFallback).toBe(false);
+    expect(report.summary).toBe("DB接続枯渇");
+    expect(report.confidence).toBe(0.87);
+    expect(report.severity.value).toBe(AlertSeverities.CRITICAL);
+    // 回収した事実は Cloud Logging で追えること（切断頻度の観測点）
+    expect(logger.logs.map((l) => l.action)).toContain("ai_investigation_salvaged");
   });
 
   it("パース不能でも収集済み証拠のリンクは fallback レポートに残す", async () => {

@@ -4,7 +4,7 @@ import { LLMTextClient } from "../../domain/LLMTextClient.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { SYSTEM_INSTRUCTION, buildUserPrompt } from "./InvestigationPromptBuilder.js";
-import { parseLLMOutput, rawSnippet } from "./LLMOutputParser.js";
+import { parseLLMOutput, salvageLLMOutput, rawSnippet } from "./LLMOutputParser.js";
 import { toInvestigationReport, buildFallbackReport } from "./InvestigationReportMapper.js";
 import {
   buildEvidenceLinks,
@@ -51,6 +51,16 @@ export class LLMInvestigationAdapter implements AIInvestigationPort {
 
     const output = parseLLMOutput(raw);
     if (!output) {
+      // 出力が途中切断されていても、完成済みフィールドは部分レポートとして回収する（ADK 版と同方針）。
+      const salvaged = salvageLLMOutput(raw);
+      if (salvaged) {
+        await this.logger?.warn({
+          service: "backoffice-backend",
+          action: "ai_investigation_salvaged",
+          message: `AI調査の応答が途中切断されていたため部分レポートを回収しました: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}, rawSnippet=${rawSnippet(raw)}`,
+        });
+        return toInvestigationReport(salvaged, evidenceLinks);
+      }
       await this.logger?.warn({
         service: "backoffice-backend",
         action: "ai_investigation_unparseable",
