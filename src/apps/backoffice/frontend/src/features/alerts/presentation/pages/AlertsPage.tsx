@@ -12,6 +12,7 @@ import {
 import { reinvestigate } from "../../application/reinvestigate";
 import { AlertList } from "../components/AlertList";
 import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
+import { FirstRunGuide } from "../components/FirstRunGuide";
 import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
 
 export interface AlertsPageProps {
@@ -30,6 +31,7 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
     alerts,
     status,
     error,
+    retrying,
     streamStatus,
     lastUpdatedAt,
     refreshAlert,
@@ -183,13 +185,18 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
         }
         demoDrawer={<DemoDrawer api={demoApi} onAfterReset={refreshAlerts} />}
       >
-        <AlertList
-          alerts={alerts}
-          status={status}
-          error={error}
-          selectedId={selectedId}
-          onSelect={openFocus}
-        />
+        <div className="space-y-4">
+          <FirstRunGuide />
+          <AlertList
+            alerts={alerts}
+            status={status}
+            error={error}
+            retrying={retrying}
+            onRetry={refreshAlerts}
+            selectedId={selectedId}
+            onSelect={openFocus}
+          />
+        </div>
       </AlertsLayout>
       <AlertDetailDrawer
         alert={selected}

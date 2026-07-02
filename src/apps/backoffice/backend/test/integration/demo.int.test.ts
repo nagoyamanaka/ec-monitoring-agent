@@ -62,6 +62,7 @@ describe("demoRoutes (integration)", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ demoEnabled: true });
     expect(typeof res.body.totalAlerts).toBe("number");
+    expect(typeof res.body.activeAlerts).toBe("number");
     expect(typeof res.body.patternCount).toBe("number");
   });
 });

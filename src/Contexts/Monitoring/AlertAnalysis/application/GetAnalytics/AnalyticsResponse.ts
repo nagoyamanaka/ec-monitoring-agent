@@ -23,6 +23,8 @@ export type ApprovedAlertSummary = {
 // AI 分類の精度トラッキング。オペレーターの承認/却下フィードバックを母数に正答率を出す。
 export class AnalyticsResponse implements Response {
   public readonly totalAlerts: number;
+  // 現役（非 RESOLVED）の件数。一覧（GET /alerts）と同じ軸＝表示件数と一致する。
+  public readonly activeAlertCount: number;
   public readonly knownCount: number;
   public readonly unknownCount: number;
   public readonly withFeedbackCount: number;
@@ -35,6 +37,9 @@ export class AnalyticsResponse implements Response {
 
   constructor(alerts: Alert[]) {
     this.totalAlerts = alerts.length;
+    this.activeAlertCount = alerts.filter(
+      (alert) => alert.status.value !== "RESOLVED",
+    ).length;
 
     let known = 0;
     let withFeedback = 0;

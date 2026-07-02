@@ -1,6 +1,6 @@
 import { cn } from "@shared/ui/cn";
-import { type AlertView, isAnalyzing } from "../../domain/AlertView";
-import { alertReviewState } from "../../domain/alertReview";
+import type { AlertView } from "../../domain/AlertView";
+import { alertWorkState } from "../../domain/alertReview";
 
 export interface AlertStatusBadgeProps {
   alert: AlertView;
@@ -13,16 +13,16 @@ type Tone = { readonly label: string; readonly cls: string };
  * alert の「対応状態」をひとことで示すバッジ。
  * 分析中 → レビュー待ち → 承認済み/却下済み の遷移を一覧・ドロワーで共通表示し、
  * 「自分が対応すべき行（＝レビュー待ち）」を一目で分かるようにする。
- * レビュー状態は feedback ベース（alertReviewState）で既知・未知を統一して扱う。
+ * 状態算出はヘッダの件数チップと同じ alertWorkState（単一ソース）を使い、
+ * バッジと集計が食い違わないことを保証する。
  */
 function toneOf(alert: AlertView): Tone {
-  if (isAnalyzing(alert)) {
-    return {
-      label: "分析中",
-      cls: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
-    };
-  }
-  switch (alertReviewState(alert)) {
+  switch (alertWorkState(alert)) {
+    case "ANALYZING":
+      return {
+        label: "分析中",
+        cls: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
+      };
     case "APPROVED":
       return {
         label: "承認済み",
