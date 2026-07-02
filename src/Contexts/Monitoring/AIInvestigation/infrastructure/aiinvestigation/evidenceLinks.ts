@@ -10,7 +10,12 @@ import type { InvestigationStepPrimitives } from "../../../AlertAnalysis/domain/
  */
 
 export type EvidenceLinkConfig = {
-  /** GitHub の "owner/repo"（GITHUB_REPO）。未設定ならコミットリンクを出さない。 */
+  /**
+   * GitHub の "owner/repo"。コミットリンクの基底。未設定ならコミットリンクを出さない。
+   * 証拠収集ゲートウェイ（GitHubGatewayImpl）と同じ repo を指す必要があるため、環境変数は
+   * そちらと同じ GITHUB_TARGET_REPO を正とする（別名 GITHUB_REPO を読んでいた過去は、
+   * 実デプロイでは常に未設定＝コミットリンクが出ない不具合だった。evidenceLinkConfigFromEnv 参照）。
+   */
   readonly githubRepo?: string;
   /** GCP プロジェクト ID（GCP_PROJECT_ID）。未設定なら Cloud Logging リンクを出さない。 */
   readonly gcpProjectId?: string;
@@ -63,10 +68,15 @@ export function buildEvidenceLinks(
   return links;
 }
 
-/** 環境変数からデフォルトのリンク設定を読む（空文字は未設定として落とす）。 */
+/**
+ * 環境変数からデフォルトのリンク設定を読む（空文字は未設定として落とす）。
+ * repo は証拠収集ゲートウェイ（config.github.targetRepo＝GITHUB_TARGET_REPO）と一致させる。
+ * 旧名 GITHUB_REPO は後方互換のフォールバックとしてのみ残す。
+ */
 export function evidenceLinkConfigFromEnv(): EvidenceLinkConfig {
   return {
-    githubRepo: process.env.GITHUB_REPO || undefined,
+    githubRepo:
+      process.env.GITHUB_TARGET_REPO || process.env.GITHUB_REPO || undefined,
     gcpProjectId: process.env.GCP_PROJECT_ID || undefined,
   };
 }

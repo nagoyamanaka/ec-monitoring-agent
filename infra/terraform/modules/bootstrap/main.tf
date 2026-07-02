@@ -30,7 +30,9 @@ locals {
   # Secret コンテナ（値=version は tf に置かず gcloud で投入する。§11.5）
   # Gemini は Vertex AI 経由（ADC 認証）なので API キー Secret は不要。
   # AI Studio フォールバックを使う場合のみ手動で GEMINI_API_KEY Secret を足す。
-  secret_ids = ["INGEST_TOKEN"]
+  # GITHUB_TOKEN は AI 調査の証拠収集（コミット履歴）＋証拠リンク＋修正PR起票で使う read-only PAT。
+  # version 未投入でも startup-script はフォールバックで空にするため VM 起動は止まらない（silent skip）。
+  secret_ids = ["INGEST_TOKEN", "GITHUB_TOKEN"]
 }
 
 resource "google_project_service" "this" {

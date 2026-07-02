@@ -58,6 +58,32 @@ describe("LLMInvestigationAdapter", () => {
     expect(report.isFallback).toBe(true);
   });
 
+  it("パース不能でも収集済み証拠のリンクは fallback レポートに残す", async () => {
+    const adapter = new LLMInvestigationAdapter(new StubLLMTextClient({ text: "壊れたJSON" }), {
+      githubRepo: "example-org/ec-backend",
+    });
+
+    const report = await adapter.investigate({
+      ...context,
+      infraEvidence: {
+        appLogs: [],
+        collectedAt: new Date("2026-06-20T00:00:00.000Z"),
+        recentCommits: [
+          { sha: "abc1234", message: "fix", author: "a", committedAt: new Date() },
+        ],
+      },
+    });
+
+    expect(report.isFallback).toBe(true);
+    expect(report.investigationSteps).toEqual([
+      {
+        text: "コミット abc1234: fix",
+        href: "https://github.com/example-org/ec-backend/commit/abc1234",
+        kind: "code",
+      },
+    ]);
+  });
+
   it("infraEvidence と linkConfig から証拠リンクを調査ステップへ追記する（LLMはテキストのみ）", async () => {
     const adapter = new LLMInvestigationAdapter(new StubLLMTextClient({ text: validJson }), {
       githubRepo: "example-org/ec-backend",

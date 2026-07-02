@@ -90,12 +90,17 @@ export function toInvestigationReport(
   });
 }
 
-export function buildFallbackReport(): InvestigationReport {
+export function buildFallbackReport(
+  // AI 出力が使えなくても、収集済み evidence から決定的に導出したリンク（コミット・ログ）は
+  // 「どこを見ればよいか」の一次情報として価値がある。パース不能で fallback に落ちても、
+  // 収集できていた証拠リンクだけは調査ステップとして残す（空なら従来どおり空表示）。
+  evidenceLinks: InvestigationStepPrimitives[] = [],
+): InvestigationReport {
   return new InvestigationReport({
     summary: "自動調査に失敗しました。手動での確認が必要です。",
     confidence: 0,
     severity: AlertSeverity.warning(),
-    investigationSteps: [],
+    investigationSteps: [...evidenceLinks],
     suggestedActions: ["手動での障害調査を実施してください"],
     suggestedPatternName: "",
     reviewStatus: ReviewStatus.pendingReview(),

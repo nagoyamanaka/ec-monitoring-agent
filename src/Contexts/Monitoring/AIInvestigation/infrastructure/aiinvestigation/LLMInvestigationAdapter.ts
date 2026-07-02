@@ -4,7 +4,7 @@ import { LLMTextClient } from "../../domain/LLMTextClient.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { SYSTEM_INSTRUCTION, buildUserPrompt } from "./InvestigationPromptBuilder.js";
-import { parseLLMOutput } from "./LLMOutputParser.js";
+import { parseLLMOutput, rawSnippet } from "./LLMOutputParser.js";
 import { toInvestigationReport, buildFallbackReport } from "./InvestigationReportMapper.js";
 import {
   buildEvidenceLinks,
@@ -34,6 +34,8 @@ export class LLMInvestigationAdapter implements AIInvestigationPort {
 
   async investigate(context: InvestigationContext): Promise<InvestigationReport> {
     const prompt = buildUserPrompt(context);
+    // fallback（例外／パース不能）でも収集済み証拠のリンクは残せるよう、先に決定的に組んでおく。
+    const evidenceLinks = buildEvidenceLinks(context.infraEvidence, this.linkConfig);
 
     let raw: string;
     try {
@@ -44,7 +46,7 @@ export class LLMInvestigationAdapter implements AIInvestigationPort {
         action: "ai_investigation_failed",
         message: `AI調査がLLM例外でfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, error=${error instanceof Error ? error.message : String(error)}`,
       });
-      return buildFallbackReport();
+      return buildFallbackReport(evidenceLinks);
     }
 
     const output = parseLLMOutput(raw);
@@ -52,12 +54,12 @@ export class LLMInvestigationAdapter implements AIInvestigationPort {
       await this.logger?.warn({
         service: "backoffice-backend",
         action: "ai_investigation_unparseable",
-        message: `AI調査の応答をパースできずfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}`,
+        // rawLen だけでは「なぜパースできなかったか」を本番で追えないため、生出力の先頭スニペットも残す。
+        message: `AI調査の応答をパースできずfallbackに落ちました（confidence=0）: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}, rawSnippet=${rawSnippet(raw)}`,
       });
-      return buildFallbackReport();
+      return buildFallbackReport(evidenceLinks);
     }
 
-    const evidenceLinks = buildEvidenceLinks(context.infraEvidence, this.linkConfig);
     return toInvestigationReport(output, evidenceLinks);
   }
 }

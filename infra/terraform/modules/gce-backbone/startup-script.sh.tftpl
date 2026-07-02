@@ -40,12 +40,23 @@ INGEST_TOKEN=$(curl -sf -H "Authorization: Bearer $TOKEN" \
   "https://secretmanager.googleapis.com/v1/projects/${project_id}/secrets/INGEST_TOKEN/versions/latest:access" \
   | sed -n 's/.*"data": *"\([^"]*\)".*/\1/p' | base64 -d)
 
+# GitHub PAT（read-only）: AI 調査のコミット履歴収集＋証拠リンク＋修正PR起票に使う。
+# INGEST_TOKEN と違い「未投入でも起動を止めない」オプショナル扱い。secret に version が無い/取得失敗なら
+# 空にフォールバックする（|| true）。空なら GitHubGatewayImpl が silent skip するだけ（証拠リンクが出ないのみ）。
+GITHUB_TOKEN=$(curl -sf -H "Authorization: Bearer $TOKEN" \
+  "https://secretmanager.googleapis.com/v1/projects/${project_id}/secrets/GITHUB_TOKEN/versions/latest:access" 2>/dev/null \
+  | sed -n 's/.*"data": *"\([^"]*\)".*/\1/p' | base64 -d 2>/dev/null || true)
+
 # 6) イメージ参照・プロジェクト・シークレットを .env に。
+#    DEMO_ENABLED=true: この本番デプロイはハッカソン・デモ環境そのもの（デモコンソール/シナリオを出す）。
+#    その他の非シークレット（GITHUB_TARGET_REPO/REF・REMEDIATION_MODE 等）は compose の default 側で持つ。
 cat > /opt/app/.env <<EOF
 GCP_PROJECT_ID=${project_id}
 IMAGE_EC=${image_ec}
 IMAGE_BACKOFFICE=${image_backoffice}
 INGEST_TOKEN=$INGEST_TOKEN
+GITHUB_TOKEN=$GITHUB_TOKEN
+DEMO_ENABLED=true
 EOF
 
 # 7) 起動（base + prod override）。イメージはpush済みなのでビルドをスキップ
