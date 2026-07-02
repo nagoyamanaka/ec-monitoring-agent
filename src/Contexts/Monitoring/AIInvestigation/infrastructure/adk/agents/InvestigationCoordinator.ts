@@ -64,6 +64,10 @@ export function createInvestigationCoordinator(params: {
     name: "investigation_coordinator",
     model: params.model,
     description: "障害調査を統括し、専門エージェントに委譲して最終レポート(JSON)を出すコーディネーター。",
+    // fallback 第4原因（最終出力 JSON の途中切断・タスク I1）への防御: gemini-2.5 系は思考トークンも
+    // maxOutputTokens を消費するため、既定値頼みにせずモデル上限まで明示確保する（最終 JSON は高々2KB弱）。
+    // 切断が残った場合の受け皿はサルベージパース（salvageLLMOutput）側。
+    generateContentConfig: { maxOutputTokens: 65535 },
     instruction: SYSTEM_INSTRUCTION + orchestration,
     tools: [
       new AgentTool({ agent: params.evidenceCollector }),

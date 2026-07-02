@@ -84,6 +84,8 @@ export class ReinvestigateAlertUseCase {
       ]);
 
     return {
+      // 進行イベント（investigation-progress）のライブ中継に使う相関キー（プロンプトには載らない）。
+      alertId: selfId.value,
       errorEvent: {
         eventName: monitoringEvent.eventName,
         occurredOn: monitoringEvent.occurredOn.toISOString(),

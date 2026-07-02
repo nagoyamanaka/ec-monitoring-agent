@@ -2,14 +2,17 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ConfidenceGauge } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import { formatDateTimeJa, formatTimeJa } from "@shared/format/dateTime";
 import {
   type AlertView,
   isAnalyzing,
   hasAiInvestigation,
 } from "../../domain/AlertView";
 import { alertConfidence } from "../../domain/alertConfidence";
+import { reportTeaser } from "../../domain/reportTeaser";
 import { eventInfo, eventTitle } from "../../domain/eventCatalog";
 import { categoryInfo } from "../../domain/alertCategory";
+import type { InvestigationProgressView } from "../../domain/investigationProgress";
 import type { FeedbackDecision } from "../../application/submitFeedback";
 import type { EvidenceApi } from "../../infrastructure/evidenceApi";
 import type { RemediationApi } from "../../infrastructure/remediationApi";
@@ -18,6 +21,7 @@ import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertReviewPanel } from "./AlertReviewPanel";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { EvidencePanel } from "./EvidencePanel";
+import { InvestigationPipelinePanel } from "./InvestigationPipelinePanel";
 import { RemediationPanel } from "./RemediationPanel";
 import { RelatedAlertsPanel } from "./RelatedAlertsPanel";
 import { ExactMatchBadge } from "./ExactMatchBadge";
@@ -51,6 +55,8 @@ export interface AlertDetailDrawerProps {
   remediationApi?: RemediationApi;
   /** SSE で届いた選択中アラートのリメディ確定（live 反映用）。 */
   pushedRemediation?: RemediationView | null;
+  /** SSE で届いた選択中アラートの調査進行イベント（調査パイプラインビュー・E1 のライブ表示用）。 */
+  investigationProgress?: readonly InvestigationProgressView[];
   /** 関連アラートの alertId → AlertView 解決（一覧から渡す。関連の日時/severity 補完用）。 */
   relatedLookup?: (id: string) => AlertView | undefined;
   /** 一覧のアラート集合。完全一致分類の「過去の同型事例」（同 eventName の対処済み）を引くのに使う。 */
@@ -61,11 +67,6 @@ export interface AlertDetailDrawerProps {
    * 無い場合（詳細ページ等）は従来どおり `/alerts/:id` への `Link` にフォールバックする。
    */
   onRelatedNavigate?: (id: string) => void;
-}
-
-function formatAbsoluteTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
 /**
@@ -92,7 +93,7 @@ function formatOccurrenceSummary(alert: {
     span = `${Math.round(spanMs / 3_600_000)} 時間`;
   }
 
-  return `${span}に ${alert.occurrenceCount} 回観測（初回 ${first.toLocaleTimeString()} → 最新 ${last.toLocaleTimeString()}）`;
+  return `${span}に ${alert.occurrenceCount} 回観測（初回 ${formatTimeJa(first)} → 最新 ${formatTimeJa(last)}）`;
 }
 
 /**
@@ -114,6 +115,7 @@ export function AlertDetailDrawer({
   evidenceApi,
   remediationApi,
   pushedRemediation,
+  investigationProgress,
   relatedLookup,
   alerts,
   onRelatedNavigate,
@@ -137,6 +139,8 @@ export function AlertDetailDrawer({
   const title = eventTitle(alert.eventName);
   const category = categoryInfo(alert.category);
   const occurrenceSummary = formatOccurrenceSummary(alert);
+  // 詳細ページ限定コンテンツのティザー（タスク D5）。無ければ素のリンクにフォールバック。
+  const teaser = reportTeaser(alert.report);
 
   return (
     <div
@@ -193,7 +197,7 @@ export function AlertDetailDrawer({
                   ·{" "}
                 </>
               )}
-              {alert.source} · {formatAbsoluteTime(alert.occurredOn)}
+              {alert.source} · {formatDateTimeJa(alert.occurredOn)}
             </p>
             {occurrenceSummary && (
               <p className="text-xs text-amber-300/80">
@@ -245,7 +249,18 @@ export function AlertDetailDrawer({
               />
             </div>
           ) : null}
-          <AlertCardExpanded alert={alert} variant="summary" />
+          {/* AI 調査ライブ・タイムライン（E1）: ANALYZING 中はパイプライン、完了直後はステップの
+              順次アニメ。ANALYZING 告知は本パネルに一本化（AlertCardExpanded 側は抑止）。 */}
+          <InvestigationPipelinePanel
+            key={alert.id}
+            alert={alert}
+            progress={investigationProgress}
+          />
+          <AlertCardExpanded
+            alert={alert}
+            variant="summary"
+            analyzingNotice={false}
+          />
           <RelatedAlertsPanel
             alert={alert}
             lookup={relatedLookup}
@@ -263,7 +278,8 @@ export function AlertDetailDrawer({
               live
             />
           )}
-          {evidenceApi && hasAiInvestigation(alert) && (
+          {/* 分析中の証拠プレースホルダはパイプラインビュー（上）が代替するため完了後のみ出す。 */}
+          {evidenceApi && hasAiInvestigation(alert) && !analyzing && (
             <EvidencePanel api={evidenceApi} alert={alert} />
           )}
           {/* 判定は末尾に統一配置（詳細ページと同じ）。 */}
@@ -277,14 +293,47 @@ export function AlertDetailDrawer({
         </div>
 
         <footer className="border-t border-slate-700/60 px-5 py-3">
-          <Link
-            to={`/alerts/${encodeURIComponent(alert.id)}`}
-            className="text-xs font-medium text-cyan-300 transition hover:text-cyan-200"
-          >
-            {alert.report
-              ? "AI レポートを詳細ページで読む →"
-              : "詳細ページを開く →"}
-          </Link>
+          {/* ティザーCTA（タスク D5）: 「詳細ページに行くと何が読めるか」を実データで予告する。
+              full 射影(タスク37)限定のセクションをチップで棚卸しし、推奨アクション先頭1件を
+              抜粋＝テキストリンクだけの空手形をなくしてクリック価値を事前に伝える。 */}
+          {teaser ? (
+            <Link
+              to={`/alerts/${encodeURIComponent(alert.id)}`}
+              className="group block rounded-lg bg-slate-800/40 px-4 py-3 ring-1 ring-inset ring-slate-700/60 transition hover:bg-slate-800/70 hover:ring-cyan-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                AI レポート全文
+              </p>
+              {teaser.headline && (
+                <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-slate-200">
+                  <span aria-hidden className="text-cyan-300">
+                    ▸{" "}
+                  </span>
+                  {teaser.headline}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {teaser.chips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[11px] font-medium text-slate-300 ring-1 ring-inset ring-slate-600/50"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-right text-xs font-medium text-cyan-300 transition group-hover:text-cyan-200">
+                詳細ページで全文を読む →
+              </p>
+            </Link>
+          ) : (
+            <Link
+              to={`/alerts/${encodeURIComponent(alert.id)}`}
+              className="text-xs font-medium text-cyan-300 transition hover:text-cyan-200"
+            >
+              詳細ページを開く →
+            </Link>
+          )}
         </footer>
       </aside>
     </div>

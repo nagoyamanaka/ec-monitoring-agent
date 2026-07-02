@@ -178,6 +178,10 @@ export type InvestigationReportPrimitives = {
   // 実際の write 実行ゲートは人間承認＋executor の deterministic 判定が握る。
   // optional は旧データ互換（未保存なら false 扱い／dedupKey と同じ規約）。
   readonly remediable?: boolean;
+  // Forecast 突合キー（コンポーネントラベル。例: "db_connection_pool_exhaustion"）。
+  // 調査時に deterministic に導出して埋める（LLM 出力ではない）。ForecastMemory projection が
+  // 解決済み事例のタグとして読む。optional は後方互換＝subject 無しの旧 Alert も読める。
+  readonly subject?: string;
 };
 
 export type AlertPrimitives = {

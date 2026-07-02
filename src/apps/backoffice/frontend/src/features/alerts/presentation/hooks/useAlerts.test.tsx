@@ -44,6 +44,43 @@ describe("useAlerts", () => {
     );
   });
 
+  it("investigation-progress 受信を alertId 単位の時系列に積む", async () => {
+    const api = fakeApi([makeAlert({ id: "a", status: "ANALYZING" })]);
+    const stream = new MockAlertStream();
+    const { result } = renderHook(() => useAlerts(api, stream));
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    act(() => {
+      stream.emitInvestigationProgress({
+        alertId: "a",
+        agent: "evidence_collector",
+        tool: "fetch_app_logs",
+        at: "2026-07-03T00:00:10.000Z",
+      });
+      stream.emitInvestigationProgress({
+        alertId: "a",
+        agent: "investigation_coordinator",
+        tool: "impact_triage",
+        at: "2026-07-03T00:00:20.000Z",
+      });
+      stream.emitInvestigationProgress({
+        alertId: "other",
+        agent: "evidence_collector",
+        tool: "fetch_terraform_diff",
+        at: "2026-07-03T00:00:30.000Z",
+      });
+    });
+
+    expect(
+      result.current.investigationProgressByAlertId
+        .get("a")
+        ?.map((e) => e.tool),
+    ).toEqual(["fetch_app_logs", "impact_triage"]);
+    expect(
+      result.current.investigationProgressByAlertId.get("other"),
+    ).toHaveLength(1);
+  });
+
   it("取得失敗時は error 遷移する", async () => {
     const api: AlertsApi = {
       getAlerts: vi.fn().mockRejectedValue(new Error("network down")),

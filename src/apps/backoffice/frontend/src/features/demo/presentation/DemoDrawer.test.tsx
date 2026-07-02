@@ -73,6 +73,22 @@ describe("DemoDrawer", () => {
     expect(api.triggerScenario).toHaveBeenCalledWith("1");
   });
 
+  it("refreshKey が変わると status を再取得する（SSE 着弾で件数追随）", async () => {
+    const api = fakeApi();
+    const { rerender } = render(<DemoDrawer api={api} refreshKey={null} />);
+    await waitFor(() => expect(api.getStatus).toHaveBeenCalledTimes(1));
+
+    // 同一 key の再レンダーでは再取得しない
+    rerender(<DemoDrawer api={api} refreshKey={null} />);
+    expect(api.getStatus).toHaveBeenCalledTimes(1);
+
+    // SSE 着弾＝lastUpdatedAt 変化で /demo/status を再取得
+    rerender(<DemoDrawer api={api} refreshKey={1000} />);
+    await waitFor(() => expect(api.getStatus).toHaveBeenCalledTimes(2));
+    rerender(<DemoDrawer api={api} refreshKey={2000} />);
+    await waitFor(() => expect(api.getStatus).toHaveBeenCalledTimes(3));
+  });
+
   it("リセット押下で reset を呼ぶ", async () => {
     const api = fakeApi();
     render(<DemoDrawer api={api} />);

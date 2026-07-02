@@ -8,5 +8,9 @@
  * fake 注入でユニットテストできる（GeminiLLMClient と LLMInvestigationAdapter の関係と同型）。
  */
 export interface InvestigationAgentRunner {
-  run(seedPrompt: string): Promise<string>;
+  /**
+   * options.alertId が与えられた場合、実行イベント（ツール呼び出し）を当該 Alert に紐付けて
+   * ライブ中継してよい（investigation-progress・実イベントのみ）。省略時は中継しない。
+   */
+  run(seedPrompt: string, options?: { alertId?: string }): Promise<string>;
 }

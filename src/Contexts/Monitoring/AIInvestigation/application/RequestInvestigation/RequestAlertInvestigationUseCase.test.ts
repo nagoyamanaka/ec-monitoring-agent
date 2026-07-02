@@ -16,6 +16,7 @@ const ALERT_ID = "550e8400-e29b-41d4-a716-446655440000";
 const fakeNotifier = (): SSEAlertNotifier => ({
   notify: vi.fn(),
   notifyRemediation: vi.fn(),
+  notifyInvestigationProgress: vi.fn(),
   addConnection: vi.fn(),
   removeConnection: vi.fn(),
 });

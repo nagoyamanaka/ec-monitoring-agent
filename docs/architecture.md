@@ -105,6 +105,7 @@ flowchart TD
 
 - 既知/未知でルートが変わる（既知は重い調査モジュールを通さない）。出口は自責→修正起案 / 他責→運用エスカレーションに分岐。
 - 失敗時も空にしない: runner 例外・パース不能の fallback レポートに**収集済み証拠リンクを温存**。パース不能時は rawSnippet をログに残し真因を追跡。
+- **調査のライブ可視化（E1）**: runner の実行イベント（agentTrace と同じタップ）を SSE 名前付きイベント `investigation-progress`（alertId/agent/tool/at）で中継。UI は ANALYZING 中に経過タイマー＋7エージェント台帳＋実行イベントのライブフィード（`InvestigationPipelinePanel`）を表示し、完了時に確定した調査ステップを順次アニメ表示する。**実イベントのみ中継**（演出の捏造なし）。Valkey 構成では専用 channel（`monitoring:sse:investigation-progress`）で fan-out。
 
 ## 5. リメディエーション（write 隔離・人間承認ゲート）
 
@@ -160,13 +161,13 @@ src/
 ```
 
 - ポート実装は `...Adapter`、ドメインサービスは `...DomainService`。driven ポートと wire DTO は infrastructure 配下。ワイヤ型は contracts に単一ソース化。
-- テスト: Vitest（BDD）716件・111ファイル。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E（Playwright は `e2e/`）。
+- テスト: Vitest（BDD）744件・114ファイル。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E（Playwright は `e2e/`）。
 
 ## 8. 主要 API（backoffice）
 
 | エンドポイント | 役割 |
 | --- | --- |
-| `GET /alerts` / `GET /alerts/:id` | 一覧・詳細（一覧は SSE `GET /stream` でライブ更新） |
+| `GET /alerts` / `GET /alerts/:id` | 一覧・詳細（一覧は SSE `GET /stream` でライブ更新。名前付きイベント: `remediation`＝リメディ確定、`investigation-progress`＝ADK 調査の実行イベント中継） |
 | `PATCH /alerts/:id/feedback` | 正解/不正解フィードバック（正解→SimilarIncident 蓄積→閾値で自動昇格） |
 | `POST /alerts/:id/promote` | 手動即時昇格（結晶化） |
 | `POST /alerts/:id/report` | 既知/類似へのオンデマンド AI レポート生成（202→SSE） |
@@ -194,6 +195,6 @@ src/
 
 ## 10. 未実装（設計のみ）
 
-- **予兆ブリーフィング（Forecast）**: 未来シグナル×記憶の引用付きリスク予報。設計確定・実装は [docs/steps/step6-final-sprint-todo.md](steps/step6-final-sprint-todo.md) F1〜F8 で進行。
+- **予兆ブリーフィング（Forecast）**: 未来シグナル×記憶の引用付きリスク予報。設計確定・実装は [docs/steps/step6-final-sprint-todo.md](steps/step6-final-sprint-todo.md) F1〜F8 で進行。着地済み: F1 ドメイン型（`Monitoring/Forecast/domain/`：`ForecastSignal`/`RiskForecast`/`Schedule`/`ScheduleSource`/`ForecastSignalSource`）、F2 ForecastMemory projection（突合キー(B)：`ForecastMemory`/`forecastSubject` 導出・照合規約/`ResolvedAlertForecastMemoryRepository`。`InvestigationReport` に optional `subject` を追記し調査時に deterministic 導出＝唯一の既存P0変更点）、F3 未来シグナル（`GitHubGateway.listOpenPullRequests`/`TerraformGateway.getPendingPlan`＋`PendingInfraPlanStore`、Source 3実装 `PullRequestSignalSource`/`PendingPlanSignalSource`/`ScheduleSignalSource`＝正規化を Source 内に閉じ Handler は配列を回すだけ・全て read-only・失敗時は源単位で空縮退）、F4 ForecastPort＋Gemini アダプタ（`ForecastPort`/`ForecastContext`＋`GeminiForecastAdapter`。**単発 Gemini 経路・ADK 非使用は意図的**＝入力は Handler が事前収集済みでツールコール型探索が不要、`responseMimeType=application/json` 強制で無人閲覧の構造化堅牢性を優先。`LLMTextClient`（GeminiLLMClient）注入のコンポジション・JSON固定＋citations必須プロンプト・safeParse・confidenceクランプ・未知levelはLOW丸め・level降順ソート・失敗時は throw せず `isFallback=true` 縮退。citations 空/偽引用を落とすのは F5 引用検証の責務）。
 - **イベントソーシング基盤（stretchⅢ）**: ハッカソン後。[docs/steps/step4-1-strategy.md](steps/step4-1-strategy.md) §7.10。
 - `VertexLLMClient`（独立クラスとしては未実装。Vertex AI 経路は `GeminiLLMClient` の `GOOGLE_GENAI_USE_VERTEXAI=true` で実現済み）。

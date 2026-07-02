@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "@shared/ui/cn";
+import { formatDateTimeJa, formatTimeJa } from "@shared/format/dateTime";
 import type { StreamStatus } from "../../infrastructure/AlertStream";
 
 export interface StreamStatusIndicatorProps {
@@ -49,7 +50,7 @@ function formatRelative(from: Date, now: number): string {
   if (sec < 60) return `${sec}秒前`;
   const min = Math.round(sec / 60);
   if (min < 60) return `${min}分前`;
-  return from.toLocaleTimeString();
+  return formatTimeJa(from);
 }
 
 /**
@@ -96,7 +97,10 @@ export function StreamStatusIndicator({
         <span className={cn("font-medium", tone.text)}>{tone.label}</span>
       </span>
       {showLastUpdated && lastUpdatedAt && (
-        <span className="text-slate-400" title={lastUpdatedAt.toLocaleString()}>
+        <span
+          className="text-slate-400"
+          title={formatDateTimeJa(lastUpdatedAt)}
+        >
           最終更新 {formatRelative(lastUpdatedAt, now)}
         </span>
       )}

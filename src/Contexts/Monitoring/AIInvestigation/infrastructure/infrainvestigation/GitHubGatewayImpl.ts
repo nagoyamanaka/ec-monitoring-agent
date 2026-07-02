@@ -3,7 +3,7 @@ import {
   GitCommitDiff,
   GitFileDiff,
 } from "../../domain/InfraEvidence.js";
-import { GitHubGateway } from "./GitHubGateway.js";
+import { GitHubGateway, OpenPullRequest } from "./GitHubGateway.js";
 
 // GitHub REST API v3 でコミット履歴・差分を収集する（読み取り専用）。
 // GITHUB_TOKEN / GITHUB_REPO（owner/repo 形式）が未設定の場合はスキップする。
@@ -73,6 +73,49 @@ export class GitHubGatewayImpl implements GitHubGateway {
       author: c.commit.author.name,
       committedAt: new Date(c.commit.author.date),
       ...(c.html_url ? { url: c.html_url } : {}),
+    }));
+  }
+
+  async listOpenPullRequests(params?: {
+    limit?: number;
+  }): Promise<OpenPullRequest[]> {
+    if (!this.token || !this.repo) return [];
+
+    const limit = params?.limit ?? 10;
+    // 直近に動きのある PR から拾う（stale な open PR で枠を食わない）。
+    const query = new URLSearchParams({
+      state: "open",
+      sort: "updated",
+      direction: "desc",
+      per_page: String(limit),
+    });
+    const url = `https://api.github.com/repos/${this.repo}/pulls?${query.toString()}`;
+
+    const res = await fetch(url, {
+      headers: this.headers(),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!res.ok) return [];
+
+    const data = (await res.json()) as Array<{
+      number: number;
+      title: string;
+      draft?: boolean;
+      html_url?: string;
+      updated_at: string;
+      user?: { login: string };
+      head?: { ref: string };
+    }>;
+
+    return data.map((pr) => ({
+      number: pr.number,
+      title: pr.title.split("\n")[0],
+      author: pr.user?.login ?? "",
+      updatedAt: new Date(pr.updated_at),
+      headRef: pr.head?.ref ?? "",
+      draft: pr.draft ?? false,
+      ...(pr.html_url ? { url: pr.html_url } : {}),
     }));
   }
 

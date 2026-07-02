@@ -18,6 +18,7 @@ function fakeNotifier(): SSEAlertNotifier {
   return {
     notify: vi.fn(),
     notifyRemediation: vi.fn(),
+    notifyInvestigationProgress: vi.fn(),
     addConnection: vi.fn(),
     removeConnection: vi.fn(),
   };

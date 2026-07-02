@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@shared/ui/cn";
+import { formatDateTimeJa } from "@shared/format/dateTime";
 import type { AlertView } from "../../domain/AlertView";
 import {
   type EvidenceLogLevel,
@@ -47,11 +48,6 @@ const TF_ACTION_CLASS: Record<EvidenceTerraformAction, string> = {
   replace: "bg-orange-500/15 text-orange-300 ring-orange-500/30",
   delete: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
 };
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
-}
 
 /** stagger 1 ステップの遅延（秒）。証拠を 1 行ずつ積み上げる体感を作る。 */
 const RISE_STEP = 0.09;
@@ -135,7 +131,7 @@ function EvidenceSectionView({
                   {log.resource}
                 </code>
                 <span className="ml-auto text-[11px] text-slate-400">
-                  {formatTime(log.timestamp)}
+                  {formatDateTimeJa(log.timestamp)}
                 </span>
               </div>
               <p className="mt-1 font-mono text-xs text-slate-100">
@@ -202,7 +198,7 @@ function EvidenceSectionView({
         >
           <p className="text-xs text-slate-100">{diff.summary}</p>
           <p className="mt-1 text-[11px] text-slate-400">
-            適用 {formatTime(diff.appliedAt)}
+            適用 {formatDateTimeJa(diff.appliedAt)}
             {diff.commitSha ? ` · ${diff.commitSha.slice(0, 7)}` : ""}
           </p>
         </Rise>
@@ -291,7 +287,7 @@ function EvidenceSectionView({
               )}
               <span className="text-[11px] text-slate-300">{c.author}</span>
               <span className="ml-auto text-[11px] text-slate-400">
-                {formatTime(c.committedAt)}
+                {formatDateTimeJa(c.committedAt)}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-100">{c.message}</p>

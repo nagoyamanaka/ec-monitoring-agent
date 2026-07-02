@@ -3,7 +3,7 @@ import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
 import { buildUserPrompt } from "../aiinvestigation/InvestigationPromptBuilder.js";
-import { parseLLMOutput, rawSnippet } from "../aiinvestigation/LLMOutputParser.js";
+import { parseLLMOutput, salvageLLMOutput, rawSnippet } from "../aiinvestigation/LLMOutputParser.js";
 import {
   toInvestigationReport,
   buildFallbackReport,
@@ -43,7 +43,11 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
 
     let raw: string;
     try {
-      raw = await this.runner.run(seedPrompt);
+      // alertId があれば実行イベントのライブ中継（investigation-progress）の相関キーとして渡す。
+      raw = await this.runner.run(
+        seedPrompt,
+        context.alertId ? { alertId: context.alertId } : undefined,
+      );
     } catch (error) {
       await this.logger?.warn({
         service: "backoffice-backend",
@@ -55,6 +59,18 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
 
     const output = parseLLMOutput(raw);
     if (!output) {
+      // fallback 第4原因（最終出力 JSON の mid-string 切断）への防御: 完成済みフィールドだけでも
+      // best-effort で回収し、fallback でなく部分レポートとして返す（分析が正解なのに
+      // 「自動調査に失敗しました」を出すデモ即死パターンを潰す・タスク I1）。
+      const salvaged = salvageLLMOutput(raw);
+      if (salvaged) {
+        await this.logger?.warn({
+          service: "backoffice-backend",
+          action: "ai_investigation_salvaged",
+          message: `AI調査(ADK)の最終出力が途中切断されていたため部分レポートを回収しました: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}, rawSnippet=${rawSnippet(raw)}`,
+        });
+        return toInvestigationReport(salvaged, evidenceLinks);
+      }
       await this.logger?.warn({
         service: "backoffice-backend",
         action: "ai_investigation_unparseable",

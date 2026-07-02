@@ -57,14 +57,15 @@ describe("StreamStatusIndicator", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("connecting + lastUpdatedAt: 最終更新と絶対時刻 title を出す", () => {
+  it("connecting + lastUpdatedAt: 最終更新と絶対時刻 title（ja-JP 統一）を出す", () => {
     const ts = new Date("2026-06-22T05:30:00Z");
     render(
       <StreamStatusIndicator status="connecting" lastUpdatedAt={ts} />,
     );
     const span = screen.getByText(/最終更新/);
     expect(span).toBeInTheDocument();
-    expect(span).toHaveAttribute("title", ts.toLocaleString());
+    // 実行環境ロケールに依存させず ja-JP 固定（英語式 6/22/2026, 2:30:00 PM を出さない）
+    expect(span).toHaveAttribute("title", ts.toLocaleString("ja-JP"));
   });
 
   it("open + onReconnect: ライブ中は切断でないのでボタンを出さない", () => {

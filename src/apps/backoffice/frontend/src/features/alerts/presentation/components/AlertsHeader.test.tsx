@@ -1,12 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AlertsHeader } from "./AlertsHeader";
 import { makeAlert } from "../../test-support/alertFixture";
 
 describe("AlertsHeader", () => {
-  it("画面の説明文を常に出す", () => {
+  it("価値訴求の説明文を常に出す（機構説明でなく「何を肩代わりするか」）", () => {
     render(<AlertsHeader alerts={[]} status="loading" />);
-    expect(screen.getByText(/レビュー一覧/)).toBeInTheDocument();
+    expect(screen.getByText(/肩代わり/)).toBeInTheDocument();
   });
 
   it("loading 中は件数サマリを出さない", () => {
@@ -90,5 +91,69 @@ describe("AlertsHeader", () => {
       />,
     );
     expect(screen.getByText("分析中 1件")).toBeInTheDocument();
+  });
+
+  it("チップのクリックで onFilterToggle を呼ぶ（選択中は aria-pressed）", async () => {
+    const onFilterToggle = vi.fn();
+    render(
+      <AlertsHeader
+        status="ready"
+        activeFilter="critical"
+        onFilterToggle={onFilterToggle}
+        alerts={[makeAlert({ id: "a", severity: "CRITICAL", feedback: null })]}
+      />,
+    );
+    const critical = screen.getByRole("button", { name: "CRITICAL 1件" });
+    expect(critical).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "レビュー待ち 1件" }));
+    expect(onFilterToggle).toHaveBeenCalledWith("pending");
+  });
+
+  it("onFilterToggle がある時は絞り込み導線ラベルを出す（表示のみの時は出さない）", () => {
+    const { rerender } = render(
+      <AlertsHeader
+        status="ready"
+        onFilterToggle={vi.fn()}
+        alerts={[makeAlert({ id: "a", feedback: null })]}
+      />,
+    );
+    expect(screen.getByText(/クリックで絞り込み/)).toBeInTheDocument();
+
+    rerender(
+      <AlertsHeader
+        status="ready"
+        alerts={[makeAlert({ id: "a", feedback: null })]}
+      />,
+    );
+    expect(screen.queryByText(/クリックで絞り込み/)).not.toBeInTheDocument();
+  });
+
+  it("選択中のチップは解除の導線（tooltip）を持つ", () => {
+    render(
+      <AlertsHeader
+        status="ready"
+        activeFilter="pending"
+        onFilterToggle={vi.fn()}
+        alerts={[makeAlert({ id: "a", feedback: null })]}
+      />,
+    );
+    const pending = screen.getByRole("button", { name: /レビュー待ち 1件/ });
+    expect(pending).toHaveAttribute("title", "クリックで絞り込みを解除");
+  });
+
+  it("0件のチップは淡色化して無効（クリックできない）", async () => {
+    const onFilterToggle = vi.fn();
+    render(
+      <AlertsHeader
+        status="ready"
+        onFilterToggle={onFilterToggle}
+        alerts={[
+          makeAlert({ id: "a", severity: "WARNING", feedback: { isCorrect: true } }),
+        ]}
+      />,
+    );
+    const pending = screen.getByRole("button", { name: "レビュー待ち 0件" });
+    expect(pending).toBeDisabled();
+    expect(pending.className).toContain("opacity-40");
   });
 });

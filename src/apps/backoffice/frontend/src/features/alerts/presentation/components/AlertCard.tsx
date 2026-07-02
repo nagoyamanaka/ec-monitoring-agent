@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ConfidenceChip } from "@shared/ui/tremor";
-import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { cn } from "@shared/ui/cn";
+import { formatDateTimeJa } from "@shared/format/dateTime";
 import {
   type AlertView,
   type AlertSeverity,
   isAnalyzing,
-  hasAiInvestigation,
 } from "../../domain/AlertView";
 import { alertConfidence } from "../../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../../domain/eventCatalog";
@@ -14,7 +13,6 @@ import { categoryInfo } from "../../domain/alertCategory";
 import { alertReason } from "../../domain/alertReason";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { ExactMatchBadge } from "./ExactMatchBadge";
-import { UnknownFaultBadge } from "./UnknownFaultBadge";
 
 export interface AlertCardProps {
   alert: AlertView;
@@ -56,10 +54,13 @@ function formatRelativeTime(iso: string): string {
   return `${Math.round(hr / 24)}日前`;
 }
 
-function formatAbsoluteTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
-}
+/** severity をスクリーンリーダー向けに読み上げるラベル（視覚上はストライプ色が担う）。 */
+const SEVERITY_LABEL: Record<AlertSeverity, string> = {
+  CRITICAL: "重大",
+  WARNING: "警告",
+  INFO: "情報",
+  PENDING: "判定中",
+};
 
 /**
  * 一覧の 1 行（マスター）。クリックで詳細ドロワー（AlertDetailDrawer）を開く。
@@ -136,17 +137,13 @@ export function AlertCard({
           )}
         </div>
 
-        {/* ② 従属メタ: 種別（未知障害）・重要度（分析中は判定中）・category（人間語）・時刻 */}
+        {/* ② 従属メタ: category（人間語）・時刻。
+            重要度は左ストライプ色に一本化（バッジ軸分離＝カード上のバッジは
+            category / 状態 / 分類根拠 の最大3。E2）。読み上げ用に sr-only で残す。 */}
         <div className="flex min-w-0 items-center gap-2 text-sm text-slate-300">
-          {/* 未知障害は eventName だけでは伝わらないので種別バッジで明示する */}
-          {hasAiInvestigation(alert) && <UnknownFaultBadge />}
-          {analyzing ? (
-            <span className="inline-flex items-center rounded-full bg-slate-600/20 px-2.5 py-0.5 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-500/30">
-              重要度 判定中
-            </span>
-          ) : (
-            <SeverityBadge level={alert.severity} />
-          )}
+          <span className="sr-only">
+            重要度 {analyzing ? "判定中" : SEVERITY_LABEL[alert.severity]}
+          </span>
           <span
             className="rounded bg-slate-700/50 px-1.5 py-0.5 text-xs font-medium text-slate-300"
             title={category.description}
@@ -155,7 +152,7 @@ export function AlertCard({
           </span>
           <span
             className="shrink-0"
-            title={formatAbsoluteTime(alert.occurredOn)}
+            title={formatDateTimeJa(alert.occurredOn)}
           >
             {formatRelativeTime(alert.occurredOn)}
           </span>
@@ -175,7 +172,8 @@ export function AlertCard({
           )}
         </div>
 
-        {/* ③ 副次: 推定原因（該当パターン／AI推定パターン） */}
+        {/* ③ 副次: 推定原因（該当パターン／AI推定パターン）。
+            結晶化パターンは生ID（PROMOTED_...）を出さず ◈＋人間語（tooltip に生ID）。 */}
         <p className="truncate text-sm leading-relaxed text-slate-300">
           {reason.kind === "analyzing" ? (
             "AI が未知障害を調査中…"
@@ -184,7 +182,18 @@ export function AlertCard({
               <span className="text-slate-400">
                 {reason.kind === "known" ? "該当: " : "AI推定: "}
               </span>
-              {reason.patternName}
+              {reason.kind === "known" && reason.crystallized ? (
+                <span
+                  title={`結晶化パターン（承認により学習・昇格）: ${reason.rawPatternName}`}
+                >
+                  <span aria-hidden className="text-emerald-300">
+                    ◈{" "}
+                  </span>
+                  {reason.patternName}
+                </span>
+              ) : (
+                reason.patternName
+              )}
             </>
           )}
         </p>

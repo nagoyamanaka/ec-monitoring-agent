@@ -21,7 +21,7 @@ todo実施後に
 
 > 出すシナリオは §3 の**DB接続枯渇 1本を本命**、2本目は同一機構の seed 替え（stretch）。既存P0パイプライン無傷・突合キーは (B) 構造化タグ。
 
-### タスク F1: Forecast ドメイン型 〔P0〕（旧 step4-2 タスク19）
+### タスク F1: Forecast ドメイン型 〔P0〕（旧 step4-2 タスク19）✅
 
 - 【新規】`Forecast/domain/ForecastSignal.ts`（id/kind/subject/when/desc/source・kind=FUTURE_CHANGE|SCHEDULE|MEMORY）
 - 【新規】`RiskForecast.ts`（forecastId/generatedAt/horizon/risks[]/isFallback、`RiskItem`=window/subject/level/confidence/**citations**/reasoning）
@@ -31,14 +31,14 @@ todo実施後に
 > **相関（step4-4 タスク9e）との共通化メモ**: `RiskItem.citations`（引用＝根拠 id）と実装済み AI 相関（`InvestigationReportPrimitives.relatedAlerts`）は**同型パターン**＝「LLM が _id + ラベル + 根拠_ を出し、防御的に正規化してから実在レコードへ照合」。引用 incidentId は `SimilarIncident.sourceAlertId`＝実在 Alert id（step4-2 タスク12）なので実在 Alert に解決できる。
 > **ただし context を跨いだ型共有はしない**: 相関は Monitoring BC、引用は Forecast BC の別物。`RelatedAlertPrimitives` を Forecast から import しない（BC 結合を避ける）。共通なのは*手順*（防御的正規化＋citations 必須プロンプト＋実在照合）だけ。`GeminiForecastAdapter`（F4）の safeParse/clamp/fallback は `LLMOutputParser`/`InvestigationReportMapper` を**参考にする**（コピー元）。frontend 共通化は F7 のメモを正とする。
 
-### タスク F2: ForecastMemory projection（突合キーB）〔P0〕（旧 step4-2 タスク20）
+### タスク F2: ForecastMemory projection（突合キーB）〔P0〕（旧 step4-2 タスク20）✅
 
 - 【新規】`Forecast/domain/ForecastMemory.ts`（`ForecastMemoryEntry`=incidentId/subject/trigger/outcome、`ForecastMemoryRepository`：warmUp/findBySubjects）
 - 【新規】`infrastructure/` 実装（Resolved から subject 投影）。`ForecastMemoryEntry.incidentId` は `SimilarIncident.sourceAlertId`（step4-2 タスク12 の back-link）を投影元にすれば citation を**実在する Alert id**に解決でき引用検証（§7.3）が効く
 - 【補足】`trigger`/`outcome` 文も `resolvedNote`（index 時に AI調査 summary をフォールバック充填）から導出できる
 - 【修正】`InvestigationReport` に optional `subject?: string` 追記（後方互換）＋ `InvestigateAlertUseCase` で導出して埋める ← **唯一の既存P0変更点**（要リグレッションテスト）
 
-### タスク F3: Gateway 未来シグナル取得メソッド ＋ ForecastSignalSource 実装 〔P0〕（旧 step4-2 タスク21）
+### タスク F3: Gateway 未来シグナル取得メソッド ＋ ForecastSignalSource 実装 〔P0〕（旧 step4-2 タスク21）✅
 
 - 【修正】`GitHubGateway` に `listOpenPullRequests()`（未マージ）/ `TerraformGateway` に `getPendingPlan()`（未適用）を追加（**read-only維持**）
 - 各 `*Impl.ts` に実装追加
@@ -48,10 +48,12 @@ todo実施後に
   - `ScheduleSignalSource`（`ScheduleSource.list` → SCHEDULE）
 - 設計判断: 正規化（subject/when/desc 付与）を各 Source 内に閉じ、Handler は `ForecastSignalSource[]` を回すだけ＝stretchⅢ の源追加が容易
 
-### タスク F4: ForecastPort ＋ Gemini アダプタ 〔P0〕（旧 step4-2 タスク22）
+### タスク F4: ForecastPort ＋ Gemini アダプタ 〔P0〕（旧 step4-2 タスク22）✅
 
 - 【新規】`Forecast/domain/ForecastPort.ts` / `ForecastContext.ts`
 - 【新規】`infrastructure/GeminiForecastAdapter.ts`（既存Geminiアダプタ踏襲・JSON固定・**citations必須をプロンプト強制**・safeParse・confidenceクランプ・fallback）
+- 【設計判断・実装済み】**ADK は意図的に非使用**: 入力（シグナル）は Handler が Source 群から事前収集済みで、LLM の仕事は突合・格付けの1ショット合成＝ツールコール型の動的探索（ADK の価値）が不要。D3/I1 で実測済みの ADK 脆さ（無言ドロップ・散文・JSON途中切断）を無人閲覧経路（GET /forecast・録画）に持ち込まず、`responseMimeType=application/json` 強制の単発 generateContent で構造化を堅くする。`LLMTextClient`（GeminiLLMClient＝Vertex/AI Studio 切替・timeout・リトライ持ち）を注入するコンポジション。後から agentic 化したければ `ForecastPort` 差し替えのみ（Handler ノータッチ）
+- 【実装メモ】citations 空の RiskItem はアダプタでは落とさない（「空は不正」の drop は F5 引用検証へ集約＝実在照合と同じ場所・二重実装回避）。未知 level は LOW 丸め（盛らない側）・level降順/confidence降順ソートはアダプタが保証。fallback は throw せず `isFallback=true`・risks 空（UT 13ケース・全791テスト緑）
 
 ### タスク F5: ForecastRiskCommandHandler 〔P0〕（旧 step4-2 タスク23）
 
@@ -71,6 +73,7 @@ todo実施後に
 - 【新規】`ScheduleSource` の seed 実装（JSON/config）。`DEMO_ENABLED` 配下で投入
 - 【修正】`config.ts`：`FORECAST_ENABLED`（既定off）/ `FORECAST_HORIZON`（既定 "今週末"）追加
 - **write は発生しない**（全Gateway read-only）
+- **【確認済み方針・2026-07-03】定期実行（cron/setInterval）はやらない**: 審査員の非同期閲覧に対し「たまたま失敗した最新予報」を見せるリスクと Gemini 課金が増えるだけで掴みに寄与しない。手動 POST（デモ卓）＋提出前キャッシュ温めで無人安定性を取る。Bus 登録済みハンドラなので本運用の定期化は `FORECAST_ENABLED` 配下に1本足すだけ＝stretchⅢ と併せて「語り」で示す。SSE push も設計上任意のまま＝デモではページを開けば足りる（D2 認知負荷と整合）
 
 ### タスク F7: forecast feature slice（UI）〔P0〕（旧 step4-4 タスク13）
 
@@ -80,6 +83,7 @@ todo実施後に
 - 【新規】`components/RiskCard.tsx`（window・subject・level バッジ・confidenceゲージ・reasoning）/ **`CitationList.tsx`（引用チップ＝根拠の明示・ハルシネーション否定の可視化・本機能の体験の肝）**
 - 【修正】`App.tsx` に `/forecast` 追加（`FORECAST_ENABLED` off時はナビ非表示）
 - `shared/`（HttpClient/SeverityBadge/layouts）流用。`SeverityBadge` を RiskLevel に転用
+- 【任意・安ければ】アラート一覧側に予兆への**導線1個だけ**（例: ナビバッジ「予兆: HIGH 1件」・`FORECAST_ENABLED` 時のみ）。一覧へ予報コンテンツは混載しない（reactive/proactive の優先度混線を避ける step4-2 の決定を維持）。D1 の「では実際に起きたら？」の逆方向遷移がデモで滑らかになる
 
 > **共通化の継ぎ目（タスク9e 相関との共有）**: `CitationList`（引用 id 提示）と `RelatedAlertsPanel`（相関 id 提示）は**同型**。**本タスク実装時に** `domain/relatedAlerts.ts` の `toRelatedAlertViews(refs, lookup)` と `RelatedAlertsPanel` のカード描画を `shared/ui` へ昇格（例 `shared/ui/ReferencedAlertCard` ＋ resolver）し両者で共有する＝正しい抽出点（第二の消費者が現れる今）。**先行抽出はしない（YAGNI）**。backend は BC を跨いで型共有しない（相関=Monitoring / 引用=Forecast）。
 
@@ -93,6 +97,7 @@ todo実施後に
 - 【検証】`POST /forecast` → HIGH リスク＋引用3系統＋confidence が安定して出る seed に調整
 - 【引用検証の可視化】意図的に偽引用を混ぜたケースで**ドロップされる**ことをデモで見せられるようにする（ハルシネーション・ガードの実演）
 - 【録画】「実際に動いた1回を録る」（捏造NG・`step4-1` §7.6）
+- 【録画・提出前チェック】`make e2e` 実行後は一覧に「AI推定: [STUB] 未知の障害パターン（推定）」が出ていないこと（STUB 残留）を確認（I2 で自動原状復帰済み・念のための目視1行）
 
 ### ~~タスク F9: 2本目シナリオ（seed 替えのみ）~~〔**切り確定**（時間制約・strategy §1.6）〕
 
@@ -119,6 +124,7 @@ todo実施後に
 ### タスク D3: ライブ脆さ対策〔取り: David・**最終ピッチ=渋谷ライブ確定で重要度up**〕
 
 - 【実地データ 2026-07-02】ローカル実機で fallback を再現・計測: `adk_investigation_run_completed: elapsedMs=59396, events=1, timedOut=false, finalTextLen=0, agentTrace=[(no tool calls)]` → `ai_investigation_unparseable: rawLen=0`。**ADC マウント・env は正常なのに最初の LLM 呼び出しが応答イベント無しで59秒後に終了**（散文ですらなく空＝ADK がエラーを飲み込んだ形。トークン失効 or Vertex 側エラーの無言ドロップが疑い）。散文パターンとは別の第3の fallback 原因として真因追跡に追加
+- 【実地データ 2026-07-03】**第4の原因を rawSnippet ログで確定＝最終出力 JSON の途中切断**（→ 対策はタスク I1 に集約）: シナリオ7実走で fallback 発生。finalText は正しい JSON（e12b655 正引用・confidence 0.95）だが **794 字で mid-string 切断**→parse 不能。timedOut=false・agentTrace 3委譲とも正常・成功時 finalTextLen=1182〜1642
 - 【明文化】AI経路タイムアウト時のフォールバック導線（`GEMINI_TIMEOUT_MS`/`AI_INVESTIGATION_TIMEOUT_MS`・fallback confidence の見え方）をデモ台本に記述。fallback でも証拠リンクが残る改善（evidenceLinks 温存）は着地済み＝「失敗しても空にならない」ことを台本の保険として明記
 - 【真因】ADK 散文出力（JSONでなく地の文が返る）の rawSnippet ログで真因を確定し、プロンプト側で JSON 強制を締める（fallback 率を下げる＝ライブ耐性の本丸）
 - 【退避】録画テイクを正とし、ライブは「録画済みを再現する」位置づけにする（`AI_INVESTIGATION_STUB` の決定的応答経路を演出上どう使うか整理）
@@ -129,6 +135,13 @@ todo実施後に
 - 【整理】自リポジトリの CI/CD が本プロダクト自身の運用である事実を1枚図に: app.yml（typecheck/UT/E2E→build→Cloud Run/GCE deploy）・Trivy→実 ingest（シナリオ5の実経路）・terraform.yml（plan/apply・state lock 対策済み）・ai-remediation.yml（dispatch→実修正→テストゲート→draft PR）
 - 【デモ導線】「監視対象のECも、監視するエージェント自身も、同じ DevOps ループの中にいる」をデモ or 録画のどこで見せるか決める（発表資料側と分担）
 
+### タスク D5: ドロワー→詳細ページ導線のティザーCTA 〔P1・Lisa/E系連動〕完了✅
+
+- 【課題】ドロワー末尾の「AI レポートを詳細ページで読む」テキストリンクはクリック価値が伝わらない（ドロワーで要約が読める＋遷移先に何があるか不明＝空手形）
+- [x] 【UI】フッターをコンテンツ連動ティザーカードへ: full 射影（タスク37）限定コンテンツのインベントリチップ（調査ステップN・推奨アクションN・コードで修正可能・影響評価・エスカレーション草案・修正PRレビュー）＋推奨アクション先頭1件の抜粋（line-clamp 2行）
+- [x] 【設計】抽出は domain 純関数 `reportTeaser`（UT 5ケース）。ティザー不成立（レポート無し/summary のみ）は素のリンクへフォールバック。ドロワー本文の射影境界（summary＝トリアージ用）は動かさない
+- 【検討済み代替】スクロールトリガー展開は非採用: ドロワーはスクロールが発生しないケースが多くトリガー自体が発火しない・スクロール起点の自動遷移は予期しない画面移動になる・インライン全文展開は詳細ページ（ディープリンク/共有）の存在意義と射影分離を崩す。フッター常時可視のティザーカードが最小コストで同じ目的を満たす
+
 ---
 
 ## E. デザイン攻勢（Lisa 視点・実機操作評価 2026-07-02 に基づく）
@@ -136,22 +149,22 @@ todo実施後に
 > **根拠**: ローカル実機を Playwright で実操作して評価（既知アラート到達 **実測867ms**・ANALYZING 59秒・空状態・500エラー状態・狭幅480pxまで確認）。実装は **Claude Code**、人間はレビューのみ。F 系（予兆）と並行可（衝突は `shared/ui` 程度）。**merge 条件 = 全テスト緑＋RTL テスト同時更新**。
 > 狙い: 審査観点3（ユーザビリティ）だけでなく、E1 は観点1（自律的判断の可視化）に直撃。デプロイURL審査（無人）と動画の両方で効く。
 
-### タスク E1: AI調査ライブ・タイムライン 〔P0・最大の wow〕
+### タスク E1: AI調査ライブ・タイムライン 〔P0・最大の wow〕完了✅
 
 **問題（実測）**: 未知アラートの調査中、ドロワーは「AI が証拠を解析しています…」の静的1行が **60〜120秒**続く（今回実測59秒）。7エージェントの自律調査という最大の売りが、審査員には「ローディング」にしか見えない＝死んだ時間。
 
-- (a) 【P0・安全】ANALYZING 中のドロワー/カードに**調査パイプラインビュー**: 経過時間タイマー（実測値）＋エージェント台帳（Coordinator/EvidenceCollector/RootCauseAnalyst/ImpactTriage…の役割1行）＋不確定プログレス。完了時に `InvestigationReport` の調査ステップ（`InvestigationStepPrimitives`）を**タイムラインとして順次アニメ表示**（ツール別アイコン: ログ/Terraform/コミット/類似DB）。捏造なし＝実データのみ、進行中は「完了時に確定」と正直に表示
-- (b) 【P1・wow最大】**実 ADK イベントの SSE 中継**: f640add で agentTrace をログ化済み＝同じイベントタップを `SSEAlertNotifier` の新イベント種（investigation-progress）に乗せ、フロントで「いま EvidenceCollector が fetch_commit_diff を実行中」を**ライブ表示**。実イベントのみ中継（演出の捏造はしない）。変更点: `ADKInvestigationAgentRunner`（タップ追加）→ notifier 注入 → `AlertsDataProvider`（イベント購読）→ E1(a) のタイムラインに合流
+- [x] (a) 【P0・安全】ANALYZING 中のドロワー/カードに**調査パイプラインビュー**: 経過時間タイマー（実測値）＋エージェント台帳（Coordinator/EvidenceCollector/RootCauseAnalyst/ImpactTriage…の役割1行）＋不確定プログレス。完了時に `InvestigationReport` の調査ステップ（`InvestigationStepPrimitives`）を**タイムラインとして順次アニメ表示**（ツール別アイコン: ログ/Terraform/コミット/類似DB）。捏造なし＝実データのみ、進行中は「完了時に確定」と正直に表示（✅ `InvestigationPipelinePanel` 新設。ドロワー＝ライブ＋完了タイムライン／詳細ページ＝ライブのみ（full の調査ステップと重複させない）。ANALYZING 告知はパネルに一本化＝`AlertCardExpanded` の `analyzingNotice` で抑止・EvidencePanel の静的「解析しています…」は分析中は非表示。完了タイムラインは**ライブで完了を見届けたときだけ**流す）
+- [x] (b) 【P1・wow最大】**実 ADK イベントの SSE 中継**: f640add で agentTrace をログ化済み＝同じイベントタップを `SSEAlertNotifier` の新イベント種（investigation-progress）に乗せ、フロントで「いま EvidenceCollector が fetch_commit_diff を実行中」を**ライブ表示**。実イベントのみ中継（演出の捏造はしない）。変更点: `ADKInvestigationAgentRunner`（タップ追加）→ notifier 注入 → `AlertsDataProvider`（イベント購読）→ E1(a) のタイムラインに合流（✅ 契約 `InvestigationProgressPrimitives`（contracts 単一ソース・alertId/agent/tool/at）＋`InvestigationProgressNotifier` ポート。相関キーは `InvestigationContext.alertId`（プロンプトには載せない）。EventEmitter/Redis 両 notifier 対応（専用 channel `monitoring:sse:investigation-progress`）。再調査の run 切り分けはクリア処理でなく `progressForRun(alert.updatedAt)` のクライアント側フィルタ）
 
-### タスク E2: アラートカードの情報設計 〔P0〕
+### タスク E2: アラートカードの情報設計 〔P0〕完了✅
 
 **問題（実測）**: 1カードにバッジ6個（severity/カテゴリ/時刻/該当パターン/状態/分類）＝概念過多。`該当: PROMOTED_EC.DB.CONNECTION_POOL_EXHAUSTED` と**生の内部IDが露出**。さらに**上部チップ「レビュー待ち 0件」とカードの「レビュー待ち」バッジが矛盾**する実バグを確認。
 
 - [x] 【バグ】チップ集計とカードバッジの状態算出を単一ソース化（レビュー待ち件数が一覧と常に一致）（✅ `alertWorkState` を domain/alertReview に新設し AlertsHeader / AlertStatusBadge 双方が使用。既知=report無しの取りこぼしと ANALYZING の混入を解消）
-- 該当パターンの人間化: `PROMOTED_` プレフィックス→結晶化アイコン＋日本語名（eventCatalog 流用）。生IDはツールチップ/詳細へ降格
-- バッジの軸分離: severity（左ボーダー色＝既存）/ 状態（右端）/ 分類根拠（1チップ）に整理し、カード上のバッジを最大3に
-- 上部チップ（レビュー待ち/CRITICAL）を**クリック可能フィルタ**に（0件時は淡色化）
-- タイムスタンプを `ja-JP` ロケールに統一（実測: ドロワーが `7/2/2026, 2:16:55 PM` と英語式）
+- [x] 該当パターンの人間化: `PROMOTED_` プレフィックス→結晶化アイコン＋日本語名（eventCatalog 流用）。生IDはツールチップ/詳細へ降格（✅ alertReason が `(AUTO_)?PROMOTED_` を検出し crystallized+eventTitle へ写像。カードは ◈＋人間語・tooltip に生ID、詳細（AlertCardExpanded）は結晶化チップ＋パターンID行）
+- [x] バッジの軸分離: severity（左ボーダー色＝既存）/ 状態（右端）/ 分類根拠（1チップ）に整理し、カード上のバッジを最大3に（✅ カードから SeverityBadge チップ・UnknownFaultBadge を撤去（sr-only で読み上げは温存・コンポーネントは削除）＝category/状態/確信度の3チップ）
+- [x] 上部チップ（レビュー待ち/CRITICAL）を**クリック可能フィルタ**に（0件時は淡色化）（✅ AlertsHeader の FilterChip＋matchesAlertFilter 単一ソース・AlertList が絞り込み。0件は淡色+disabled・再クリック/解除リンクで解除。**導線の明示**: 漏斗アイコン＋「クリックで絞り込み:」ラベルでチップ群をグルーピング・選択中は ✓＋✕・hover でリング強調・クリック不可の「分析中」チップは区切り線の右へ分離＝バッジと誤認されない）
+- [x] タイムスタンプを `ja-JP` ロケールに統一（実測: ドロワーが `7/2/2026, 2:16:55 PM` と英語式）（✅ `shared/format/dateTime.ts`（formatDateTimeJa/formatTimeJa）へ一本化・各所のローカル formatter を削除）
 
 ### タスク E3: fallback 体験の格上げ 〔P0・D3連動〕
 
@@ -161,7 +174,7 @@ todo実施後に
 - fallback でも evidenceLinks（温存済み）を「収集済みの証拠リンク」として表示（backend は対応済み・UI 側の出し分け）
 - 「AI推定: 」空文字の抑止（fallback 時は「調査失敗・再調査可」の定型文）
 
-### タスク E4: 審査員ファーストラン 〔P0・デプロイURL審査に直撃〕
+### タスク E4: 審査員ファーストラン 〔P0・デプロイURL審査に直撃〕完了✅
 
 **問題（実測）**: ①リセット直後の空一覧は「現在アクティブなアラートはありません。」のみ＝**次の一手の案内ゼロ**。②起動直後に「アラートの取得に失敗しました。HTTP 500 Internal Server Error」と**生のHTTPエラーが露出**（自動リトライなし・審査員がコールドアクセスすると最初に見る画面になり得る）。③リセット後「1 アラート」表示 vs 空一覧の軸不一致。
 
@@ -211,13 +224,13 @@ todo実施後に
 - 【UI】ドロワーのレポート冒頭に1行サマリ: 「**92秒**で Cloud Logging・GitHub・類似事例DB を横断し、**証拠62件**を収集して原因を推定」＝数字は全部実測
 - 【UI】既知アラートには対比を1行: 「既知パターン一致＝**1秒未満・AI コストゼロ**で確定（初回調査の結晶化）」→ 学習ループの経済性を毎回想起させる
 
-### タスク G2: 一覧のバリューストリップ ＋ 5秒ポジショニング 〔P0・Marcus 直撃〕
+### タスク G2: 一覧のバリューストリップ ＋ 5秒ポジショニング 〔P0・Marcus 直撃〕完了✅
 
 **狙い**: デプロイURLを開いた審査員が**5秒**で「何の価値か」を掴める。現状のヘッダー文「AI が検知・分類・調査したアラートのレビュー一覧です」は**機構の説明**であって価値の主張ではない。
 
-- 【copy】ヘッダー下の説明文を価値訴求に書き換え: 例「アラート発火後の**調査・評価・報告**を AI エージェントが肩代わりします。既知は1秒で確定、未知は証拠つきで原因を提示」（機構説明はツールチップ/ガイドへ降格）
-- 【UI】一覧上部に**実績ストリップ**（Analytics の実データを read）: 「自動トリアージ n 件 ／ 既知即決 n 件 ／ AI 調査 n 件 ／ 昇格 n 件」— デモを触るほど数字が増える＝価値が蓄積して見える
-- 【接続】ストリップのクリックで Analytics へ（E6 の対比タイル・昇格ファネルが受け皿）
+- [x] 【copy】ヘッダー下の説明文を価値訴求に書き換え: 例「アラート発火後の**調査・評価・報告**を AI エージェントが肩代わりします。既知は1秒で確定、未知は証拠つきで原因を提示」（機構説明はツールチップ/ガイドへ降格）（✅ AlertsHeader。機構3ステップは FirstRunGuide が担う）
+- [x] 【UI】一覧上部に**実績ストリップ**（Analytics の実データを read）: 「自動トリアージ n 件 ／ 既知即決 n 件 ／ AI 調査 n 件 ／ 昇格 n 件」— デモを触るほど数字が増える＝価値が蓄積して見える（✅ ValueStrip 新設・lastUpdatedAt で再取得＝SSE 着弾のたび数字が伸びる。昇格数は GET /analytics に promotedPatternCount を同梱（既存 patterns query 再利用））
+- [x] 【接続】ストリップのクリックで Analytics へ（E6 の対比タイル・昇格ファネルが受け皿）（✅ ストリップ全体をボタン化し /analytics へ遷移）
 
 ### タスク G3: 提出資料の Marcus レンズ磨き 〔P0・スマホ時間・doc のみ〕
 
@@ -247,6 +260,38 @@ todo実施後に
 - 【README/ProtoPedia】「GCP 活用マップ」1節: どのプロダクトを・どこで・**なぜ**（Cloud Run×GCE 折衷の理由、Cloud Monitoring を検知権威にした境界設計、Vertex AI/ADC 経路）
 - 【README】「ADK 実戦ポイント」数行: AgentTool による hub-and-spoke 7エージェント・FunctionTool＋zod/v4 の nominal 型一致の落とし穴・イベントループのトレース可視化・**エラー無言ドロップへの防御（fallback 設計）**——使い込んだ者にしか書けない具体で深度を証明（自慢でなく知見の共有トーンで）
 - （余力）同素材で Zenn 記事1本（ハッカソン後でも可・転職資産と兼用）
+
+---
+
+## I. デモシナリオ実機総点検（2026-07-03・Playwright 実走・AI審査員レンズ）
+
+> **根拠**: ローカル実機（実 ADK・非 stub）を Playwright で全シナリオ実走（4 は GCP 専用のため 4b で代替）。実測: 既知 484ms/類似 413ms/未知カード着弾 906〜909ms・AI 調査 105〜134 秒（5走）・承認→昇格→再注入 910ms で結晶化既知。**検証済みで良好**: 初回ガイド・空状態CTA・生500非露出・dedup×N・類似67%ゲージ・E1ライブパイプライン（実イベント中継）・昇格学習ループ・4b の Terraform 差分証拠・6 の「同一根本原因」相関・5 の CVE 特定と修正起票 UI・Esc/✕/バックドロップのドロワー閉。
+> その場修正済み（✅・全778テスト緑）: similarity 生 float 丸め（`AlertCardExpanded.formatValue`）／4・4b の生イベント名→ `eventCatalog` に `critical_log_entries` 追加／詳細ページ h2 の生 eventName → `eventTitle` 化／デモコンソール件数の SSE 追随（`DemoDrawer` に `refreshKey`・RTL テスト付き）／ライブパイプライン注記「実測 60〜120 秒」→「およそ 2 分前後」（実測に整合）。
+
+### タスク I1: fallback 第4原因＝最終出力 JSON の途中切断への防御 〔P0・D3 の本丸・シナリオ7で実発生〕
+
+- 【実測 2026-07-03】シナリオ7（アプリコード退行＝実コミット差分が売りの本丸）が fallback。rawSnippet ログで真因確定: **finalText は正しい JSON（e12b655 正引用・confidence 0.95・修正方針まで正確）だが 794 字で mid-string 切断**→ safeParse 失敗 → UI は「自動調査に失敗しました」。分析は正解なのに失敗表示＝一次審査（無人デプロイ URL）でのデモ即死パターン
+- 対策（いずれか/併用）: ① parse 失敗時に**最終合成のみ1回リトライ** ② **途切れ JSON のサルベージパース**（完成済みフィールド summary/confidence/steps を best-effort 回収し、fallback でなく部分レポートとして表示） ③ 最終出力の maxOutputTokens 引き上げ
+- ✅ 実装済み（2026-07-03）: **②＋③を採用**。② `salvageLLMOutput`（`LLMOutputParser`）＝括弧/文字列の状態機械で「最後に完成した値」まで巻き戻して修復パースし、summary が回収できれば部分レポート（isFallback=false）として返す。ADK/単一Gemini 両アダプタに組み込み、回収時は `ai_investigation_salvaged` を warn ログ（rawLen/rawSnippet 付き＝切断頻度の観測点）。③ Coordinator の `generateContentConfig.maxOutputTokens=65535` 明示（gemini-2.5 系は思考トークンも上限を消費するため既定値頼みにしない）。①は `runEphemeral` がセッション破棄する契約のため「最終合成のみ」の安価なリトライが組めず見送り（全グラフ再走＝2分追加は demo に不適）
+- 検証: シナリオ7を複数回実走し fallback 率が下がることを確認（E2E は stub のため実走でのみ検証可能）
+
+### タスク I2: make e2e がローカル環境を STUB のまま残す罠 〔P0・録画/デモ前の事故防止〕
+
+- 【実測】`make e2e` の `docker compose run e2e` が depends_on 経由で backoffice-backend を **e2e overlay（AI_INVESTIGATION_STUB=true）で再作成**し、終了後もそのまま残る。次にデモ/録画すると一覧に「AI推定: **[STUB] 未知の障害パターン（推定）**」が露出（Makefile コメント「ローカル開発時は false のまま」は実態と不一致）
+- 対策: `e2e` ターゲット末尾に `$(DC) up -d ec-backend backoffice-backend` を追加して local 構成へ原状復帰（+コメント修正）。**録画・提出前チェックリストにも「make e2e 後は STUB 確認」を1行**
+- ✅ 実装済み（2026-07-03）: `e2e` ターゲット末尾で exit status を保持しつつ `$(DC) up -d ec-backend backoffice-backend` で原状復帰（`test-integration` と同じ status 温存パターン）。Makefile コメントを実態（overlay 再作成が残留する）に合わせて修正。チェック1行は F8 の【録画・提出前チェック】に追加
+
+### タスク I3: investigationSteps への evidenceLinks 全件連結ノイズ 〔P0→P1・レポート信頼性〕
+
+- 【実測】シナリオ3/5 で `demo/regression` の直近コミット10件（merge 含む・原因と無関係）が「調査完了 — AI がたどったステップ」に混入。D5 ティザー「調査ステップ 13」も水増し。同時に証拠パネルは「証拠は見つかりませんでした」（CitedCommitFilter は引用絞り済み）＝**ステップには10コミット・証拠は0件という矛盾に見える**
+- 方向: `InvestigationReportMapper` の evidenceLinks 連結（`InvestigationReportMapper.ts:79`）に CitedCommitFilter と同じ**引用 sha 絞り**を適用（シナリオ7では正解 e12b655 が引用されるので残る）。**fallback 時は全件温存**＝「失敗しても空にしない」の D3 意図は守る
+- 表示だけの代替案: ステップと分離して「参照した直近コミット」見出しにするだけでも矛盾は解消する
+
+### タスク I4: 残りの文言・整合の小粒 〔P2〕
+
+- リセット直後の ValueStrip が「自動トリアージ 1・AI 調査 1」（seed の過去解決事例 5eed0000… が集計に乗る）: 学習履歴の種として意図的なら現状維持可。気になる場合のみ「過去実績を含む」注記 or 集計から RESOLVED 除外を判断
+- デモ台本メモ（D1 連動）: **4b と 6 は同一根本原因（Cloud SQL 縮小）の物語**。連続で見せると重複感が出る一方、6 の関連アラートに「同一根本原因: インフラ障害（CRITICAL ログ検知）」が張られ**クロスアラート相関の見せ場**になる＝台本は「4b →（波及）→ 6 で相関を回収」の順を明記
+- E3（fallback 体験の格上げ）の優先度維持の根拠を実測で補強: 今回 fallback 実発生時、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを確認（E3 は未実装のまま）
 
 ---
 

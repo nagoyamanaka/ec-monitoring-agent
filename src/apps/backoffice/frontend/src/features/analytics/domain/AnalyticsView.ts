@@ -30,6 +30,8 @@ export type AnalyticsDto = {
   readonly accuracy: number | null;
   /** 承認済みアラート（過去の判断）。新しい順。旧backend互換で未定義を許容。 */
   readonly approvedAlerts?: readonly ApprovedAlertSummaryDto[];
+  /** 昇格（結晶化）済みパターン数。学習ループの成果指標。旧backend互換で未定義を許容。 */
+  readonly promotedPatternCount?: number;
 };
 
 export type AnalyticsView = {
@@ -47,6 +49,8 @@ export type AnalyticsView = {
   readonly knownRatio: number;
   /** 承認済みアラート（過去の判断）。新しい順。 */
   readonly approvedAlerts: readonly ApprovedAlertSummaryDto[];
+  /** 昇格（結晶化）済みパターン数。 */
+  readonly promotedPatternCount: number;
 };
 
 export function toAnalyticsView(dto: AnalyticsDto): AnalyticsView {
@@ -65,5 +69,6 @@ export function toAnalyticsView(dto: AnalyticsDto): AnalyticsView {
     accuracyPercent,
     knownRatio,
     approvedAlerts: dto.approvedAlerts ?? [],
+    promotedPatternCount: dto.promotedPatternCount ?? 0,
   };
 }

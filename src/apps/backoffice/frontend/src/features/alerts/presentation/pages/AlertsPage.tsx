@@ -4,6 +4,8 @@ import type { AlertView } from "../../domain/AlertView";
 import { AlertsLayout } from "@shared/layouts/AlertsLayout";
 import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import { DemoDrawer } from "@features/demo/presentation/DemoDrawer";
+import type { AnalyticsApi } from "@features/analytics/infrastructure/analyticsApi";
+import { ValueStrip } from "@features/analytics/presentation/ValueStrip";
 import { useAlertsData } from "../AlertsDataProvider";
 import {
   submitFeedback,
@@ -18,6 +20,8 @@ import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
 export interface AlertsPageProps {
   /** デモ操作卓 API（composition root で生成して注入）。 */
   demoApi: DemoApi;
+  /** 実績ストリップ用 Analytics API（composition root で生成して注入）。 */
+  analyticsApi: AnalyticsApi;
 }
 
 /**
@@ -26,7 +30,7 @@ export interface AlertsPageProps {
  * 共有 state を `useAlertsData()` で読むだけ。一覧（マスター）＋行クリックで右ドロワー（detail）。
  * 選択中 alert は共有 alerts から都度引く＝SSE 更新がドロワーにもライブ反映される。
  */
-export function AlertsPage({ demoApi }: AlertsPageProps) {
+export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
   const {
     alerts,
     status,
@@ -38,6 +42,7 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
     refreshAlerts,
     reconnectStream,
     remediationByAlertId,
+    investigationProgressByAlertId,
     api,
     evidenceApi,
     remediationApi,
@@ -183,10 +188,20 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
             onReconnect={reconnectStream}
           />
         }
-        demoDrawer={<DemoDrawer api={demoApi} onAfterReset={refreshAlerts} />}
+        demoDrawer={
+          <DemoDrawer
+            api={demoApi}
+            onAfterReset={refreshAlerts}
+            refreshKey={lastUpdatedAt?.getTime() ?? null}
+          />
+        }
       >
         <div className="space-y-4">
           <FirstRunGuide />
+          <ValueStrip
+            api={analyticsApi}
+            refreshKey={lastUpdatedAt?.getTime() ?? null}
+          />
           <AlertList
             alerts={alerts}
             status={status}
@@ -210,6 +225,11 @@ export function AlertsPage({ demoApi }: AlertsPageProps) {
         remediationApi={remediationApi}
         pushedRemediation={
           selectedId ? remediationByAlertId.get(selectedId) ?? null : null
+        }
+        investigationProgress={
+          selectedId
+            ? investigationProgressByAlertId.get(selectedId) ?? []
+            : []
         }
         relatedLookup={relatedLookup}
         alerts={alerts}

@@ -104,12 +104,28 @@ body {
   animation: badge-fade-in 0.25s ease-out both;
 }
 
+/* AI 調査ライブ・タイムラインの不確定プログレス（タスク E1）。
+   完了時刻を約束できないため %バーではなく往路スイープで「進行中」だけを伝える。 */
+@keyframes pipeline-sweep {
+  from {
+    left: -40%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+.pipeline-sweep {
+  animation: pipeline-sweep 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .evidence-rise,
   .drawer-overlay,
   .drawer-panel,
   .resolve-flash,
-  .badge-fade-in {
+  .badge-fade-in,
+  .pipeline-sweep {
     animation: none;
   }
 }

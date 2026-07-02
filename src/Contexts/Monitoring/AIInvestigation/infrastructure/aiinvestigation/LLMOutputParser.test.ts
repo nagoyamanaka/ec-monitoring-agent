@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseLLMOutput } from "./LLMOutputParser.js";
+import { parseLLMOutput, salvageLLMOutput } from "./LLMOutputParser.js";
 
 const validJson = JSON.stringify({
   summary: "DB接続枯渇",
@@ -276,6 +276,76 @@ describe("LLMOutputParser", () => {
         relatedAlerts: "oops",
       });
       expect(parseLLMOutput(notArray)?.relatedAlerts).toEqual([]);
+    });
+  });
+
+  // fallback 第4原因（最終出力 JSON の mid-string 切断・タスク I1）への防御。
+  // 完成済みフィールドだけを best-effort で回収し、部分レポートとして成立させる。
+  describe("salvageLLMOutput", () => {
+    // シナリオ7実発生系の再現: 正しい JSON が値文字列の途中で切断されている
+    const regressionJson = JSON.stringify({
+      summary: "コミット e12b655 の SubtotalAmount 変更による退行",
+      confidence: 0.95,
+      severity: "CRITICAL",
+      investigationSteps: ["コミット差分を確認", "例外ログと突合"],
+      suggestedActions: ["e12b655 をリバートする"],
+      suggestedPatternName: "APP_CODE_REGRESSION",
+    });
+
+    it("値文字列の途中で切断された JSON から完成済みフィールドを回収する", () => {
+      // suggestedPatternName の値の途中で切る（mid-string 切断）
+      const truncated = regressionJson.slice(
+        0,
+        regressionJson.indexOf('"APP_CODE_REGRESSION"') + 9,
+      );
+      expect(parseLLMOutput(truncated)).toBeNull(); // 通常パースでは救えないこと
+
+      const out = salvageLLMOutput(truncated);
+      expect(out?.summary).toBe("コミット e12b655 の SubtotalAmount 変更による退行");
+      expect(out?.confidence).toBe(0.95);
+      expect(out?.severity).toBe("CRITICAL");
+      expect(out?.investigationSteps).toEqual(["コミット差分を確認", "例外ログと突合"]);
+      expect(out?.suggestedActions).toEqual(["e12b655 をリバートする"]);
+      // 未完成のフィールドは安全側の既定値
+      expect(out?.suggestedPatternName).toBe("");
+    });
+
+    it("閉じフェンスの無い ```json 出力（フェンスごと切断）からも回収する", () => {
+      const truncated =
+        "```json\n" + regressionJson.slice(0, regressionJson.indexOf('"CRITICAL"') + 10);
+      const out = salvageLLMOutput(truncated);
+      expect(out?.summary).toBe("コミット e12b655 の SubtotalAmount 変更による退行");
+      expect(out?.severity).toBe("CRITICAL");
+      expect(out?.investigationSteps).toEqual([]); // 未到達フィールドは空
+    });
+
+    it("入れ子（relatedAlerts）の途中で切断されても完成済み要素だけ残す", () => {
+      const truncated =
+        '{"summary":"s","confidence":0.8,"relatedAlerts":[' +
+        '{"alertId":"a1","relation":"same_root_cause","rationale":"同根"},{"alertId":"a2","rel';
+      const out = salvageLLMOutput(truncated);
+      expect(out?.summary).toBe("s");
+      expect(out?.relatedAlerts).toEqual([
+        { alertId: "a1", relation: "same_root_cause", rationale: "同根" },
+      ]);
+    });
+
+    it("summary が完成していなければ null（fallback の方が正直）", () => {
+      expect(salvageLLMOutput('{"summary": "DB接続')).toBeNull();
+      expect(salvageLLMOutput('{"summary": ""}')).toBeNull();
+    });
+
+    it("JSON が始まらない散文では null", () => {
+      expect(salvageLLMOutput("調査の結果、DB接続が枯渇しています。")).toBeNull();
+    });
+
+    it("構文は完全だが必須フィールド未達の JSON も summary があれば回収する", () => {
+      const partial = JSON.stringify({ summary: "要約のみ", confidence: 0.5 });
+      expect(parseLLMOutput(partial)).toBeNull(); // 通常パースは必須スキーマ未達で null
+      const out = salvageLLMOutput(partial);
+      expect(out?.summary).toBe("要約のみ");
+      expect(out?.confidence).toBe(0.5);
+      expect(out?.severity).toBe(""); // マッパ側で WARNING に丸まる
     });
   });
 });

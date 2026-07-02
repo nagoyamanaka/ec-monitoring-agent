@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { hasAiInvestigation } from "../../domain/AlertView";
+import { eventTitle } from "../../domain/eventCatalog";
 import { useAlertsData } from "../AlertsDataProvider";
 import {
   submitFeedback,
@@ -12,17 +13,14 @@ import { reinvestigate } from "../../application/reinvestigate";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { AlertReviewPanel } from "../components/AlertReviewPanel";
 import { EvidencePanel } from "../components/EvidencePanel";
+import { InvestigationPipelinePanel } from "../components/InvestigationPipelinePanel";
 import { RemediationPanel } from "../components/RemediationPanel";
 import { RelatedAlertsPanel } from "../components/RelatedAlertsPanel";
 import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
+import { formatDateTimeJa } from "@shared/format/dateTime";
 
 /** 報告書の各ブロックをカードで括る共通スタイル（グルーピングで視線の止め所を作る）。 */
 const PANEL = "rounded-xl border border-slate-800/80 bg-slate-900/40 p-5";
-
-function formatAbsoluteTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
-}
 
 /**
  * アラート詳細ページ（DefaultLayout＝デモUI非侵食・ディープリンク/別タブ用）。
@@ -47,6 +45,7 @@ export function AlertDetailPage() {
     refreshAlert,
     reconnectStream,
     remediationByAlertId,
+    investigationProgressByAlertId,
     api,
     evidenceApi,
     remediationApi,
@@ -166,10 +165,11 @@ export function AlertDetailPage() {
                   </span>
                 </div>
                 <h2 className="text-xl font-semibold text-slate-50">
-                  {alert.eventName}
+                  {eventTitle(alert.eventName)}
                 </h2>
                 <p className="text-xs text-slate-400">
-                  {alert.source} · {formatAbsoluteTime(alert.occurredOn)}
+                  <code>{alert.eventName}</code> · {alert.source} ·{" "}
+                  {formatDateTimeJa(alert.occurredOn)}
                 </p>
               </div>
               <button
@@ -181,7 +181,20 @@ export function AlertDetailPage() {
               </button>
             </header>
 
-            <AlertCardExpanded alert={alert} variant="full" className={PANEL} />
+            {/* AI 調査ライブ・タイムライン（E1）。ANALYZING 告知はここに一本化し、
+                完了タイムラインは full 射影の「調査ステップ」と重複するため出さない。 */}
+            <InvestigationPipelinePanel
+              key={alert.id}
+              alert={alert}
+              progress={investigationProgressByAlertId.get(alert.id) ?? []}
+              showCompletionTimeline={false}
+            />
+            <AlertCardExpanded
+              alert={alert}
+              variant="full"
+              analyzingNotice={false}
+              className={PANEL}
+            />
             <RelatedAlertsPanel
               alert={alert}
               lookup={(rid) => alerts.find((a) => a.id === rid)}

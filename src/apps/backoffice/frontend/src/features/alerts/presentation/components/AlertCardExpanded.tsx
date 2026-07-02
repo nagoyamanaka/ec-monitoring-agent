@@ -21,12 +21,22 @@ export interface AlertCardExpandedProps {
    * 表示する射影。既定は要約（一覧オーバレイ/ドロワー）。詳細ページは "full" を渡し報告用フルを出す。
    */
   variant?: AlertReportVariant;
+  /**
+   * ANALYZING 中の告知（バナー/プレースホルダ）を本コンポーネントが出すか。
+   * 調査パイプラインビュー（InvestigationPipelinePanel・E1）を隣にマウントする親は
+   * false を渡して二重告知を避ける。既定 true（単体使用時の従来挙動）。
+   */
+  analyzingNotice?: boolean;
   className?: string;
 }
 
-/** 一致条件の値を表示用に整形（文字列はそのまま、それ以外は JSON 表記）。 */
+/** 一致条件の値を表示用に整形（文字列はそのまま、非整数は2桁に丸め、それ以外は JSON 表記）。 */
 function formatValue(value: unknown): string {
-  return typeof value === "string" ? value : JSON.stringify(value);
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && !Number.isInteger(value)) {
+    return value.toFixed(2);
+  }
+  return JSON.stringify(value);
 }
 
 /**
@@ -37,6 +47,7 @@ function formatValue(value: unknown): string {
 export function AlertCardExpanded({
   alert,
   variant = "summary",
+  analyzingNotice = true,
   className,
 }: AlertCardExpandedProps) {
   const full = variant === "full";
@@ -47,7 +58,9 @@ export function AlertCardExpanded({
   const analyzingNow = alert.status === "ANALYZING";
 
   // 分析中（既知でもなく調査レポートも無い＝初回調査）はプレースホルダ
+  // （パイプラインビューが隣にある親では出さない＝他に出せる内容も無いので null）。
   if (reason.kind === "analyzing" && !report && !known) {
+    if (!analyzingNotice) return null;
     return (
       <div className={cn("text-sm text-slate-300", className)}>
         AI が未知障害を調査中です…
@@ -59,7 +72,7 @@ export function AlertCardExpanded({
     <div className={cn("space-y-4 text-sm text-slate-200", className)}>
       {/* AI 調査中（オンデマンドのレポート生成 or 人間の指摘を反映した再調査）。
           既存内容は下に残したまま、進行中であることを明示する。 */}
-      {analyzingNow && (
+      {analyzingNow && analyzingNotice && (
         <div className="flex items-center gap-2 rounded-md bg-cyan-500/10 px-3 py-2.5 text-sm font-medium text-cyan-200 ring-1 ring-inset ring-cyan-500/30">
           <span
             className="h-2.5 w-2.5 animate-pulse rounded-full bg-cyan-400"
@@ -69,13 +82,31 @@ export function AlertCardExpanded({
         </div>
       )}
 
-      {/* 推定原因（該当パターン / AI 推定パターン） */}
+      {/* 推定原因（該当パターン / AI 推定パターン）。
+          結晶化パターンは人間語＋◈で出し、生ID（PROMOTED_...）は詳細の従属行へ降格。 */}
       {reason.kind !== "analyzing" && (
         <section className="space-y-1">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
             {known ? "該当パターン（既知）" : "AI 推定パターン"}
           </h4>
-          <p className="text-slate-100">{reason.patternName}</p>
+          {reason.kind === "known" && reason.crystallized ? (
+            <>
+              <p className="text-slate-100">
+                <span aria-hidden className="text-emerald-300">
+                  ◈{" "}
+                </span>
+                {reason.patternName}
+                <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/25">
+                  結晶化（承認により学習）
+                </span>
+              </p>
+              <p className="text-xs text-slate-400">
+                パターンID: <code>{reason.rawPatternName}</code>
+              </p>
+            </>
+          ) : (
+            <p className="text-slate-100">{reason.patternName}</p>
+          )}
           {/* 類似既知（SIMILARITY）の back-link は RelatedAlertsPanel の「過去の同型事例」
               セクションに確度チップ付きで提示する（ドロワー/詳細でマウント・タスク9e）。 */}
         </section>

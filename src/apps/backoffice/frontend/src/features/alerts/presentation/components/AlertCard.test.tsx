@@ -24,11 +24,18 @@ describe("AlertCard", () => {
     expect(screen.queryByText("APPLICATION")).not.toBeInTheDocument();
   });
 
-  it("分析中は重要度を判定中と出す", () => {
+  it("重要度はバッジで出さない（左ストライプ色＋sr-onlyのみ・バッジ軸分離）", () => {
+    render(<AlertCard alert={makeAlert({ severity: "CRITICAL" })} />);
+    // 視覚バッジは無し（SeverityBadge のラベル「重大」チップを出さない）が、
+    // スクリーンリーダー向けの読み上げテキストは残す。
+    expect(screen.getByText(/重要度 重大/)).toHaveClass("sr-only");
+  });
+
+  it("分析中は重要度を判定中と読み上げる（sr-only）", () => {
     render(
       <AlertCard alert={makeAlert({ status: "ANALYZING", report: null })} />,
     );
-    expect(screen.getByText("重要度 判定中")).toBeInTheDocument();
+    expect(screen.getByText(/重要度 判定中/)).toHaveClass("sr-only");
   });
 
   it("クリックで onSelect を alert id 付きで呼ぶ", async () => {
@@ -57,30 +64,36 @@ describe("AlertCard", () => {
     expect(screen.getByText("82%")).toBeInTheDocument();
   });
 
-  it("未知障害（unknown 分類）は未知障害バッジを出す", () => {
+  it("未知障害バッジは出さない（分類根拠は「AI推定:」行と確信度チップに一本化・バッジ軸分離）", () => {
     render(
       <AlertCard
         alert={makeAlert({ classification: { type: "unknown", confidence: null } })}
       />,
     );
-    expect(screen.getByText("未知障害")).toBeInTheDocument();
+    expect(screen.queryByText("未知障害")).not.toBeInTheDocument();
+    expect(screen.getByText(/AI推定/)).toBeInTheDocument();
   });
 
-  it("既知パターン一致（known 分類）は未知障害バッジを出さない", () => {
+  it("昇格（結晶化）パターンは生IDを出さず ◈＋人間語で出す（生IDは tooltip）", () => {
     render(
       <AlertCard
         alert={makeAlert({
+          eventName: "ec.payment.timeout",
+          report: null,
           classification: {
             type: "known",
             source: "EXACT_MATCH",
-            patternId: "PAYMENT_TIMEOUT",
-            patternName: "決済タイムアウト",
+            patternId: "p-1",
+            patternName: "PROMOTED_EC.PAYMENT.TIMEOUT",
             confidence: 1,
             matchedConditions: [],
           },
         })}
       />,
     );
-    expect(screen.queryByText("未知障害")).not.toBeInTheDocument();
+    expect(screen.queryByText(/PROMOTED_/)).not.toBeInTheDocument();
+    expect(screen.getByTitle(/PROMOTED_EC\.PAYMENT\.TIMEOUT/)).toHaveTextContent(
+      "決済タイムアウト",
+    );
   });
 });

@@ -36,7 +36,10 @@ export function App() {
     >
       <Routes>
         <Route path="/" element={<Navigate to="/alerts" replace />} />
-        <Route path="/alerts" element={<AlertsPage demoApi={demoApi} />} />
+        <Route
+          path="/alerts"
+          element={<AlertsPage demoApi={demoApi} analyticsApi={analyticsApi} />}
+        />
         <Route path="/alerts/:id" element={<AlertDetailPage />} />
         <Route
           path="/analytics"

@@ -58,6 +58,18 @@ describe("LLMInvestigationAdapter", () => {
     expect(report.isFallback).toBe(true);
   });
 
+  it("応答が途中切断されたJSONなら fallback でなく部分レポートを回収する（ADK版と同方針）", async () => {
+    // 値文字列の途中で切断（mid-string 切断）
+    const truncated = validJson.slice(0, validJson.indexOf('"DB_CONNECTION_EXHAUSTION"') + 5);
+    const adapter = new LLMInvestigationAdapter(new StubLLMTextClient({ text: truncated }));
+
+    const report = await adapter.investigate(context);
+
+    expect(report.isFallback).toBe(false);
+    expect(report.summary).toBe("DB接続枯渇");
+    expect(report.confidence).toBe(0.87);
+  });
+
   it("パース不能でも収集済み証拠のリンクは fallback レポートに残す", async () => {
     const adapter = new LLMInvestigationAdapter(new StubLLMTextClient({ text: "壊れたJSON" }), {
       githubRepo: "example-org/ec-backend",

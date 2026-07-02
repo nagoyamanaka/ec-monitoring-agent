@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TerraformGatewayImpl } from "./TerraformGatewayImpl.js";
 import { InMemoryAppliedInfraChangeStore } from "./InMemoryAppliedInfraChangeStore.js";
 import { AppliedInfraChange } from "./AppliedInfraChangeStore.js";
+import { InMemoryPendingInfraPlanStore } from "./InMemoryPendingInfraPlanStore.js";
 
 const change = (
   appliedAt: Date,
@@ -52,5 +53,32 @@ describe("TerraformGatewayImpl", () => {
       before: "100",
       after: "20",
     });
+  });
+
+  it("pending plan store 未配線なら getPendingPlan は空を返す", async () => {
+    const gw = new TerraformGatewayImpl(new InMemoryAppliedInfraChangeStore());
+    expect(await gw.getPendingPlan()).toEqual([]);
+  });
+
+  it("pending plan store の未適用 plan を新しい順で返す", async () => {
+    const pendingStore = new InMemoryPendingInfraPlanStore();
+    await pendingStore.record({
+      resourceChanges: [],
+      plannedAt: new Date("2026-07-01T00:00:00Z"),
+      summary: "古い plan",
+    });
+    await pendingStore.record({
+      resourceChanges: [],
+      plannedAt: new Date("2026-07-02T00:00:00Z"),
+      summary: "新しい plan",
+    });
+    const gw = new TerraformGatewayImpl(
+      new InMemoryAppliedInfraChangeStore(),
+      pendingStore,
+    );
+
+    const plans = await gw.getPendingPlan();
+
+    expect(plans.map((p) => p.summary)).toEqual(["新しい plan", "古い plan"]);
   });
 });

@@ -36,4 +36,12 @@ describe("toAnalyticsView", () => {
     });
     expect(v.knownRatio).toBe(0);
   });
+
+  it("promotedPatternCount は旧backend互換で未定義なら0", () => {
+    expect(toAnalyticsView(base).promotedPatternCount).toBe(0);
+    expect(
+      toAnalyticsView({ ...base, promotedPatternCount: 3 })
+        .promotedPatternCount,
+    ).toBe(3);
+  });
 });
