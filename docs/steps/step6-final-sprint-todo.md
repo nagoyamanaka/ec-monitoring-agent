@@ -121,6 +121,7 @@ todo実施後に
 ### タスク D3: ライブ脆さ対策〔取り: David・**最終ピッチ=渋谷ライブ確定で重要度up**〕
 
 - 【実地データ 2026-07-02】ローカル実機で fallback を再現・計測: `adk_investigation_run_completed: elapsedMs=59396, events=1, timedOut=false, finalTextLen=0, agentTrace=[(no tool calls)]` → `ai_investigation_unparseable: rawLen=0`。**ADC マウント・env は正常なのに最初の LLM 呼び出しが応答イベント無しで59秒後に終了**（散文ですらなく空＝ADK がエラーを飲み込んだ形。トークン失効 or Vertex 側エラーの無言ドロップが疑い）。散文パターンとは別の第3の fallback 原因として真因追跡に追加
+- 【実地データ 2026-07-03】**第4の原因を rawSnippet ログで確定＝最終出力 JSON の途中切断**（→ 対策はタスク I1 に集約）: シナリオ7実走で fallback 発生。finalText は正しい JSON（e12b655 正引用・confidence 0.95）だが **794 字で mid-string 切断**→parse 不能。timedOut=false・agentTrace 3委譲とも正常・成功時 finalTextLen=1182〜1642
 - 【明文化】AI経路タイムアウト時のフォールバック導線（`GEMINI_TIMEOUT_MS`/`AI_INVESTIGATION_TIMEOUT_MS`・fallback confidence の見え方）をデモ台本に記述。fallback でも証拠リンクが残る改善（evidenceLinks 温存）は着地済み＝「失敗しても空にならない」ことを台本の保険として明記
 - 【真因】ADK 散文出力（JSONでなく地の文が返る）の rawSnippet ログで真因を確定し、プロンプト側で JSON 強制を締める（fallback 率を下げる＝ライブ耐性の本丸）
 - 【退避】録画テイクを正とし、ライブは「録画済みを再現する」位置づけにする（`AI_INVESTIGATION_STUB` の決定的応答経路を演出上どう使うか整理）
@@ -256,6 +257,36 @@ todo実施後に
 - 【README/ProtoPedia】「GCP 活用マップ」1節: どのプロダクトを・どこで・**なぜ**（Cloud Run×GCE 折衷の理由、Cloud Monitoring を検知権威にした境界設計、Vertex AI/ADC 経路）
 - 【README】「ADK 実戦ポイント」数行: AgentTool による hub-and-spoke 7エージェント・FunctionTool＋zod/v4 の nominal 型一致の落とし穴・イベントループのトレース可視化・**エラー無言ドロップへの防御（fallback 設計）**——使い込んだ者にしか書けない具体で深度を証明（自慢でなく知見の共有トーンで）
 - （余力）同素材で Zenn 記事1本（ハッカソン後でも可・転職資産と兼用）
+
+---
+
+## I. デモシナリオ実機総点検（2026-07-03・Playwright 実走・AI審査員レンズ）
+
+> **根拠**: ローカル実機（実 ADK・非 stub）を Playwright で全シナリオ実走（4 は GCP 専用のため 4b で代替）。実測: 既知 484ms/類似 413ms/未知カード着弾 906〜909ms・AI 調査 105〜134 秒（5走）・承認→昇格→再注入 910ms で結晶化既知。**検証済みで良好**: 初回ガイド・空状態CTA・生500非露出・dedup×N・類似67%ゲージ・E1ライブパイプライン（実イベント中継）・昇格学習ループ・4b の Terraform 差分証拠・6 の「同一根本原因」相関・5 の CVE 特定と修正起票 UI・Esc/✕/バックドロップのドロワー閉。
+> その場修正済み（✅・全778テスト緑）: similarity 生 float 丸め（`AlertCardExpanded.formatValue`）／4・4b の生イベント名→ `eventCatalog` に `critical_log_entries` 追加／詳細ページ h2 の生 eventName → `eventTitle` 化／デモコンソール件数の SSE 追随（`DemoDrawer` に `refreshKey`・RTL テスト付き）／ライブパイプライン注記「実測 60〜120 秒」→「およそ 2 分前後」（実測に整合）。
+
+### タスク I1: fallback 第4原因＝最終出力 JSON の途中切断への防御 〔P0・D3 の本丸・シナリオ7で実発生〕
+
+- 【実測 2026-07-03】シナリオ7（アプリコード退行＝実コミット差分が売りの本丸）が fallback。rawSnippet ログで真因確定: **finalText は正しい JSON（e12b655 正引用・confidence 0.95・修正方針まで正確）だが 794 字で mid-string 切断**→ safeParse 失敗 → UI は「自動調査に失敗しました」。分析は正解なのに失敗表示＝一次審査（無人デプロイ URL）でのデモ即死パターン
+- 対策（いずれか/併用）: ① parse 失敗時に**最終合成のみ1回リトライ** ② **途切れ JSON のサルベージパース**（完成済みフィールド summary/confidence/steps を best-effort 回収し、fallback でなく部分レポートとして表示） ③ 最終出力の maxOutputTokens 引き上げ
+- 検証: シナリオ7を複数回実走し fallback 率が下がることを確認（E2E は stub のため実走でのみ検証可能）
+
+### タスク I2: make e2e がローカル環境を STUB のまま残す罠 〔P0・録画/デモ前の事故防止〕
+
+- 【実測】`make e2e` の `docker compose run e2e` が depends_on 経由で backoffice-backend を **e2e overlay（AI_INVESTIGATION_STUB=true）で再作成**し、終了後もそのまま残る。次にデモ/録画すると一覧に「AI推定: **[STUB] 未知の障害パターン（推定）**」が露出（Makefile コメント「ローカル開発時は false のまま」は実態と不一致）
+- 対策: `e2e` ターゲット末尾に `$(DC) up -d ec-backend backoffice-backend` を追加して local 構成へ原状復帰（+コメント修正）。**録画・提出前チェックリストにも「make e2e 後は STUB 確認」を1行**
+
+### タスク I3: investigationSteps への evidenceLinks 全件連結ノイズ 〔P0→P1・レポート信頼性〕
+
+- 【実測】シナリオ3/5 で `demo/regression` の直近コミット10件（merge 含む・原因と無関係）が「調査完了 — AI がたどったステップ」に混入。D5 ティザー「調査ステップ 13」も水増し。同時に証拠パネルは「証拠は見つかりませんでした」（CitedCommitFilter は引用絞り済み）＝**ステップには10コミット・証拠は0件という矛盾に見える**
+- 方向: `InvestigationReportMapper` の evidenceLinks 連結（`InvestigationReportMapper.ts:79`）に CitedCommitFilter と同じ**引用 sha 絞り**を適用（シナリオ7では正解 e12b655 が引用されるので残る）。**fallback 時は全件温存**＝「失敗しても空にしない」の D3 意図は守る
+- 表示だけの代替案: ステップと分離して「参照した直近コミット」見出しにするだけでも矛盾は解消する
+
+### タスク I4: 残りの文言・整合の小粒 〔P2〕
+
+- リセット直後の ValueStrip が「自動トリアージ 1・AI 調査 1」（seed の過去解決事例 5eed0000… が集計に乗る）: 学習履歴の種として意図的なら現状維持可。気になる場合のみ「過去実績を含む」注記 or 集計から RESOLVED 除外を判断
+- デモ台本メモ（D1 連動）: **4b と 6 は同一根本原因（Cloud SQL 縮小）の物語**。連続で見せると重複感が出る一方、6 の関連アラートに「同一根本原因: インフラ障害（CRITICAL ログ検知）」が張られ**クロスアラート相関の見せ場**になる＝台本は「4b →（波及）→ 6 で相関を回収」の順を明記
+- E3（fallback 体験の格上げ）の優先度維持の根拠を実測で補強: 今回 fallback 実発生時、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを確認（E3 は未実装のまま）
 
 ---
 

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { DemoApi } from "../infrastructure/demoApi";
 import { useDemoControls } from "./hooks/useDemoControls";
 import { SystemStatus } from "./SystemStatus";
@@ -7,6 +8,13 @@ export interface DemoDrawerProps {
   api: DemoApi;
   /** reset 完了後に呼ばれるコールバック。アラート一覧の全件再取得に使う。 */
   onAfterReset?: () => void;
+  /**
+   * 値が変わるたびに /demo/status を再取得する（ValueStrip と同じイディオム）。
+   * シナリオ注入は非同期にアラート化するため、注入直後の再取得だけでは
+   * 「一覧にはアラートがあるのにアクティブアラート 0」とズレる。SSE 着弾
+   * （useAlerts の lastUpdatedAt）を渡して件数を追随させる。
+   */
+  refreshKey?: number | null;
 }
 
 /**
@@ -14,7 +22,7 @@ export interface DemoDrawerProps {
  * DEMO_ENABLED=false の本番では /demo/status が 404 → available=false で**何も描画しない**。
  * シナリオ注入→一覧に SSE で障害が流れる、という「デモの舞台裏の操作卓」。
  */
-export function DemoDrawer({ api, onAfterReset }: DemoDrawerProps) {
+export function DemoDrawer({ api, onAfterReset, refreshKey }: DemoDrawerProps) {
   const {
     available,
     loading,
@@ -23,7 +31,19 @@ export function DemoDrawer({ api, onAfterReset }: DemoDrawerProps) {
     busy,
     triggerScenario,
     reset,
+    refresh,
   } = useDemoControls(api, { onAfterReset });
+
+  // SSE 着弾（refreshKey 変化）で件数を追随。初回はフック側の初期取得に任せる。
+  const initialKeyRef = useRef(true);
+  useEffect(() => {
+    if (initialKeyRef.current) {
+      initialKeyRef.current = false;
+      return;
+    }
+    if (refreshKey == null) return;
+    void refresh();
+  }, [refreshKey, refresh]);
 
   // デモ無効（本番）なら丸ごと出さない。
   if (!available) return null;

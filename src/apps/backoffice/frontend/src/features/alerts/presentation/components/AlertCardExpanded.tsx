@@ -30,9 +30,13 @@ export interface AlertCardExpandedProps {
   className?: string;
 }
 
-/** 一致条件の値を表示用に整形（文字列はそのまま、それ以外は JSON 表記）。 */
+/** 一致条件の値を表示用に整形（文字列はそのまま、非整数は2桁に丸め、それ以外は JSON 表記）。 */
 function formatValue(value: unknown): string {
-  return typeof value === "string" ? value : JSON.stringify(value);
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && !Number.isInteger(value)) {
+    return value.toFixed(2);
+  }
+  return JSON.stringify(value);
 }
 
 /**

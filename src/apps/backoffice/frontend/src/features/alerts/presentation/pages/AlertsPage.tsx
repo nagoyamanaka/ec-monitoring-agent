@@ -188,7 +188,13 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
             onReconnect={reconnectStream}
           />
         }
-        demoDrawer={<DemoDrawer api={demoApi} onAfterReset={refreshAlerts} />}
+        demoDrawer={
+          <DemoDrawer
+            api={demoApi}
+            onAfterReset={refreshAlerts}
+            refreshKey={lastUpdatedAt?.getTime() ?? null}
+          />
+        }
       >
         <div className="space-y-4">
           <FirstRunGuide />

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { hasAiInvestigation } from "../../domain/AlertView";
+import { eventTitle } from "../../domain/eventCatalog";
 import { useAlertsData } from "../AlertsDataProvider";
 import {
   submitFeedback,
@@ -164,10 +165,11 @@ export function AlertDetailPage() {
                   </span>
                 </div>
                 <h2 className="text-xl font-semibold text-slate-50">
-                  {alert.eventName}
+                  {eventTitle(alert.eventName)}
                 </h2>
                 <p className="text-xs text-slate-400">
-                  {alert.source} · {formatDateTimeJa(alert.occurredOn)}
+                  <code>{alert.eventName}</code> · {alert.source} ·{" "}
+                  {formatDateTimeJa(alert.occurredOn)}
                 </p>
               </div>
               <button

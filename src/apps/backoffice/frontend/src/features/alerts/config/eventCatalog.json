@@ -27,6 +27,10 @@
     "title": "アプリコード退行",
     "description": "テストは通過したアプリコード変更が挙動を退行させた障害（小計の丸め誤り）。AI が実コミット差分を読んで原因を特定する。"
   },
+  "gcp.monitoring.critical_log_entries": {
+    "title": "インフラ障害（CRITICAL ログ検知）",
+    "description": "アプリの CRITICAL ログ・HTTP 500 の急増を Cloud Monitoring のアラートポリシーが検知して発報した。"
+  },
   "gcp.monitoring.cloud_sql_instance_unhealthy_after_configuration_change": {
     "title": "構成変更障害",
     "description": "IaC 変更（Cloud SQL 設定縮小の terraform apply）適用直後に DB インスタンスが不安定化。AI が apply 差分を root cause として特定する。"
