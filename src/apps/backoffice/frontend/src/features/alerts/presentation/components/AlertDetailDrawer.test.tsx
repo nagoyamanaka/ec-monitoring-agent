@@ -89,4 +89,24 @@ describe("AlertDetailDrawer", () => {
       screen.getByRole("link", { name: /詳細ページ/ }),
     ).toHaveAttribute("href", "/alerts/a-9");
   });
+
+  it("レポートがあればフッターに詳細ページのティザー（チップ＋推奨アクション抜粋）を出す", () => {
+    renderDrawer({ alert: makeAlert(), onClose: vi.fn() });
+    const link = screen.getByRole("link", { name: /AI レポート全文/ });
+    expect(link).toHaveAttribute("href", "/alerts/alert-1");
+    expect(link).toHaveTextContent("調査ステップ 2");
+    expect(link).toHaveTextContent("推奨アクション 2");
+    expect(link).toHaveTextContent("ロールバック");
+    expect(link).toHaveTextContent("詳細ページで全文を読む");
+  });
+
+  it("レポートが無ければフッターは素の詳細ページリンクにフォールバックする", () => {
+    renderDrawer({
+      alert: makeAlert({ id: "a-9", report: null }),
+      onClose: vi.fn(),
+    });
+    const link = screen.getByRole("link", { name: "詳細ページを開く →" });
+    expect(link).toHaveAttribute("href", "/alerts/a-9");
+    expect(screen.queryByText("AI レポート全文")).not.toBeInTheDocument();
+  });
 });

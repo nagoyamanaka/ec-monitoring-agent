@@ -9,6 +9,7 @@ import {
   hasAiInvestigation,
 } from "../../domain/AlertView";
 import { alertConfidence } from "../../domain/alertConfidence";
+import { reportTeaser } from "../../domain/reportTeaser";
 import { eventInfo, eventTitle } from "../../domain/eventCatalog";
 import { categoryInfo } from "../../domain/alertCategory";
 import type { InvestigationProgressView } from "../../domain/investigationProgress";
@@ -138,6 +139,8 @@ export function AlertDetailDrawer({
   const title = eventTitle(alert.eventName);
   const category = categoryInfo(alert.category);
   const occurrenceSummary = formatOccurrenceSummary(alert);
+  // 詳細ページ限定コンテンツのティザー（タスク D5）。無ければ素のリンクにフォールバック。
+  const teaser = reportTeaser(alert.report);
 
   return (
     <div
@@ -290,14 +293,47 @@ export function AlertDetailDrawer({
         </div>
 
         <footer className="border-t border-slate-700/60 px-5 py-3">
-          <Link
-            to={`/alerts/${encodeURIComponent(alert.id)}`}
-            className="text-xs font-medium text-cyan-300 transition hover:text-cyan-200"
-          >
-            {alert.report
-              ? "AI レポートを詳細ページで読む →"
-              : "詳細ページを開く →"}
-          </Link>
+          {/* ティザーCTA（タスク D5）: 「詳細ページに行くと何が読めるか」を実データで予告する。
+              full 射影(タスク37)限定のセクションをチップで棚卸しし、推奨アクション先頭1件を
+              抜粋＝テキストリンクだけの空手形をなくしてクリック価値を事前に伝える。 */}
+          {teaser ? (
+            <Link
+              to={`/alerts/${encodeURIComponent(alert.id)}`}
+              className="group block rounded-lg bg-slate-800/40 px-4 py-3 ring-1 ring-inset ring-slate-700/60 transition hover:bg-slate-800/70 hover:ring-cyan-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                AI レポート全文
+              </p>
+              {teaser.headline && (
+                <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-slate-200">
+                  <span aria-hidden className="text-cyan-300">
+                    ▸{" "}
+                  </span>
+                  {teaser.headline}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {teaser.chips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[11px] font-medium text-slate-300 ring-1 ring-inset ring-slate-600/50"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-right text-xs font-medium text-cyan-300 transition group-hover:text-cyan-200">
+                詳細ページで全文を読む →
+              </p>
+            </Link>
+          ) : (
+            <Link
+              to={`/alerts/${encodeURIComponent(alert.id)}`}
+              className="text-xs font-medium text-cyan-300 transition hover:text-cyan-200"
+            >
+              詳細ページを開く →
+            </Link>
+          )}
         </footer>
       </aside>
     </div>
