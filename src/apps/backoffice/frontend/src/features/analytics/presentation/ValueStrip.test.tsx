@@ -49,6 +49,13 @@ describe("ValueStrip", () => {
     expect(screen.getByText("昇格パターン")).toBeInTheDocument();
   });
 
+  it("累計であることの注記（過去実績含む）を出す＝リセット直後の空一覧と矛盾して見せない", async () => {
+    renderStrip(fakeApi());
+    await waitFor(() =>
+      expect(screen.getByText("※過去実績含む")).toBeInTheDocument(),
+    );
+  });
+
   it("クリックで Analytics ページへ遷移する", async () => {
     renderStrip(fakeApi());
     await waitFor(() =>

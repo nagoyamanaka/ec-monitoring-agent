@@ -141,9 +141,14 @@ describe("ADKAgentInvestigationAdapter", () => {
     ]);
   });
 
-  it("infraEvidence と linkConfig から証拠リンクを調査ステップへ追記する", async () => {
+  it("infraEvidence と linkConfig から、AI が引用した sha の証拠リンクだけ調査ステップへ追記する", async () => {
+    // summary が abc1234 を引用＝残る。def5678 は引用なし＝落ちる（全件連結ノイズの抑止）。
+    const citedJson = JSON.stringify({
+      ...JSON.parse(validJson),
+      summary: "abc1234 の修正コミットが原因",
+    });
     const adapter = new ADKAgentInvestigationAdapter(
-      new FakeAgentRunner({ text: validJson }),
+      new FakeAgentRunner({ text: citedJson }),
       { githubRepo: "example-org/ec-backend" },
     );
 
@@ -154,6 +159,7 @@ describe("ADKAgentInvestigationAdapter", () => {
         collectedAt: new Date("2026-06-20T00:00:00.000Z"),
         recentCommits: [
           { sha: "abc1234", message: "fix", author: "a", committedAt: new Date() },
+          { sha: "def5678", message: "Merge pull request #6", author: "a", committedAt: new Date() },
         ],
       },
     });
