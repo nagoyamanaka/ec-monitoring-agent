@@ -95,7 +95,7 @@ describe("EvidencePanel", () => {
     expect(api.getEvidence).not.toHaveBeenCalled();
   });
 
-  it("証拠が空なら見つからなかった旨を出す", async () => {
+  it("証拠が空なら引用された証拠が無い旨を出す", async () => {
     const empty: EvidenceView = {
       appLogs: [],
       terraformDiff: null,
@@ -112,7 +112,9 @@ describe("EvidencePanel", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText("証拠は見つかりませんでした。"),
+        screen.getByText(
+          "原因の根拠として引用されたインフラ証拠（ログ・メトリクス・Terraform・コミット）はありませんでした。",
+        ),
       ).toBeInTheDocument(),
     );
   });

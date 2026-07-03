@@ -103,6 +103,11 @@ export class InvestigationReport {
     return new InvestigationReport({ ...this, subject });
   }
 
+  /** 確信度キャリブレーション（ConfidenceCalibration）の補正値を反映する。 */
+  withConfidence(confidence: number): InvestigationReport {
+    return new InvestigationReport({ ...this, confidence });
+  }
+
   withMetrics(metrics: InvestigationMetricsPrimitives): InvestigationReport {
     return new InvestigationReport({ ...this, metrics });
   }

@@ -20,6 +20,7 @@ import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { InfraInvestigationPort } from "../../domain/InfraInvestigationPort.js";
 import { InfraEvidence } from "../../domain/InfraEvidence.js";
 import { buildInvestigationMetrics } from "../../domain/InvestigationMetrics.js";
+import { calibrateConfidence } from "../../domain/ConfidenceCalibration.js";
 
 // 類似インシデントは文脈強化用なので件数を絞る（トークン上限 3,500 を意識）
 const SIMILAR_INCIDENT_LIMIT = 5;
@@ -67,9 +68,12 @@ export class ReinvestigateAlertUseCase {
     );
     // 働きの明細（タスク G1）: 自動調査（InvestigateAlertUseCase）と同じ形で実測を添付する。
     const startedAt = Date.now();
-    const report = (await this.investigate(context, alertId)).withMetrics(
-      buildInvestigationMetrics(context, Date.now() - startedAt),
-    );
+    const investigated = await this.investigate(context, alertId);
+    // 確信度キャリブレーション: LLM 自己申告を、検証可能な裏付けシグナル由来の上限で切り詰める
+    // （下げるだけで上げない・fallback は対象外）。operatorNote は人間の一次情報として裏付けに数える。
+    const report = (
+      await this.applyConfidenceCalibration(investigated, context, alertId)
+    ).withMetrics(buildInvestigationMetrics(context, Date.now() - startedAt));
 
     await this.attachAndNotify(reopened, report);
     await this.logReinvestigated(alertId, report);
@@ -107,6 +111,26 @@ export class ReinvestigateAlertUseCase {
       ...(candidateAlerts.length > 0 ? { candidateAlerts } : {}),
       operatorNote,
     };
+  }
+
+  // 確信度キャリブレーションを適用し、切り詰めが起きた場合は説明ログを残す（透明性）。
+  private async applyConfidenceCalibration(
+    report: InvestigationReport,
+    context: InvestigationContext,
+    alertId: AlertId,
+  ): Promise<InvestigationReport> {
+    const calibration = calibrateConfidence(report, context);
+    if (calibration.calibrated >= calibration.original) return report;
+
+    await this.logger.info({
+      service: "backoffice-backend",
+      action: "confidence_calibrated",
+      message:
+        `確信度を証拠裏付けで補正：${alertId.value}, ` +
+        `${calibration.original}→${calibration.calibrated}` +
+        `（上限${calibration.cap}・根拠: ${calibration.signals.join(",") || "なし"}）`,
+    });
+    return report.withConfidence(calibration.calibrated);
   }
 
   // 相関判定の候補＝自分以外の他アラートをベストエフォートで収集する（失敗時は空配列）。
