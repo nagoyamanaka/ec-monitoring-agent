@@ -30,8 +30,11 @@ class FakeSource implements ForecastSignalSource {
 
 class FakeMemory implements ForecastMemoryRepository {
   askedSubjects: string[][] = [];
+  warmUpCount = 0;
   constructor(private readonly entries: ForecastMemoryEntry[] = []) {}
-  async warmUp(): Promise<void> {}
+  async warmUp(): Promise<void> {
+    this.warmUpCount += 1;
+  }
   async findBySubjects(subjects: string[]): Promise<ForecastMemoryEntry[]> {
     this.askedSubjects.push(subjects);
     return this.entries;
@@ -115,7 +118,8 @@ describe("ForecastRiskUseCase", () => {
 
     expect(source1.collectedHorizons).toEqual(["今週末"]);
     expect(source2.collectedHorizons).toEqual(["今週末"]);
-    // 記憶は主シグナルの subject（重複除去済み）で引く
+    // 記憶は生成時点の最新投影へ再 warmUp してから、主シグナルの subject（重複除去済み）で引く
+    expect(memory.warmUpCount).toBe(1);
     expect(memory.askedSubjects).toEqual([["db_connection_pool", "checkout"]]);
     // Port へは主シグナル + MEMORY 正規化済みの全量
     expect(port.contexts).toHaveLength(1);
@@ -165,6 +169,7 @@ describe("ForecastRiskUseCase", () => {
     await useCase.run({ horizon: "今週末" });
 
     expect(port.contexts).toHaveLength(0); // Gemini 非呼び出し
+    expect(memory.warmUpCount).toBe(0); // 主シグナル0件なら記憶の再投影もしない
     expect(memory.askedSubjects).toHaveLength(0);
     expect(repository.saved).toHaveLength(1);
     expect(repository.saved[0].forecast.risks).toEqual([]);

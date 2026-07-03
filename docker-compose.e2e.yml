@@ -4,3 +4,6 @@ services:
       # E2E 実行時のみ stub を有効化（Gemini 課金・非決定性なし）。
       # make up / ローカル開発時は docker-compose.local.yml の false が使われる。
       AI_INVESTIGATION_STUB: "true"
+      # 予兆E2E（forecast.e2e.test.ts）用: /forecast ルートを有効化。
+      # POST /forecast は stub LLM の固定予報（偽引用入り）で決定論＝課金なし。
+      FORECAST_ENABLED: "true"

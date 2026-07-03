@@ -27,7 +27,38 @@ export class StubLLMClient implements LLMTextClient {
     remediable: true,
   });
 
-  async generate(_systemInstruction: string, _prompt: string): Promise<string> {
+  // GeminiForecastAdapter（予兆・F8）から呼ばれたときの固定予報。実在する seed シグナル
+  // （plan-1=pending plan seed / sch-1=schedule seed）への引用に、意図的な偽引用 ghost-* を
+  // 混ぜてある: 1件目は ghost-1 だけが citations から落ち、2件目は裏付けゼロでリスクごと
+  // 破棄される＝引用検証（ハルシネーション・ガード）を課金なしで決定論的に E2E 実演する。
+  private static readonly FORECAST_CANNED_OUTPUT = JSON.stringify({
+    risks: [
+      {
+        window: "土 20:00-23:00",
+        subject: "google_sql_database_instance_ec_db",
+        level: "HIGH",
+        confidence: 0.78,
+        citations: ["plan-1", "sch-1", "ghost-1"],
+        reasoning:
+          "[STUB] 接続上限の縮小予定（未適用 plan）と週末セールの checkout 負荷が重なるため。",
+      },
+      {
+        window: "今週末",
+        subject: "uncited_claim",
+        level: "MEDIUM",
+        confidence: 0.4,
+        citations: ["ghost-2"],
+        reasoning: "[STUB] 裏付けシグナルなし（引用検証で破棄されるべきリスク）。",
+      },
+    ],
+  });
+
+  async generate(systemInstruction: string, _prompt: string): Promise<string> {
+    // 予報かどうかは GeminiForecastAdapter の SYSTEM_INSTRUCTION 固有の語で判別する
+    // （呼び出し元の識別子は LLMTextClient 契約に無いため、文言への相乗りで済ませる）。
+    if (systemInstruction.includes("予兆ブリーフィング")) {
+      return StubLLMClient.FORECAST_CANNED_OUTPUT;
+    }
     return StubLLMClient.CANNED_OUTPUT;
   }
 }

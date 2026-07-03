@@ -94,13 +94,14 @@ todo実施後に
 ### タスク F8: フラッグシップ seed ＋ 録画テイク 〔P0〕（新規・本スプリント）
 
 - 【新規】§3.1 DB接続枯渇シナリオの seed 一式:
-  - 過去インシデント N件（`sourceAlertId` 付き＝citation が実在 Alert に解決できる）
-  - ステージ済み未マージ PR（pool 100→40 縮小）＝ `listOpenPullRequests` が拾える実 PR（draft 可）
-  - Terraform pending plan（connection 上限縮小）＝ `getPendingPlan` が拾える
-  - `ScheduleSource` seed（土20:00 checkout 負荷x5）
-- 【検証】`POST /forecast` → HIGH リスク＋引用3系統＋confidence が安定して出る seed に調整
-- 【引用検証の可視化】意図的に偽引用を混ぜたケースで**ドロップされる**ことをデモで見せられるようにする（ハルシネーション・ガードの実演）
-- 【録画】「実際に動いた1回を録る」（捏造NG・`step4-1` §7.6）
+  - [x] 過去インシデント N件（`sourceAlertId` 付き＝citation が実在 Alert に解決できる）（✅ `ResolvedAlertSeed.ts` に2件追加（`FORECAST_MEMORY_SEED_ALERT_IDS`）: ①過去の max_connections 縮小→枯渇（`report.subject="google_sql_database_instance.ec_db"`＝pending plan の terraform address と同語彙で突合）②週末セール checkout 負荷（`subject="checkout_db_connection_pool"`＝schedule seed の checkout と突合）。demo reset が再seed・`GET /alerts/:id` で開ける・一覧には出ない（RESOLVED））
+  - [ ] ステージ済み未マージ PR（pool 100→40 縮小）＝ `listOpenPullRequests` が拾える実 PR（draft 可）← **人間タスク**（GITHUB_TARGET_REPO に draft PR を1本立てる。タイトルに db/connection/pool 系の語を入れると過去事例①とも突合する）
+  - [x] Terraform pending plan（connection 上限縮小）＝ `getPendingPlan` が拾える（✅ `seeds/ForecastPendingPlanSeed.ts`＝Cloud SQL `max_connections` 100→40。`DEMO_ENABLED` 配下で `InMemoryPendingInfraPlanStore` へ起動時投入）
+  - [x] `ScheduleSource` seed（土20:00 checkout 負荷x5）（✅ F6 着地済みの値をフラッグシップ確定値としてコメント更新のみ）
+- 【実装メモ】**MEMORY は生成時に再 warmUp**（`ForecastRiskUseCase.recallMemorySignals`）: 起動時 warmUp だけだと demo reset の再seed・デモ中に承認/解決した事例が記憶に載らない穴があった（reset → POST /forecast がデモ卓の手順）。主シグナル0件時は再投影もスキップ（課金ゼロ経路は不変）
+- [ ] 【検証】`POST /forecast` → HIGH リスク＋引用3系統＋confidence が安定して出る seed に調整 ← **実 Gemini での実走確認は人間**（配線と突合はE2Eで検証済み。引用3系統のうち PR は上記 draft PR 待ち）
+- [x] 【引用検証の可視化】意図的に偽引用を混ぜたケースで**ドロップされる**ことをデモで見せられるようにする（✅ `StubLLMClient` が予兆 SYSTEM_INSTRUCTION を判別し**偽引用 ghost-\* 入りの固定予報**を返す→ローカルE2E `e2e/backoffice/forecast.e2e.test.ts` で「ghost-1 のみ citations から drop／ghost-2 だけのリスクは丸ごと破棄／MEMORY 引用が実在 Alert に解決／GET はキャッシュ配信」を決定論検証。e2e overlay に `FORECAST_ENABLED=true` 追加。実機の観測点は `forecast_fake_citation_dropped` ログ）
+- [ ] 【録画】「実際に動いた1回を録る」（捏造NG・`step4-1` §7.6）
 - 【録画・提出前チェック】`make e2e` 実行後は一覧に「AI推定: [STUB] 未知の障害パターン（推定）」が出ていないこと（STUB 残留）を確認（I2 で自動原状復帰済み・念のための目視1行）
 
 ### ~~タスク F9: 2本目シナリオ（seed 替えのみ）~~〔**切り確定**（時間制約・strategy §1.6）〕

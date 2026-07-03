@@ -7,6 +7,7 @@ import {
 import { ForecastContext } from "../domain/ForecastContext.js";
 import { ForecastSignal, ForecastSignalKind } from "../domain/ForecastSignal.js";
 import { LLMTextClient } from "../../AIInvestigation/domain/LLMTextClient.js";
+import { StubLLMClient } from "../../AIInvestigation/infrastructure/aiinvestigation/StubLLMClient.js";
 import { Logger } from "../../../Shared/domain/logging/Logger.js";
 import { StructuredLog } from "../../../Shared/domain/logging/StructuredLog.js";
 
@@ -251,5 +252,27 @@ describe("parseForecastOutput / buildForecastPrompt（境界）", () => {
     const prompt = buildForecastPrompt(context);
     expect(prompt).toContain('"kind": "FUTURE_CHANGE"');
     expect(prompt).toContain('"desc": "max_connections 100→40 に縮小"');
+  });
+});
+
+// ローカルE2E（AI_INVESTIGATION_STUB=true）の決定論経路: StubLLMClient は予兆の
+// SYSTEM_INSTRUCTION を判別して固定予報 JSON を返す。ここで adapter 経由の契約
+// （parse 可能・偽引用 ghost-* 入り＝引用検証の実演素材）を固定し、stub とパーサの乖離を防ぐ。
+describe("GeminiForecastAdapter × StubLLMClient（E2E 決定論経路の契約）", () => {
+  it("stub の固定予報を parse でき、偽引用 ghost-* を含む2リスクが得られる", async () => {
+    const adapter = new GeminiForecastAdapter(new StubLLMClient());
+
+    const forecast = await adapter.forecast(context);
+
+    expect(forecast.isFallback).toBe(false);
+    expect(forecast.risks).toHaveLength(2);
+    expect(forecast.risks[0].level).toBe("HIGH");
+    expect(forecast.risks[0].citations).toEqual(["plan-1", "sch-1", "ghost-1"]);
+    expect(forecast.risks[1].citations).toEqual(["ghost-2"]);
+  });
+
+  it("予兆以外の instruction には調査用の固定出力を返す（既存経路を汚さない）", async () => {
+    const raw = await new StubLLMClient().generate("あなたはSREの調査AIです", "prompt");
+    expect(JSON.parse(raw).summary).toContain("[STUB]");
   });
 });
