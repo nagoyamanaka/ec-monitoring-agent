@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@shared/ui/cn";
 import type { AlertView } from "../../domain/AlertView";
 import { alertWorkState } from "../../domain/alertReview";
@@ -42,11 +43,27 @@ function toneOf(alert: AlertView): Tone {
 }
 
 export function AlertStatusBadge({ alert, className }: AlertStatusBadgeProps) {
+  const state = alertWorkState(alert);
   const { label, cls } = toneOf(alert);
+  // 状態が遷移したときだけフェード差し替え（タスク E5: 分析中→レビュー待ち等の
+  // 状態変化を「切り替わった」と分かる形で見せる）。初期マウントでは動かさない。
+  const prevState = useRef(state);
+  const [transitioned, setTransitioned] = useState(false);
+  useEffect(() => {
+    if (prevState.current !== state) {
+      prevState.current = state;
+      setTransitioned(true);
+    }
+  }, [state]);
   return (
     <span
+      // 遷移時は key で差し替えてフェードを毎回再生する（同一要素の class 追加だけだと
+      // 連続遷移の2回目以降にアニメが再発火しない）。
+      key={state}
+      onAnimationEnd={() => setTransitioned(false)}
       className={cn(
         "inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset",
+        transitioned && "badge-fade-in",
         cls,
         className,
       )}

@@ -74,6 +74,43 @@ describe("AlertCard", () => {
     expect(screen.getByText(/AI推定/)).toBeInTheDocument();
   });
 
+  it("いま着弾した新規アラート（createdAt が直近）はスライドイン演出を付ける（E5）", () => {
+    render(<AlertCard alert={makeAlert({ createdAt: new Date().toISOString() })} />);
+    expect(screen.getByTestId("alert-card")).toHaveClass("card-arrive");
+  });
+
+  it("過去のアラート（初回ロードで並ぶ分）は着弾演出を付けない（E5）", () => {
+    render(<AlertCard alert={makeAlert()} />);
+    expect(screen.getByTestId("alert-card")).not.toHaveClass("card-arrive");
+  });
+
+  it("SSE 更新（updatedAt 変化）でその場グローを付ける＝新規と区別（E5）", () => {
+    const { rerender } = render(<AlertCard alert={makeAlert()} />);
+    rerender(
+      <AlertCard alert={makeAlert({ updatedAt: "2026-06-21T00:00:05.000Z" })} />,
+    );
+    const card = screen.getByTestId("alert-card");
+    expect(card).toHaveClass("card-update-flash");
+    expect(card).not.toHaveClass("card-arrive");
+  });
+
+  it("dedup 加算（occurrenceCount 増加）で重複カウンタがパルスする（E5）", () => {
+    const { rerender } = render(
+      <AlertCard alert={makeAlert({ occurrenceCount: 2 })} />,
+    );
+    expect(screen.getByText(/重複/)).not.toHaveClass("count-pulse");
+    rerender(
+      <AlertCard
+        alert={makeAlert({
+          occurrenceCount: 3,
+          updatedAt: "2026-06-21T00:00:05.000Z",
+        })}
+      />,
+    );
+    expect(screen.getByText(/重複/)).toHaveClass("count-pulse");
+    expect(screen.getByText(/重複 3件/)).toBeInTheDocument();
+  });
+
   it("昇格（結晶化）パターンは生IDを出さず ◈＋人間語で出す（生IDは tooltip）", () => {
     render(
       <AlertCard

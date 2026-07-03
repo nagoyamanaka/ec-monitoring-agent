@@ -63,6 +63,13 @@ const SEVERITY_LABEL: Record<AlertSeverity, string> = {
 };
 
 /**
+ * マウント時点で「いま着弾した新規アラート」とみなす鮮度（タスク E5）。
+ * SSE の新規はサーバ生成から1秒未満で届くため十分に短く、初回ロードで並ぶ
+ * 過去アラートの一斉アニメは起こさない。
+ */
+const NEW_ARRIVAL_WINDOW_MS = 10_000;
+
+/**
  * 一覧の 1 行（マスター）。クリックで詳細ドロワー（AlertDetailDrawer）を開く。
  * レイアウトは2ゾーン: 左=内容（①ドメイン日本語ラベル＋eventName主役 ②従属メタ ③原因サマリ）、
  * 右=固定幅レール（対応状態＋確信度を集約）。右端の情報が散らず間延びしない。
@@ -73,14 +80,41 @@ export function AlertCard({
   onSelect,
 }: AlertCardProps) {
   const analyzing = isAnalyzing(alert);
-  // ANALYZING→解決 の遷移を検出して行を一瞬フラッシュ（タスク12・自律性の可視化）。
-  // SSE で同一行が置き換わる（飛ばない）ため、前回の analyzing 状態と比較すれば検出できる。
+  // SSE 着弾のライブ感（タスク E5）。同一行は置き換え（mergeAlert）なので、
+  // prop の変化を前回値と比較すれば「何が起きたか」をカード自身が検出できる。
+  // - 新規: マウント時に createdAt が十分新しい → スライドイン＋グロー
+  // - 解決: ANALYZING→確定 → resolve-flash（タスク12・自律性の可視化）
+  // - 更新: updatedAt が動いた（dedup 加算・レポート添付等） → その場グロー
+  // - dedup: occurrenceCount 増加 → カウンタバッジのパルス
+  const [isNewArrival, setIsNewArrival] = useState(
+    () =>
+      Date.now() - new Date(alert.createdAt).getTime() < NEW_ARRIVAL_WINDOW_MS,
+  );
   const wasAnalyzing = useRef(analyzing);
+  const prevUpdatedAt = useRef(alert.updatedAt);
+  const prevCount = useRef(alert.occurrenceCount);
   const [justResolved, setJustResolved] = useState(false);
+  const [justUpdated, setJustUpdated] = useState(false);
+  const [countPulse, setCountPulse] = useState(false);
   useEffect(() => {
-    if (wasAnalyzing.current && !analyzing) setJustResolved(true);
+    const resolved = wasAnalyzing.current && !analyzing;
+    const updated = prevUpdatedAt.current !== alert.updatedAt;
+    const counted = alert.occurrenceCount > prevCount.current;
     wasAnalyzing.current = analyzing;
-  }, [analyzing]);
+    prevUpdatedAt.current = alert.updatedAt;
+    prevCount.current = alert.occurrenceCount;
+    if (resolved) setJustResolved(true);
+    // 解決フラッシュと重ねない（1回の置換に演出は1つ）。
+    else if (updated) setJustUpdated(true);
+    if (counted) setCountPulse(true);
+  }, [analyzing, alert.updatedAt, alert.occurrenceCount]);
+  // 子要素のアニメも bubbling で届くため、名前で判別して各演出をリセットする。
+  const handleAnimationEnd = (e: React.AnimationEvent) => {
+    if (e.animationName === "card-arrive") setIsNewArrival(false);
+    if (e.animationName === "resolve-flash") setJustResolved(false);
+    if (e.animationName === "card-update-flash") setJustUpdated(false);
+    if (e.animationName === "count-pulse") setCountPulse(false);
+  };
 
   const confidence = alertConfidence(alert);
   // AI 調査が失敗した fallback レポートは confidence が当てにならない。
@@ -101,10 +135,12 @@ export function AlertCard({
       data-alert-id={alert.id}
       data-approved={approved || undefined}
       onClick={() => onSelect?.(alert.id)}
-      onAnimationEnd={() => justResolved && setJustResolved(false)}
+      onAnimationEnd={handleAnimationEnd}
       className={cn(
-        "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition",
+        "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
+        isNewArrival && "card-arrive",
         justResolved && "resolve-flash",
+        justUpdated && !justResolved && "card-update-flash",
         // 承認済みは減光＋彩度を落として沈める（hover で一時的に戻して閲覧しやすく）。
         approved && !selected && "opacity-55 saturate-50 hover:opacity-90",
         selected
@@ -139,13 +175,14 @@ export function AlertCard({
 
         {/* ② 従属メタ: category（人間語）・時刻。
             重要度は左ストライプ色に一本化（バッジ軸分離＝カード上のバッジは
-            category / 状態 / 分類根拠 の最大3。E2）。読み上げ用に sr-only で残す。 */}
-        <div className="flex min-w-0 items-center gap-2 text-sm text-slate-300">
+            category / 状態 / 分類根拠 の最大3。E2）。読み上げ用に sr-only で残す。
+            狭幅ではチップを潰さず折り返す（whitespace-nowrap ＋ flex-wrap。E7）。 */}
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-300">
           <span className="sr-only">
             重要度 {analyzing ? "判定中" : SEVERITY_LABEL[alert.severity]}
           </span>
           <span
-            className="rounded bg-slate-700/50 px-1.5 py-0.5 text-xs font-medium text-slate-300"
+            className="whitespace-nowrap rounded bg-slate-700/50 px-1.5 py-0.5 text-xs font-medium text-slate-300"
             title={category.description}
           >
             {category.label}
@@ -161,8 +198,9 @@ export function AlertCard({
           {alert.occurrenceCount > 1 && (
             <span
               className={cn(
-                "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
                 occurrenceTone(alert.occurrenceCount),
+                countPulse && "count-pulse",
               )}
               title={`同一インシデント（同一 dedupKey）の重複観測 ${alert.occurrenceCount} 件を 1 枚にまとめています`}
             >

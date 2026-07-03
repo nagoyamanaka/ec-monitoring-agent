@@ -189,12 +189,13 @@ todo実施後に
 - [x] 統計タイル「アラート」→「アクティブアラート」等、一覧と同じ軸のラベルに統一（✅ AnalyticsResponse に `activeAlertCount`（非 RESOLVED）追加→ /demo/status が `activeAlerts` を返し SystemStatus タイルが表示＝リセット後「1 vs 空一覧」不一致解消）
 - [x] 初回訪問ガイド（dismissible・3ステップ: ①注入 → ②AI調査を見る → ③承認で学習）。localStorage で1回きり（✅ FirstRunGuide 新設・AlertsPage 冒頭）
 
-### タスク E5: ライブ感マイクロインタラクション 〔P1〕
+### タスク E5: ライブ感マイクロインタラクション 〔P1〕完了✅
 
-- SSE 着弾時のカードスライドイン＋一瞬のグロー（新規と更新を区別）
-- dedup ×N 加算時のカウンタパルス（storm デモの体感を強化）
-- ANALYZING→OPEN の状態遷移アニメ（badge クロスフェード）
-- ライブインジケータ（既存）に最終イベント種別を一言添える（「アラート受信 たった今」）
+- [x] SSE 着弾時のカードスライドイン＋一瞬のグロー（新規と更新を区別）（✅ `AlertCard` が prop の前回値比較で検出: 新規=マウント時 createdAt が直近10秒（初回ロードの過去分は動かさない）→ `card-arrive`（スライドイン＋シアングロー）／既存更新=updatedAt 変化 → `card-update-flash`（移動なしグロー）＝移動の有無で新規/更新を区別。解決フラッシュ（resolve-flash）とは重ねない・アニメ終了リセットは animationName 判別で子要素の bubbling と混線しない）
+- [x] dedup ×N 加算時のカウンタパルス（storm デモの体感を強化）（✅ occurrenceCount 増加 → 重複バッジに `count-pulse`（scale+brightness 0.5s））
+- [x] ANALYZING→OPEN の状態遷移アニメ（badge クロスフェード）（✅ `AlertStatusBadge` が alertWorkState 遷移時のみ key 差し替え＋`badge-fade-in`。初期マウント・無関係な再レンダーでは動かない）
+- [x] ライブインジケータ（既存）に最終イベント種別を一言添える（「アラート受信 たった今」）（✅ `useAlerts` に `lastEvent`（アラート受信/アラート更新/修正提案 受信/AI調査 進行中）を追加し `StreamStatusIndicator` が **open 中のみ**相対時刻つきで表示＝AI調査中の60〜120秒も鼓動が見える。非ライブ中は受信が止まっており誤解を招くため出さない）
+- すべて実データ駆動（演出の捏造なし）・`prefers-reduced-motion` で全アニメ無効化。RTL/hook テスト追加（AlertCard 4・AlertStatusBadge 2・StreamStatusIndicator 2・useAlerts 2）
 
 ### タスク E6: Analytics を学習ループの証明に 〔P1〕
 
@@ -204,13 +205,13 @@ todo実施後に
 - 昇格ファネル（未知→承認→昇格の3段バー）
 - 正答率の母数を常時明示（「1/1 件」は既にあり・母数小の注記を添える）
 
-### タスク E7: 仕上げ 〔P1・小粒多数〕
+### タスク E7: 仕上げ 〔P1・小粒多数〕（スクショ撮影以外✅）
 
-- favicon / `<title>`（「EC Monitoring Agent」）/ OG メタ＋OG画像（ProtoPedia・リンクプレビュー対策）
-- デモ卓シナリオ名の truncate 解消（実測: 「インフラ障害（実 Cl...」「インフラ障害（合成・反...」）＝2行許容 or 短名化
-- 狭幅（〜480px）でのバッジ縦書き崩れ（「アプリ層」が1文字ずつ縦に）と カード内折返しの調整（ProtoPedia モバイル閲覧の最低保証）
-- フォーカスリング/キーボード操作の一貫性（Tab 順・Esc でドロワー閉は既存挙動を確認して固定）
-- README 用スクショ・GIF の撮影（E1 完成後の画面で）
+- [x] favicon / `<title>`（「EC Monitoring Agent」）/ OG メタ＋OG画像（ProtoPedia・リンクプレビュー対策）（✅ `public/favicon.svg`（BrandMark と同一意匠）・`<title>`/description/og:\*/twitter:card を index.html に追加・`public/og-image.png`（1200×630・ダーク観測コンソール調・Playwright レンダで生成）。**og:image は絶対パス `/og-image.png`**＝デプロイ先ドメインがビルド時に確定しないための割り切り（主要クローラは相対解決可・確定後に絶対URL化が理想）
+- [x] デモ卓シナリオ名の truncate 解消（✅ `ScenarioControls` の行ラベルを truncate → `line-clamp-2`（2行許容））
+- [x] 狭幅（〜480px）でのバッジ縦書き崩れと カード内折返しの調整（✅ AlertCard メタ行を flex-wrap 化＋category チップ/重複バッジに whitespace-nowrap（1文字ずつ縦になる圧縮を根絶）・ドロワー header の category チップも同様・ドロワー幅 `w-[clamp(480px,38vw,480px)]`（常に480px＝狭幅で溢れる）→ `w-full max-w-[480px]`）
+- [x] フォーカスリング/キーボード操作の一貫性（✅ Esc でドロワー閉は既存実装＋既存 RTL テストで固定済みを確認。focus-visible リング（cyan・ring-2）を AlertCard 本体・ドロワー✕・ヘッダ FilterChip・絞り込み解除・再接続ボタンに統一追加＝Tab 巡回で現在地が常に見える）
+- [ ] README 用スクショ・GIF の撮影（E1 完成後の画面で）← **残り。実機起動＋実走が必要なため録画テイク（F8）と同時に人間が撮るのが効率的**
 
 > **実装順（推奨）**: E2バグ修正＋E4（半日相当・審査員の初撃体験）→ E1(a)（wow の土台）→ E3 → E1(b)（本線タップ・慎重に）→ E5〜E7。各タスク独立コミット・全緑維持。
 

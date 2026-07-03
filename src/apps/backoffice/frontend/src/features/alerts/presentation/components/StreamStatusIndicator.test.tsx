@@ -78,4 +78,26 @@ describe("StreamStatusIndicator", () => {
     );
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("open + lastEvent: 最終イベント種別を一言添える（「アラート受信 たった今」・E5）", () => {
+    render(
+      <StreamStatusIndicator
+        status="open"
+        lastUpdatedAt={new Date()}
+        lastEvent={{ label: "アラート受信", at: new Date() }}
+      />,
+    );
+    expect(screen.getByText(/アラート受信 たった今/)).toBeInTheDocument();
+  });
+
+  it("非ライブ（connecting）では lastEvent を出さない（受信が止まっており誤解を招く・E5）", () => {
+    render(
+      <StreamStatusIndicator
+        status="connecting"
+        lastUpdatedAt={null}
+        lastEvent={{ label: "アラート受信", at: new Date() }}
+      />,
+    );
+    expect(screen.queryByText(/アラート受信/)).not.toBeInTheDocument();
+  });
 });

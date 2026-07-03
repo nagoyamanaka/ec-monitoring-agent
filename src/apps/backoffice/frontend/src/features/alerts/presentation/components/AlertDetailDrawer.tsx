@@ -154,7 +154,8 @@ export function AlertDetailDrawer({
         onClick={onClose}
         aria-hidden
       />
-      <aside className="drawer-panel absolute inset-y-0 right-0 flex w-[clamp(480px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
+      {/* 狭幅（〜480px）ではビューポート幅いっぱいに畳む（E7: モバイル閲覧の最低保証）。 */}
+      <aside className="drawer-panel absolute inset-y-0 right-0 flex w-full max-w-[480px] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
         {onBack && (
           <button
             type="button"
@@ -175,7 +176,7 @@ export function AlertDetailDrawer({
                 <SeverityBadge level={alert.severity} />
               )}
               <span
-                className="rounded bg-slate-700/40 px-2 py-0.5 text-xs font-medium text-slate-300"
+                className="whitespace-nowrap rounded bg-slate-700/40 px-2 py-0.5 text-xs font-medium text-slate-300"
                 title={category.description}
               >
                 {category.label}
@@ -209,7 +210,7 @@ export function AlertDetailDrawer({
             type="button"
             onClick={onClose}
             aria-label="閉じる"
-            className="shrink-0 rounded-md px-2 py-1 text-slate-300 transition hover:bg-slate-800/60 hover:text-slate-200"
+            className="shrink-0 rounded-md px-2 py-1 text-slate-300 transition hover:bg-slate-800/60 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             ✕
           </button>

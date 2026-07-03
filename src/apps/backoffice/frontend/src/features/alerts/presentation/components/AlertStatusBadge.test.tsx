@@ -33,4 +33,25 @@ describe("AlertStatusBadge", () => {
     expect(screen.getByText("レビュー待ち")).toBeInTheDocument();
     expect(screen.queryByText("未調査")).not.toBeInTheDocument();
   });
+
+  it("状態遷移（分析中→レビュー待ち）でフェード差し替えを付ける（E5）", () => {
+    const { rerender } = render(
+      <AlertStatusBadge alert={makeAlert({ status: "ANALYZING", report: null })} />,
+    );
+    // 初期マウントではアニメしない
+    expect(screen.getByText("分析中")).not.toHaveClass("badge-fade-in");
+
+    rerender(<AlertStatusBadge alert={makeAlert()} />);
+    expect(screen.getByText("レビュー待ち")).toHaveClass("badge-fade-in");
+  });
+
+  it("状態が変わらない再レンダーではフェードを付けない（E5）", () => {
+    const { rerender } = render(<AlertStatusBadge alert={makeAlert()} />);
+    rerender(
+      <AlertStatusBadge
+        alert={makeAlert({ updatedAt: "2026-06-21T00:00:05.000Z" })}
+      />,
+    );
+    expect(screen.getByText("レビュー待ち")).not.toHaveClass("badge-fade-in");
+  });
 });

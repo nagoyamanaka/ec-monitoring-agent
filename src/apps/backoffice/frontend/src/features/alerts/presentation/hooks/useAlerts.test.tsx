@@ -44,6 +44,39 @@ describe("useAlerts", () => {
     );
   });
 
+  it("SSE イベント種別を lastEvent に記録する（新規=受信/既存=更新・E5）", async () => {
+    const api = fakeApi([makeAlert({ id: "a" })]);
+    const stream = new MockAlertStream();
+    const { result } = renderHook(() => useAlerts(api, stream));
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(result.current.lastEvent).toBeNull();
+
+    // 未知の id → 新規「アラート受信」
+    act(() => stream.emit(makeAlert({ id: "b" })));
+    expect(result.current.lastEvent?.label).toBe("アラート受信");
+
+    // 既知の id → 「アラート更新」
+    act(() => stream.emit(makeAlert({ id: "a", status: "ANALYZING" })));
+    expect(result.current.lastEvent?.label).toBe("アラート更新");
+  });
+
+  it("investigation-progress 受信で lastEvent が「AI調査 進行中」になる（E5）", async () => {
+    const api = fakeApi([makeAlert({ id: "a", status: "ANALYZING" })]);
+    const stream = new MockAlertStream();
+    const { result } = renderHook(() => useAlerts(api, stream));
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    act(() => {
+      stream.emitInvestigationProgress({
+        alertId: "a",
+        agent: "evidence_collector",
+        tool: "fetch_app_logs",
+        at: "2026-07-03T00:00:10.000Z",
+      });
+    });
+    expect(result.current.lastEvent?.label).toBe("AI調査 進行中");
+  });
+
   it("investigation-progress 受信を alertId 単位の時系列に積む", async () => {
     const api = fakeApi([makeAlert({ id: "a", status: "ANALYZING" })]);
     const stream = new MockAlertStream();

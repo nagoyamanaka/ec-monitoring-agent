@@ -119,13 +119,79 @@ body {
   animation: pipeline-sweep 1.6s ease-in-out infinite;
 }
 
+/* SSE 着弾のライブ感（タスク E5）。
+   新規カードは上から滑り込み＋シアンのグロー（「いま来た」）、
+   既存カードの更新はその場でグローだけ（「動きがあった」）——移動の有無で新規/更新を区別する。 */
+@keyframes card-arrive {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+  }
+  35% {
+    opacity: 1;
+    transform: none;
+    box-shadow:
+      0 0 0 2px rgba(34, 211, 238, 0.5),
+      0 0 20px rgba(34, 211, 238, 0.25);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0);
+  }
+}
+
+.card-arrive {
+  animation: card-arrive 1.2s ease-out both;
+}
+
+@keyframes card-update-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(148, 163, 184, 0);
+  }
+  30% {
+    box-shadow:
+      0 0 0 2px rgba(148, 163, 184, 0.45),
+      0 0 14px rgba(148, 163, 184, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(148, 163, 184, 0);
+  }
+}
+
+.card-update-flash {
+  animation: card-update-flash 0.9s ease-out;
+}
+
+/* dedup ×N 加算時のカウンタパルス（タスク E5）。storm デモで「畳み込みが生きている」体感を作る。 */
+@keyframes count-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.3);
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.count-pulse {
+  animation: count-pulse 0.5s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .evidence-rise,
   .drawer-overlay,
   .drawer-panel,
   .resolve-flash,
   .badge-fade-in,
-  .pipeline-sweep {
+  .pipeline-sweep,
+  .card-arrive,
+  .card-update-flash,
+  .count-pulse {
     animation: none;
   }
 }

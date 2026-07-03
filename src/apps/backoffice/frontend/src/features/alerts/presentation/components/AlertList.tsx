@@ -63,7 +63,7 @@ export function AlertList({
           <button
             type="button"
             onClick={() => setFilter(null)}
-            className="ml-2 font-medium text-cyan-300 hover:text-cyan-200"
+            className="ml-2 rounded font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             解除
           </button>

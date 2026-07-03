@@ -1,6 +1,8 @@
-import { Link } from "react-router-dom";
 import { cn } from "@shared/ui/cn";
-import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import {
+  ReferencedEvidenceCard,
+  type ReferencedChipTone,
+} from "@shared/ui/ReferencedEvidenceCard";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 import type { AlertView } from "../../domain/AlertView";
 import { eventTitle } from "../../domain/eventCatalog";
@@ -32,21 +34,11 @@ export interface RelatedAlertsPanelProps {
   className?: string;
 }
 
-const ROW_CLASS =
-  "block w-full rounded-md border border-slate-700/60 bg-slate-800/30 px-3 py-2.5 text-left transition hover:border-cyan-500/40 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400";
-
-/** 現在の相関＝cyan、過去の同型事例＝emerald（既知/類似度ゲージと同系色）でチップを塗り分ける。 */
-const CHIP_CLASS = {
-  correlated:
-    "rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30",
-  past: "rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-500/30",
-} as const;
-
 /** 関連/過去の両行が共有する表示形。ラベルとチップ色だけが違う。 */
 type LinkedAlertRow = {
   readonly alertId: string;
   readonly chipLabel: string;
-  readonly chipClass: string;
+  readonly chipTone: ReferencedChipTone;
   readonly rationale: string;
   readonly resolved: boolean;
   readonly title?: string;
@@ -61,53 +53,24 @@ function AlertRow({
   row: LinkedAlertRow;
   onNavigate?: (id: string) => void;
 }) {
-  const title = row.resolved && row.title ? eventTitle(row.title) : null;
-  const body = <AlertRowBody row={row} title={title} />;
   // onNavigate あり＝舞台に留まって選択差し替え（button）。無ければ詳細ページへの Link。
-  return onNavigate ? (
-    <button
-      type="button"
-      onClick={() => onNavigate(row.alertId)}
-      className={ROW_CLASS}
-    >
-      {body}
-    </button>
-  ) : (
-    <Link to={`/alerts/${encodeURIComponent(row.alertId)}`} className={ROW_CLASS}>
-      {body}
-    </Link>
-  );
-}
-
-function AlertRowBody({
-  row,
-  title,
-}: {
-  row: LinkedAlertRow;
-  title: string | null;
-}) {
   return (
-    <>
-      <div className="flex items-center gap-2">
-        <span className={row.chipClass}>{row.chipLabel}</span>
-        {row.resolved && row.severity && <SeverityBadge level={row.severity} />}
-        {row.resolved && row.occurredOn && (
-          <span className="ml-auto text-[11px] text-slate-400">
-            {formatDateTimeJa(row.occurredOn)}
-          </span>
-        )}
-      </div>
-      {title && (
-        <p className="mt-1.5 truncate text-sm font-medium text-slate-100">
-          {title}
-        </p>
-      )}
-      <p className="mt-1 text-xs leading-snug text-slate-300">{row.rationale}</p>
-      <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-cyan-300">
-        <span aria-hidden>🔗</span>
-        詳細を開く
-      </span>
-    </>
+    <ReferencedEvidenceCard
+      chipLabel={row.chipLabel}
+      chipTone={row.chipTone}
+      severity={row.resolved ? row.severity : undefined}
+      timestamp={
+        row.resolved && row.occurredOn
+          ? formatDateTimeJa(row.occurredOn)
+          : undefined
+      }
+      title={row.resolved && row.title ? eventTitle(row.title) : null}
+      description={row.rationale}
+      onClick={onNavigate ? () => onNavigate(row.alertId) : undefined}
+      to={
+        onNavigate ? undefined : `/alerts/${encodeURIComponent(row.alertId)}`
+      }
+    />
   );
 }
 
@@ -173,7 +136,7 @@ export function RelatedAlertsPanel({
           rows={correlated.map((r) => ({
             alertId: r.alertId,
             chipLabel: r.relationLabel,
-            chipClass: CHIP_CLASS.correlated,
+            chipTone: "cyan" as const,
             rationale: r.rationale,
             resolved: r.resolved,
             title: r.title,
@@ -190,7 +153,7 @@ export function RelatedAlertsPanel({
           rows={past.map((r) => ({
             alertId: r.alertId,
             chipLabel: r.matchLabel,
-            chipClass: CHIP_CLASS.past,
+            chipTone: "emerald" as const,
             rationale: r.rationale,
             resolved: r.resolved,
             title: r.title,
