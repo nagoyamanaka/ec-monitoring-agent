@@ -15,6 +15,9 @@ export interface AlertsLayoutProps {
    * shared は features を import できないため slot で受け取る（demoDrawer と同じ流儀）。
    */
   headerSlot?: ReactNode;
+  /** Forecast タブの表示可否と HIGH バッジ（AppHeader へ pass-through・F7）。 */
+  forecastEnabled?: boolean;
+  forecastBadge?: string;
   children?: ReactNode;
 }
 
@@ -22,11 +25,17 @@ export interface AlertsLayoutProps {
 export function AlertsLayout({
   demoDrawer,
   headerSlot,
+  forecastEnabled,
+  forecastBadge,
   children,
 }: AlertsLayoutProps) {
   return (
     <div className="min-h-screen bg-[#0B0E14] text-tremor-content-emphasis">
-      <AppHeader rightSlot={headerSlot} />
+      <AppHeader
+        rightSlot={headerSlot}
+        forecastEnabled={forecastEnabled}
+        forecastBadge={forecastBadge}
+      />
 
       <div
         className={cn(

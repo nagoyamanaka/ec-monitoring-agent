@@ -75,8 +75,8 @@ make e2e         # E2E
 | [docs/decisions/](docs/decisions/) | 決定記録（例: シナリオ6/7 の自動修正見送り） |
 | [docs/steps/step6-final-sprint-strategy.md](docs/steps/step6-final-sprint-strategy.md) | 現役スプリント戦略（予兆ブリーフィング×デモ防御） |
 
-## ステータス（2026-07-02）
+## ステータス（2026-07-03）
 
 - 実装済み: 検知境界＋3系統 ingest／分類3層（既知・類似・未知）／ADK 7エージェント調査（**実行イベントの SSE ライブ中継＝調査タイムライン可視化**）／学習ループ・昇格／リメディエーション（advisory・dispatch）／SSE UI／Cloud Run + GCE デプロイ／CI/CD 一式
-- 開発中: **予兆ブリーフィング**（未来シグナル×記憶→引用検証付きリスク予報。[todo](docs/steps/step6-final-sprint-todo.md)）
+- 開発中: **予兆ブリーフィング**（未来シグナル×記憶→引用検証付きリスク予報。backend F1〜F6＋UI F7（`/forecast` ページ・引用チップ＝実在シグナルへのリンクのみ表示）まで着地・残りはデモ seed/録画。[todo](docs/steps/step6-final-sprint-todo.md)）
 - 設計のみ（ハッカソン後）: イベントソーシング基盤（[step4-1 §7.10](docs/steps/step4-1-strategy.md)）

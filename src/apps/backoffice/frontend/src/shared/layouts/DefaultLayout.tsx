@@ -8,18 +8,30 @@ export interface DefaultLayoutProps {
    * AlertsLayout と同じ流儀で slot 受け（shared は features を import できないため）。
    */
   headerSlot?: ReactNode;
+  /** Forecast タブの表示可否と HIGH バッジ（AppHeader へ pass-through・F7）。 */
+  forecastEnabled?: boolean;
+  forecastBadge?: string;
   children?: ReactNode;
 }
 
 /**
- * /alerts/:id・/analytics 用レイアウト。
+ * /alerts/:id・/analytics・/forecast 用レイアウト。
  * DemoDrawer は参照しない（デモUIをプロダクション画面に持ち込まない）。
  * ヘッダは AlertsLayout と共通の AppHeader（ナビタブ）に統一する。
  */
-export function DefaultLayout({ headerSlot, children }: DefaultLayoutProps) {
+export function DefaultLayout({
+  headerSlot,
+  forecastEnabled,
+  forecastBadge,
+  children,
+}: DefaultLayoutProps) {
   return (
     <div className="min-h-screen bg-[#0B0E14] text-tremor-content-emphasis">
-      <AppHeader rightSlot={headerSlot} />
+      <AppHeader
+        rightSlot={headerSlot}
+        forecastEnabled={forecastEnabled}
+        forecastBadge={forecastBadge}
+      />
       <main className="mx-auto max-w-5xl px-6 py-6">{children ?? <Outlet />}</main>
     </div>
   );

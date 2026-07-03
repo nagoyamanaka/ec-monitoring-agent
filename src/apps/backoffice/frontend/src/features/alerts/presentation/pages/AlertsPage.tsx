@@ -6,6 +6,7 @@ import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import { DemoDrawer } from "@features/demo/presentation/DemoDrawer";
 import type { AnalyticsApi } from "@features/analytics/infrastructure/analyticsApi";
 import { ValueStrip } from "@features/analytics/presentation/ValueStrip";
+import { useForecastNav } from "@features/forecast/presentation/ForecastProvider";
 import { useAlertsData } from "../AlertsDataProvider";
 import {
   submitFeedback,
@@ -38,6 +39,7 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
     retrying,
     streamStatus,
     lastUpdatedAt,
+    lastEvent,
     refreshAlert,
     refreshAlerts,
     reconnectStream,
@@ -178,13 +180,19 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
     [api, refreshAlert],
   );
 
+  // Forecast タブの表示可否＋HIGH バッジ（FORECAST_ENABLED off なら非表示・F7）。
+  const forecastNav = useForecastNav();
+
   return (
     <>
       <AlertsLayout
+        forecastEnabled={forecastNav.enabled}
+        forecastBadge={forecastNav.badge}
         headerSlot={
           <StreamStatusIndicator
             status={streamStatus}
             lastUpdatedAt={lastUpdatedAt}
+            lastEvent={lastEvent}
             onReconnect={reconnectStream}
           />
         }

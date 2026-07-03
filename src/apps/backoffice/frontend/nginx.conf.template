@@ -26,7 +26,7 @@ server {
     # 取り違えないよう no-store を必ず付与する（Vary: Accept は値の揺れに弱く不十分）。
     # これが無いと、/alerts ページのリロードで index.html がこの URL でキャッシュされ、
     # 直後の fetch('/alerts') がそのキャッシュ（HTML）を読んで res.alerts が undefined になる。
-    location ~ ^/(alerts|analytics) {
+    location ~ ^/(alerts|analytics|forecast) {
         proxy_hide_header Cache-Control;
         add_header Cache-Control "no-store" always;
         if ($http_accept ~* "text/html") {
@@ -41,7 +41,7 @@ server {
     }
 
     # API 専用パス（対応する SPA ルートなし）
-    location ~ ^/(demo|patterns|forecast|health) {
+    location ~ ^/(demo|patterns|health) {
         proxy_pass ${BACKEND_EDGE_URL};
         proxy_http_version 1.1;
         proxy_set_header Host $proxy_host;

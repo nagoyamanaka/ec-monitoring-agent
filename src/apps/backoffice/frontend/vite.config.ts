@@ -38,10 +38,10 @@ export default defineConfig({
       // SPA ルートと衝突するため bypass 付き（/alerts/stream の SSE も text/html 以外なので転送される）
       "/alerts": spaAwareApi(),
       "/analytics": spaAwareApi(),
+      "/forecast": spaAwareApi(),
       // API 専用（対応する SPA ルート無し）
       "/demo": apiOnly(),
       "/patterns": apiOnly(),
-      "/forecast": apiOnly(),
       "/health": apiOnly(),
     },
   },

@@ -11,6 +11,9 @@ import { AlertDetailPage } from "@features/alerts/presentation/pages/AlertDetail
 import { createDemoApi } from "@features/demo/infrastructure/demoApi";
 import { createAnalyticsApi } from "@features/analytics/infrastructure/analyticsApi";
 import { AnalyticsPage } from "@features/analytics/presentation/pages/AnalyticsPage";
+import { createForecastApi } from "@features/forecast/infrastructure/forecastApi";
+import { ForecastProvider } from "@features/forecast/presentation/ForecastProvider";
+import { ForecastPage } from "@features/forecast/presentation/pages/ForecastPage";
 
 /**
  * バックオフィスの composition root。
@@ -25,6 +28,7 @@ export function App() {
   const remediationApi = useMemo(() => createRemediationApi(http), [http]);
   const demoApi = useMemo(() => createDemoApi(http), [http]);
   const analyticsApi = useMemo(() => createAnalyticsApi(http), [http]);
+  const forecastApi = useMemo(() => createForecastApi(http), [http]);
   const stream = useMemo(() => new SSEAlertStream(), []);
 
   return (
@@ -34,19 +38,25 @@ export function App() {
       remediationApi={remediationApi}
       stream={stream}
     >
-      <Routes>
-        <Route path="/" element={<Navigate to="/alerts" replace />} />
-        <Route
-          path="/alerts"
-          element={<AlertsPage demoApi={demoApi} analyticsApi={analyticsApi} />}
-        />
-        <Route path="/alerts/:id" element={<AlertDetailPage />} />
-        <Route
-          path="/analytics"
-          element={<AnalyticsPage api={analyticsApi} />}
-        />
-        <Route path="*" element={<Navigate to="/alerts" replace />} />
-      </Routes>
+      {/* GET /forecast 1回で「Forecast ナビ表示可否（FORECAST_ENABLED）＋最新予報」を全ページへ共有 */}
+      <ForecastProvider api={forecastApi}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/alerts" replace />} />
+          <Route
+            path="/alerts"
+            element={
+              <AlertsPage demoApi={demoApi} analyticsApi={analyticsApi} />
+            }
+          />
+          <Route path="/alerts/:id" element={<AlertDetailPage />} />
+          <Route
+            path="/analytics"
+            element={<AnalyticsPage api={analyticsApi} />}
+          />
+          <Route path="/forecast" element={<ForecastPage />} />
+          <Route path="*" element={<Navigate to="/alerts" replace />} />
+        </Routes>
+      </ForecastProvider>
     </AlertsDataProvider>
   );
 }
