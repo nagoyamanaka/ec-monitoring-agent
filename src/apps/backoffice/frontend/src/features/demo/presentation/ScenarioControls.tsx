@@ -22,6 +22,10 @@ import { useState } from "react";
  * **UX 方針（アクション優先＋シナリオ単位の段階開示）**: 休止状態は「押せる行＋確度スペクトルの短いチップ」
  * だけ。行をクリックすると**その場でパネルが開き**、説明・その群で AI がすること・realness 凡例・
  * トリガーボタンをまとめて出す。物語（＝評価の肝）は各シナリオの文脈に紐付いた状態で、必要時にだけ現れる。
+ *
+ * **認知負荷トリム（D2）**: パネル内の文は各1行に圧縮し、正直さの担保（realness の詳細）は
+ * バッジのホバー（title）へ退避＝「読む物」でなく「一目で分かる」。詳細文言は tooltip に残すので
+ * 正直さの情報自体は失わない。
  */
 
 export interface ScenarioControlsProps {
@@ -47,24 +51,30 @@ type ScenarioGroup = {
   readonly scenarios: readonly Scenario[];
 };
 
-/** リアルさバッジの表示名・配色・ツールチップ。 */
+/**
+ * リアルさバッジの表示名・配色・説明。
+ * `short` はパネルに常時出す1行（一目で分かる）、`note` はバッジホバー（title）にだけ出す全文（正直さの担保）。
+ */
 const REALNESS_META: Record<
   Realness,
-  { label: string; className: string; note: string }
+  { label: string; className: string; short: string; note: string }
 > = {
   live: {
     label: "実トリガ",
     className: "bg-emerald-500/15 text-emerald-200 ring-emerald-500/30",
+    short: "EC へ実注文 → Alert 化まで実経路",
     note: "EC へ実際に注文を投入し、業務障害イベントから Alert 化まで実経路で流す。main も外部も汚さない。",
   },
   cloud: {
     label: "クラウド実検知",
     className: "bg-sky-500/15 text-sky-200 ring-sky-500/30",
+    short: "GCP Cloud Monitoring が実発報（GCP のみ）",
     note: "GCP に CRITICAL ログ + HTTP 500 を注入し、Cloud Monitoring 経由で発報する実検知経路（GCP デプロイ時のみ）。",
   },
   synthetic: {
     label: "合成入力",
     className: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
+    short: "入口のみ合成・以降のパイプラインは実経路・実 AI",
     note: "障害の入口だけを合成（本番では実 CI／実 apply／実ログが同じ入口に入る）。変換→分類→AI 調査→修正提案のパイプラインはすべて実経路・実 AI。",
   },
 };
@@ -73,13 +83,12 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
   {
     chip: "既知 ・ 即確定",
     aiRole:
-      "既知パターンに完全一致 → 分類・重大度を即・無料・決定論で確定（AI 自動起動なし）。今回の値に合わせた調査レポートが要るときは詳細から『AIレポートを生成』でオンデマンド実行。重複観測は dedup で畳み込み発生回数を加算。",
+      "既知パターンに完全一致 → 即・無料・決定論で確定（AI 自動起動なし。レポートは詳細から必要時に生成）。",
     scenarios: [
       {
         id: "1",
         label: "決済タイムアウト",
-        description:
-          "決済が時間切れ → 既知パターンに完全一致 → 即確定（レポートは必要時オンデマンド生成）",
+        description: "決済が時間切れ → 既知パターンに完全一致 → 即確定",
         realness: "live",
       },
     ],
@@ -87,13 +96,12 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
   {
     chip: "類似 ・ 即確定（確度付き）",
     aiRole:
-      "既知パターンには完全一致しないが、正解フィードバックで蓄積した過去の解決済み事例に高い字句類似。source=SIMILARITY・confidence 付きで『準・既知』に分類し、AI 生調査を回さず即確定する（graded confidence）。完全一致（既知）と同じく即・無料でレポートは必要時オンデマンド生成。",
+      "過去の解決済み事例に高い字句類似 → 確度付きの『準・既知』として即・無料で確定（AI 生調査なし）。",
     scenarios: [
       {
         id: "2",
         label: "DBコネクションプール枯渇",
-        description:
-          "DB コネクションプール枯渇 → 完全一致なし → 過去の解決済み事例に約67%類似 → 準・既知（確度付き）で即確定（AI 生調査なし）",
+        description: "完全一致なし → 過去事例に約67%類似 → 確度付きで即確定",
         realness: "synthetic",
       },
     ],
@@ -101,7 +109,7 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
   {
     chip: "未知 ・ AI が調査",
     aiRole:
-      "既知に一致しない障害。ADK マルチエージェント（根本原因分析・影響トリアージ・証拠収集・修正計画）が起動し、実ログ・実コミット差分を引用して調査。承認で新しい既知パターンへ昇格する学習ループ。",
+      "ADK マルチエージェントが実ログ・実コミット差分を引用して調査 → 承認で既知パターンへ昇格（学習ループ）。",
     scenarios: [
       {
         id: "3",
@@ -113,14 +121,14 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
         id: "4",
         label: "インフラ障害（実 Cloud Monitoring）",
         description:
-          "CRITICAL ログ + HTTP 500 → 実 Cloud Monitoring 経由で発報（GCP のみ・真正性の見せ場）。⏱ Cloud Monitoring のポリシー評価を挟むため、注入からアラート検知まで約1分のラグがあります（実検知経路ゆえの遅延）。インシデントは GCP 側に残り時刻も発報時のまま（閉じる公開 API は無し）。反復・時刻ずれ回避には合成版（4b）を推奨。",
+          "CRITICAL ログ + HTTP 500 → 実 Cloud Monitoring が発報（GCP のみ）。⏱ 検知まで約1分・GCP にインシデントが残るため、反復は 4b を推奨",
         realness: "cloud",
       },
       {
         id: "4b",
         label: "インフラ障害（合成・反復用）",
         description:
-          "4 と同型の Cloud Monitoring 発報を合成注入で即・新鮮に再現（started_at=now・実 CM 非依存）。GCP 側にインシデントを残さずデモ reset で完全に消えるので、審査中の反復・時刻ずれ回避に使う。下流の分類→ADK 調査は 4 と同一経路。",
+          "4 と同型の発報を合成で即・新鮮に再現（reset で消える・反復用）。下流の分類→AI 調査は 4 と同一経路",
         realness: "synthetic",
       },
       {
@@ -190,7 +198,8 @@ function ScenarioRow({
           </span>
         </span>
         <span
-          className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
+          title={realness.note}
+          className={`shrink-0 cursor-help rounded px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
         >
           {realness.label}
         </span>
@@ -199,20 +208,22 @@ function ScenarioRow({
       {open && (
         <div
           id={panelId}
-          className="space-y-3 border-t border-slate-700/50 px-3 py-3 text-[13px] leading-relaxed"
+          className="space-y-2 border-t border-slate-700/50 px-3 py-3 text-[13px] leading-relaxed"
         >
           <p className="text-slate-100">{scenario.description}</p>
           <p className="text-slate-300">
             <span className="font-semibold text-slate-200">AI の動き:</span>{" "}
             {aiRole}
           </p>
-          <p className="text-slate-300">
+          {/* 凡例の全文はバッジホバー（title）へ退避し、常時表示は1行だけ（D2 認知負荷トリム）。 */}
+          <p className="text-slate-400">
             <span
-              className={`mr-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
+              title={realness.note}
+              className={`mr-1.5 cursor-help rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
             >
               {realness.label}
             </span>
-            {realness.note}
+            {realness.short}
           </p>
           <button
             type="button"
