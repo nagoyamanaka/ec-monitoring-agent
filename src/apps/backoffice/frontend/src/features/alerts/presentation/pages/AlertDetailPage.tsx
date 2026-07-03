@@ -11,7 +11,7 @@ import {
   type FeedbackDecision,
 } from "../../application/submitFeedback";
 import { reinvestigate } from "../../application/reinvestigate";
-import { useArchiveAlert } from "../hooks/useArchiveAlert";
+import { useAlertDetail } from "../hooks/useAlertDetail";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { AlertReviewPanel } from "../components/AlertReviewPanel";
 import { EvidencePanel } from "../components/EvidencePanel";
@@ -58,38 +58,13 @@ export function AlertDetailPage() {
   // Forecast タブの表示可否＋HIGH バッジ（FORECAST_ENABLED off なら非表示・F7）。
   const forecastNav = useForecastNav();
 
-  const listAlert = id ? alerts.find((a) => a.id === id) ?? null : null;
-  // 一覧（GET /alerts）は RESOLVED の解決済みアーカイブを含まないため、一覧に無い id は
-  // GET /alerts/:id へフォールバック（予兆 MEMORY 引用・類似の関連アラートの解決先）。
-  // アーカイブは共有一覧へ merge しない＝一覧ページに RESOLVED が混入しない。
-  const archive = useArchiveAlert(
-    api,
-    id,
-    listStatus === "ready" && listAlert === null,
-  );
-  const alert = listAlert ?? archive.alert;
-  // 一覧 ready＋一覧に無い場合はアーカイブ取得の結果で確定する（404 で初めて notfound）。
-  const status =
-    listStatus !== "ready"
-      ? listStatus
-      : listAlert
-        ? "ready"
-        : archive.status === "ready"
-          ? "ready"
-          : archive.status === "notfound"
-            ? "notfound"
-            : archive.status === "error"
-              ? "error"
-              : "loading";
-
-  // 操作後の再取得: 現役（一覧に居る）は共有 state へ merge、アーカイブはローカル再取得。
-  const refreshCurrent = useCallback(
-    async (alertId: string) => {
-      if (alerts.some((a) => a.id === alertId)) await refreshAlert(alertId);
-      else await archive.refresh();
-    },
-    [alerts, refreshAlert, archive.refresh],
-  );
+  // 現役（一覧＝SSE ライブ）とアーカイブ（RESOLVED＝GET /alerts/:id 単品）の二源を隠し、
+  // この1件を単一インターフェースで得る。refresh は源に合わせて再取得する（useAlertDetail 参照）。
+  const {
+    alert,
+    status,
+    refresh: refreshCurrent,
+  } = useAlertDetail({ id, alerts, listStatus, refreshAlert, api });
 
   const handleDecision = useCallback(
     async (alertId: string, decision: FeedbackDecision, operatorNote?: string) => {
