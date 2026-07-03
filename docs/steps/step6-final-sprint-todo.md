@@ -55,14 +55,15 @@ todo実施後に
 - 【設計判断・実装済み】**ADK は意図的に非使用**: 入力（シグナル）は Handler が Source 群から事前収集済みで、LLM の仕事は突合・格付けの1ショット合成＝ツールコール型の動的探索（ADK の価値）が不要。D3/I1 で実測済みの ADK 脆さ（無言ドロップ・散文・JSON途中切断）を無人閲覧経路（GET /forecast・録画）に持ち込まず、`responseMimeType=application/json` 強制の単発 generateContent で構造化を堅くする。`LLMTextClient`（GeminiLLMClient＝Vertex/AI Studio 切替・timeout・リトライ持ち）を注入するコンポジション。後から agentic 化したければ `ForecastPort` 差し替えのみ（Handler ノータッチ）
 - 【実装メモ】citations 空の RiskItem はアダプタでは落とさない（「空は不正」の drop は F5 引用検証へ集約＝実在照合と同じ場所・二重実装回避）。未知 level は LOW 丸め（盛らない側）・level降順/confidence降順ソートはアダプタが保証。fallback は throw せず `isFallback=true`・risks 空（UT 13ケース・全791テスト緑）
 
-### タスク F5: ForecastRiskCommandHandler 〔P0〕（旧 step4-2 タスク23）
+### タスク F5: ForecastRiskCommandHandler 〔P0〕（旧 step4-2 タスク23）✅
 
 - 【新規】`Forecast/application/ForecastRisk/ForecastRiskCommand.ts` / `ForecastRiskCommandHandler.ts`
 - フロー: `signalSources: ForecastSignalSource[]` を回して主シグナル収集（PR/plan/schedule）→ subject抽出→ ForecastMemory.findBySubjects（MEMORY）→ 全シグナル結合 → Context → Port.forecast → **引用検証（citations実在照合・偽引用は落とす）** → 保存（最小はメモリ最新）
 - 依存は `ForecastSignalSource[]` / ForecastMemoryRepository / ForecastPort / Logger（全て read-only・write無し）。**Gateway は名指ししない**（Source 経由）
 - 設計判断（継ぎ目）: 源を配列で受け、stretchⅢ は `EventLogPrecursorSource` を配列に足すだけ＝Handler ノータッチ（`step4-1` §7.9）。記憶（MEMORY）は subject 駆動なので配列反復と別ステップ
+- 【実装メモ】引用検証は2段: 偽引用（実在しないシグナル id）を citations から破棄（`forecast_fake_citation_dropped` ログ＝F8 の偽引用実演の観測点）＋裏付けゼロ（citations 空 or 全偽）のリスクを丸ごと破棄（`forecast_uncited_risk_dropped`）。保存は `ForecastBriefing`（予報＋**シグナル全量同梱**＝引用チップの解決先を配信に含める・`RiskForecastRepository`/InMemory 最新1件）。シグナル0件は Gemini を呼ばず空予報（isFallback=false・課金ゼロ）。wire 契約 `Forecast/domain/contracts/ForecastContract.ts`（F7 は @monitoring alias で直接 import）。MEMORY シグナルの source は `incident.<実在AlertId>`（UT 4ケース）
 
-### タスク F6: forecast ルート・コントローラ ＋ DI ＋ seed 〔P0〕（旧 step4-3 タスク13・14）
+### タスク F6: forecast ルート・コントローラ ＋ DI ＋ seed 〔P0〕（旧 step4-3 タスク13・14）✅
 
 - 【新規】`routes/forecastRoutes.ts` ＋ `ForecastPostController`（POST /forecast → `ForecastRiskCommandHandler`）/ `ForecastGetController`（GET /forecast → 最新 RiskForecast）。`routes/index.ts` に登録（既存ルートはノータッチ）
 - **【審査対応】GET /forecast は事前生成済みの最新 RiskForecast を返す**＝審査員の非同期閲覧（デプロイURL審査）に Gemini 待ちゼロ・課金ゼロで耐える。提出前に POST を1回打ってキャッシュを温めておく。POST は `DEMO_ENABLED` 配下
@@ -74,6 +75,7 @@ todo実施後に
 - 【修正】`config.ts`：`FORECAST_ENABLED`（既定off）/ `FORECAST_HORIZON`（既定 "今週末"）追加
 - **write は発生しない**（全Gateway read-only）
 - **【確認済み方針・2026-07-03】定期実行（cron/setInterval）はやらない**: 審査員の非同期閲覧に対し「たまたま失敗した最新予報」を見せるリスクと Gemini 課金が増えるだけで掴みに寄与しない。手動 POST（デモ卓）＋提出前キャッシュ温めで無人安定性を取る。Bus 登録済みハンドラなので本運用の定期化は `FORECAST_ENABLED` 配下に1本足すだけ＝stretchⅢ と併せて「語り」で示す。SSE push も設計上任意のまま＝デモではページを開けば足りる（D2 認知負荷と整合）
+- 【実装メモ】`forecastGuard`（FORECAST_ENABLED off＝/forecast まとめて404・demoGuard と同方針）、POST はさらに demoGuard を重ねる。horizon は config 固定＝無認証デモ経路に入力面を作らない（H1 整合）。POST レスポンスは生成結果（引用検証済み・fallback 含む）をそのまま返す＝デモ卓で即 confirm。`InMemoryPendingInfraPlanStore` を `TerraformGatewayImpl` に配線（F8 の pending plan seed の受け皿・record 口は `pendingInfraPlanStore`）。schedule seed は `seeds/ForecastScheduleSeed.ts`（checkout 土20:00 x5）。`BackofficeAppOverrides.forecastPort` を追加（結合テストの決定論差し替え口）。結合テスト3件（404→POST 引用検証→GET キャッシュ）・全緑（unit 803・integration 27）
 
 ### タスク F7: forecast feature slice（UI）〔P0〕（旧 step4-4 タスク13）
 

@@ -30,6 +30,8 @@ export default defineConfig({
       INGEST_TOKEN: "it-token",
       // demo ルート（demoGuard）を 404 にせず通す。
       DEMO_ENABLED: "true",
+      // forecast ルート（forecastGuard）を 404 にせず通す（生成は forecastPort override で決定論化）。
+      FORECAST_ENABLED: "true",
       // dev データを汚さないよう専用 DB を使う。
       MONGO_URL: process.env.MONGO_URL ?? "mongodb://localhost:27017/monitoring_integration",
       RABBITMQ_HOST: process.env.RABBITMQ_HOST ?? "localhost",
