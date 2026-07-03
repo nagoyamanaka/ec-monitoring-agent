@@ -7,6 +7,7 @@ import type {
   EscalationDraftPrimitives,
   RemediationReviewPrimitives,
 } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
+import { collectCitedEvidenceText } from "../../domain/CitedEvidence.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
 /**
@@ -66,17 +67,56 @@ function parseSeverity(value: string): AlertSeverity {
   return AlertSeverity.warning();
 }
 
+/** GitHub コミットページの href から sha を取り出すパターン（buildEvidenceLinks の逆写像）。 */
+const COMMIT_LINK_PATTERN = /\/commit\/([0-9a-f]+)\/?$/i;
+
+/**
+ * evidenceLinks のうちコミットリンクを、AI が報告書で実際に引用した sha だけに絞る。
+ *
+ * 背景: 証拠収集は「直近 N 件のコミット」を無条件に積むため、全件連結すると原因と無関係な
+ * merge/別件コミットが調査ステップに並ぶ。証拠パネル側は CitedCommitFilter で引用絞り済みの
+ * ため「ステップには10コミット・証拠は0件」という矛盾に見えていた。ここで同じ引用判定
+ * （CitedEvidence）を適用し両者の見え方を一致させる。コミット以外のリンク（Cloud Logging 等）
+ * は決定的導出のまま残す。fallback（buildFallbackReport）は絞らず全件温存＝「失敗しても
+ * 収集済みの一次情報は空にしない」の方針はそのまま。
+ */
+function restrictCommitLinksToCited(
+  links: InvestigationStepPrimitives[],
+  citedText: string,
+): InvestigationStepPrimitives[] {
+  const cited = citedText.toLowerCase();
+  return links.filter((link) => {
+    const sha = link.href?.match(COMMIT_LINK_PATTERN)?.[1];
+    if (!sha) return true;
+    return cited.includes(sha.toLowerCase());
+  });
+}
+
 export function toInvestigationReport(
   output: LLMInvestigationOutput,
   // evidence から決定的に導出した外部リンク（LLM はテキストのみ・URL は作らせない）。
-  // 「証拠を見るべき場所」として調査ステップ末尾へ追記する。
+  // 「証拠を見るべき場所」として、AI が引用したコミットに絞ったうえで調査ステップ末尾へ追記する。
   evidenceLinks: InvestigationStepPrimitives[] = [],
 ): InvestigationReport {
+  // ハルシネーションガード適用後の値を引用源にする（証拠パネルの CitedCommitFilter は
+  // 永続化後＝ガード済みの報告書を読むため、同じ土台で判定しないと両者がずれる）。
+  const impact = guardImpact(output.impact);
+  const escalation = guardEscalation(output.escalation);
+  const remediationReview = guardRemediationReview(output.remediationReview);
+  const citedLinks = restrictCommitLinksToCited(
+    evidenceLinks,
+    collectCitedEvidenceText({
+      summary: output.summary,
+      impact,
+      escalation,
+      remediationReview,
+    }),
+  );
   return new InvestigationReport({
     summary: output.summary,
     confidence: clampConfidence(output.confidence),
     severity: parseSeverity(output.severity),
-    investigationSteps: [...output.investigationSteps, ...evidenceLinks],
+    investigationSteps: [...output.investigationSteps, ...citedLinks],
     suggestedActions: output.suggestedActions,
     suggestedPatternName: output.suggestedPatternName,
     reviewStatus: ReviewStatus.pendingReview(),
@@ -84,9 +124,9 @@ export function toInvestigationReport(
     isFallback: false,
     remediable: output.remediable,
     relatedAlerts: output.relatedAlerts,
-    impact: guardImpact(output.impact),
-    escalation: guardEscalation(output.escalation),
-    remediationReview: guardRemediationReview(output.remediationReview),
+    impact,
+    escalation,
+    remediationReview,
   });
 }
 

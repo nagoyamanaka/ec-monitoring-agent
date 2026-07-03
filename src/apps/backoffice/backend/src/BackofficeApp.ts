@@ -64,6 +64,19 @@ import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestig
 import { InMemoryAppliedInfraChangeStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryAppliedInfraChangeStore.js";
 import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/GitHubGatewayImpl.js";
 import { GitHubPullRequestReadGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestReadGateway.js";
+import { InMemoryPendingInfraPlanStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryPendingInfraPlanStore.js";
+import { ForecastRiskCommandHandler } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskCommandHandler.js";
+import { ForecastRiskUseCase } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskUseCase.js";
+import { ForecastPort } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastPort.js";
+import { ForecastSignalSource } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastSignalSource.js";
+import { GeminiForecastAdapter } from "../../../../Contexts/Monitoring/Forecast/infrastructure/GeminiForecastAdapter.js";
+import { InMemoryRiskForecastRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/InMemoryRiskForecastRepository.js";
+import { PendingPlanSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/PendingPlanSignalSource.js";
+import { PullRequestSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/PullRequestSignalSource.js";
+import { ResolvedAlertForecastMemoryRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/ResolvedAlertForecastMemoryRepository.js";
+import { ScheduleSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/ScheduleSignalSource.js";
+import { SeedScheduleSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/SeedScheduleSource.js";
+import { FORECAST_SCHEDULE_SEED } from "../../../../Contexts/Monitoring/seeds/ForecastScheduleSeed.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
 import { RedisSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/RedisSSEAlertNotifier.js";
 import { SSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/domain/SSEAlertNotifier.js";
@@ -110,6 +123,8 @@ export type BackofficeAppOverrides = {
   infraInvestigationPort?: InfraInvestigationPort;
   // demo パネルが EC backend を叩く口。未指定なら HttpEcDemoGateway（実 EC へ HTTP）。
   ecDemoGateway?: EcDemoGateway;
+  // 予報生成の口（Gemini）。未指定なら GeminiForecastAdapter。結合テストでは決定的な fake に差し替える。
+  forecastPort?: ForecastPort;
 };
 
 export class BackofficeApp {
@@ -186,7 +201,12 @@ export class BackofficeApp {
     // demo 注入（TriggerDemoScenarioUseCase 経由 write）で同一インスタンスを共有する。
     // 実機では CI からの HTTP ingest を上流に差し込み、本ストアはその受け皿になる。
     const appliedInfraChangeStore = new InMemoryAppliedInfraChangeStore();
-    const terraformGateway = new TerraformGatewayImpl(appliedInfraChangeStore);
+    // 未適用 plan（予兆の FUTURE_CHANGE シグナル）の受け皿。F8 の seed / CI の plan ingest が record する。
+    const pendingInfraPlanStore = new InMemoryPendingInfraPlanStore();
+    const terraformGateway = new TerraformGatewayImpl(
+      appliedInfraChangeStore,
+      pendingInfraPlanStore,
+    );
     const githubGateway = new GitHubGatewayImpl(
       config.github.token,
       config.github.targetRepo,
@@ -384,6 +404,40 @@ export class BackofficeApp {
       logger,
     );
 
+    // 予兆ブリーフィング（step6 F5/F6）: 全依存 read-only・write ゼロ。FORECAST_ENABLED off（既定）
+    // ではルートが 404 なので配線は inert＝既存P0経路に影響しない。
+    // ★継ぎ目: Handler へは ForecastSignalSource[] を渡す（Gateway を名指しさせない）。
+    // stretchⅢ は EventLogPrecursorSource をこの配列に足すだけ。
+    const forecastSignalSources: ForecastSignalSource[] = [
+      new PullRequestSignalSource(githubGateway, logger),
+      new PendingPlanSignalSource(terraformGateway, logger),
+      new ScheduleSignalSource(
+        // スケジュール seed は DEMO_ENABLED 配下で投入（本番 off では空＝シグナル無し）。
+        new SeedScheduleSource(config.demo.enabled ? FORECAST_SCHEDULE_SEED : []),
+        logger,
+      ),
+    ];
+    const forecastMemoryRepository = new ResolvedAlertForecastMemoryRepository(
+      alertRepository,
+      logger,
+    );
+    if (config.forecast.enabled) {
+      // 起動時に解決済み事例から投影（失敗しても空で縮退＝起動は止めない）。off 時はスキャン自体しない。
+      await forecastMemoryRepository.warmUp();
+    }
+    const riskForecastRepository = new InMemoryRiskForecastRepository();
+    // ★差し替え点（ForecastPort）: 既定は単発 Gemini（ADK 非使用は意図的・GeminiForecastAdapter 参照）。
+    const forecastPort =
+      this.overrides.forecastPort ?? new GeminiForecastAdapter(llmClient, logger);
+    const forecastRiskUseCase = new ForecastRiskUseCase(
+      forecastSignalSources,
+      forecastMemoryRepository,
+      forecastPort,
+      riskForecastRepository,
+      logger,
+    );
+    const forecastRiskCommandHandler = new ForecastRiskCommandHandler(forecastRiskUseCase);
+
     const commandBus = new InMemoryCommandBus(
       new CommandHandlers([
         analyzeAlertCommandHandler,
@@ -393,6 +447,7 @@ export class BackofficeApp {
         requestAlertInvestigationCommandHandler,
         draftRemediationCommandHandler,
         reinvestigateAlertCommandHandler,
+        forecastRiskCommandHandler,
       ]),
     );
     const queryBus = new InMemoryQueryBus(
@@ -479,6 +534,11 @@ export class BackofficeApp {
           // CI(AIリメディジョブ)からの結果 callback。
           recordRemediationResultUseCase,
           ingestToken: config.ingestToken,
+        },
+        {
+          // 予兆ブリーフィング（FORECAST_ENABLED off では guard が 404 を返す）。
+          riskForecastRepository,
+          horizon: config.forecast.horizon,
         },
       );
     }

@@ -42,6 +42,12 @@ export const config = {
       parseInt(process.env.AI_INVESTIGATION_TIMEOUT_MS ?? "240000"),
     ),
   },
+  forecast: {
+    // 予兆ブリーフィング（step6 F系）。既定 off＝forecast ルートは 404・既存P0経路に影響ゼロ。
+    enabled: process.env.FORECAST_ENABLED === "true",
+    // 予報の対象期間。POST /forecast はこの値で固定生成する（無認証デモ経路に入力面を作らない）。
+    horizon: process.env.FORECAST_HORIZON ?? "今週末",
+  },
   demo: {
     enabled: process.env.DEMO_ENABLED === "true",
     feedbackAutoPromoteThreshold: parseInt(

@@ -47,15 +47,57 @@ describe("InvestigationReportMapper", () => {
       expect(toInvestigationReport(output({ severity: "FATAL" })).severity.value).toBe(AlertSeverities.WARNING);
     });
 
-    it("evidence リンクを LLM ステップの末尾へ追記する", () => {
-      const report = toInvestigationReport(output({ investigationSteps: ["ログ確認"] }), [
-        { text: "コミット abc: m", href: "https://github.com/o/r/commit/abc", kind: "code" },
-      ]);
+    it("引用された sha のコミットリンクだけを LLM ステップの末尾へ追記する", () => {
+      const report = toInvestigationReport(
+        output({
+          summary: "e12b655 による float 演算退行",
+          investigationSteps: ["ログ確認"],
+        }),
+        [
+          { text: "コミット e12b655: perf", href: "https://github.com/o/r/commit/e12b655", kind: "code" },
+          { text: "コミット 740498f: Merge pull request #6", href: "https://github.com/o/r/commit/740498f", kind: "code" },
+        ],
+      );
 
       expect(report.investigationSteps).toEqual([
         "ログ確認",
+        { text: "コミット e12b655: perf", href: "https://github.com/o/r/commit/e12b655", kind: "code" },
+      ]);
+    });
+
+    it("impact.citations の引用でもコミットリンクを残す", () => {
+      const report = toInvestigationReport(
+        output({
+          impact: {
+            fault: "own" as const,
+            scope: "注文",
+            scale: "全件",
+            affectedSubjects: ["orders"],
+            citations: ["commit e12b655 が原因"],
+          },
+        }),
+        [{ text: "コミット e12b655: perf", href: "https://github.com/o/r/commit/e12b655", kind: "code" }],
+      );
+      expect(report.investigationSteps).toContainEqual(
+        { text: "コミット e12b655: perf", href: "https://github.com/o/r/commit/e12b655", kind: "code" },
+      );
+    });
+
+    it("どこにも引用されないコミットリンクは全て落とす（全件連結ノイズの抑止）", () => {
+      const report = toInvestigationReport(output({ investigationSteps: ["ログ確認"] }), [
         { text: "コミット abc: m", href: "https://github.com/o/r/commit/abc", kind: "code" },
       ]);
+      expect(report.investigationSteps).toEqual(["ログ確認"]);
+    });
+
+    it("コミット以外のリンク（Cloud Logging 等）は引用なしでも残す", () => {
+      const logLink = {
+        text: "Cloud Logging: svc の ERROR ログ",
+        href: "https://console.cloud.google.com/logs/query;query=x?project=p",
+        kind: "log" as const,
+      };
+      const report = toInvestigationReport(output(), [logLink]);
+      expect(report.investigationSteps).toContainEqual(logLink);
     });
 
     it("evidence リンク未指定なら LLM ステップのみ", () => {
@@ -166,6 +208,14 @@ describe("InvestigationReportMapper", () => {
       expect(report.severity.value).toBe(AlertSeverities.WARNING);
       expect(report.reviewStatus.value).toBe(ReviewStatuses.PENDING_REVIEW);
       expect(report.suggestedActions.length).toBeGreaterThan(0);
+    });
+
+    it("fallback は evidence リンクを引用で絞らず全件温存する（失敗しても空にしない）", () => {
+      const links = [
+        { text: "コミット abc: m", href: "https://github.com/o/r/commit/abc", kind: "code" as const },
+        { text: "コミット def: n", href: "https://github.com/o/r/commit/def", kind: "code" as const },
+      ];
+      expect(buildFallbackReport(links).investigationSteps).toEqual(links);
     });
   });
 });

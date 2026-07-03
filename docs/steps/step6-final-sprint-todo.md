@@ -55,14 +55,15 @@ todo実施後に
 - 【設計判断・実装済み】**ADK は意図的に非使用**: 入力（シグナル）は Handler が Source 群から事前収集済みで、LLM の仕事は突合・格付けの1ショット合成＝ツールコール型の動的探索（ADK の価値）が不要。D3/I1 で実測済みの ADK 脆さ（無言ドロップ・散文・JSON途中切断）を無人閲覧経路（GET /forecast・録画）に持ち込まず、`responseMimeType=application/json` 強制の単発 generateContent で構造化を堅くする。`LLMTextClient`（GeminiLLMClient＝Vertex/AI Studio 切替・timeout・リトライ持ち）を注入するコンポジション。後から agentic 化したければ `ForecastPort` 差し替えのみ（Handler ノータッチ）
 - 【実装メモ】citations 空の RiskItem はアダプタでは落とさない（「空は不正」の drop は F5 引用検証へ集約＝実在照合と同じ場所・二重実装回避）。未知 level は LOW 丸め（盛らない側）・level降順/confidence降順ソートはアダプタが保証。fallback は throw せず `isFallback=true`・risks 空（UT 13ケース・全791テスト緑）
 
-### タスク F5: ForecastRiskCommandHandler 〔P0〕（旧 step4-2 タスク23）
+### タスク F5: ForecastRiskCommandHandler 〔P0〕（旧 step4-2 タスク23）✅
 
-- 【新規】`Forecast/application/ForecastRisk/ForecastRiskCommand.ts` / `ForecastRiskCommandHandler.ts`
+- 【新規】`Forecast/application/ForecastRisk/ForecastRiskCommand.ts` / `ForecastRiskCommandHandler.ts` / `ForecastRiskUseCase.ts`（AnalyzeAlert と同構造: Handler は Command→params 変換のみの薄い層・ロジックは UseCase。`run()` は収集→予報→検証→保存の1段の抽象度＝SLAP、各ステップは private メソッドへ）
 - フロー: `signalSources: ForecastSignalSource[]` を回して主シグナル収集（PR/plan/schedule）→ subject抽出→ ForecastMemory.findBySubjects（MEMORY）→ 全シグナル結合 → Context → Port.forecast → **引用検証（citations実在照合・偽引用は落とす）** → 保存（最小はメモリ最新）
 - 依存は `ForecastSignalSource[]` / ForecastMemoryRepository / ForecastPort / Logger（全て read-only・write無し）。**Gateway は名指ししない**（Source 経由）
 - 設計判断（継ぎ目）: 源を配列で受け、stretchⅢ は `EventLogPrecursorSource` を配列に足すだけ＝Handler ノータッチ（`step4-1` §7.9）。記憶（MEMORY）は subject 駆動なので配列反復と別ステップ
+- 【実装メモ】引用検証は2段: 偽引用（実在しないシグナル id）を citations から破棄（`forecast_fake_citation_dropped` ログ＝F8 の偽引用実演の観測点）＋裏付けゼロ（citations 空 or 全偽）のリスクを丸ごと破棄（`forecast_uncited_risk_dropped`）。保存は `ForecastBriefing`（予報＋**シグナル全量同梱**＝引用チップの解決先を配信に含める・`RiskForecastRepository`/InMemory 最新1件）。シグナル0件は Gemini を呼ばず空予報（isFallback=false・課金ゼロ）。wire 契約 `Forecast/domain/contracts/ForecastContract.ts`（F7 は @monitoring alias で直接 import）。MEMORY シグナルの source は `incident.<実在AlertId>`（UT 4ケース）
 
-### タスク F6: forecast ルート・コントローラ ＋ DI ＋ seed 〔P0〕（旧 step4-3 タスク13・14）
+### タスク F6: forecast ルート・コントローラ ＋ DI ＋ seed 〔P0〕（旧 step4-3 タスク13・14）✅
 
 - 【新規】`routes/forecastRoutes.ts` ＋ `ForecastPostController`（POST /forecast → `ForecastRiskCommandHandler`）/ `ForecastGetController`（GET /forecast → 最新 RiskForecast）。`routes/index.ts` に登録（既存ルートはノータッチ）
 - **【審査対応】GET /forecast は事前生成済みの最新 RiskForecast を返す**＝審査員の非同期閲覧（デプロイURL審査）に Gemini 待ちゼロ・課金ゼロで耐える。提出前に POST を1回打ってキャッシュを温めておく。POST は `DEMO_ENABLED` 配下
@@ -74,6 +75,7 @@ todo実施後に
 - 【修正】`config.ts`：`FORECAST_ENABLED`（既定off）/ `FORECAST_HORIZON`（既定 "今週末"）追加
 - **write は発生しない**（全Gateway read-only）
 - **【確認済み方針・2026-07-03】定期実行（cron/setInterval）はやらない**: 審査員の非同期閲覧に対し「たまたま失敗した最新予報」を見せるリスクと Gemini 課金が増えるだけで掴みに寄与しない。手動 POST（デモ卓）＋提出前キャッシュ温めで無人安定性を取る。Bus 登録済みハンドラなので本運用の定期化は `FORECAST_ENABLED` 配下に1本足すだけ＝stretchⅢ と併せて「語り」で示す。SSE push も設計上任意のまま＝デモではページを開けば足りる（D2 認知負荷と整合）
+- 【実装メモ】`forecastGuard`（FORECAST_ENABLED off＝/forecast まとめて404・demoGuard と同方針）、POST はさらに demoGuard を重ねる。horizon は config 固定＝無認証デモ経路に入力面を作らない（H1 整合）。POST レスポンスは生成結果（引用検証済み・fallback 含む）をそのまま返す＝デモ卓で即 confirm。`InMemoryPendingInfraPlanStore` を `TerraformGatewayImpl` に配線（F8 の pending plan seed の受け皿・record 口は `pendingInfraPlanStore`）。schedule seed は `seeds/ForecastScheduleSeed.ts`（checkout 土20:00 x5）。`BackofficeAppOverrides.forecastPort` を追加（結合テストの決定論差し替え口）。結合テスト3件（404→POST 引用検証→GET キャッシュ）・全緑（unit 803・integration 27）
 
 ### タスク F7: forecast feature slice（UI）〔P0〕（旧 step4-4 タスク13）
 
@@ -114,6 +116,7 @@ todo実施後に
 - 【設計】`step6-final-sprint-strategy.md` §5 の 0-15/15-35/35-60 秒構成をデモ台本に落とす
 - 【UI】予兆の予報カード＋引用チップを**最初に見せられる**導線（`ForecastPage` を開幕に置く or 専用 demo 開幕ビュー）
 - 【接続】「では実際に起きたら？」で反応的パイプライン（分類→ADK調査→承認）へ滑らかに遷移
+- 【台本メモ・I4 より】**4b と 6 は同一根本原因（Cloud SQL 縮小）の物語**。連続で見せると重複感が出る一方、6 の関連アラートに「同一根本原因: インフラ障害（CRITICAL ログ検知）」が張られるクロスアラート相関の見せ場になる＝台本は「**4b →（波及）→ 6 で相関を回収**」の順を明記する
 
 ### タスク D2: 認知負荷トリム〔取り: Lisa〕
 
@@ -169,6 +172,7 @@ todo実施後に
 ### タスク E3: fallback 体験の格上げ 〔P0・D3連動〕
 
 **問題（実測）**: fallback 時のドロワーが「自動調査に失敗しました。手動での確認が必要です。」＋「証拠は見つかりませんでした。」で行き止まり。バナーは「再調査をおすすめします」と言うのに**再調査ボタンがドロワーに無い**。一覧カードは「AI推定: 」と**空文字**を表示。
+**P0 維持の根拠補強（2026-07-03 実機総点検・I4）**: シナリオ7で fallback が実発生した際、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを再確認（`POST /alerts/:id/reinvestigate` は backend 実装済みのまま未結線）。ライブ・無人デプロイ審査の両方で fallback は現実に起きる＝導線の格上げは演出でなく必須。
 
 - ドロワーのfallbackバナー直下に**「再調査を実行」ボタン**（既存 `POST /alerts/:id/reinvestigate` を結線するだけ）
 - fallback でも evidenceLinks（温存済み）を「収集済みの証拠リンク」として表示（backend は対応済み・UI 側の出し分け）
@@ -286,12 +290,13 @@ todo実施後に
 - 【実測】シナリオ3/5 で `demo/regression` の直近コミット10件（merge 含む・原因と無関係）が「調査完了 — AI がたどったステップ」に混入。D5 ティザー「調査ステップ 13」も水増し。同時に証拠パネルは「証拠は見つかりませんでした」（CitedCommitFilter は引用絞り済み）＝**ステップには10コミット・証拠は0件という矛盾に見える**
 - 方向: `InvestigationReportMapper` の evidenceLinks 連結（`InvestigationReportMapper.ts:79`）に CitedCommitFilter と同じ**引用 sha 絞り**を適用（シナリオ7では正解 e12b655 が引用されるので残る）。**fallback 時は全件温存**＝「失敗しても空にしない」の D3 意図は守る
 - 表示だけの代替案: ステップと分離して「参照した直近コミット」見出しにするだけでも矛盾は解消する
+- ✅ 実装済み（2026-07-03）: 引用判定を `CitedEvidence`（AIInvestigation/domain）に**単一ソース化**（引用源 = summary / impact.citations / escalation.evidenceBundle / remediationReview.citations）し、CitedCommitFilter（証拠パネル）と `toInvestigationReport` の evidenceLinks 絞り（調査ステップ）が同じ基準を共有＝「ステップには10件・証拠は0件」の食い違いが構造的に起きない。コミットリンクは href の `/commit/{sha}` から sha を逆引きして照合、Cloud Logging 等コミット以外のリンクは決定的導出のまま温存。ガード適用後（citations 空 impact 除去後）の値を引用源にし、永続化後に読む CitedCommitFilter とずれない。`buildFallbackReport` は絞らず全件温存（D3 意図維持・回帰テストで固定）
 
 ### タスク I4: 残りの文言・整合の小粒 〔P2〕
 
-- リセット直後の ValueStrip が「自動トリアージ 1・AI 調査 1」（seed の過去解決事例 5eed0000… が集計に乗る）: 学習履歴の種として意図的なら現状維持可。気になる場合のみ「過去実績を含む」注記 or 集計から RESOLVED 除外を判断
-- デモ台本メモ（D1 連動）: **4b と 6 は同一根本原因（Cloud SQL 縮小）の物語**。連続で見せると重複感が出る一方、6 の関連アラートに「同一根本原因: インフラ障害（CRITICAL ログ検知）」が張られ**クロスアラート相関の見せ場**になる＝台本は「4b →（波及）→ 6 で相関を回収」の順を明記
-- E3（fallback 体験の格上げ）の優先度維持の根拠を実測で補強: 今回 fallback 実発生時、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを確認（E3 は未実装のまま）
+- リセット直後の ValueStrip が「自動トリアージ 1・AI 調査 1」（seed の過去解決事例 5eed0000… が集計に乗る）: 学習履歴の種として意図的なら現状維持可。気になる場合のみ「過去実績を含む」注記 or 集計から RESOLVED 除外を判断（✅ **注記案を採用**: ストリップ末尾に「※過去実績含む」＋ tooltip に累計の説明・RTL テスト追加。RESOLVED 除外は GET /analytics の集計が Analytics ページ・昇格ファネルと共有のためここだけ意味を変えない＝不採用）
+- デモ台本メモ（D1 連動）: **4b と 6 は同一根本原因（Cloud SQL 縮小）の物語**。連続で見せると重複感が出る一方、6 の関連アラートに「同一根本原因: インフラ障害（CRITICAL ログ検知）」が張られ**クロスアラート相関の見せ場**になる＝台本は「4b →（波及）→ 6 で相関を回収」の順を明記（✅ D1 のタスク本文に台本メモとして転記済み＝台本作成時に確実に乗る）
+- E3（fallback 体験の格上げ）の優先度維持の根拠を実測で補強: 今回 fallback 実発生時、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを確認（E3 は未実装のまま）（✅ E3 の問題文に「P0 維持の根拠補強（2026-07-03）」として追記済み）
 
 ---
 
