@@ -121,6 +121,16 @@ describe("ReinvestigateAlertUseCase", () => {
     expect(saved?.investigationReport?.summary).toBe(
       "DBコネクションプール枯渇の可能性",
     );
+
+    // 働きの明細（G1）: 自動調査と同じ形で実測メトリクスが添付される
+    expect(saved?.investigationReport?.metrics?.elapsedMs).toBeGreaterThanOrEqual(0);
+    expect(saved?.investigationReport?.metrics?.evidenceCounts).toEqual({
+      logs: 0,
+      metrics: 0,
+      terraformChanges: 0,
+      commits: 0,
+      similarIncidents: 0,
+    });
   });
 
   it("Alert が存在しなければ何もしない（冪等性）", async () => {

@@ -65,7 +65,7 @@ function FilterChip({
       disabled={empty || !onToggle}
       onClick={onToggle}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-medium ring-1 ring-inset transition",
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-medium ring-1 ring-inset transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
         toneCls,
         empty && "opacity-40",
         !empty && onToggle && "cursor-pointer hover:brightness-125 hover:ring-2",

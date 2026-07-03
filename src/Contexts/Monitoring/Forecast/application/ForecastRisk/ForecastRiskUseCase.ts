@@ -58,6 +58,9 @@ export class ForecastRiskUseCase {
     primarySignals: ForecastSignal[],
   ): Promise<ForecastSignal[]> {
     if (primarySignals.length === 0) return [];
+    // 生成時点の最新投影へ更新してから引く。起動時 warmUp だけだと demo reset の再seed や
+    // 直前に承認/解決した事例が記憶に載らず、MEMORY シグナルが起動時のまま固定されてしまう。
+    await this.forecastMemory.warmUp();
     const subjects = [...new Set(primarySignals.map((signal) => signal.subject))];
     const memories = await this.forecastMemory.findBySubjects(subjects);
     return memories.map((memory, index) => this.toMemorySignal(memory, index));

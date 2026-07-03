@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AlertView } from "../../domain/AlertView";
 import { mergeAlert, mergeAlerts } from "../../domain/alertMerge";
 import { type RemediationView, toRemediationView } from "../../domain/RemediationView";
@@ -12,6 +12,12 @@ import { useAlertStream } from "./useAlertStream";
 
 export type AlertsStatus = "loading" | "ready" | "error";
 
+/** ライブインジケータに一言添える「最後に届いた SSE イベント」（タスク E5）。 */
+export type LastStreamEvent = {
+  readonly label: string;
+  readonly at: Date;
+};
+
 export type UseAlertsResult = {
   readonly alerts: AlertView[];
   readonly status: AlertsStatus;
@@ -22,6 +28,8 @@ export type UseAlertsResult = {
   readonly streamStatus: StreamStatus;
   /** 最後に一覧へ反映が入った時刻（初回取得・SSE 受信・再取得）。未反映は null。 */
   readonly lastUpdatedAt: Date | null;
+  /** 最後に届いた SSE イベントの種別（「アラート受信」等）。ライブ表示に一言添える。 */
+  readonly lastEvent: LastStreamEvent | null;
   /** 1 件を再取得して一覧へマージする。フィードバック送信後の即時反映に使う（SSE push が無いため）。 */
   readonly refreshAlert: (id: string) => Promise<void>;
   /** 全件を再取得して一覧を置き換える。デモリセット後など全件変わる操作の後に使う。 */
@@ -67,6 +75,10 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
   const [retrying, setRetrying] = useState(false);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("connecting");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [lastEvent, setLastEvent] = useState<LastStreamEvent | null>(null);
+  // 「受信＝新規」と「更新＝既存の置換」をイベントラベルで区別するための既知 id 集合。
+  // alerts state の写し（描画後に追随）。ラベル用途なので一瞬の遅れは許容する。
+  const knownIdsRef = useRef<ReadonlySet<string>>(new Set());
   const [remediationByAlertId, setRemediationByAlertId] = useState<
     ReadonlyMap<string, RemediationView>
   >(new Map());
@@ -129,9 +141,20 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, fetchKey]);
 
+  // 既知 id 集合を一覧に追随させる（ラベルの新規/更新判定用）。
+  useEffect(() => {
+    knownIdsRef.current = new Set(alerts.map((a) => a.id));
+  }, [alerts]);
+
   useAlertStream(
     stream,
     (incoming) => {
+      setLastEvent({
+        label: knownIdsRef.current.has(incoming.id)
+          ? "アラート更新"
+          : "アラート受信",
+        at: new Date(),
+      });
       setAlerts((prev) => mergeAlert(prev, incoming));
       setLastUpdatedAt(new Date());
     },
@@ -144,10 +167,13 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
         return next;
       });
       setLastUpdatedAt(new Date());
+      setLastEvent({ label: "修正提案 受信", at: new Date() });
     },
     (progress) => {
       // 調査進行イベント（E1）。alert 単位の時系列に追記（上限超過は古い方から捨てる）。
       // 一覧の lastUpdatedAt は動かさない（一覧データの反映ではないため）。
+      // ライブ表示のイベント種別だけは更新する＝AI 調査中（60〜120秒）も鼓動が見える。
+      setLastEvent({ label: "AI調査 進行中", at: new Date() });
       const view = toInvestigationProgressView(progress);
       setInvestigationProgressByAlertId((prev) => {
         const next = new Map(prev);
@@ -176,6 +202,7 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
     retrying,
     streamStatus,
     lastUpdatedAt,
+    lastEvent,
     refreshAlert,
     refreshAlerts,
     reconnectStream,

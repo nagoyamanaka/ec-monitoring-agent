@@ -5,6 +5,7 @@ import { ImpactPanel } from "./ImpactPanel";
 import { EscalationPanel } from "./EscalationPanel";
 import { RemediationReviewPanel } from "./RemediationReviewPanel";
 import { alertReason } from "../../domain/alertReason";
+import { workloadSummary } from "../../domain/investigationWorkload";
 
 /**
  * 表示の射影モード（タスク37：同一 InvestigationReport を射影違いで出し分ける）。
@@ -54,6 +55,8 @@ export function AlertCardExpanded({
   const report = alert.report;
   const reason = alertReason(alert);
   const known = alert.classification.type === "known";
+  // 働きの明細（タスク G1）: 実測メトリクスがあれば冒頭 1 行に数字で出す（fallback は対象外）。
+  const workload = report && !report.isFallback ? workloadSummary(report.metrics) : null;
   // 状態が ANALYZING に戻っている＝AI が（再）調査中。既存の内容を持つときは再調査の最中。
   const analyzingNow = alert.status === "ANALYZING";
 
@@ -107,6 +110,17 @@ export function AlertCardExpanded({
           ) : (
             <p className="text-slate-100">{reason.patternName}</p>
           )}
+          {/* 学習ループの経済性の対比（タスク G1）: 既知一致は AI を起動せず即・無料で確定する事実を
+              毎回 1 行で想起させる（AI 調査の実測サマリと対になる）。 */}
+          {reason.kind === "known" && (
+            <p className="text-xs text-emerald-300/90">
+              <span aria-hidden>⚡ </span>
+              既知パターン一致＝
+              <span className="font-semibold">1秒未満・AI コストゼロ</span>
+              で確定
+              {reason.crystallized && "（初回 AI 調査の結晶化を再利用）"}
+            </p>
+          )}
           {/* 類似既知（SIMILARITY）の back-link は RelatedAlertsPanel の「過去の同型事例」
               セクションに確度チップ付きで提示する（ドロワー/詳細でマウント・タスク9e）。 */}
         </section>
@@ -152,6 +166,28 @@ export function AlertCardExpanded({
           full は報告用フル（調査ステップ・推奨アクション・影響評価・escalation・review）。 */}
       {report && (
         <>
+          {/* 働きの明細（タスク G1）: 何秒で・どのソースを横断し・何件の証拠を読んだかの実測 1 行。
+              数字は全て backend が記録した事実（InvestigationMetrics）＝人間換算はしない。 */}
+          {workload && (
+            <p className="rounded-md bg-cyan-500/10 px-3 py-2 text-xs leading-relaxed text-cyan-100 ring-1 ring-inset ring-cyan-500/25">
+              <span aria-hidden>⏱ </span>
+              <span className="font-semibold text-cyan-300">
+                {workload.elapsedLabel}
+              </span>
+              で
+              {workload.evidenceTotal > 0 ? (
+                <>
+                  {workload.sources.join("・")} を横断し、
+                  <span className="font-semibold text-cyan-300">
+                    証拠 {workload.evidenceTotal} 件
+                  </span>
+                  を収集して原因を推定
+                </>
+              ) : (
+                <>調査を実行して原因を推定</>
+              )}
+            </p>
+          )}
           <p className="leading-relaxed text-slate-100">{report.summary}</p>
 
           {/* 要約: 障害規模(impact.scale)だけを1行で出す（重い impact 全項目は full のみ）。 */}
@@ -164,7 +200,27 @@ export function AlertCardExpanded({
             </p>
           )}
 
-          {full && report.investigationSteps.length > 0 && (
+          {/* fallback の調査ステップは「収集済みの証拠リンク」（buildFallbackReport が温存した
+              コミット/ログへの一次情報リンク）＝行き止まりにしない（タスク E3）。要約射影でも出す。 */}
+          {report.isFallback && report.investigationSteps.length > 0 && (
+            <section className="space-y-1">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                収集済みの証拠リンク
+              </h4>
+              <p className="text-xs text-slate-400">
+                AI の結論は出せませんでしたが、調査中に収集した一次情報へのリンクは残っています。
+              </p>
+              <ul className="list-disc space-y-1 pl-5 marker:text-slate-400">
+                {report.investigationSteps.map((step, i) => (
+                  <li key={i}>
+                    <InvestigationItem item={step} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {full && !report.isFallback && report.investigationSteps.length > 0 && (
             <section className="space-y-1">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
                 調査ステップ

@@ -86,6 +86,11 @@ services:
       # SimilarPatternRule（graded confidence 分類）用
       ELASTICSEARCH_URL: http://elasticsearch:9200
       # read-model projection ＋ SSE Pub/Sub（base の REDIS_URL=redis://valkey:6379 を継承）
+      # POST /forecast は stub LLM の固定予報（偽引用入り）で決定論＝課金なし。
+      FORECAST_ENABLED: "true"
+      # horizon はこの固定文字列がそのまま Gemini とページのメタ表示に使われる。
+      # 録画/デモ前は「今週末（7/5 土〜7/6 日）」のように具体日付にすると window の導出・表示が具体化する。
+      FORECAST_HORIZON: "今週末"
     depends_on:
       mongo:
         condition: service_healthy

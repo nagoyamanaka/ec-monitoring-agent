@@ -184,7 +184,8 @@ function ScenarioRow({
           >
             ▶
           </span>
-          <span className="truncate text-sm font-semibold text-slate-50">
+          {/* 「インフラ障害（実 Cl...」のような尻切れを避けるため truncate せず2行まで許容（E7）。 */}
+          <span className="line-clamp-2 text-sm font-semibold leading-snug text-slate-50">
             {scenario.label}
           </span>
         </span>

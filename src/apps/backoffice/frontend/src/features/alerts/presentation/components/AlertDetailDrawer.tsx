@@ -20,7 +20,9 @@ import type { RemediationView } from "../../domain/RemediationView";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertReviewPanel } from "./AlertReviewPanel";
 import { AlertStatusBadge } from "./AlertStatusBadge";
+import { ConfidenceCalibrationNote } from "./ConfidenceCalibrationNote";
 import { EvidencePanel } from "./EvidencePanel";
+import { FallbackRecoveryBanner } from "./FallbackRecoveryBanner";
 import { InvestigationPipelinePanel } from "./InvestigationPipelinePanel";
 import { RemediationPanel } from "./RemediationPanel";
 import { RelatedAlertsPanel } from "./RelatedAlertsPanel";
@@ -154,7 +156,8 @@ export function AlertDetailDrawer({
         onClick={onClose}
         aria-hidden
       />
-      <aside className="drawer-panel absolute inset-y-0 right-0 flex w-[clamp(480px,38vw,480px)] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
+      {/* 狭幅（〜480px）ではビューポート幅いっぱいに畳む（E7: モバイル閲覧の最低保証）。 */}
+      <aside className="drawer-panel absolute inset-y-0 right-0 flex w-full max-w-[480px] flex-col border-l border-slate-700/60 bg-[#0B0E14] shadow-2xl">
         {onBack && (
           <button
             type="button"
@@ -175,7 +178,7 @@ export function AlertDetailDrawer({
                 <SeverityBadge level={alert.severity} />
               )}
               <span
-                className="rounded bg-slate-700/40 px-2 py-0.5 text-xs font-medium text-slate-300"
+                className="whitespace-nowrap rounded bg-slate-700/40 px-2 py-0.5 text-xs font-medium text-slate-300"
                 title={category.description}
               >
                 {category.label}
@@ -209,7 +212,7 @@ export function AlertDetailDrawer({
             type="button"
             onClick={onClose}
             aria-label="閉じる"
-            className="shrink-0 rounded-md px-2 py-1 text-slate-300 transition hover:bg-slate-800/60 hover:text-slate-200"
+            className="shrink-0 rounded-md px-2 py-1 text-slate-300 transition hover:bg-slate-800/60 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             ✕
           </button>
@@ -219,17 +222,14 @@ export function AlertDetailDrawer({
           {confidence.kind === "exact-match" ? (
             <ExactMatchBadge variant="panel" />
           ) : confidence.kind === "ai" && aiFallback ? (
-            <div className="rounded-tremor-default bg-amber-500/10 px-4 py-3 text-amber-200 ring-1 ring-inset ring-amber-500/25">
-              <p className="flex items-center gap-2 text-sm font-semibold">
-                <span aria-hidden>⚠</span>
-                AI 調査に失敗・暫定表示
-              </p>
-              <p className="mt-1 text-xs text-amber-200/80">
-                確信度は参考値です（再調査をおすすめします）
-              </p>
-            </div>
+            // fallback は「再調査をおすすめします」で行き止まりにしない＝バナー直下に
+            // ワンクリックの「再調査を実行」を結線する（タスク E3）。
+            <FallbackRecoveryBanner
+              alert={alert}
+              onReinvestigate={onReinvestigate}
+            />
           ) : confidence.kind === "ai" ? (
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-1.5">
               <ConfidenceGauge
                 confidence={confidence.value}
                 size="lg"
@@ -237,6 +237,13 @@ export function AlertDetailDrawer({
                 color="cyan"
                 animate
               />
+              {/* キャリブレーション記録があれば「なぜこの値か」（裏付け・上限・補正）を併記する。 */}
+              {alert.report?.confidenceCalibration && (
+                <ConfidenceCalibrationNote
+                  calibration={alert.report.confidenceCalibration}
+                  confidence={confidence.value}
+                />
+              )}
             </div>
           ) : confidence.kind === "known" ? (
             <div className="flex justify-center">

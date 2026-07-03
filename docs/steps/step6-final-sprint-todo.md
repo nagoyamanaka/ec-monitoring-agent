@@ -94,13 +94,16 @@ todo実施後に
 ### タスク F8: フラッグシップ seed ＋ 録画テイク 〔P0〕（新規・本スプリント）
 
 - 【新規】§3.1 DB接続枯渇シナリオの seed 一式:
-  - 過去インシデント N件（`sourceAlertId` 付き＝citation が実在 Alert に解決できる）
-  - ステージ済み未マージ PR（pool 100→40 縮小）＝ `listOpenPullRequests` が拾える実 PR（draft 可）
-  - Terraform pending plan（connection 上限縮小）＝ `getPendingPlan` が拾える
-  - `ScheduleSource` seed（土20:00 checkout 負荷x5）
-- 【検証】`POST /forecast` → HIGH リスク＋引用3系統＋confidence が安定して出る seed に調整
-- 【引用検証の可視化】意図的に偽引用を混ぜたケースで**ドロップされる**ことをデモで見せられるようにする（ハルシネーション・ガードの実演）
-- 【録画】「実際に動いた1回を録る」（捏造NG・`step4-1` §7.6）
+  - [x] 過去インシデント N件（`sourceAlertId` 付き＝citation が実在 Alert に解決できる）（✅ `ResolvedAlertSeed.ts` に2件追加（`FORECAST_MEMORY_SEED_ALERT_IDS`）: ①過去の max_connections 縮小→枯渇（`report.subject="google_sql_database_instance.ec_db"`＝pending plan の terraform address と同語彙で突合）②週末セール checkout 負荷（`subject="checkout_db_connection_pool"`＝schedule seed の checkout と突合）。demo reset が再seed・`GET /alerts/:id` で開ける・一覧には出ない（RESOLVED））
+  - [ ] ステージ済み未マージ PR（pool 100→40 縮小）＝ `listOpenPullRequests` が拾える実 PR（draft 可）← **人間タスク**（GITHUB_TARGET_REPO に draft PR を1本立てる。タイトルに db/connection/pool 系の語を入れると過去事例①とも突合する）
+  - [x] Terraform pending plan（connection 上限縮小）＝ `getPendingPlan` が拾える（✅ `seeds/ForecastPendingPlanSeed.ts`＝Cloud SQL `max_connections` 100→40。`DEMO_ENABLED` 配下で `InMemoryPendingInfraPlanStore` へ起動時投入）
+  - [x] `ScheduleSource` seed（土20:00 checkout 負荷x5）（✅ F6 着地済みの値をフラッグシップ確定値としてコメント更新のみ）
+- 【実装メモ】**MEMORY は生成時に再 warmUp**（`ForecastRiskUseCase.recallMemorySignals`）: 起動時 warmUp だけだと demo reset の再seed・デモ中に承認/解決した事例が記憶に載らない穴があった（reset → POST /forecast がデモ卓の手順）。主シグナル0件時は再投影もスキップ（課金ゼロ経路は不変）
+- [ ] 【検証】`POST /forecast` → HIGH リスク＋引用3系統＋confidence が安定して出る seed に調整 ← **実 Gemini での実走確認は人間**（配線と突合はE2Eで検証済み。引用3系統のうち PR は上記 draft PR 待ち）
+- [x] 【引用検証の可視化】意図的に偽引用を混ぜたケースで**ドロップされる**ことをデモで見せられるようにする（✅ `StubLLMClient` が予兆 SYSTEM_INSTRUCTION を判別し**偽引用 ghost-\* 入りの固定予報**を返す→ローカルE2E `e2e/backoffice/forecast.e2e.test.ts` で「ghost-1 のみ citations から drop／ghost-2 だけのリスクは丸ごと破棄／MEMORY 引用が実在 Alert に解決／GET はキャッシュ配信」を決定論検証。e2e overlay に `FORECAST_ENABLED=true` 追加。stub の引用は `plan-1/sch-1/inc-1`＝**3系統が stub モードの UI にも揃い、記憶 seed が引けなければ inc-1 が偽引用として落ちて E2E が赤くなる**。実機の観測点は `forecast_fake_citation_dropped` ログ）
+- [x] 【バグ修正・実機で発見】MEMORY 引用「当時のアラートを開く」が「指定されたアラートは見つかりませんでした」になる（✅ 詳細ページは共有一覧 state から id を引くが、一覧 API は RESOLVED を除外＝アーカイブ seed に永遠に到達しない構造バグ。`useAlertDetail`（新規 hook・UT 5件）が現役＝共有一覧 state／アーカイブ＝`GET /alerts/:id` 単品の二源を単一インターフェース `{alert,status,refresh}` に畳む（一覧に無い id だけ単品 fetch）。**アーカイブは共有一覧へ merge しない**＝一覧ページに RESOLVED が混入しない。類似シナリオの関連アラート導線も同じ穴だったので同時に解消。Playwright 実クリックで /forecast → 引用チップ → 詳細描画 → 一覧混入なし を確認済み）
+- [x] 【UI・見やすさ（タイムチャート不採用の代替）】RiskCard は **window を主見出し**（「いつ危ないか」が予報の答え・subject は補足行）、引用は**種別レーン**（変更予定 cyan／負荷予定 amber／過去の記憶 emerald の左ボーダー・語り順固定）＋「根拠 n系統」チップで**収束の強さ**を可視化（`groupCitationsByKind`/`citationKindCount`＝domain 純関数・UT3件）。タイムチャートは window が LLM 由来の自由文字列で時刻を捏造せずには描けないため不採用。`FORECAST_HORIZON` は録画前に「今週末（7/5 土〜7/6 日）」等の具体日付へ（.env.example に注記）。seed の `ec.checkout.latency_degraded` を eventCatalog に追加（詳細ページ見出しの生英語防止）
+- [ ] 【録画】「実際に動いた1回を録る」（捏造NG・`step4-1` §7.6）
 - 【録画・提出前チェック】`make e2e` 実行後は一覧に「AI推定: [STUB] 未知の障害パターン（推定）」が出ていないこと（STUB 残留）を確認（I2 で自動原状復帰済み・念のための目視1行）
 
 ### ~~タスク F9: 2本目シナリオ（seed 替えのみ）~~〔**切り確定**（時間制約・strategy §1.6）〕
@@ -171,14 +174,14 @@ todo実施後に
 - [x] 上部チップ（レビュー待ち/CRITICAL）を**クリック可能フィルタ**に（0件時は淡色化）（✅ AlertsHeader の FilterChip＋matchesAlertFilter 単一ソース・AlertList が絞り込み。0件は淡色+disabled・再クリック/解除リンクで解除。**導線の明示**: 漏斗アイコン＋「クリックで絞り込み:」ラベルでチップ群をグルーピング・選択中は ✓＋✕・hover でリング強調・クリック不可の「分析中」チップは区切り線の右へ分離＝バッジと誤認されない）
 - [x] タイムスタンプを `ja-JP` ロケールに統一（実測: ドロワーが `7/2/2026, 2:16:55 PM` と英語式）（✅ `shared/format/dateTime.ts`（formatDateTimeJa/formatTimeJa）へ一本化・各所のローカル formatter を削除）
 
-### タスク E3: fallback 体験の格上げ 〔P0・D3連動〕
+### タスク E3: fallback 体験の格上げ 〔P0・D3連動〕完了✅
 
 **問題（実測）**: fallback 時のドロワーが「自動調査に失敗しました。手動での確認が必要です。」＋「証拠は見つかりませんでした。」で行き止まり。バナーは「再調査をおすすめします」と言うのに**再調査ボタンがドロワーに無い**。一覧カードは「AI推定: 」と**空文字**を表示。
 **P0 維持の根拠補強（2026-07-03 実機総点検・I4）**: シナリオ7で fallback が実発生した際、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを再確認（`POST /alerts/:id/reinvestigate` は backend 実装済みのまま未結線）。ライブ・無人デプロイ審査の両方で fallback は現実に起きる＝導線の格上げは演出でなく必須。
 
-- ドロワーのfallbackバナー直下に**「再調査を実行」ボタン**（既存 `POST /alerts/:id/reinvestigate` を結線するだけ）
-- fallback でも evidenceLinks（温存済み）を「収集済みの証拠リンク」として表示（backend は対応済み・UI 側の出し分け）
-- 「AI推定: 」空文字の抑止（fallback 時は「調査失敗・再調査可」の定型文）
+- [x] ドロワーのfallbackバナー直下に**「再調査を実行」ボタン**（既存 `POST /alerts/:id/reinvestigate` を結線するだけ）（✅ `FallbackRecoveryBanner` 新設＝警告バナー＋ワンクリック再調査。operatorNote 必須の既存契約は「前回の自動調査は出力不正で失敗しました…」の定型指摘文で満たす。ドロワーの既存インラインバナーを置換＋**詳細ページにも同バナーを追加**（I4 で確認した「どちらにも無い」行き止まりを両方解消）。再調査中（ANALYZING）はパイプラインビューが進行を示すため非表示）
+- [x] fallback でも evidenceLinks（温存済み）を「収集済みの証拠リンク」として表示（backend は対応済み・UI 側の出し分け）（✅ `AlertCardExpanded`＝fallback の investigationSteps を「収集済みの証拠リンク」見出し＋「一次情報へのリンクは残っています」注記で **summary 射影でも**表示。full の「調査ステップ」とは排他＝二重表示なし）
+- [x] 「AI推定: 」空文字の抑止（fallback 時は「調査失敗・再調査可」の定型文）（✅ `alertReason` が report.isFallback で patternName「調査失敗・再調査可」を返す＝一覧カード/展開ビュー共通）
 
 ### タスク E4: 審査員ファーストラン 〔P0・デプロイURL審査に直撃〕完了✅
 
@@ -189,12 +192,13 @@ todo実施後に
 - [x] 統計タイル「アラート」→「アクティブアラート」等、一覧と同じ軸のラベルに統一（✅ AnalyticsResponse に `activeAlertCount`（非 RESOLVED）追加→ /demo/status が `activeAlerts` を返し SystemStatus タイルが表示＝リセット後「1 vs 空一覧」不一致解消）
 - [x] 初回訪問ガイド（dismissible・3ステップ: ①注入 → ②AI調査を見る → ③承認で学習）。localStorage で1回きり（✅ FirstRunGuide 新設・AlertsPage 冒頭）
 
-### タスク E5: ライブ感マイクロインタラクション 〔P1〕
+### タスク E5: ライブ感マイクロインタラクション 〔P1〕完了✅
 
-- SSE 着弾時のカードスライドイン＋一瞬のグロー（新規と更新を区別）
-- dedup ×N 加算時のカウンタパルス（storm デモの体感を強化）
-- ANALYZING→OPEN の状態遷移アニメ（badge クロスフェード）
-- ライブインジケータ（既存）に最終イベント種別を一言添える（「アラート受信 たった今」）
+- [x] SSE 着弾時のカードスライドイン＋一瞬のグロー（新規と更新を区別）（✅ `AlertCard` が prop の前回値比較で検出: 新規=マウント時 createdAt が直近10秒（初回ロードの過去分は動かさない）→ `card-arrive`（スライドイン＋シアングロー）／既存更新=updatedAt 変化 → `card-update-flash`（移動なしグロー）＝移動の有無で新規/更新を区別。解決フラッシュ（resolve-flash）とは重ねない・アニメ終了リセットは animationName 判別で子要素の bubbling と混線しない）
+- [x] dedup ×N 加算時のカウンタパルス（storm デモの体感を強化）（✅ occurrenceCount 増加 → 重複バッジに `count-pulse`（scale+brightness 0.5s））
+- [x] ANALYZING→OPEN の状態遷移アニメ（badge クロスフェード）（✅ `AlertStatusBadge` が alertWorkState 遷移時のみ key 差し替え＋`badge-fade-in`。初期マウント・無関係な再レンダーでは動かない）
+- [x] ライブインジケータ（既存）に最終イベント種別を一言添える（「アラート受信 たった今」）（✅ `useAlerts` に `lastEvent`（アラート受信/アラート更新/修正提案 受信/AI調査 進行中）を追加し `StreamStatusIndicator` が **open 中のみ**相対時刻つきで表示＝AI調査中の60〜120秒も鼓動が見える。非ライブ中は受信が止まっており誤解を招くため出さない）
+- すべて実データ駆動（演出の捏造なし）・`prefers-reduced-motion` で全アニメ無効化。RTL/hook テスト追加（AlertCard 4・AlertStatusBadge 2・StreamStatusIndicator 2・useAlerts 2）
 
 ### タスク E6: Analytics を学習ループの証明に 〔P1〕
 
@@ -204,13 +208,13 @@ todo実施後に
 - 昇格ファネル（未知→承認→昇格の3段バー）
 - 正答率の母数を常時明示（「1/1 件」は既にあり・母数小の注記を添える）
 
-### タスク E7: 仕上げ 〔P1・小粒多数〕
+### タスク E7: 仕上げ 〔P1・小粒多数〕（スクショ撮影以外✅）
 
-- favicon / `<title>`（「EC Monitoring Agent」）/ OG メタ＋OG画像（ProtoPedia・リンクプレビュー対策）
-- デモ卓シナリオ名の truncate 解消（実測: 「インフラ障害（実 Cl...」「インフラ障害（合成・反...」）＝2行許容 or 短名化
-- 狭幅（〜480px）でのバッジ縦書き崩れ（「アプリ層」が1文字ずつ縦に）と カード内折返しの調整（ProtoPedia モバイル閲覧の最低保証）
-- フォーカスリング/キーボード操作の一貫性（Tab 順・Esc でドロワー閉は既存挙動を確認して固定）
-- README 用スクショ・GIF の撮影（E1 完成後の画面で）
+- [x] favicon / `<title>`（「EC Monitoring Agent」）/ OG メタ＋OG画像（ProtoPedia・リンクプレビュー対策）（✅ `public/favicon.svg`（BrandMark と同一意匠）・`<title>`/description/og:\*/twitter:card を index.html に追加・`public/og-image.png`（1200×630・ダーク観測コンソール調・Playwright レンダで生成）。**og:image は絶対パス `/og-image.png`**＝デプロイ先ドメインがビルド時に確定しないための割り切り（主要クローラは相対解決可・確定後に絶対URL化が理想）
+- [x] デモ卓シナリオ名の truncate 解消（✅ `ScenarioControls` の行ラベルを truncate → `line-clamp-2`（2行許容））
+- [x] 狭幅（〜480px）でのバッジ縦書き崩れと カード内折返しの調整（✅ AlertCard メタ行を flex-wrap 化＋category チップ/重複バッジに whitespace-nowrap（1文字ずつ縦になる圧縮を根絶）・ドロワー header の category チップも同様・ドロワー幅 `w-[clamp(480px,38vw,480px)]`（常に480px＝狭幅で溢れる）→ `w-full max-w-[480px]`）
+- [x] フォーカスリング/キーボード操作の一貫性（✅ Esc でドロワー閉は既存実装＋既存 RTL テストで固定済みを確認。focus-visible リング（cyan・ring-2）を AlertCard 本体・ドロワー✕・ヘッダ FilterChip・絞り込み解除・再接続ボタンに統一追加＝Tab 巡回で現在地が常に見える）
+- [ ] README 用スクショ・GIF の撮影（E1 完成後の画面で）← **残り。実機起動＋実走が必要なため録画テイク（F8）と同時に人間が撮るのが効率的**
 
 > **実装順（推奨）**: E2バグ修正＋E4（半日相当・審査員の初撃体験）→ E1(a)（wow の土台）→ E3 → E1(b)（本線タップ・慎重に）→ E5〜E7。各タスク独立コミット・全緑維持。
 
@@ -222,13 +226,13 @@ todo実施後に
 > **正直さの制約（必須）**: 表示するのは**システムが実際に記録した事実のみ**（調査経過時間・横断した証拠の件数・ソース数・×N・昇格数）。「人間なら◯分」の換算係数は根拠を出せないため**製品UIには出さない**（換算はナレーション/ProtoPedia側で「一般に」の枕詞つきで語る）。盛った瞬間に David/Sarah の信頼を失い純損になる。
 > 実装 = Claude Code。E 系と同枝で進めて衝突回避。
 
-### タスク G1: 調査レポートの「働きの明細」〔P0・Alex 直撃〕
+### タスク G1: 調査レポートの「働きの明細」〔P0・Alex 直撃〕完了✅
 
 **狙い**: レポートを読んだ審査員が「これを人間がやったら」と**自分で**換算してしまう状態を作る。事実の列挙が最強のペインキラー証明。
 
-- 【backend】調査完了時に**実測メトリクス**を `InvestigationReport` に添付（後方互換 optional）: `elapsedMs`（既にログにある値）・収集ソース数・証拠件数の内訳（ログ n 件 / コミット n 件 / 差分 n 件 / 類似事例 n 件）。ADK/単一Gemini 両経路で同じ形に
-- 【UI】ドロワーのレポート冒頭に1行サマリ: 「**92秒**で Cloud Logging・GitHub・類似事例DB を横断し、**証拠62件**を収集して原因を推定」＝数字は全部実測
-- 【UI】既知アラートには対比を1行: 「既知パターン一致＝**1秒未満・AI コストゼロ**で確定（初回調査の結晶化）」→ 学習ループの経済性を毎回想起させる
+- [x] 【backend】調査完了時に**実測メトリクス**を `InvestigationReport` に添付（後方互換 optional）: `elapsedMs`（既にログにある値）・収集ソース数・証拠件数の内訳（ログ n 件 / コミット n 件 / 差分 n 件 / 類似事例 n 件）。ADK/単一Gemini 両経路で同じ形に（✅ 契約 `InvestigationMetricsPrimitives`（contracts 単一ソース・elapsedMs＋evidenceCounts: logs/metrics/terraformChanges/commits/similarIncidents）。計測・添付は Port 実装でなく **UseCase 側**（`InvestigateAlertUseCase`/`ReinvestigateAlertUseCase` が `buildInvestigationMetrics(context, elapsed)` を `withMetrics` で添付）＝ADK/単一Gemini/オンデマンド生成（POST /alerts/:id/report→同 UseCase）の全経路で同形・LLM 出力に依存しない deterministic 導出。fallback レポートにも付く（事実は温存）。収集ソース数は内訳から表示側導出＝二重持ちしない）
+- [x] 【UI】ドロワーのレポート冒頭に1行サマリ: 「**92秒**で Cloud Logging・GitHub・類似事例DB を横断し、**証拠62件**を収集して原因を推定」＝数字は全部実測（✅ 純関数 `investigationWorkload.workloadSummary`（件数0のソースは「横断した」と主張しない・1秒未満丸め）→ `AlertCardExpanded` 冒頭の ⏱ 1行（ドロワー/詳細ページ共通・fallback と metrics 無しの旧データは非表示））
+- [x] 【UI】既知アラートには対比を1行: 「既知パターン一致＝**1秒未満・AI コストゼロ**で確定（初回調査の結晶化）」→ 学習ループの経済性を毎回想起させる（✅ 該当パターン（既知）セクション直下に ⚡ 1行・結晶化パターンは「（初回 AI 調査の結晶化を再利用）」を付記）
 
 ### タスク G2: 一覧のバリューストリップ ＋ 5秒ポジショニング 〔P0・Marcus 直撃〕完了✅
 

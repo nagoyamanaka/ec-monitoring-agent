@@ -68,6 +68,12 @@ services:
       # ADC を用意できない / E2E では AI_INVESTIGATION_STUB=true で Stub に回避するのが手軽。
       # SimilarIncident を ES に永続し SimilarPatternRule（graded confidence 分類）を有効化する
       ELASTICSEARCH_URL: http://elasticsearch:9200
+      # /forecast ルートを有効化。
+      # POST /forecast は stub LLM の固定予報（偽引用入り）で決定論＝課金なし。
+      FORECAST_ENABLED: "true"
+      # horizon はこの固定文字列がそのまま Gemini とページのメタ表示に使われる。
+      # 録画/デモ前は「今週末（7/5 土〜7/6 日）」のように具体日付にすると window の導出・表示が具体化する。
+      FORECAST_HORIZON: "今週末"
     depends_on:
       ec-backend:
         condition: service_healthy

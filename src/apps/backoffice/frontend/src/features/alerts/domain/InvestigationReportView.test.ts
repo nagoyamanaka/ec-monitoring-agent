@@ -79,6 +79,23 @@ describe("toInvestigationReportView", () => {
     expect(view.remediationReview).toBeUndefined();
   });
 
+  it("metrics（働きの明細）は射影され、無し（旧 Alert）は欠落する（後方互換）", () => {
+    expect(toInvestigationReportView(makePrimitives()).metrics).toBeUndefined();
+
+    const metrics = {
+      elapsedMs: 92_000,
+      evidenceCounts: {
+        logs: 12,
+        metrics: 3,
+        terraformChanges: 1,
+        commits: 10,
+        similarIncidents: 5,
+      },
+    };
+    const view = toInvestigationReportView(makePrimitives({ metrics }));
+    expect(view.metrics).toEqual(metrics);
+  });
+
   it("impact/escalation/review はワイヤ→View へ射影される", () => {
     const view = toInvestigationReportView(
       makePrimitives({

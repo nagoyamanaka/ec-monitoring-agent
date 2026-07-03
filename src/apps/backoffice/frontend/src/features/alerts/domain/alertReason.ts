@@ -44,6 +44,11 @@ export function alertReason(alert: AlertView): AlertReason {
     return { kind: "known", patternName: raw, crystallized: false };
   }
   if (alert.report) {
+    // fallback レポートは suggestedPatternName が空＝「AI推定: 」と空文字が並ぶため、
+    // 「調査失敗・再調査可」の定型文で状態を明示する（タスク E3）。
+    if (alert.report.isFallback) {
+      return { kind: "ai", patternName: "調査失敗・再調査可" };
+    }
     return { kind: "ai", patternName: alert.report.suggestedPatternName };
   }
   return { kind: "analyzing" };

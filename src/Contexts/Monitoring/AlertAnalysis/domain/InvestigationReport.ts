@@ -7,6 +7,9 @@ import type {
   ImpactAssessmentPrimitives,
   EscalationDraftPrimitives,
   RemediationReviewPrimitives,
+  InvestigationMetricsPrimitives,
+  InvestigationEvidenceCountsPrimitives,
+  ConfidenceCalibrationPrimitives,
 } from "./contracts/AlertContract.js";
 
 // シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
@@ -17,6 +20,9 @@ export type {
   ImpactAssessmentPrimitives,
   EscalationDraftPrimitives,
   RemediationReviewPrimitives,
+  InvestigationMetricsPrimitives,
+  InvestigationEvidenceCountsPrimitives,
+  ConfidenceCalibrationPrimitives,
 };
 
 /** 調査ステップ／推奨アクション項目から表示・学習用のプレーンテキストを取り出す。 */
@@ -51,6 +57,12 @@ export class InvestigationReport {
   // Forecast 突合キー（ForecastMemory projection が解決済み事例のタグとして読む）。
   // 調査時に deterministic に導出して埋める（LLM 出力ではない）。未指定は undefined（旧データ互換）。
   readonly subject?: string;
+  // 調査の実測メトリクス（経過時間・証拠件数内訳＝タスク G1）。UseCase が計測して添付する
+  // （LLM 出力ではない）。未指定は undefined（旧データ・未計測互換）。
+  readonly metrics?: InvestigationMetricsPrimitives;
+  // 確信度キャリブレーションの記録（裏付けシグナル・上限・LLM 自己申告値）。UseCase が
+  // deterministic に添付する（LLM 出力ではない）。未指定は undefined（旧データ・fallback 互換）。
+  readonly confidenceCalibration?: ConfidenceCalibrationPrimitives;
 
   constructor(params: {
     summary: string;
@@ -68,6 +80,8 @@ export class InvestigationReport {
     escalation?: EscalationDraftPrimitives;
     remediationReview?: RemediationReviewPrimitives;
     subject?: string;
+    metrics?: InvestigationMetricsPrimitives;
+    confidenceCalibration?: ConfidenceCalibrationPrimitives;
   }) {
     this.summary = params.summary;
     this.confidence = params.confidence;
@@ -84,6 +98,8 @@ export class InvestigationReport {
     this.escalation = params.escalation;
     this.remediationReview = params.remediationReview;
     this.subject = params.subject;
+    this.metrics = params.metrics;
+    this.confidenceCalibration = params.confidenceCalibration;
   }
 
   withReviewStatus(reviewStatus: ReviewStatus): InvestigationReport {
@@ -92,6 +108,28 @@ export class InvestigationReport {
 
   withSubject(subject: string): InvestigationReport {
     return new InvestigationReport({ ...this, subject });
+  }
+
+  /**
+   * 確信度キャリブレーション（ConfidenceCalibration）を反映する。
+   * confidence 本体を補正値（calibrated）で置き換え、根拠（signals/cap/original）を記録に残す。
+   */
+  withConfidenceCalibration(
+    calibration: ConfidenceCalibrationPrimitives & { readonly calibrated: number },
+  ): InvestigationReport {
+    return new InvestigationReport({
+      ...this,
+      confidence: calibration.calibrated,
+      confidenceCalibration: {
+        signals: [...calibration.signals],
+        cap: calibration.cap,
+        original: calibration.original,
+      },
+    });
+  }
+
+  withMetrics(metrics: InvestigationMetricsPrimitives): InvestigationReport {
+    return new InvestigationReport({ ...this, metrics });
   }
 
   toPrimitives(): InvestigationReportPrimitives {
@@ -111,6 +149,10 @@ export class InvestigationReport {
       ...(this.escalation ? { escalation: this.escalation } : {}),
       ...(this.remediationReview ? { remediationReview: this.remediationReview } : {}),
       ...(this.subject ? { subject: this.subject } : {}),
+      ...(this.metrics ? { metrics: this.metrics } : {}),
+      ...(this.confidenceCalibration
+        ? { confidenceCalibration: this.confidenceCalibration }
+        : {}),
     };
   }
 
@@ -131,6 +173,8 @@ export class InvestigationReport {
       escalation: primitives.escalation,
       remediationReview: primitives.remediationReview,
       subject: primitives.subject,
+      metrics: primitives.metrics,
+      confidenceCalibration: primitives.confidenceCalibration,
     });
   }
 }

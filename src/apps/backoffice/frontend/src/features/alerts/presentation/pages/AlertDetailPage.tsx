@@ -11,9 +11,11 @@ import {
   type FeedbackDecision,
 } from "../../application/submitFeedback";
 import { reinvestigate } from "../../application/reinvestigate";
+import { useAlertDetail } from "../hooks/useAlertDetail";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { AlertReviewPanel } from "../components/AlertReviewPanel";
 import { EvidencePanel } from "../components/EvidencePanel";
+import { FallbackRecoveryBanner } from "../components/FallbackRecoveryBanner";
 import { InvestigationPipelinePanel } from "../components/InvestigationPipelinePanel";
 import { RemediationPanel } from "../components/RemediationPanel";
 import { RelatedAlertsPanel } from "../components/RelatedAlertsPanel";
@@ -56,21 +58,24 @@ export function AlertDetailPage() {
   // Forecast タブの表示可否＋HIGH バッジ（FORECAST_ENABLED off なら非表示・F7）。
   const forecastNav = useForecastNav();
 
-  const alert = id ? alerts.find((a) => a.id === id) ?? null : null;
-  // 一覧が ready なのに見つからない＝存在しない id（404 相当）。読み込み中はローディング。
-  const status =
-    listStatus === "ready" ? (alert ? "ready" : "notfound") : listStatus;
+  // 現役（一覧＝SSE ライブ）とアーカイブ（RESOLVED＝GET /alerts/:id 単品）の二源を隠し、
+  // この1件を単一インターフェースで得る。refresh は源に合わせて再取得する（useAlertDetail 参照）。
+  const {
+    alert,
+    status,
+    refresh: refreshCurrent,
+  } = useAlertDetail({ id, alerts, listStatus, refreshAlert, api });
 
   const handleDecision = useCallback(
     async (alertId: string, decision: FeedbackDecision, operatorNote?: string) => {
       try {
         await submitFeedback(api, { alertId, decision, operatorNote });
-        await refreshAlert(alertId);
+        await refreshCurrent(alertId);
       } catch (e) {
         console.error("feedback submission failed", e);
       }
     },
-    [api, refreshAlert],
+    [api, refreshCurrent],
   );
 
   const handleReinvestigate = useCallback(
@@ -78,12 +83,12 @@ export function AlertDetailPage() {
       try {
         await reinvestigate(api, { alertId, operatorNote });
         // 202 直後に ANALYZING（再調査中）を反映。確定は共有 SSE で一覧→本ページに届く。
-        await refreshAlert(alertId);
+        await refreshCurrent(alertId);
       } catch (e) {
         console.error("reinvestigation request failed", e);
       }
     },
-    [api, refreshAlert],
+    [api, refreshCurrent],
   );
 
   // 既知一致のオンデマンド AI 調査（202／レポート添付は SSE で届く）。
@@ -103,12 +108,12 @@ export function AlertDetailPage() {
     async (alertId: string) => {
       try {
         await api.promote(alertId);
-        await refreshAlert(alertId);
+        await refreshCurrent(alertId);
       } catch (e) {
         console.error("promote request failed", e);
       }
     },
-    [api, refreshAlert],
+    [api, refreshCurrent],
   );
 
   // 報告書の共有はダウンロード（静的スナップショット＝引用リンクが死ぬ）より、生きた証跡を
@@ -189,6 +194,14 @@ export function AlertDetailPage() {
               </button>
             </header>
 
+            {/* AI 調査失敗（fallback）の警告＋ワンクリック再調査（タスク E3）。
+                再調査中（ANALYZING）は下のパイプラインビューが進行を示すため出さない。 */}
+            {alert.report?.isFallback && alert.status !== "ANALYZING" && (
+              <FallbackRecoveryBanner
+                alert={alert}
+                onReinvestigate={handleReinvestigate}
+              />
+            )}
             {/* AI 調査ライブ・タイムライン（E1）。ANALYZING 告知はここに一本化し、
                 完了タイムラインは full 射影の「調査ステップ」と重複するため出さない。 */}
             <InvestigationPipelinePanel

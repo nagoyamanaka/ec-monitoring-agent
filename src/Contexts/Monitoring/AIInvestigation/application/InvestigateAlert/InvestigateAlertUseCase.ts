@@ -20,6 +20,8 @@ import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { InfraInvestigationPort } from "../../domain/InfraInvestigationPort.js";
 import { InfraEvidence } from "../../domain/InfraEvidence.js";
+import { buildInvestigationMetrics } from "../../domain/InvestigationMetrics.js";
+import { calibrateConfidence } from "../../domain/ConfidenceCalibration.js";
 import { deriveForecastSubject } from "../../../Forecast/domain/forecastSubject.js";
 
 // 類似インシデントは文脈強化用なので件数を絞る（トークン上限 3,500 を意識）
@@ -49,11 +51,22 @@ export class InvestigateAlertUseCase {
     if (alert === null) return this.logSkipped(alertId);
 
     const context = await this.buildInvestigationContext(monitoringEvent, alertId);
+    // 働きの明細（タスク G1）: AI 調査の実測経過時間＋読んだ証拠の件数内訳を deterministic に添付。
+    // ADK / 単一 Gemini どちらの Port 実装でもここで同じ形になる（fallback レポートにも付く＝事実のみ）。
+    const startedAt = Date.now();
+    const investigated = await this.investigate(context, alertId);
+    // 確信度キャリブレーション: LLM 自己申告を、検証可能な裏付けシグナル由来の上限で切り詰める
+    // （下げるだけで上げない・fallback は対象外）。
+    const calibrated = await this.applyConfidenceCalibration(
+      investigated,
+      context,
+      alertId,
+    );
     const report = this.enrichWithForecastSubject(
-      await this.investigate(context, alertId),
+      calibrated,
       monitoringEvent,
       context,
-    );
+    ).withMetrics(buildInvestigationMetrics(context, Date.now() - startedAt));
 
     await this.attachAndNotify(alert, report);
     await this.logInvestigated(alertId, report);
@@ -198,6 +211,29 @@ export class InvestigateAlertUseCase {
       });
       return this.fallbackReport(context);
     }
+  }
+
+  // 確信度キャリブレーションを適用する。根拠（シグナル・上限・自己申告）は常に報告書へ記録し、
+  // 切り詰めが起きた場合は説明ログも残す（透明性）。fallback は confidence=0 の定型なので対象外。
+  private async applyConfidenceCalibration(
+    report: InvestigationReport,
+    context: InvestigationContext,
+    alertId: AlertId,
+  ): Promise<InvestigationReport> {
+    if (report.isFallback) return report;
+
+    const calibration = calibrateConfidence(report, context);
+    if (calibration.calibrated < calibration.original) {
+      await this.logger.info({
+        service: "backoffice-backend",
+        action: "confidence_calibrated",
+        message:
+          `確信度を証拠裏付けで補正：${alertId.value}, ` +
+          `${calibration.original}→${calibration.calibrated}` +
+          `（上限${calibration.cap}・根拠: ${calibration.signals.join(",") || "なし"}）`,
+      });
+    }
+    return report.withConfidenceCalibration(calibration);
   }
 
   // Forecast 突合キー（F2）: 調査時点の文脈から subject を導出して埋める。

@@ -3,6 +3,7 @@ import { InvestigateAlertUseCase } from "./InvestigateAlertUseCase.js";
 import { InMemoryAlertRepository } from "../../../AlertAnalysis/infrastructure/persistence/InMemoryAlertRepository.js";
 import { Alert, AlertPrimitives } from "../../../AlertAnalysis/domain/Alert.js";
 import { AlertId } from "../../../AlertAnalysis/domain/AlertId.js";
+import { KnownErrorPattern } from "../../../AlertAnalysis/domain/KnownErrorPattern.js";
 import { KnownErrorPatternRepository } from "../../../AlertAnalysis/domain/KnownErrorPatternRepository.js";
 import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { InvestigationReport } from "../../../AlertAnalysis/domain/InvestigationReport.js";
@@ -94,6 +95,7 @@ describe("InvestigateAlertUseCase", () => {
     port: AIInvestigationPort,
     notifier: SSEAlertNotifier,
     similarRepo: SimilarIncidentRepository = makeSimilarRepo(),
+    patternRepo: KnownErrorPatternRepository = emptyPatternRepo,
   ) =>
     new InvestigateAlertUseCase(
       alertRepo,
@@ -101,7 +103,7 @@ describe("InvestigateAlertUseCase", () => {
       port,
       notifier,
       logger,
-      emptyPatternRepo,
+      patternRepo,
     );
 
   describe("Alert が存在しない（冪等性）", () => {
@@ -142,7 +144,7 @@ describe("InvestigateAlertUseCase", () => {
       expect(saved?.investigationReport?.isFallback).toBe(false);
     });
 
-    it("調査完了が SSE で notify される", async () => {
+    it("調査完了が SSE で notify される（裏付けゼロの確信度は 0.4 に補正）", async () => {
       await alertRepo.save(makeUnknownAlert());
       const { notifier, notified } = makeSpyNotifier();
       const port: AIInvestigationPort = {
@@ -155,6 +157,53 @@ describe("InvestigateAlertUseCase", () => {
         monitoringEvent: makeUnknownEvent(),
       });
 
+      // 既知パターン・類似事例・相関・引用証拠のいずれも無い文脈では、LLM 自己申告 0.87 は
+      // ConfidenceCalibration の裏付けゼロ上限（0.4）まで切り詰められる。
+      expect(notified).toHaveLength(1);
+      expect(notified[0].investigationReport?.confidence).toBe(0.4);
+    });
+
+    it("裏付け（既知パターン＋類似事例）があれば LLM 自己申告の確信度を保持する", async () => {
+      await alertRepo.save(makeUnknownAlert());
+      const { notifier, notified } = makeSpyNotifier();
+      const port: AIInvestigationPort = {
+        investigate: async () => makeReport(),
+      };
+      const matchingPatternRepo: KnownErrorPatternRepository = {
+        ...emptyPatternRepo,
+        findAll: async () => [
+          KnownErrorPattern.create({
+            id: "pat-1",
+            name: "UNKNOWN_EVENT_PATTERN",
+            description: "過去に確定した同型障害",
+            eventNamePattern: "ec.some.unknown_event",
+            payloadConditions: [],
+            severity: AlertSeverity.warning(),
+            suggestedAction: "接続上限を確認",
+          }),
+        ],
+      };
+      const similar: SimilarIncident = {
+        id: "inc-1",
+        eventName: "ec.some.unknown_event",
+        occurredOn: new Date("2025-12-01T00:00:00.000Z"),
+        resolvedNote: "再起動で解消",
+        resolvedAt: new Date("2025-12-01T01:00:00.000Z"),
+        severity: AlertSeverity.warning(),
+      };
+      const useCase = makeUseCase(
+        port,
+        notifier,
+        makeSimilarRepo([similar]),
+        matchingPatternRepo,
+      );
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      });
+
+      // 既知パターン(強)＋類似事例(状況証拠)で上限 0.9 → 自己申告 0.87 はそのまま通る。
       expect(notified).toHaveLength(1);
       expect(notified[0].investigationReport?.confidence).toBe(0.87);
     });
@@ -243,6 +292,62 @@ describe("InvestigateAlertUseCase", () => {
       const saved = await alertRepo.findById(new AlertId(ALERT_ID));
       expect(saved?.investigationReport?.isFallback).toBe(true);
       expect(saved?.investigationReport?.subject).toBe("application");
+    });
+  });
+
+  describe("働きの明細（G1）：実測メトリクスの添付", () => {
+    it("保存されたレポートに elapsedMs と証拠件数内訳（類似事例含む）が埋まる", async () => {
+      await alertRepo.save(makeUnknownAlert());
+      const { notifier } = makeSpyNotifier();
+      const port: AIInvestigationPort = {
+        investigate: async () => makeReport(),
+      };
+      const similar: SimilarIncident = {
+        id: "inc-1",
+        eventName: "ec.some.unknown_event",
+        occurredOn: new Date("2025-12-01T00:00:00.000Z"),
+        resolvedNote: "再起動で解消",
+        resolvedAt: new Date("2025-12-01T01:00:00.000Z"),
+        severity: AlertSeverity.warning(),
+      };
+      const useCase = makeUseCase(port, notifier, makeSimilarRepo([similar]));
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      });
+
+      const metrics = (await alertRepo.findById(new AlertId(ALERT_ID)))
+        ?.investigationReport?.metrics;
+      expect(metrics).toBeDefined();
+      expect(metrics?.elapsedMs).toBeGreaterThanOrEqual(0);
+      expect(metrics?.evidenceCounts).toEqual({
+        logs: 0,
+        metrics: 0,
+        terraformChanges: 0,
+        commits: 0,
+        similarIncidents: 1,
+      });
+    });
+
+    it("fallback レポートにも実測メトリクスが埋まる（事実は温存）", async () => {
+      await alertRepo.save(makeUnknownAlert());
+      const { notifier } = makeSpyNotifier();
+      const port: AIInvestigationPort = {
+        investigate: async () => {
+          throw new Error("Gemini API timeout");
+        },
+      };
+      const useCase = makeUseCase(port, notifier);
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      });
+
+      const saved = await alertRepo.findById(new AlertId(ALERT_ID));
+      expect(saved?.investigationReport?.isFallback).toBe(true);
+      expect(saved?.investigationReport?.metrics).toBeDefined();
     });
   });
 

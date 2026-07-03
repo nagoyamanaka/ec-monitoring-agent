@@ -2,11 +2,18 @@ import { useEffect, useState } from "react";
 import { cn } from "@shared/ui/cn";
 import { formatDateTimeJa, formatTimeJa } from "@shared/format/dateTime";
 import type { StreamStatus } from "../../infrastructure/AlertStream";
+import type { LastStreamEvent } from "../hooks/useAlerts";
 
 export interface StreamStatusIndicatorProps {
   status: StreamStatus;
   /** 最後に一覧へ反映が入った時刻。null なら未更新。 */
   lastUpdatedAt: Date | null;
+  /**
+   * 最後に届いた SSE イベントの種別（タスク E5）。ライブ（open）中に
+   * 「アラート受信 たった今」のように一言添え、緑ランプだけでは伝わらない
+   * 「何が動いたか」を示す。null なら種別は出さない。
+   */
+  lastEvent?: LastStreamEvent | null;
   /**
    * 切断状態（closed）で表示する「再接続」ボタンのハンドラ。
    * 渡さない場合はボタンを出さない（ページ側で stream.reconnect を持つかどうかを選択できる）。
@@ -56,12 +63,14 @@ function formatRelative(from: Date, now: number): string {
 /**
  * SSE のライブ状態を一覧ヘッダ右側に出すインジケータ。
  * 接続中は緑ランプ（パルス）で「通信が生きている」ことを示す。
- * ライブ（open）中は「いつ反映されたか」は自明なので最終更新は隠し、緑ランプのみ。
+ * ライブ（open）中は「いつ反映されたか」は自明なので最終更新は隠し、代わりに
+ * 最後に届いたイベント種別を一言添える（「アラート受信 たった今」。タスク E5）。
  * 非ライブ（接続中/切断）かつ更新済みのときだけ最終更新を出し、相対時刻を10秒ごとに再計算する。
  */
 export function StreamStatusIndicator({
   status,
   lastUpdatedAt,
+  lastEvent = null,
   onReconnect,
   className,
 }: StreamStatusIndicatorProps) {
@@ -70,14 +79,16 @@ export function StreamStatusIndicator({
 
   // 最終更新（相対時刻）を実際に出すのは「非ライブ かつ 更新済み」のときだけ。
   const showLastUpdated = status !== "open" && lastUpdatedAt !== null;
+  // イベント種別はライブ中のみ（非ライブでは受信が止まっており誤解を招く）。
+  const showLastEvent = status === "open" && lastEvent !== null;
 
   // 「X秒前」を生かすため軽く再描画する（リスト本体は別 state なので影響しない）。
   // 相対時刻を表示しているときだけ動かす。
   useEffect(() => {
-    if (!showLastUpdated) return;
+    if (!showLastUpdated && !showLastEvent) return;
     const id = setInterval(() => setNow(Date.now()), 10_000);
     return () => clearInterval(id);
-  }, [showLastUpdated]);
+  }, [showLastUpdated, showLastEvent]);
 
   return (
     <div
@@ -96,6 +107,14 @@ export function StreamStatusIndicator({
         />
         <span className={cn("font-medium", tone.text)}>{tone.label}</span>
       </span>
+      {showLastEvent && lastEvent && (
+        <span
+          className="text-slate-400"
+          title={formatDateTimeJa(lastEvent.at)}
+        >
+          {lastEvent.label} {formatRelative(lastEvent.at, now)}
+        </span>
+      )}
       {showLastUpdated && lastUpdatedAt && (
         <span
           className="text-slate-400"
@@ -108,7 +127,7 @@ export function StreamStatusIndicator({
         <button
           type="button"
           onClick={onReconnect}
-          className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-300 ring-1 ring-inset ring-slate-600 transition hover:bg-slate-700/60 hover:text-slate-200 active:scale-95"
+          className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-300 ring-1 ring-inset ring-slate-600 transition hover:bg-slate-700/60 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95"
         >
           再接続
         </button>
