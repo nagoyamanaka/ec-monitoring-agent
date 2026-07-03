@@ -28,9 +28,12 @@ export class StubLLMClient implements LLMTextClient {
   });
 
   // GeminiForecastAdapter（予兆・F8）から呼ばれたときの固定予報。実在する seed シグナル
-  // （plan-1=pending plan seed / sch-1=schedule seed）への引用に、意図的な偽引用 ghost-* を
-  // 混ぜてある: 1件目は ghost-1 だけが citations から落ち、2件目は裏付けゼロでリスクごと
-  // 破棄される＝引用検証（ハルシネーション・ガード）を課金なしで決定論的に E2E 実演する。
+  // （plan-1=pending plan seed / sch-1=schedule seed / inc-1=ForecastMemory 先頭＝
+  // reset が seed した過去解決事例）への引用に、意図的な偽引用 ghost-* を混ぜてある:
+  // 1件目は ghost-1 だけが citations から落ち、2件目は裏付けゼロでリスクごと破棄される
+  // ＝引用検証（ハルシネーション・ガード）を課金なしで決定論的に E2E 実演する。
+  // inc-1 を含めることで stub モードの UI にも3系統（変更予定/負荷予定/記憶）の引用が揃い、
+  // MEMORY seed が壊れた（記憶が引けない）場合は inc-1 が偽引用として落ちて E2E が赤くなる。
   private static readonly FORECAST_CANNED_OUTPUT = JSON.stringify({
     risks: [
       {
@@ -38,9 +41,9 @@ export class StubLLMClient implements LLMTextClient {
         subject: "google_sql_database_instance_ec_db",
         level: "HIGH",
         confidence: 0.78,
-        citations: ["plan-1", "sch-1", "ghost-1"],
+        citations: ["plan-1", "sch-1", "inc-1", "ghost-1"],
         reasoning:
-          "[STUB] 接続上限の縮小予定（未適用 plan）と週末セールの checkout 負荷が重なるため。",
+          "[STUB] 接続上限の縮小予定（未適用 plan）と週末セールの checkout 負荷・過去の同型枯渇が重なるため。",
       },
       {
         window: "今週末",

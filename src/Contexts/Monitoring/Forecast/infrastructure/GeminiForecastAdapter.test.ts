@@ -267,7 +267,12 @@ describe("GeminiForecastAdapter × StubLLMClient（E2E 決定論経路の契約�
     expect(forecast.isFallback).toBe(false);
     expect(forecast.risks).toHaveLength(2);
     expect(forecast.risks[0].level).toBe("HIGH");
-    expect(forecast.risks[0].citations).toEqual(["plan-1", "sch-1", "ghost-1"]);
+    expect(forecast.risks[0].citations).toEqual([
+      "plan-1",
+      "sch-1",
+      "inc-1",
+      "ghost-1",
+    ]);
     expect(forecast.risks[1].citations).toEqual(["ghost-2"]);
   });
 

@@ -75,8 +75,9 @@ describe("backoffice E2E: 予兆ブリーフィング（フラッグシップ se
     expect(generated.forecast.risks).toHaveLength(1);
     const risk = generated.forecast.risks[0];
     expect(risk.level).toBe("HIGH");
-    // ghost-1（偽引用）だけが citations から落ち、実在シグナルの引用は残る
-    expect(risk.citations).toEqual(["plan-1", "sch-1"]);
+    // ghost-1（偽引用）だけが citations から落ち、実在シグナルの引用は残る。
+    // inc-1（MEMORY 先頭）が残る＝記憶 seed が引けている検証を兼ねる（引けなければ偽引用扱いで落ちて赤くなる）。
+    expect(risk.citations).toEqual(["plan-1", "sch-1", "inc-1"]);
   });
 
   it("MEMORY 引用は実在の解決済み Alert に解決できる（GET /alerts/:id が開ける）", async () => {

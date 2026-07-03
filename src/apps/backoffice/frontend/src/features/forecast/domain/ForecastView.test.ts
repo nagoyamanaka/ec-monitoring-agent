@@ -5,9 +5,12 @@ import type {
   RiskItemPrimitives,
 } from "@monitoring/Forecast/domain/contracts/ForecastContract";
 import {
+  citationKindCount,
+  groupCitationsByKind,
   incidentAlertId,
   signalKindLabel,
   toForecastBriefingView,
+  type CitationView,
 } from "./ForecastView";
 
 const signal = (
@@ -139,5 +142,53 @@ describe("signalKindLabel / incidentAlertId", () => {
 
   it("incident. プレフィックスが無い source は undefined", () => {
     expect(incidentAlertId({ source: "github.pr.42" })).toBeUndefined();
+  });
+});
+
+describe("groupCitationsByKind / citationKindCount", () => {
+  const citation = (over: Partial<CitationView> = {}): CitationView => ({
+    id: "c-1",
+    kind: "FUTURE_CHANGE",
+    kindLabel: "未来の変更",
+    subject: "db.connection_pool",
+    when: "マージ後",
+    desc: "pool 縮小",
+    ...over,
+  });
+
+  it("語り順（変更予定→スケジュール→記憶）でレーンにまとめ、同種は同レーンに束ねる", () => {
+    const lanes = groupCitationsByKind([
+      citation({ id: "m-1", kind: "MEMORY", kindLabel: "過去の同型事例" }),
+      citation({ id: "s-1", kind: "SCHEDULE", kindLabel: "スケジュール" }),
+      citation({ id: "f-1" }),
+      citation({ id: "f-2" }),
+    ]);
+
+    expect(lanes.map((l) => l.kind)).toEqual([
+      "FUTURE_CHANGE",
+      "SCHEDULE",
+      "MEMORY",
+    ]);
+    expect(lanes[0].citations.map((c) => c.id)).toEqual(["f-1", "f-2"]);
+    expect(lanes[0].kindLabel).toBe("未来の変更");
+  });
+
+  it("未知の kind は末尾レーンに degrade する（落とさない）", () => {
+    const lanes = groupCitationsByKind([
+      citation({ id: "x-1", kind: "SOMETHING_NEW", kindLabel: "SOMETHING_NEW" }),
+      citation({ id: "s-1", kind: "SCHEDULE", kindLabel: "スケジュール" }),
+    ]);
+    expect(lanes.map((l) => l.kind)).toEqual(["SCHEDULE", "SOMETHING_NEW"]);
+  });
+
+  it("citationKindCount は系統数（重複除去）を返す", () => {
+    expect(
+      citationKindCount([
+        citation({ id: "f-1" }),
+        citation({ id: "f-2" }),
+        citation({ id: "m-1", kind: "MEMORY" }),
+      ]),
+    ).toBe(2);
+    expect(citationKindCount([])).toBe(0);
   });
 });

@@ -23,6 +23,10 @@
     "title": "DBコネクションプール枯渇",
     "description": "DB コネクションプールが枯渇。既知パターンには完全一致しないが、過去の解決済み事例に高類似（約67%）で『準・既知』に確度付き分類し、AI 生調査なしで即確定。"
   },
+  "ec.checkout.latency_degraded": {
+    "title": "チェックアウト遅延",
+    "description": "checkout のレイテンシが劣化した。負荷集中時の DB 接続待ちが原因になりやすい（予兆の過去事例 seed もこの型）。"
+  },
   "ec.pricing.subtotal_mismatch": {
     "title": "アプリコード退行",
     "description": "テストは通過したアプリコード変更が挙動を退行させた障害（小計の丸め誤り）。AI が実コミット差分を読んで原因を特定する。"

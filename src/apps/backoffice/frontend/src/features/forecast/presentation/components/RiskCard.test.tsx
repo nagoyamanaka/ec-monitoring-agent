@@ -43,10 +43,12 @@ function renderCard(risk: RiskCardView = RISK) {
 }
 
 describe("RiskCard", () => {
-  it("level バッジ・window・confidence%・reasoning を出す", () => {
+  it("window を主見出しに、level バッジ・confidence%・reasoning を出す", () => {
     renderCard();
+    expect(
+      screen.getByRole("heading", { level: 3, name: /土曜 20:00-22:00/ }),
+    ).toBeInTheDocument();
     expect(screen.getByText("HIGH")).toBeInTheDocument();
-    expect(screen.getByText("土曜 20:00-22:00")).toBeInTheDocument();
     expect(screen.getByText("80%")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -55,10 +57,18 @@ describe("RiskCard", () => {
     ).toBeInTheDocument();
   });
 
-  it("引用チップを件数付きで出し、外部証拠（PR）とアラート詳細の両リンクを張る", () => {
+  it("根拠の系統数チップ: 複数系統なら「根拠 n系統」、単一系統なら出さない", () => {
+    renderCard();
+    expect(screen.getByText("根拠 2系統")).toBeInTheDocument();
+
+    renderCard({ ...RISK, citations: [RISK.citations[0]] });
+    expect(screen.queryByText(/根拠 1系統/)).not.toBeInTheDocument();
+  });
+
+  it("引用チップを系統・件数付きで出し、外部証拠（PR）とアラート詳細の両リンクを張る", () => {
     renderCard();
     expect(screen.getByText("根拠（引用）")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("2系統・2件")).toBeInTheDocument();
     expect(screen.getByText("未来の変更")).toBeInTheDocument();
     expect(screen.getByText("過去の同型事例")).toBeInTheDocument();
 

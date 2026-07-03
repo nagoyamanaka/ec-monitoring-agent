@@ -80,6 +80,49 @@ export type ForecastBriefingView = {
   readonly highRiskCount: number;
 };
 
+/**
+ * 引用を種別レーン（未来の変更 / スケジュール / 過去の同型事例）へグルーピングする。
+ * 「単独では弱いシグナルが複数系統で重なるほどリスクが高い」という予報ロジックを
+ * そのまま画面構造にする（タイムチャートは window が LLM 由来の自由文字列で時刻を
+ * 捏造せずには描けないため不採用＝系統の収束を見せる方が正直で分かりやすい）。
+ * レーン順は §3.1 の語り順（変更予定 → 負荷予定 → 記憶）に固定。未知種別は末尾。
+ */
+export type CitationLane = {
+  readonly kind: string;
+  readonly kindLabel: string;
+  readonly citations: CitationView[];
+};
+
+const LANE_KIND_ORDER = ["FUTURE_CHANGE", "SCHEDULE", "MEMORY"];
+
+function laneOrder(kind: string): number {
+  const index = LANE_KIND_ORDER.indexOf(kind);
+  return index === -1 ? LANE_KIND_ORDER.length : index;
+}
+
+export function groupCitationsByKind(
+  citations: readonly CitationView[],
+): CitationLane[] {
+  const byKind = new Map<string, CitationView[]>();
+  for (const citation of citations) {
+    const lane = byKind.get(citation.kind) ?? [];
+    lane.push(citation);
+    byKind.set(citation.kind, lane);
+  }
+  return [...byKind.entries()]
+    .sort(([a], [b]) => laneOrder(a) - laneOrder(b))
+    .map(([kind, laneCitations]) => ({
+      kind,
+      kindLabel: signalKindLabel(kind),
+      citations: laneCitations,
+    }));
+}
+
+/** 根拠の系統数（収束の強さ）。RiskCard の「根拠 n系統」チップに使う。 */
+export function citationKindCount(citations: readonly CitationView[]): number {
+  return new Set(citations.map((c) => c.kind)).size;
+}
+
 function toCitationView(signal: ForecastSignalPrimitives): CitationView {
   return {
     id: signal.id,

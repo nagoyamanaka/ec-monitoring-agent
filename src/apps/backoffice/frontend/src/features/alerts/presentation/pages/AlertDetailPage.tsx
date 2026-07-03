@@ -11,6 +11,7 @@ import {
   type FeedbackDecision,
 } from "../../application/submitFeedback";
 import { reinvestigate } from "../../application/reinvestigate";
+import { useArchiveAlert } from "../hooks/useArchiveAlert";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { AlertReviewPanel } from "../components/AlertReviewPanel";
 import { EvidencePanel } from "../components/EvidencePanel";
@@ -57,21 +58,49 @@ export function AlertDetailPage() {
   // Forecast タブの表示可否＋HIGH バッジ（FORECAST_ENABLED off なら非表示・F7）。
   const forecastNav = useForecastNav();
 
-  const alert = id ? alerts.find((a) => a.id === id) ?? null : null;
-  // 一覧が ready なのに見つからない＝存在しない id（404 相当）。読み込み中はローディング。
+  const listAlert = id ? alerts.find((a) => a.id === id) ?? null : null;
+  // 一覧（GET /alerts）は RESOLVED の解決済みアーカイブを含まないため、一覧に無い id は
+  // GET /alerts/:id へフォールバック（予兆 MEMORY 引用・類似の関連アラートの解決先）。
+  // アーカイブは共有一覧へ merge しない＝一覧ページに RESOLVED が混入しない。
+  const archive = useArchiveAlert(
+    api,
+    id,
+    listStatus === "ready" && listAlert === null,
+  );
+  const alert = listAlert ?? archive.alert;
+  // 一覧 ready＋一覧に無い場合はアーカイブ取得の結果で確定する（404 で初めて notfound）。
   const status =
-    listStatus === "ready" ? (alert ? "ready" : "notfound") : listStatus;
+    listStatus !== "ready"
+      ? listStatus
+      : listAlert
+        ? "ready"
+        : archive.status === "ready"
+          ? "ready"
+          : archive.status === "notfound"
+            ? "notfound"
+            : archive.status === "error"
+              ? "error"
+              : "loading";
+
+  // 操作後の再取得: 現役（一覧に居る）は共有 state へ merge、アーカイブはローカル再取得。
+  const refreshCurrent = useCallback(
+    async (alertId: string) => {
+      if (alerts.some((a) => a.id === alertId)) await refreshAlert(alertId);
+      else await archive.refresh();
+    },
+    [alerts, refreshAlert, archive.refresh],
+  );
 
   const handleDecision = useCallback(
     async (alertId: string, decision: FeedbackDecision, operatorNote?: string) => {
       try {
         await submitFeedback(api, { alertId, decision, operatorNote });
-        await refreshAlert(alertId);
+        await refreshCurrent(alertId);
       } catch (e) {
         console.error("feedback submission failed", e);
       }
     },
-    [api, refreshAlert],
+    [api, refreshCurrent],
   );
 
   const handleReinvestigate = useCallback(
@@ -79,12 +108,12 @@ export function AlertDetailPage() {
       try {
         await reinvestigate(api, { alertId, operatorNote });
         // 202 直後に ANALYZING（再調査中）を反映。確定は共有 SSE で一覧→本ページに届く。
-        await refreshAlert(alertId);
+        await refreshCurrent(alertId);
       } catch (e) {
         console.error("reinvestigation request failed", e);
       }
     },
-    [api, refreshAlert],
+    [api, refreshCurrent],
   );
 
   // 既知一致のオンデマンド AI 調査（202／レポート添付は SSE で届く）。
@@ -104,12 +133,12 @@ export function AlertDetailPage() {
     async (alertId: string) => {
       try {
         await api.promote(alertId);
-        await refreshAlert(alertId);
+        await refreshCurrent(alertId);
       } catch (e) {
         console.error("promote request failed", e);
       }
     },
-    [api, refreshAlert],
+    [api, refreshCurrent],
   );
 
   // 報告書の共有はダウンロード（静的スナップショット＝引用リンクが死ぬ）より、生きた証跡を
