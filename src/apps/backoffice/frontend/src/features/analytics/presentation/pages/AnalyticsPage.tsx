@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
+import { useForecastNav } from "@features/forecast/presentation/ForecastProvider";
 import type { AnalyticsApi } from "../../infrastructure/analyticsApi";
 import type {
   AnalyticsView,
@@ -19,9 +20,14 @@ export interface AnalyticsPageProps {
  */
 export function AnalyticsPage({ api }: AnalyticsPageProps) {
   const { analytics, status, error, refresh } = useAnalytics(api);
+  // Forecast タブの表示可否＋HIGH バッジ（FORECAST_ENABLED off なら非表示・F7）。
+  const forecastNav = useForecastNav();
 
   return (
-    <DefaultLayout>
+    <DefaultLayout
+      forecastEnabled={forecastNav.enabled}
+      forecastBadge={forecastNav.badge}
+    >
       <div className="space-y-6">
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-1">

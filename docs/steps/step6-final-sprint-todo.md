@@ -77,7 +77,7 @@ todo実施後に
 - **【確認済み方針・2026-07-03】定期実行（cron/setInterval）はやらない**: 審査員の非同期閲覧に対し「たまたま失敗した最新予報」を見せるリスクと Gemini 課金が増えるだけで掴みに寄与しない。手動 POST（デモ卓）＋提出前キャッシュ温めで無人安定性を取る。Bus 登録済みハンドラなので本運用の定期化は `FORECAST_ENABLED` 配下に1本足すだけ＝stretchⅢ と併せて「語り」で示す。SSE push も設計上任意のまま＝デモではページを開けば足りる（D2 認知負荷と整合）
 - 【実装メモ】`forecastGuard`（FORECAST_ENABLED off＝/forecast まとめて404・demoGuard と同方針）、POST はさらに demoGuard を重ねる。horizon は config 固定＝無認証デモ経路に入力面を作らない（H1 整合）。POST レスポンスは生成結果（引用検証済み・fallback 含む）をそのまま返す＝デモ卓で即 confirm。`InMemoryPendingInfraPlanStore` を `TerraformGatewayImpl` に配線（F8 の pending plan seed の受け皿・record 口は `pendingInfraPlanStore`）。schedule seed は `seeds/ForecastScheduleSeed.ts`（checkout 土20:00 x5）。`BackofficeAppOverrides.forecastPort` を追加（結合テストの決定論差し替え口）。結合テスト3件（404→POST 引用検証→GET キャッシュ）・全緑（unit 803・integration 27）
 
-### タスク F7: forecast feature slice（UI）〔P0〕（旧 step4-4 タスク13）
+### タスク F7: forecast feature slice（UI）〔P0〕（旧 step4-4 タスク13）✅
 
 - 【新規】`features/forecast/domain/ForecastView.ts`（RiskItem→level色）/ `RiskLevel.ts`（純関数のみ）
 - 【新規】`features/forecast/infrastructure/forecastApi.ts`（POST /forecast, GET /forecast）/ `application/triggerForecast.ts`
@@ -88,6 +88,8 @@ todo実施後に
 - 【任意・安ければ】アラート一覧側に予兆への**導線1個だけ**（例: ナビバッジ「予兆: HIGH 1件」・`FORECAST_ENABLED` 時のみ）。一覧へ予報コンテンツは混載しない（reactive/proactive の優先度混線を避ける step4-2 の決定を維持）。D1 の「では実際に起きたら？」の逆方向遷移がデモで滑らかになる
 
 > **共通化の継ぎ目（タスク9e 相関との共有）**: `CitationList`（引用 id 提示）と `RelatedAlertsPanel`（相関 id 提示）は**同型**。**本タスク実装時に** `domain/relatedAlerts.ts` の `toRelatedAlertViews(refs, lookup)` と `RelatedAlertsPanel` のカード描画を `shared/ui` へ昇格（例 `shared/ui/ReferencedAlertCard` ＋ resolver）し両者で共有する＝正しい抽出点（第二の消費者が現れる今）。**先行抽出はしない（YAGNI）**。backend は BC を跨いで型共有しない（相関=Monitoring / 引用=Forecast）。
+>
+> ✅ **実装済み（2026-07-03）**: カード描画を `shared/ui/ReferencedEvidenceCard`（chipTone cyan/emerald/amber・to/href/onClick の3リンク形）へ昇格し `RelatedAlertsPanel` と `CitationList` が共有。resolver（`toRelatedAlertViews` 等）は AlertView 依存のため feature domain に残置（shared は features を import できない規約）。FORECAST_ENABLED の frontend 判定は **GET /forecast の 404 を body で判別**（guard の `sendStatus(404)`=非JSON → disabled ／ controller の `{error}` JSON → empty=未生成）＝専用 status API を増やさない。`ForecastProvider`（composition root で1回張る）が「ナビ表示可否＋HIGH n件バッジ＋最新予報」の単一ソース。MEMORY 引用は source `incident.<AlertId>` から `/alerts/:id` へ、FUTURE_CHANGE は `url`（PR html_url）へ実リンク。POST（生成）は 90 秒タイムアウト・DEMO off の 404 は「デモ操作が無効」の文言に写像。任意項目のナビ導線は **Forecast タブ内の「HIGH n件」rose バッジ**として実装（一覧へのコンテンツ混載なし）。`/forecast` が SPA ルート化したため vite proxy / nginx を Accept 出し分け側へ移動。UT/RTL 17件追加（domain 13・api 6 含む）・frontend 236 全緑。
 
 ### タスク F8: フラッグシップ seed ＋ 録画テイク 〔P0〕（新規・本スプリント）
 

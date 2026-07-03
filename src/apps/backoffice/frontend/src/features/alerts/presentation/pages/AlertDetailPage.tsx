@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
+import { useForecastNav } from "@features/forecast/presentation/ForecastProvider";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { hasAiInvestigation } from "../../domain/AlertView";
 import { eventTitle } from "../../domain/eventCatalog";
@@ -42,6 +43,7 @@ export function AlertDetailPage() {
     error,
     streamStatus,
     lastUpdatedAt,
+    lastEvent,
     refreshAlert,
     reconnectStream,
     remediationByAlertId,
@@ -50,6 +52,9 @@ export function AlertDetailPage() {
     evidenceApi,
     remediationApi,
   } = useAlertsData();
+
+  // Forecast タブの表示可否＋HIGH バッジ（FORECAST_ENABLED off なら非表示・F7）。
+  const forecastNav = useForecastNav();
 
   const alert = id ? alerts.find((a) => a.id === id) ?? null : null;
   // 一覧が ready なのに見つからない＝存在しない id（404 相当）。読み込み中はローディング。
@@ -121,10 +126,13 @@ export function AlertDetailPage() {
 
   return (
     <DefaultLayout
+      forecastEnabled={forecastNav.enabled}
+      forecastBadge={forecastNav.badge}
       headerSlot={
         <StreamStatusIndicator
           status={streamStatus}
           lastUpdatedAt={lastUpdatedAt}
+          lastEvent={lastEvent}
           onReconnect={reconnectStream}
         />
       }

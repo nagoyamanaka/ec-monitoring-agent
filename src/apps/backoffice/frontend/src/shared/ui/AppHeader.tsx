@@ -6,8 +6,13 @@ import { cn } from "./cn";
 export interface AppHeaderProps {
   /** ヘッダー右側の差し込み口（SSE ライブ状態など。features は import できないため slot 受け）。 */
   rightSlot?: ReactNode;
-  /** Forecast（stretchⅡ・未実装）タブを出すか。既定 off＝本番非侵食（設計どおり）。 */
+  /** Forecast タブを出すか。既定 off＝backend の FORECAST_ENABLED に追従（GET /forecast の可用性で判定）。 */
   forecastEnabled?: boolean;
+  /**
+   * Forecast タブに添える HIGH リスクバッジ（例: "HIGH 1件"）。予兆への導線1個だけ（F7）＝
+   * 一覧へ予報コンテンツは混載しない方針のまま、リスクの存在だけをナビで知らせる。
+   */
+  forecastBadge?: string;
 }
 
 const BASE_NAV: ReadonlyArray<{ to: string; label: string }> = [
@@ -21,7 +26,11 @@ const BASE_NAV: ReadonlyArray<{ to: string; label: string }> = [
  * shared に置き features を import しないため、ライブ状態などは rightSlot で受け取る。
  * NavLink の active を cyan ピルで示し、/alerts/:id 詳細でも "Alerts" を点灯させる（end 指定なし）。
  */
-export function AppHeader({ rightSlot, forecastEnabled = false }: AppHeaderProps) {
+export function AppHeader({
+  rightSlot,
+  forecastEnabled = false,
+  forecastBadge,
+}: AppHeaderProps) {
   const items = forecastEnabled
     ? [...BASE_NAV, { to: "/forecast", label: "Forecast" }]
     : BASE_NAV;
@@ -50,6 +59,11 @@ export function AppHeader({ rightSlot, forecastEnabled = false }: AppHeaderProps
               }
             >
               {it.label}
+              {it.to === "/forecast" && forecastBadge && (
+                <span className="ml-1.5 rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30">
+                  {forecastBadge}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
