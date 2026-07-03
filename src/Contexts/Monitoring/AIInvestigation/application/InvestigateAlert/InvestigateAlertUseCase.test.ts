@@ -246,6 +246,62 @@ describe("InvestigateAlertUseCase", () => {
     });
   });
 
+  describe("働きの明細（G1）：実測メトリクスの添付", () => {
+    it("保存されたレポートに elapsedMs と証拠件数内訳（類似事例含む）が埋まる", async () => {
+      await alertRepo.save(makeUnknownAlert());
+      const { notifier } = makeSpyNotifier();
+      const port: AIInvestigationPort = {
+        investigate: async () => makeReport(),
+      };
+      const similar: SimilarIncident = {
+        id: "inc-1",
+        eventName: "ec.some.unknown_event",
+        occurredOn: new Date("2025-12-01T00:00:00.000Z"),
+        resolvedNote: "再起動で解消",
+        resolvedAt: new Date("2025-12-01T01:00:00.000Z"),
+        severity: AlertSeverity.warning(),
+      };
+      const useCase = makeUseCase(port, notifier, makeSimilarRepo([similar]));
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      });
+
+      const metrics = (await alertRepo.findById(new AlertId(ALERT_ID)))
+        ?.investigationReport?.metrics;
+      expect(metrics).toBeDefined();
+      expect(metrics?.elapsedMs).toBeGreaterThanOrEqual(0);
+      expect(metrics?.evidenceCounts).toEqual({
+        logs: 0,
+        metrics: 0,
+        terraformChanges: 0,
+        commits: 0,
+        similarIncidents: 1,
+      });
+    });
+
+    it("fallback レポートにも実測メトリクスが埋まる（事実は温存）", async () => {
+      await alertRepo.save(makeUnknownAlert());
+      const { notifier } = makeSpyNotifier();
+      const port: AIInvestigationPort = {
+        investigate: async () => {
+          throw new Error("Gemini API timeout");
+        },
+      };
+      const useCase = makeUseCase(port, notifier);
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      });
+
+      const saved = await alertRepo.findById(new AlertId(ALERT_ID));
+      expect(saved?.investigationReport?.isFallback).toBe(true);
+      expect(saved?.investigationReport?.metrics).toBeDefined();
+    });
+  });
+
   describe("異常系：AI調査が例外を投げる", () => {
     it("fallback レポートが添付され status は OPEN で保存される", async () => {
       await alertRepo.save(makeUnknownAlert());

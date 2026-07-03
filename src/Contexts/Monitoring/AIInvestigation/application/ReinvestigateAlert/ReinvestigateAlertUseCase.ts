@@ -19,6 +19,7 @@ import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { InfraInvestigationPort } from "../../domain/InfraInvestigationPort.js";
 import { InfraEvidence } from "../../domain/InfraEvidence.js";
+import { buildInvestigationMetrics } from "../../domain/InvestigationMetrics.js";
 
 // 類似インシデントは文脈強化用なので件数を絞る（トークン上限 3,500 を意識）
 const SIMILAR_INCIDENT_LIMIT = 5;
@@ -64,7 +65,11 @@ export class ReinvestigateAlertUseCase {
       operatorNote,
       alertId,
     );
-    const report = await this.investigate(context, alertId);
+    // 働きの明細（タスク G1）: 自動調査（InvestigateAlertUseCase）と同じ形で実測を添付する。
+    const startedAt = Date.now();
+    const report = (await this.investigate(context, alertId)).withMetrics(
+      buildInvestigationMetrics(context, Date.now() - startedAt),
+    );
 
     await this.attachAndNotify(reopened, report);
     await this.logReinvestigated(alertId, report);

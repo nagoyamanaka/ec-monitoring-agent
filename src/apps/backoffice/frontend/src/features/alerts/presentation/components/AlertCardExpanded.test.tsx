@@ -127,6 +127,106 @@ describe("AlertCardExpanded", () => {
     expect(screen.getByText("eventName")).toBeInTheDocument();
   });
 
+  it("既知パターンには「1秒未満・AI コストゼロ」の経済性対比 1 行を出す（タスク G1）", () => {
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({
+          report: null,
+          classification: {
+            type: "known",
+            source: "EXACT_MATCH",
+            patternId: "p-1",
+            patternName: "決済APIタイムアウト",
+            confidence: 0.9,
+            matchedConditions: [],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/1秒未満・AI コストゼロ/)).toBeInTheDocument();
+  });
+
+  it("実測メトリクス付きレポートは冒頭に働きの明細 1 行を出す（タスク G1）", () => {
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({
+          report: makeReport({
+            metrics: {
+              elapsedMs: 92_000,
+              evidenceCounts: {
+                logs: 12,
+                metrics: 0,
+                terraformChanges: 0,
+                commits: 10,
+                similarIncidents: 5,
+              },
+            },
+          }),
+        })}
+      />,
+    );
+    expect(screen.getByText("92秒")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Cloud Logging・GitHub・類似事例DB を横断し、/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/証拠 27 件/)).toBeInTheDocument();
+  });
+
+  it("metrics 無し（旧データ）・fallback では働きの明細を出さない", () => {
+    const { rerender } = render(
+      <AlertCardExpanded alert={makeAlert({ report: makeReport() })} />,
+    );
+    expect(screen.queryByText(/を横断し、/)).not.toBeInTheDocument();
+
+    rerender(
+      <AlertCardExpanded
+        alert={makeAlert({
+          report: makeReport({
+            isFallback: true,
+            metrics: {
+              elapsedMs: 60_000,
+              evidenceCounts: {
+                logs: 1,
+                metrics: 0,
+                terraformChanges: 0,
+                commits: 0,
+                similarIncidents: 0,
+              },
+            },
+          }),
+        })}
+      />,
+    );
+    expect(screen.queryByText(/を横断し、/)).not.toBeInTheDocument();
+  });
+
+  it("fallback は調査ステップを「収集済みの証拠リンク」として summary 射影でも出す（タスク E3）", () => {
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({
+          report: makeReport({
+            isFallback: true,
+            suggestedPatternName: "",
+            summary: "自動調査に失敗しました。手動での確認が必要です。",
+            investigationSteps: [
+              {
+                text: "コミット abc1234 を確認",
+                href: "https://github.com/o/r/commit/abc1234",
+                kind: "code",
+              },
+            ],
+          }),
+        })}
+      />,
+    );
+    expect(screen.getByText("収集済みの証拠リンク")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /コミット abc1234 を確認/ }),
+    ).toBeInTheDocument();
+    // 通常レポートの見出し（調査ステップ）としては出さない
+    expect(screen.queryByText("調査ステップ")).not.toBeInTheDocument();
+  });
+
   // 分類レビュー（承認/却下/再調査）UI は AlertReviewPanel に分離した
   // （末尾配置の統一・AlertReviewPanel.test.tsx で網羅）。ここでは扱わない。
   it("調査中（ANALYZING かつ既存内容あり）はバナーを出す", () => {

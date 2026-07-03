@@ -20,6 +20,7 @@ import { AIInvestigationPort } from "../../domain/AIInvestigationPort.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { InfraInvestigationPort } from "../../domain/InfraInvestigationPort.js";
 import { InfraEvidence } from "../../domain/InfraEvidence.js";
+import { buildInvestigationMetrics } from "../../domain/InvestigationMetrics.js";
 import { deriveForecastSubject } from "../../../Forecast/domain/forecastSubject.js";
 
 // 類似インシデントは文脈強化用なので件数を絞る（トークン上限 3,500 を意識）
@@ -49,11 +50,15 @@ export class InvestigateAlertUseCase {
     if (alert === null) return this.logSkipped(alertId);
 
     const context = await this.buildInvestigationContext(monitoringEvent, alertId);
+    // 働きの明細（タスク G1）: AI 調査の実測経過時間＋読んだ証拠の件数内訳を deterministic に添付。
+    // ADK / 単一 Gemini どちらの Port 実装でもここで同じ形になる（fallback レポートにも付く＝事実のみ）。
+    const startedAt = Date.now();
+    const investigated = await this.investigate(context, alertId);
     const report = this.enrichWithForecastSubject(
-      await this.investigate(context, alertId),
+      investigated,
       monitoringEvent,
       context,
-    );
+    ).withMetrics(buildInvestigationMetrics(context, Date.now() - startedAt));
 
     await this.attachAndNotify(alert, report);
     await this.logInvestigated(alertId, report);

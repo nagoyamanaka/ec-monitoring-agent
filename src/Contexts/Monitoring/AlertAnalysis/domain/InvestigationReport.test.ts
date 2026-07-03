@@ -119,6 +119,50 @@ describe("InvestigationReport toPrimitives / fromPrimitives", () => {
     expect(InvestigationReport.fromPrimitives(legacy).remediationReview).toBeUndefined();
   });
 
+  it("metrics（働きの明細）は既定で undefined・指定時はラウンドトリップで復元される", () => {
+    expect(new InvestigationReport(baseParams).metrics).toBeUndefined();
+
+    const metrics = {
+      elapsedMs: 92_000,
+      evidenceCounts: {
+        logs: 12,
+        metrics: 3,
+        terraformChanges: 1,
+        commits: 10,
+        similarIncidents: 5,
+      },
+    };
+    const restored = InvestigationReport.fromPrimitives(
+      new InvestigationReport({ ...baseParams, metrics }).toPrimitives(),
+    );
+    expect(restored.metrics).toEqual(metrics);
+  });
+
+  it("metrics 無しの旧 Primitives も読める（後方互換）", () => {
+    const legacy = new InvestigationReport(baseParams).toPrimitives();
+    expect("metrics" in legacy).toBe(false);
+    expect(InvestigationReport.fromPrimitives(legacy).metrics).toBeUndefined();
+  });
+
+  it("withMetrics() は新しいレポートに metrics を載せ、元は変更しない", () => {
+    const original = new InvestigationReport(baseParams);
+    const metrics = {
+      elapsedMs: 1500,
+      evidenceCounts: {
+        logs: 0,
+        metrics: 0,
+        terraformChanges: 0,
+        commits: 0,
+        similarIncidents: 2,
+      },
+    };
+    const updated = original.withMetrics(metrics);
+
+    expect(updated.metrics).toEqual(metrics);
+    expect(updated.summary).toBe(original.summary);
+    expect(original.metrics).toBeUndefined();
+  });
+
   it("relatedAlerts は既定で空配列・指定時はラウンドトリップで復元される", () => {
     expect(new InvestigationReport(baseParams).relatedAlerts).toEqual([]);
 

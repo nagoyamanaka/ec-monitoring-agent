@@ -14,6 +14,7 @@ import { reinvestigate } from "../../application/reinvestigate";
 import { AlertCardExpanded } from "../components/AlertCardExpanded";
 import { AlertReviewPanel } from "../components/AlertReviewPanel";
 import { EvidencePanel } from "../components/EvidencePanel";
+import { FallbackRecoveryBanner } from "../components/FallbackRecoveryBanner";
 import { InvestigationPipelinePanel } from "../components/InvestigationPipelinePanel";
 import { RemediationPanel } from "../components/RemediationPanel";
 import { RelatedAlertsPanel } from "../components/RelatedAlertsPanel";
@@ -189,6 +190,14 @@ export function AlertDetailPage() {
               </button>
             </header>
 
+            {/* AI 調査失敗（fallback）の警告＋ワンクリック再調査（タスク E3）。
+                再調査中（ANALYZING）は下のパイプラインビューが進行を示すため出さない。 */}
+            {alert.report?.isFallback && alert.status !== "ANALYZING" && (
+              <FallbackRecoveryBanner
+                alert={alert}
+                onReinvestigate={handleReinvestigate}
+              />
+            )}
             {/* AI 調査ライブ・タイムライン（E1）。ANALYZING 告知はここに一本化し、
                 完了タイムラインは full 射影の「調査ステップ」と重複するため出さない。 */}
             <InvestigationPipelinePanel

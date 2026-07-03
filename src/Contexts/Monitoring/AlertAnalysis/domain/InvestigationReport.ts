@@ -7,6 +7,8 @@ import type {
   ImpactAssessmentPrimitives,
   EscalationDraftPrimitives,
   RemediationReviewPrimitives,
+  InvestigationMetricsPrimitives,
+  InvestigationEvidenceCountsPrimitives,
 } from "./contracts/AlertContract.js";
 
 // シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
@@ -17,6 +19,8 @@ export type {
   ImpactAssessmentPrimitives,
   EscalationDraftPrimitives,
   RemediationReviewPrimitives,
+  InvestigationMetricsPrimitives,
+  InvestigationEvidenceCountsPrimitives,
 };
 
 /** 調査ステップ／推奨アクション項目から表示・学習用のプレーンテキストを取り出す。 */
@@ -51,6 +55,9 @@ export class InvestigationReport {
   // Forecast 突合キー（ForecastMemory projection が解決済み事例のタグとして読む）。
   // 調査時に deterministic に導出して埋める（LLM 出力ではない）。未指定は undefined（旧データ互換）。
   readonly subject?: string;
+  // 調査の実測メトリクス（経過時間・証拠件数内訳＝タスク G1）。UseCase が計測して添付する
+  // （LLM 出力ではない）。未指定は undefined（旧データ・未計測互換）。
+  readonly metrics?: InvestigationMetricsPrimitives;
 
   constructor(params: {
     summary: string;
@@ -68,6 +75,7 @@ export class InvestigationReport {
     escalation?: EscalationDraftPrimitives;
     remediationReview?: RemediationReviewPrimitives;
     subject?: string;
+    metrics?: InvestigationMetricsPrimitives;
   }) {
     this.summary = params.summary;
     this.confidence = params.confidence;
@@ -84,6 +92,7 @@ export class InvestigationReport {
     this.escalation = params.escalation;
     this.remediationReview = params.remediationReview;
     this.subject = params.subject;
+    this.metrics = params.metrics;
   }
 
   withReviewStatus(reviewStatus: ReviewStatus): InvestigationReport {
@@ -92,6 +101,10 @@ export class InvestigationReport {
 
   withSubject(subject: string): InvestigationReport {
     return new InvestigationReport({ ...this, subject });
+  }
+
+  withMetrics(metrics: InvestigationMetricsPrimitives): InvestigationReport {
+    return new InvestigationReport({ ...this, metrics });
   }
 
   toPrimitives(): InvestigationReportPrimitives {
@@ -111,6 +124,7 @@ export class InvestigationReport {
       ...(this.escalation ? { escalation: this.escalation } : {}),
       ...(this.remediationReview ? { remediationReview: this.remediationReview } : {}),
       ...(this.subject ? { subject: this.subject } : {}),
+      ...(this.metrics ? { metrics: this.metrics } : {}),
     };
   }
 
@@ -131,6 +145,7 @@ export class InvestigationReport {
       escalation: primitives.escalation,
       remediationReview: primitives.remediationReview,
       subject: primitives.subject,
+      metrics: primitives.metrics,
     });
   }
 }

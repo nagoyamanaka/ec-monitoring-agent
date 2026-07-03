@@ -2,6 +2,7 @@ import type {
   InvestigationReportPrimitives,
   InvestigationItemPrimitives,
   InvestigationLinkKind,
+  InvestigationMetricsPrimitives,
   ImpactFault,
   RemediationVerdict,
 } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
@@ -15,6 +16,12 @@ import type { AlertSeverity } from "./AlertView";
 export type ReviewStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";
 
 export type { InvestigationLinkKind, ImpactFault, RemediationVerdict };
+
+/**
+ * 調査の実測メトリクス（経過時間・証拠件数内訳＝タスク G1「働きの明細」）の表示用型。
+ * ワイヤ契約と同形（全て記録済みの事実）。表示文言への写像は `investigationWorkload.ts` が担う。
+ */
+export type InvestigationMetricsView = InvestigationMetricsPrimitives;
 
 /**
  * 影響評価（自責他責・影響範囲・障害規模）の表示用型（タスク34）。
@@ -88,6 +95,8 @@ export type InvestigationReportView = {
   readonly escalation?: EscalationView;
   // 修正PRの自動レビュー結果。PR 未起票・旧 Alert では未設定。
   readonly remediationReview?: RemediationReviewView;
+  // 調査の実測メトリクス（タスク G1）。旧 Alert・未計測では未設定。
+  readonly metrics?: InvestigationMetricsView;
 };
 
 /** ワイヤ要素（文字列 or 構造化）を表示用の構造化形へ正規化。 */
@@ -148,6 +157,14 @@ export function toInvestigationReportView(
             concerns: [...dto.remediationReview.concerns],
             pullRequestUrl: dto.remediationReview.pullRequestUrl,
             citations: [...dto.remediationReview.citations],
+          },
+        }
+      : {}),
+    ...(dto.metrics
+      ? {
+          metrics: {
+            elapsedMs: dto.metrics.elapsedMs,
+            evidenceCounts: { ...dto.metrics.evidenceCounts },
           },
         }
       : {}),

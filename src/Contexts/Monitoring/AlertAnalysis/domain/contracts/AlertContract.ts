@@ -150,6 +150,34 @@ export type RemediationReviewPrimitives = {
   readonly citations: string[];
 };
 
+/**
+ * 調査が実際に読んだ証拠の件数内訳（タスク G1「働きの明細」）。
+ * 全てシステムが記録した事実のみ（「人間なら◯分」等の換算はしない＝盛らない制約）。
+ * 表示側はここから横断ソース（Cloud Logging / GitHub / Terraform / Cloud Monitoring / 類似事例DB）
+ * と証拠合計を導出する（単一ソース＝件数と表示が乖離しない）。
+ */
+export type InvestigationEvidenceCountsPrimitives = {
+  // Cloud Logging のアプリログ件数。
+  readonly logs: number;
+  // Cloud Monitoring の相関メトリクス件数。
+  readonly metrics: number;
+  // Terraform 適用差分の変更リソース件数。
+  readonly terraformChanges: number;
+  // GitHub の直近コミット件数。
+  readonly commits: number;
+  // 過去の類似インシデント（解決事例）件数。
+  readonly similarIncidents: number;
+};
+
+/**
+ * 調査の実測メトリクス（タスク G1）。elapsedMs は AI 調査呼び出しの実測経過時間で、
+ * ADK / 単一 Gemini のどちらの経路でも UseCase 側が同じ形で計測・添付する。
+ */
+export type InvestigationMetricsPrimitives = {
+  readonly elapsedMs: number;
+  readonly evidenceCounts: InvestigationEvidenceCountsPrimitives;
+};
+
 export type InvestigationReportPrimitives = {
   readonly summary: string;
   readonly confidence: number;
@@ -182,6 +210,9 @@ export type InvestigationReportPrimitives = {
   // 調査時に deterministic に導出して埋める（LLM 出力ではない）。ForecastMemory projection が
   // 解決済み事例のタグとして読む。optional は後方互換＝subject 無しの旧 Alert も読める。
   readonly subject?: string;
+  // 調査の実測メトリクス（経過時間・証拠件数内訳＝タスク G1「働きの明細」）。LLM 出力ではなく
+  // UseCase が計測して deterministic に添付する。optional は後方互換＝旧 Alert・未計測でも読める。
+  readonly metrics?: InvestigationMetricsPrimitives;
 };
 
 export type AlertPrimitives = {

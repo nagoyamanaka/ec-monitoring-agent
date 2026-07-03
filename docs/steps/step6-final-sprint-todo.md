@@ -172,14 +172,14 @@ todo実施後に
 - [x] 上部チップ（レビュー待ち/CRITICAL）を**クリック可能フィルタ**に（0件時は淡色化）（✅ AlertsHeader の FilterChip＋matchesAlertFilter 単一ソース・AlertList が絞り込み。0件は淡色+disabled・再クリック/解除リンクで解除。**導線の明示**: 漏斗アイコン＋「クリックで絞り込み:」ラベルでチップ群をグルーピング・選択中は ✓＋✕・hover でリング強調・クリック不可の「分析中」チップは区切り線の右へ分離＝バッジと誤認されない）
 - [x] タイムスタンプを `ja-JP` ロケールに統一（実測: ドロワーが `7/2/2026, 2:16:55 PM` と英語式）（✅ `shared/format/dateTime.ts`（formatDateTimeJa/formatTimeJa）へ一本化・各所のローカル formatter を削除）
 
-### タスク E3: fallback 体験の格上げ 〔P0・D3連動〕
+### タスク E3: fallback 体験の格上げ 〔P0・D3連動〕完了✅
 
 **問題（実測）**: fallback 時のドロワーが「自動調査に失敗しました。手動での確認が必要です。」＋「証拠は見つかりませんでした。」で行き止まり。バナーは「再調査をおすすめします」と言うのに**再調査ボタンがドロワーに無い**。一覧カードは「AI推定: 」と**空文字**を表示。
 **P0 維持の根拠補強（2026-07-03 実機総点検・I4）**: シナリオ7で fallback が実発生した際、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを再確認（`POST /alerts/:id/reinvestigate` は backend 実装済みのまま未結線）。ライブ・無人デプロイ審査の両方で fallback は現実に起きる＝導線の格上げは演出でなく必須。
 
-- ドロワーのfallbackバナー直下に**「再調査を実行」ボタン**（既存 `POST /alerts/:id/reinvestigate` を結線するだけ）
-- fallback でも evidenceLinks（温存済み）を「収集済みの証拠リンク」として表示（backend は対応済み・UI 側の出し分け）
-- 「AI推定: 」空文字の抑止（fallback 時は「調査失敗・再調査可」の定型文）
+- [x] ドロワーのfallbackバナー直下に**「再調査を実行」ボタン**（既存 `POST /alerts/:id/reinvestigate` を結線するだけ）（✅ `FallbackRecoveryBanner` 新設＝警告バナー＋ワンクリック再調査。operatorNote 必須の既存契約は「前回の自動調査は出力不正で失敗しました…」の定型指摘文で満たす。ドロワーの既存インラインバナーを置換＋**詳細ページにも同バナーを追加**（I4 で確認した「どちらにも無い」行き止まりを両方解消）。再調査中（ANALYZING）はパイプラインビューが進行を示すため非表示）
+- [x] fallback でも evidenceLinks（温存済み）を「収集済みの証拠リンク」として表示（backend は対応済み・UI 側の出し分け）（✅ `AlertCardExpanded`＝fallback の investigationSteps を「収集済みの証拠リンク」見出し＋「一次情報へのリンクは残っています」注記で **summary 射影でも**表示。full の「調査ステップ」とは排他＝二重表示なし）
+- [x] 「AI推定: 」空文字の抑止（fallback 時は「調査失敗・再調査可」の定型文）（✅ `alertReason` が report.isFallback で patternName「調査失敗・再調査可」を返す＝一覧カード/展開ビュー共通）
 
 ### タスク E4: 審査員ファーストラン 〔P0・デプロイURL審査に直撃〕完了✅
 
@@ -224,13 +224,13 @@ todo実施後に
 > **正直さの制約（必須）**: 表示するのは**システムが実際に記録した事実のみ**（調査経過時間・横断した証拠の件数・ソース数・×N・昇格数）。「人間なら◯分」の換算係数は根拠を出せないため**製品UIには出さない**（換算はナレーション/ProtoPedia側で「一般に」の枕詞つきで語る）。盛った瞬間に David/Sarah の信頼を失い純損になる。
 > 実装 = Claude Code。E 系と同枝で進めて衝突回避。
 
-### タスク G1: 調査レポートの「働きの明細」〔P0・Alex 直撃〕
+### タスク G1: 調査レポートの「働きの明細」〔P0・Alex 直撃〕完了✅
 
 **狙い**: レポートを読んだ審査員が「これを人間がやったら」と**自分で**換算してしまう状態を作る。事実の列挙が最強のペインキラー証明。
 
-- 【backend】調査完了時に**実測メトリクス**を `InvestigationReport` に添付（後方互換 optional）: `elapsedMs`（既にログにある値）・収集ソース数・証拠件数の内訳（ログ n 件 / コミット n 件 / 差分 n 件 / 類似事例 n 件）。ADK/単一Gemini 両経路で同じ形に
-- 【UI】ドロワーのレポート冒頭に1行サマリ: 「**92秒**で Cloud Logging・GitHub・類似事例DB を横断し、**証拠62件**を収集して原因を推定」＝数字は全部実測
-- 【UI】既知アラートには対比を1行: 「既知パターン一致＝**1秒未満・AI コストゼロ**で確定（初回調査の結晶化）」→ 学習ループの経済性を毎回想起させる
+- [x] 【backend】調査完了時に**実測メトリクス**を `InvestigationReport` に添付（後方互換 optional）: `elapsedMs`（既にログにある値）・収集ソース数・証拠件数の内訳（ログ n 件 / コミット n 件 / 差分 n 件 / 類似事例 n 件）。ADK/単一Gemini 両経路で同じ形に（✅ 契約 `InvestigationMetricsPrimitives`（contracts 単一ソース・elapsedMs＋evidenceCounts: logs/metrics/terraformChanges/commits/similarIncidents）。計測・添付は Port 実装でなく **UseCase 側**（`InvestigateAlertUseCase`/`ReinvestigateAlertUseCase` が `buildInvestigationMetrics(context, elapsed)` を `withMetrics` で添付）＝ADK/単一Gemini/オンデマンド生成（POST /alerts/:id/report→同 UseCase）の全経路で同形・LLM 出力に依存しない deterministic 導出。fallback レポートにも付く（事実は温存）。収集ソース数は内訳から表示側導出＝二重持ちしない）
+- [x] 【UI】ドロワーのレポート冒頭に1行サマリ: 「**92秒**で Cloud Logging・GitHub・類似事例DB を横断し、**証拠62件**を収集して原因を推定」＝数字は全部実測（✅ 純関数 `investigationWorkload.workloadSummary`（件数0のソースは「横断した」と主張しない・1秒未満丸め）→ `AlertCardExpanded` 冒頭の ⏱ 1行（ドロワー/詳細ページ共通・fallback と metrics 無しの旧データは非表示））
+- [x] 【UI】既知アラートには対比を1行: 「既知パターン一致＝**1秒未満・AI コストゼロ**で確定（初回調査の結晶化）」→ 学習ループの経済性を毎回想起させる（✅ 該当パターン（既知）セクション直下に ⚡ 1行・結晶化パターンは「（初回 AI 調査の結晶化を再利用）」を付記）
 
 ### タスク G2: 一覧のバリューストリップ ＋ 5秒ポジショニング 〔P0・Marcus 直撃〕完了✅
 

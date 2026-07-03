@@ -83,6 +83,24 @@ describe("AlertDetailDrawer", () => {
     expect(onDecision).toHaveBeenCalledWith("a-9", "approve", undefined);
   });
 
+  it("fallback レポートは警告バナー直下の「再調査を実行」で onReinvestigate を呼ぶ（タスク E3）", async () => {
+    const onReinvestigate = vi.fn().mockResolvedValue(undefined);
+    renderDrawer({
+      alert: makeAlert({
+        report: makeReport({ isFallback: true, suggestedPatternName: "" }),
+      }),
+      onClose: vi.fn(),
+      onReinvestigate,
+    });
+
+    expect(screen.getByText("AI 調査に失敗・暫定表示")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /再調査を実行/ }));
+    expect(onReinvestigate).toHaveBeenCalledWith(
+      "alert-1",
+      expect.stringContaining("失敗"),
+    );
+  });
+
   it("詳細ページへのリンクを出す", () => {
     renderDrawer({ alert: makeAlert({ id: "a-9" }), onClose: vi.fn() });
     expect(

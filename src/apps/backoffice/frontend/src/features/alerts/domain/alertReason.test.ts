@@ -37,6 +37,15 @@ describe("alertReason", () => {
     expect(reason).toEqual({ kind: "ai", patternName: "latency-spike" });
   });
 
+  it("fallback レポートは空文字でなく「調査失敗・再調査可」の定型文（タスク E3）", () => {
+    const reason = alertReason(
+      makeAlert({
+        report: makeReport({ isFallback: true, suggestedPatternName: "" }),
+      }),
+    );
+    expect(reason).toEqual({ kind: "ai", patternName: "調査失敗・再調査可" });
+  });
+
   it("昇格パターン（PROMOTED_）は crystallized＋eventCatalog の人間語へ写像し、生IDは rawPatternName へ降格", () => {
     const reason = alertReason(
       makeAlert({

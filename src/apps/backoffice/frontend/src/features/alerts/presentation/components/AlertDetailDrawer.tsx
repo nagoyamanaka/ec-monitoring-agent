@@ -21,6 +21,7 @@ import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertReviewPanel } from "./AlertReviewPanel";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { EvidencePanel } from "./EvidencePanel";
+import { FallbackRecoveryBanner } from "./FallbackRecoveryBanner";
 import { InvestigationPipelinePanel } from "./InvestigationPipelinePanel";
 import { RemediationPanel } from "./RemediationPanel";
 import { RelatedAlertsPanel } from "./RelatedAlertsPanel";
@@ -220,15 +221,12 @@ export function AlertDetailDrawer({
           {confidence.kind === "exact-match" ? (
             <ExactMatchBadge variant="panel" />
           ) : confidence.kind === "ai" && aiFallback ? (
-            <div className="rounded-tremor-default bg-amber-500/10 px-4 py-3 text-amber-200 ring-1 ring-inset ring-amber-500/25">
-              <p className="flex items-center gap-2 text-sm font-semibold">
-                <span aria-hidden>⚠</span>
-                AI 調査に失敗・暫定表示
-              </p>
-              <p className="mt-1 text-xs text-amber-200/80">
-                確信度は参考値です（再調査をおすすめします）
-              </p>
-            </div>
+            // fallback は「再調査をおすすめします」で行き止まりにしない＝バナー直下に
+            // ワンクリックの「再調査を実行」を結線する（タスク E3）。
+            <FallbackRecoveryBanner
+              alert={alert}
+              onReinvestigate={onReinvestigate}
+            />
           ) : confidence.kind === "ai" ? (
             <div className="flex justify-center">
               <ConfidenceGauge
