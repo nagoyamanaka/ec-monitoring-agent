@@ -213,24 +213,27 @@ export class InvestigateAlertUseCase {
     }
   }
 
-  // 確信度キャリブレーションを適用し、切り詰めが起きた場合は説明ログを残す（透明性）。
+  // 確信度キャリブレーションを適用する。根拠（シグナル・上限・自己申告）は常に報告書へ記録し、
+  // 切り詰めが起きた場合は説明ログも残す（透明性）。fallback は confidence=0 の定型なので対象外。
   private async applyConfidenceCalibration(
     report: InvestigationReport,
     context: InvestigationContext,
     alertId: AlertId,
   ): Promise<InvestigationReport> {
-    const calibration = calibrateConfidence(report, context);
-    if (calibration.calibrated >= calibration.original) return report;
+    if (report.isFallback) return report;
 
-    await this.logger.info({
-      service: "backoffice-backend",
-      action: "confidence_calibrated",
-      message:
-        `確信度を証拠裏付けで補正：${alertId.value}, ` +
-        `${calibration.original}→${calibration.calibrated}` +
-        `（上限${calibration.cap}・根拠: ${calibration.signals.join(",") || "なし"}）`,
-    });
-    return report.withConfidence(calibration.calibrated);
+    const calibration = calibrateConfidence(report, context);
+    if (calibration.calibrated < calibration.original) {
+      await this.logger.info({
+        service: "backoffice-backend",
+        action: "confidence_calibrated",
+        message:
+          `確信度を証拠裏付けで補正：${alertId.value}, ` +
+          `${calibration.original}→${calibration.calibrated}` +
+          `（上限${calibration.cap}・根拠: ${calibration.signals.join(",") || "なし"}）`,
+      });
+    }
+    return report.withConfidenceCalibration(calibration);
   }
 
   // Forecast 突合キー（F2）: 調査時点の文脈から subject を導出して埋める。

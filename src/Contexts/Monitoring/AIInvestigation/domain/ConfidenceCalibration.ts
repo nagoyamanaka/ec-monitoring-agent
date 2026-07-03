@@ -1,4 +1,8 @@
 import type { InvestigationReport } from "../../AlertAnalysis/domain/InvestigationReport.js";
+import type {
+  ConfidenceCalibrationPrimitives,
+  ConfidenceGroundingSignal,
+} from "../../AlertAnalysis/domain/contracts/AlertContract.js";
 import type { InvestigationContext } from "./InvestigationContext.js";
 import { collectCitedEvidenceText } from "./CitedEvidence.js";
 
@@ -16,19 +20,8 @@ import { collectCitedEvidenceText } from "./CitedEvidence.js";
  * - 全シグナルが揃っても 0.95 止まり（LLM の推論である以上 100% は主張しない）
  */
 
-export type ConfidenceGroundingSignal =
-  /** 既知エラーパターンに一致（過去に人間が確定した知見） */
-  | "known_pattern"
-  /** 報告書が原因コミットの sha を実際に引用（CitedEvidence と同一判定） */
-  | "cited_commit"
-  /** 障害ウィンドウ内に適用済み Terraform 差分が実在 */
-  | "terraform_diff"
-  /** 実在する候補アラートとの相関（存在しない alertId は数えない） */
-  | "related_alert"
-  /** 同一イベントの過去解決事例あり */
-  | "similar_incident"
-  /** 再調査時の人間の指摘（一次情報）が文脈に入っている */
-  | "operator_note";
+// シグナルの語彙はワイヤ契約（contracts）を単一ソースとして共有する。
+export type { ConfidenceGroundingSignal };
 
 /** 裏付けゼロ時の上限＝「推測の域」。 */
 const BASE_CAP = 0.4;
@@ -39,13 +32,11 @@ const MEDIUM_WEIGHT = 0.15;
 /** LLM の推論である以上、ここより上は主張させない。 */
 const MAX_CAP = 0.95;
 
-export type ConfidenceCalibration = {
-  /** 検出した裏付けシグナル（表示・ログでの説明責任用）。 */
-  readonly signals: ConfidenceGroundingSignal[];
-  /** シグナルから導出した確信度上限。 */
-  readonly cap: number;
-  /** LLM 自己申告の確信度。 */
-  readonly original: number;
+/**
+ * 補正結果。signals/cap/original はそのまま報告書へ記録され（ワイヤ契約と同形）、
+ * calibrated は報告書の confidence 本体に反映する。
+ */
+export type ConfidenceCalibration = ConfidenceCalibrationPrimitives & {
   /** min(original, cap)。報告書にはこの値を載せる。 */
   readonly calibrated: number;
 };

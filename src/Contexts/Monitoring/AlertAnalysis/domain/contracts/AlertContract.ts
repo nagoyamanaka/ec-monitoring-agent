@@ -178,6 +178,30 @@ export type InvestigationMetricsPrimitives = {
   readonly evidenceCounts: InvestigationEvidenceCountsPrimitives;
 };
 
+/**
+ * 確信度キャリブレーションの裏付けシグナル。LLM の作文ではなく、システムが検証できる事実のみ
+ * （既知パターン一致／報告書が引用した原因コミット／適用済み Terraform 差分／実在候補と突合済みの
+ * 相関アラート／類似事例／再調査時の人間の指摘）。
+ */
+export type ConfidenceGroundingSignal =
+  | "known_pattern"
+  | "cited_commit"
+  | "terraform_diff"
+  | "related_alert"
+  | "similar_incident"
+  | "operator_note";
+
+/**
+ * 確信度キャリブレーションの記録（ConfidenceCalibration＝domain 純関数が導出）。
+ * confidence 本体には補正後の値が入り、ここには「どう補正したか」の説明責任情報を残す
+ * （signals→表示ラベル、cap=シグナル由来の上限、original=LLM 自己申告）。
+ */
+export type ConfidenceCalibrationPrimitives = {
+  readonly signals: ConfidenceGroundingSignal[];
+  readonly cap: number;
+  readonly original: number;
+};
+
 export type InvestigationReportPrimitives = {
   readonly summary: string;
   readonly confidence: number;
@@ -213,6 +237,9 @@ export type InvestigationReportPrimitives = {
   // 調査の実測メトリクス（経過時間・証拠件数内訳＝タスク G1「働きの明細」）。LLM 出力ではなく
   // UseCase が計測して deterministic に添付する。optional は後方互換＝旧 Alert・未計測でも読める。
   readonly metrics?: InvestigationMetricsPrimitives;
+  // 確信度キャリブレーションの記録（裏付けシグナル・上限・自己申告値）。UseCase が deterministic に
+  // 添付する（LLM 出力ではない）。optional は後方互換＝旧 Alert・fallback では未設定。
+  readonly confidenceCalibration?: ConfidenceCalibrationPrimitives;
 };
 
 export type AlertPrimitives = {

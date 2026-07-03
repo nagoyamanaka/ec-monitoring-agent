@@ -20,6 +20,7 @@ import type { RemediationView } from "../../domain/RemediationView";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertReviewPanel } from "./AlertReviewPanel";
 import { AlertStatusBadge } from "./AlertStatusBadge";
+import { ConfidenceCalibrationNote } from "./ConfidenceCalibrationNote";
 import { EvidencePanel } from "./EvidencePanel";
 import { FallbackRecoveryBanner } from "./FallbackRecoveryBanner";
 import { InvestigationPipelinePanel } from "./InvestigationPipelinePanel";
@@ -228,7 +229,7 @@ export function AlertDetailDrawer({
               onReinvestigate={onReinvestigate}
             />
           ) : confidence.kind === "ai" ? (
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-1.5">
               <ConfidenceGauge
                 confidence={confidence.value}
                 size="lg"
@@ -236,6 +237,13 @@ export function AlertDetailDrawer({
                 color="cyan"
                 animate
               />
+              {/* キャリブレーション記録があれば「なぜこの値か」（裏付け・上限・補正）を併記する。 */}
+              {alert.report?.confidenceCalibration && (
+                <ConfidenceCalibrationNote
+                  calibration={alert.report.confidenceCalibration}
+                  confidence={confidence.value}
+                />
+              )}
             </div>
           ) : confidence.kind === "known" ? (
             <div className="flex justify-center">

@@ -3,6 +3,7 @@ import type {
   InvestigationItemPrimitives,
   InvestigationLinkKind,
   InvestigationMetricsPrimitives,
+  ConfidenceCalibrationPrimitives,
   ImpactFault,
   RemediationVerdict,
 } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
@@ -22,6 +23,13 @@ export type { InvestigationLinkKind, ImpactFault, RemediationVerdict };
  * ワイヤ契約と同形（全て記録済みの事実）。表示文言への写像は `investigationWorkload.ts` が担う。
  */
 export type InvestigationMetricsView = InvestigationMetricsPrimitives;
+
+/**
+ * 確信度キャリブレーションの記録（裏付けシグナル・上限・LLM 自己申告値）の表示用型。
+ * ワイヤ契約と同形（全て backend が記録した事実）。表示文言への写像は
+ * `confidenceCalibration.ts` が担う。
+ */
+export type ConfidenceCalibrationView = ConfidenceCalibrationPrimitives;
 
 /**
  * 影響評価（自責他責・影響範囲・障害規模）の表示用型（タスク34）。
@@ -97,6 +105,8 @@ export type InvestigationReportView = {
   readonly remediationReview?: RemediationReviewView;
   // 調査の実測メトリクス（タスク G1）。旧 Alert・未計測では未設定。
   readonly metrics?: InvestigationMetricsView;
+  // 確信度キャリブレーションの記録。旧 Alert・fallback では未設定。
+  readonly confidenceCalibration?: ConfidenceCalibrationView;
 };
 
 /** ワイヤ要素（文字列 or 構造化）を表示用の構造化形へ正規化。 */
@@ -165,6 +175,15 @@ export function toInvestigationReportView(
           metrics: {
             elapsedMs: dto.metrics.elapsedMs,
             evidenceCounts: { ...dto.metrics.evidenceCounts },
+          },
+        }
+      : {}),
+    ...(dto.confidenceCalibration
+      ? {
+          confidenceCalibration: {
+            signals: [...dto.confidenceCalibration.signals],
+            cap: dto.confidenceCalibration.cap,
+            original: dto.confidenceCalibration.original,
           },
         }
       : {}),
