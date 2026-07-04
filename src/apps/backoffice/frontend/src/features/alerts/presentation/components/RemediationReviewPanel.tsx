@@ -2,6 +2,7 @@ import type {
   RemediationReviewView,
   RemediationVerdict,
 } from "../../domain/InvestigationReportView";
+import { CitationChips } from "./CitationChips";
 
 export interface RemediationReviewPanelProps {
   review: RemediationReviewView;
@@ -70,23 +71,8 @@ export function RemediationReviewPanel({ review }: RemediationReviewPanelProps) 
         </div>
       )}
 
-      {review.citations.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-            判定根拠（引用）
-          </p>
-          <ul className="flex flex-wrap gap-1.5">
-            {review.citations.map((citation, i) => (
-              <li
-                key={i}
-                className="rounded bg-slate-800/70 px-1.5 py-0.5 font-mono text-[11px] text-slate-300 ring-1 ring-inset ring-slate-700/60"
-              >
-                {citation}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* 生ログ引用は既定折りたたみ＋種別レーン（タスク E8-D・ImpactPanel と同じ畳み方）。 */}
+      <CitationChips heading="判定根拠（引用）" citations={review.citations} />
     </section>
   );
 }

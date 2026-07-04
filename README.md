@@ -45,10 +45,10 @@ flowchart LR
 | --- | --- |
 | AI | **Gemini 2.5 Pro**（Vertex AI・ADC）＋ **Google ADK**（in-process マルチエージェント）。ポート DI で単一 Gemini ⇄ ADK を差し替え |
 | バックエンド | TypeScript / Express・**DDD + Clean Architecture + CQRS + EDA**（CodelyTV パターン準拠）・RabbitMQ・MongoDB・Elasticsearch・Valkey |
-| フロントエンド | React（ダーク観測コンソール・SSE ライブ・**AI調査ライブタイムライン**・証拠パネル・**働きの明細＝実測 92秒/証拠62件の1行サマリ**・fallback からのワンクリック再調査・承認 UI・着弾/更新/dedup のライブ演出） |
+| フロントエンド | React（ダーク観測コンソール・SSE ライブ・**AI調査ライブタイムライン**・証拠パネル・**働きの明細＝実測メトリクスの証拠フローダイアグラム（流入源→AI 調査→結論の収束図）**・fallback からのワンクリック再調査・承認 UI・着弾/更新/dedup のライブ演出） |
 | インフラ | **Cloud Run**（frontend / edge）＋ **Compute Engine**（EDA 常駐系）・Terraform・Cloud Monitoring / Cloud Logging（OTel 直送） |
 | CI/CD | GitHub Actions（typecheck/UT/E2E → build → deploy／Trivy → 実 ingest／AI リメディ workflow／terraform plan・apply） |
-| テスト | Vitest（BDD）**870件・128ファイル**＋ Playwright E2E |
+| テスト | Vitest（BDD）**908件・135ファイル**＋ Playwright E2E |
 
 ## クイックスタート（ローカル）
 

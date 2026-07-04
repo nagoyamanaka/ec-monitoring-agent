@@ -221,12 +221,12 @@ todo実施後に
 **問題（実機スクショ 2026-07-04）**: 詳細ページの報告書は情報粒度・カテゴリは良いが、全セクションが同じ視覚密度のテキスト縦積みで「読む物」。証拠がどこから流入し結論へ収束したかの*構造*が文でしか表現されていない。調査ステップは生エージェント名の ol リスト・算定根拠は生ログチップの横並び。
 
 - 設計: `docs/steps/step6-report-visual-design.md`（審査員5レンズ→原則、提案A〜E、棄却案、実装計画）
-- [ ] (A) 証拠フローダイアグラム（metrics.evidenceCounts→SVG手組み・実測のみ・G1 の⏱1行を吸収）〔P0〕
-- [ ] (B) 調査ステップの縦タイムライン化＋エージェント名の人間語化（時刻は捏造しない・順序のみ）〔P0〕
-- [ ] (C) 結論ファースト再配置（fault/scale をヒーローへ昇格・summary 射影はノータッチ）〔P0〕
-- [ ] (D) 引用チップの折りたたみ＋ソース種別レーン（F8 引用レーンと同じ視覚言語）〔P1〕
-- [ ] (E) 余白・見出し階層の微調整〔P1〕
-- backend 変更ゼロ・frontend 射影のみ。**F8 録画前に A〜C 着地が最大価値**。merge 条件＝全緑＋RTL 同時更新
+- [x] (A) 証拠フローダイアグラム（metrics.evidenceCounts→SVG手組み・実測のみ・G1 の⏱1行を吸収）〔P0〕（✅ `evidenceFlowModel` domain 純関数（>0ソースのみ・太さは離散3段階・ariaSummary 1文）＋`EvidenceFlowDiagram`（流入源→AI調査→結論ノード・結論に ConfidenceGauge＋キャリブレーション注記を合流・狭幅は▼で縦積み）。fallback/旧データ/0件は null→⏱1行へ劣化。図が描けるとき ⏱1行は図ヘッダに吸収。**AI調査ノードはホバー/フォーカスで7エージェント台帳**＝「✓＝この調査のステップに登場」（`mentionedAgents`＝ステップ文の生エージェント名から決定論導出・言及ゼロならハイライト無し台帳・読み上げは sr-only 1行で代替。常時表示は図の邪魔＝D2 と同じ段階開示））
+- [x] (B) 調査ステップの縦タイムライン化＋エージェント名の人間語化（時刻は捏造しない・順序のみ）〔P0〕（✅ `InvestigationTimeline`（接続線＋ノード・full のみ）＋`humanizeAgentNames`（INVESTIGATION_AGENTS 台帳へ写像・不一致は原文）。fallback の証拠リンク表示（E3）はタイムライン化しない）
+- [x] (C) 結論ファースト再配置（fault/scale をヒーローへ昇格・summary 射影はノータッチ）〔P0〕（✅ AI推定パターン直下に FaultBadge＋障害規模1行（ImpactPanel と共用の FaultBadge を export）・推奨アクションを調査ステップより先に・summary は max-w-prose）
+- [x] (D) 引用チップの折りたたみ＋ソース種別レーン（F8 引用レーンと同じ視覚言語）〔P1〕（✅ `groupCitations`（プレフィックス→観測データ cyan／変更履歴 amber／過去事例 emerald／その他・語り順固定）＋`CitationChips`（既定は「n件」トグルのみ・展開でレーン表示・全文 row 化で mono の可読性改善）。ImpactPanel 算定根拠／EscalationPanel 添付証拠／RemediationReviewPanel 判定根拠の3箇所を置換）
+- [x] (E) 余白・見出し階層の微調整〔P1〕（✅ full は space-y-5・summary 射影は現状維持）
+- backend 変更ゼロ・frontend 射影のみ。**F8 録画前に A〜C 着地が最大価値**。merge 条件＝全緑＋RTL 同時更新（✅ 全908テスト緑・frontend tsc 緑・UT/RTL 15件追加。**実機確認済み**: ローカル実スタック＋Playwright で 在庫引当の失敗（metrics 付き実レポート）の詳細ページを 1280px/420px で実描画・引用レーン展開も確認）
 
 > **実装順（推奨）**: E2バグ修正＋E4（半日相当・審査員の初撃体験）→ E1(a)（wow の土台）→ E3 → E1(b)（本線タップ・慎重に）→ E5〜E7。各タスク独立コミット・全緑維持。
 

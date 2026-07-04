@@ -1,11 +1,14 @@
 import { cn } from "@shared/ui/cn";
 import { type AlertView } from "../../domain/AlertView";
 import { InvestigationItem } from "./InvestigationItem";
-import { ImpactPanel } from "./ImpactPanel";
+import { InvestigationTimeline } from "./InvestigationTimeline";
+import { ImpactPanel, FaultBadge } from "./ImpactPanel";
 import { EscalationPanel } from "./EscalationPanel";
+import { EvidenceFlowDiagram } from "./EvidenceFlowDiagram";
 import { RemediationReviewPanel } from "./RemediationReviewPanel";
 import { alertReason } from "../../domain/alertReason";
 import { workloadSummary } from "../../domain/investigationWorkload";
+import { evidenceFlowModel } from "../../domain/evidenceFlow";
 
 /**
  * 表示の射影モード（タスク37：同一 InvestigationReport を射影違いで出し分ける）。
@@ -57,6 +60,9 @@ export function AlertCardExpanded({
   const known = alert.classification.type === "known";
   // 働きの明細（タスク G1）: 実測メトリクスがあれば冒頭 1 行に数字で出す（fallback は対象外）。
   const workload = report && !report.isFallback ? workloadSummary(report.metrics) : null;
+  // 証拠フローダイアグラム（タスク E8-A・full のみ）。図が描けるときは ⏱ 1行を図に吸収する
+  //（同じ実測を二度出さない）。描けない条件（旧データ・fallback・証拠0件）はテキスト1行へ劣化。
+  const flow = full ? evidenceFlowModel(report) : null;
   // 状態が ANALYZING に戻っている＝AI が（再）調査中。既存の内容を持つときは再調査の最中。
   const analyzingNow = alert.status === "ANALYZING";
 
@@ -72,7 +78,14 @@ export function AlertCardExpanded({
   }
 
   return (
-    <div className={cn("space-y-4 text-sm text-slate-200", className)}>
+    <div
+      className={cn(
+        "text-sm text-slate-200",
+        // 報告用フルはセクション間の視覚リズムを広めに取る（タスク E8-E・密度の緩和）。
+        full ? "space-y-5" : "space-y-4",
+        className,
+      )}
+    >
       {/* AI 調査中（オンデマンドのレポート生成 or 人間の指摘を反映した再調査）。
           既存内容は下に残したまま、進行中であることを明示する。 */}
       {analyzingNow && analyzingNotice && (
@@ -121,6 +134,18 @@ export function AlertCardExpanded({
               {reason.crystallized && "（初回 AI 調査の結晶化を再利用）"}
             </p>
           )}
+          {/* 判断材料のヒーロー行（タスク E8-C）: 自責/他責と障害規模を報告書の冒頭へ昇格
+              ＝開いて5秒で「誰の責任で・どの規模か」が揃う。詳細（影響範囲・主体・引用）は
+              下の影響評価パネルが担う（重複を許すのは fault/scale の2項目のみ）。 */}
+          {full && report?.impact && (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5 text-xs">
+              <FaultBadge fault={report.impact.fault} />
+              <span className="font-medium uppercase tracking-wide text-slate-400">
+                障害規模
+              </span>
+              <span className="text-slate-200">{report.impact.scale}</span>
+            </p>
+          )}
           {/* 類似既知（SIMILARITY）の back-link は RelatedAlertsPanel の「過去の同型事例」
               セクションに確度チップ付きで提示する（ドロワー/詳細でマウント・タスク9e）。 */}
         </section>
@@ -167,8 +192,9 @@ export function AlertCardExpanded({
       {report && (
         <>
           {/* 働きの明細（タスク G1）: 何秒で・どのソースを横断し・何件の証拠を読んだかの実測 1 行。
-              数字は全て backend が記録した事実（InvestigationMetrics）＝人間換算はしない。 */}
-          {workload && (
+              数字は全て backend が記録した事実（InvestigationMetrics）＝人間換算はしない。
+              full で証拠フローダイアグラム（E8-A）が描けるときは図に吸収し、この行は出さない。 */}
+          {workload && !flow && (
             <p className="rounded-md bg-cyan-500/10 px-3 py-2 text-xs leading-relaxed text-cyan-100 ring-1 ring-inset ring-cyan-500/25">
               <span aria-hidden>⏱ </span>
               <span className="font-semibold text-cyan-300">
@@ -188,7 +214,19 @@ export function AlertCardExpanded({
               )}
             </p>
           )}
-          <p className="leading-relaxed text-slate-100">{report.summary}</p>
+          {/* 行長を抑えて可読性を守る（E8-E）。summary 射影はドロワー幅（〜480px）で自然に収まる。 */}
+          <p className={cn("leading-relaxed text-slate-100", full && "max-w-prose")}>
+            {report.summary}
+          </p>
+
+          {/* 証拠の流れ（タスク E8-A・full のみ）: 流入源→AI 調査→結論の収束構造を実測で図示。 */}
+          {flow && (
+            <EvidenceFlowDiagram
+              model={flow}
+              calibration={report.confidenceCalibration}
+              steps={report.investigationSteps}
+            />
+          )}
 
           {/* 要約: 障害規模(impact.scale)だけを1行で出す（重い impact 全項目は full のみ）。 */}
           {!full && report.impact && (
@@ -220,21 +258,8 @@ export function AlertCardExpanded({
             </section>
           )}
 
-          {full && !report.isFallback && report.investigationSteps.length > 0 && (
-            <section className="space-y-1">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                調査ステップ
-              </h4>
-              <ol className="list-decimal space-y-1 pl-5 marker:text-slate-400">
-                {report.investigationSteps.map((step, i) => (
-                  <li key={i}>
-                    <InvestigationItem item={step} />
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
-
+          {/* 「どうする」（推奨アクション）を根拠の直後・調査の道筋より先に置く（タスク E8-C:
+              読む順でなく判断する順）。 */}
           {full && report.suggestedActions.length > 0 && (
             <section className="space-y-1">
               <div className="flex items-center gap-2">
@@ -255,6 +280,16 @@ export function AlertCardExpanded({
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {/* 調査ステップは縦タイムライン（タスク E8-B）＝AI がたどった道筋を構造で見せる。 */}
+          {full && !report.isFallback && report.investigationSteps.length > 0 && (
+            <section className="space-y-1.5">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                調査ステップ
+              </h4>
+              <InvestigationTimeline steps={report.investigationSteps} />
             </section>
           )}
 

@@ -1,4 +1,5 @@
 import type { ImpactView, ImpactFault } from "../../domain/InvestigationReportView";
+import { CitationChips } from "./CitationChips";
 
 export interface ImpactPanelProps {
   impact: ImpactView;
@@ -20,24 +21,31 @@ const FAULT_STYLE: Record<ImpactFault, { label: string; className: string }> = {
   },
 };
 
+/** 自責他責バッジ（ヒーロー行＝AlertCardExpanded と本パネルで共用・タスク E8-C）。 */
+export function FaultBadge({ fault }: { fault: ImpactFault }) {
+  const style = FAULT_STYLE[fault];
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${style.className}`}
+    >
+      {style.label}
+    </span>
+  );
+}
+
 /**
  * 影響評価パネル（報告用フル・詳細ページのみ）。
  * 自責他責・影響範囲・障害規模・影響主体・算定根拠（citations チップ）を全表示する（タスク34/37）。
  * 一覧オーバレイは `impact.scale` のみを要約に出すため、本パネルは使わない。
  */
 export function ImpactPanel({ impact }: ImpactPanelProps) {
-  const fault = FAULT_STYLE[impact.fault];
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
           影響評価
         </h4>
-        <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${fault.className}`}
-        >
-          {fault.label}
-        </span>
+        <FaultBadge fault={impact.fault} />
       </div>
 
       <dl className="space-y-1.5 text-sm">
@@ -73,23 +81,8 @@ export function ImpactPanel({ impact }: ImpactPanelProps) {
         </div>
       )}
 
-      {impact.citations.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-            算定根拠（引用）
-          </p>
-          <ul className="flex flex-wrap gap-1.5">
-            {impact.citations.map((citation, i) => (
-              <li
-                key={i}
-                className="rounded bg-slate-800/70 px-1.5 py-0.5 font-mono text-[11px] text-slate-300 ring-1 ring-inset ring-slate-700/60"
-              >
-                {citation}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* 生ログ引用は既定折りたたみ＋種別レーン（タスク E8-D）。件数は常時見える＝根拠の存在は一目。 */}
+      <CitationChips heading="算定根拠（引用）" citations={impact.citations} />
     </section>
   );
 }
