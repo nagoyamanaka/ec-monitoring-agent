@@ -54,10 +54,12 @@ function toStringArray(value: unknown): string[] {
 }
 
 /**
- * relatedAlerts を {alertId, relation, rationale} の配列へ正規化する。
+ * relatedAlerts を {alertId, relation, rationale, citations} の配列へ正規化する。
  * 3 フィールドが揃った文字列要素のみ残す（型不正・欠落・配列でない場合は空配列）。
+ * citations は空白文字列を除いて配列化（欠落・非配列は空配列＝根拠なし）。
  * alertId の実在性（candidateAlerts に含まれるか）はここでは検証しない＝表示側で解決し、
- * 未解決はリンクのみ出す（フロント `toRelatedAlertViews`）。
+ * 未解決はリンクのみ出す（フロント `toRelatedAlertViews`）。citations が収集済み証拠に
+ * 解決しない関連を落とすガードはマッパ側（impact の citations 空ガードと同方針）。
  */
 function toRelatedAlerts(value: unknown): RelatedAlertPrimitives[] {
   if (!Array.isArray(value)) return [];
@@ -74,6 +76,7 @@ function toRelatedAlerts(value: unknown): RelatedAlertPrimitives[] {
           alertId: o["alertId"],
           relation: o["relation"],
           rationale: o["rationale"],
+          citations: toStringArray(o["citations"]).filter((c) => c.trim() !== ""),
         },
       ];
     }

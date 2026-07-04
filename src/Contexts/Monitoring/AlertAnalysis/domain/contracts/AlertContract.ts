@@ -81,6 +81,11 @@ export type RelatedAlertPrimitives = {
   readonly relation: string;
   // なぜ関連と判断したか（AI の根拠・1 文）。
   readonly rationale: string;
+  // 関連の根拠となる共有証拠の引用（収集済み証拠 id: commit sha / terraform リソースアドレス /
+  // メトリクス名）。収集済み証拠に解決しない引用しか持たない関連はマッパ側で落とす
+  // （根拠なき因果の橋＝相関ハルシネーションを出さないガード。impact の citations と同方針）。
+  // optional は後方互換＝citations 無しの旧データも読める（新規調査では実質必須）。
+  readonly citations?: string[];
 };
 
 /** 自責他責ラベル。own=自社コード/IaC 起因 / external=外部API・ベンダー起因 / unknown=証拠不足で断定不能。 */

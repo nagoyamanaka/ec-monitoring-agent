@@ -6,6 +6,7 @@ import { InvestigationReport } from "../../../AlertAnalysis/domain/Investigation
 import { SYSTEM_INSTRUCTION, buildUserPrompt } from "./InvestigationPromptBuilder.js";
 import { parseLLMOutput, salvageLLMOutput, rawSnippet } from "./LLMOutputParser.js";
 import { toInvestigationReport, buildFallbackReport } from "./InvestigationReportMapper.js";
+import { collectCitableEvidenceIds } from "../../domain/CitedEvidence.js";
 import {
   buildEvidenceLinks,
   evidenceLinkConfigFromEnv,
@@ -36,6 +37,8 @@ export class LLMInvestigationAdapter implements AIInvestigationPort {
     const prompt = buildUserPrompt(context);
     // fallback（例外／パース不能）でも収集済み証拠のリンクは残せるよう、先に決定的に組んでおく。
     const evidenceLinks = buildEvidenceLinks(context.infraEvidence, this.linkConfig);
+    // 相関ガード（relatedAlerts の citation 実在照合）の語彙。収集済み証拠から決定的に導出する。
+    const citableEvidenceIds = collectCitableEvidenceIds(context.infraEvidence);
 
     let raw: string;
     try {
@@ -59,7 +62,7 @@ export class LLMInvestigationAdapter implements AIInvestigationPort {
           action: "ai_investigation_salvaged",
           message: `AI調査の応答が途中切断されていたため部分レポートを回収しました: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}, rawSnippet=${rawSnippet(raw)}`,
         });
-        return toInvestigationReport(salvaged, evidenceLinks);
+        return toInvestigationReport(salvaged, evidenceLinks, citableEvidenceIds);
       }
       await this.logger?.warn({
         service: "backoffice-backend",
@@ -70,6 +73,6 @@ export class LLMInvestigationAdapter implements AIInvestigationPort {
       return buildFallbackReport(evidenceLinks);
     }
 
-    return toInvestigationReport(output, evidenceLinks);
+    return toInvestigationReport(output, evidenceLinks, citableEvidenceIds);
   }
 }

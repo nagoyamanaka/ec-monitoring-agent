@@ -29,6 +29,9 @@ candidateAlerts は同時期に発生している他のアラート一覧です�
 5xx 急増・CPU 飽和）／同一の commit・terraform 差分／一方の summary が他方を機序込みで名指ししている、等。
 時間的に近いだけ・もっともらしい機序を思いつくだけでは関連にしない（証拠のない因果の橋を作らない）。
 証拠が無ければ空配列にする。rationale には「どの共有証拠を根拠に関連づけたか」を必ず書く（物語でなく引用）。
+各関連には citations を必ず載せること＝根拠とした共有証拠の id（infraEvidence にある commit sha /
+terraform リソースアドレス / メトリクス名）をそのまま引用する。収集済み証拠に実在しない id や
+citations を出せない（指せる共有証拠が無い）関連はシステムが破棄するので、載せても無駄になる。
 とりわけ errorEvent が既知パターンで外部要因（他責）に分類される障害（例: 決済タイムアウト＝外部決済
 サービス起因）の場合、同時発生した別アラートを根拠に自責の内部原因へ再分類しないこと（その別アラートが
 真因だという直接証拠がある場合を除く）。
@@ -72,7 +75,7 @@ confidence（0〜1）は「結論をどれだけ証拠で裏付けられたか�
   "suggestedActions": ["対応アクション1（具体的な修正方針）", "対応アクション2"],
   "suggestedPatternName": "自動昇格候補のパターン名（例: DB_CONNECTION_EXHAUSTION）",
   "remediable": true | false,
-  "relatedAlerts": [{ "alertId": "...", "relation": "same_root_cause", "rationale": "関連の根拠（1文）" }],
+  "relatedAlerts": [{ "alertId": "...", "relation": "same_root_cause", "rationale": "関連の根拠（1文）", "citations": ["共有証拠の id（commit sha / terraform アドレス / メトリクス名）", "..."] }],
   "impact": { "fault": "own" | "external" | "unknown", "scope": "影響範囲（1文）", "scale": "障害規模（1文）", "affectedSubjects": ["payment", "..."], "citations": ["証拠/類似事例の id", "..."] },
   "escalation": { "team": "...", "owner": "...", "contact": "...", "reason": "...", "interimWorkaround": "...", "severityRationale": "...", "evidenceBundle": ["証拠/引用の id", "..."] },
   "remediationReview": { "verdict": "pass" | "concerns" | "reject", "concerns": ["懸念点1", "..."], "pullRequestUrl": "...", "citations": ["diff hunk/変更ファイル/テスト名 等", "..."] }

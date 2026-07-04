@@ -99,7 +99,26 @@ describe("LLMOutputParser", () => {
         ],
       });
       expect(parseLLMOutput(withRelated)?.relatedAlerts).toEqual([
-        { alertId: "a1", relation: "same_root_cause", rationale: "同根" },
+        { alertId: "a1", relation: "same_root_cause", rationale: "同根", citations: [] },
+      ]);
+    });
+
+    it("relatedAlerts.citations は空白を除いて正規化・欠落/非配列は空配列に丸める", () => {
+      const withCitations = JSON.stringify({
+        summary: "x",
+        confidence: 0.5,
+        severity: "INFO",
+        investigationSteps: [],
+        suggestedActions: [],
+        suggestedPatternName: "",
+        relatedAlerts: [
+          { alertId: "a1", relation: "same_root_cause", rationale: "同根", citations: ["e12b655", "  ", 7] },
+          { alertId: "a2", relation: "downstream", rationale: "波及", citations: "oops" },
+        ],
+      });
+      expect(parseLLMOutput(withCitations)?.relatedAlerts).toEqual([
+        { alertId: "a1", relation: "same_root_cause", rationale: "同根", citations: ["e12b655"] },
+        { alertId: "a2", relation: "downstream", rationale: "波及", citations: [] },
       ]);
     });
 
@@ -326,7 +345,7 @@ describe("LLMOutputParser", () => {
       const out = salvageLLMOutput(truncated);
       expect(out?.summary).toBe("s");
       expect(out?.relatedAlerts).toEqual([
-        { alertId: "a1", relation: "same_root_cause", rationale: "同根" },
+        { alertId: "a1", relation: "same_root_cause", rationale: "同根", citations: [] },
       ]);
     });
 

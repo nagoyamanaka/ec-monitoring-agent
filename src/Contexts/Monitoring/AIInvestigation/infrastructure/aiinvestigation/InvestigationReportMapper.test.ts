@@ -169,6 +169,64 @@ describe("InvestigationReportMapper", () => {
       expect(report.escalation).toBeUndefined();
     });
 
+    it("解決済み citation を持つ関連は残し、未解決 citation だけ除去する（相関ガード）", () => {
+      // インフラ→アプリの正当相関: terraform アドレスと commit sha を共有証拠として指せる
+      const report = toInvestigationReport(
+        output({
+          relatedAlerts: [
+            {
+              alertId: "infra-1",
+              relation: "same_root_cause",
+              rationale: "Cloud SQL 縮小の波及",
+              citations: [
+                "google_sql_database_instance.main の max_connections 縮小",
+                "存在しない証拠", // 未解決 → citation だけ除去（関連は残る）
+              ],
+            },
+          ],
+        }),
+        [],
+        ["google_sql_database_instance.main", "e12b655"],
+      );
+      expect(report.relatedAlerts).toEqual([
+        {
+          alertId: "infra-1",
+          relation: "same_root_cause",
+          rationale: "Cloud SQL 縮小の波及",
+          citations: ["google_sql_database_instance.main の max_connections 縮小"],
+        },
+      ]);
+    });
+
+    it("収集済み証拠に解決しない関連は丸ごと落とす（証拠のない因果の橋＝決済↔在庫の捏造）", () => {
+      const report = toInvestigationReport(
+        output({
+          relatedAlerts: [
+            // 他責障害（infraEvidence ゼロ）で同時発生アラートを根拠なく関連づけたケース:
+            // citations 無し・語彙も空 → 構造的に落ちる
+            { alertId: "inventory-1", relation: "upstream", rationale: "在庫競合→DB高負荷→決済タイムアウト" },
+            { alertId: "inventory-2", relation: "upstream", rationale: "同上", citations: ["捏造の根拠"] },
+          ],
+        }),
+        [],
+        [],
+      );
+      expect(report.relatedAlerts).toEqual([]);
+    });
+
+    it("citation の照合は case-insensitive（sha の大文字引用も解決する）", () => {
+      const report = toInvestigationReport(
+        output({
+          relatedAlerts: [
+            { alertId: "app-1", relation: "downstream", rationale: "退行の波及", citations: ["コミット E12B655 を共有"] },
+          ],
+        }),
+        [],
+        ["e12b655"],
+      );
+      expect(report.relatedAlerts).toHaveLength(1);
+    });
+
     it("remediationReview 未指定なら report.remediationReview は undefined", () => {
       expect(toInvestigationReport(output()).remediationReview).toBeUndefined();
     });

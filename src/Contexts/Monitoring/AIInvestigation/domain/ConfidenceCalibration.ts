@@ -68,7 +68,14 @@ function detectSignals(
   const candidateIds = new Set(
     (context.candidateAlerts ?? []).map((c) => c.alertId),
   );
-  if (report.relatedAlerts.some((r) => candidateIds.has(r.alertId))) {
+  // 実在候補との突合に加えて citations（共有証拠の引用）を必須にする（タスク J1）。
+  // マッパのガードを通った関連は解決済み citation を必ず持つので、正当な相関の加点は温存され、
+  // 根拠なき相関（捏造の因果橋・旧データの citation 無し）だけが加点から外れる。
+  if (
+    report.relatedAlerts.some(
+      (r) => candidateIds.has(r.alertId) && (r.citations?.length ?? 0) > 0,
+    )
+  ) {
     signals.push("related_alert");
   }
 
