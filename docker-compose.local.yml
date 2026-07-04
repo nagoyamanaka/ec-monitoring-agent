@@ -66,6 +66,10 @@ services:
       # マウントする（volumes に追記）:
       #   - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
       # ADC を用意できない / E2E では AI_INVESTIGATION_STUB=true で Stub に回避するのが手軽。
+      # ADK をローカルで有効化する場合（AI_INVESTIGATION_ADK=true・要 ADC）のみ効くチューニング点。
+      # コーディネーターの思考トークン予算（fallback 第6原因＝思考が出力予算を食い潰す空応答の防御）。
+      # 有効域 128〜32768・-1 で動的。既定 16384（config.ts と同値）。増やすと wall-clock が伸びる。
+      # AI_INVESTIGATION_COORDINATOR_THINKING_BUDGET: "16384"
       # SimilarIncident を ES に永続し SimilarPatternRule（graded confidence 分類）を有効化する
       ELASTICSEARCH_URL: http://elasticsearch:9200
       # /forecast ルートを有効化。

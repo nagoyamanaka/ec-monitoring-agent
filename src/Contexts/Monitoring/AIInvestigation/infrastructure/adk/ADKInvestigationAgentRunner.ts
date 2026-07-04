@@ -31,6 +31,12 @@ import { createInvestigationCoordinator } from "./agents/InvestigationCoordinato
 const USER_ID = "monitoring-agent";
 const APP_NAME = "ec-monitoring-investigation";
 
+/**
+ * コーディネーターの思考予算のライブラリ既定（config 未注入時のフォールバック）。timeoutMs と同じく
+ * 「アプリ既定は config.ts、ライブラリ安全既定はここ」の二段（両者 16384 で一致）。
+ */
+const DEFAULT_COORDINATOR_THINKING_BUDGET = 16384;
+
 export type ADKInvestigationAgentRunnerConfig = InvestigationToolDeps &
   EscalationToolDeps &
   RemediationReviewToolDeps & {
@@ -42,6 +48,25 @@ export type ADKInvestigationAgentRunnerConfig = InvestigationToolDeps &
    * 軽量モデル（flash）を想定。未指定は model と同一（新しい失敗モードを増やさない安全側）。
    */
   readonly verifierModel?: string;
+  /**
+   * ロール別の静的モデル割当（D3 対策①・sub-agent 軽量化）。ロール自体が難易度の代理変数なので
+   * 実行時のルーター判定は挟まない（+1 LLM 呼び出しの遅延と非決定性を持ち込まない）:
+   * - collectorModel : evidence_collector。ツール呼び出しの機械的往復＝推論が薄く、自律ループで
+   *   最も回数が嵩むロール。軽量モデル（flash）で wall-clock を最も稼げる。
+   * - escalationModel: runbook_escalation。体制マスタ引き＋定型草案で推論が薄い。軽量モデル想定。
+   * - triageModel    : impact_triage。citation 必須の算定でガード（citations 空→impact 破棄）に
+   *   直結するため、既定は主モデルのまま env で切り替えて計測する（安全側）。
+   * いずれも未指定は model と同一（verifierModel と同じ後方互換の流儀）。
+   */
+  readonly collectorModel?: string;
+  readonly escalationModel?: string;
+  readonly triageModel?: string;
+  /**
+   * コーディネーターの思考トークン予算（fallback 第6原因＝思考が maxOutputTokens を食い潰す空応答の防御）。
+   * gemini-2.5-pro は思考も出力予算を消費するため上限にキャップして最終JSON用トークンを必ず残す。
+   * 有効域 128〜32768・-1 で動的。未指定は安全側の既定（DEFAULT_COORDINATOR_THINKING_BUDGET）。
+   */
+  readonly coordinatorThinkingBudget?: number;
   /** 自律ループの LLM 呼び出し上限（トークン暴走の安全弁）。 */
   readonly maxLlmCalls: number;
   /** 全体のウォールクロック上限(ms)。超過したらそれまでの最終応答で打ち切る。 */
@@ -86,12 +111,22 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
     const escalationTools = buildEscalationTools(config);
     const remediationReviewTools = buildRemediationReviewTools(config);
     const coordinator = createInvestigationCoordinator({
+      // coordinator / root_cause_analyst / remediation_planner / remediation_reviewer は
+      // 深い推論（証拠統合・因果推論・コード読解）の核なので主モデル固定（ここは削らない）。
       model: config.model,
-      evidenceCollector: createEvidenceCollectorAgent(config.model, tools),
+      thinkingBudget:
+        config.coordinatorThinkingBudget ?? DEFAULT_COORDINATOR_THINKING_BUDGET,
+      evidenceCollector: createEvidenceCollectorAgent(
+        config.collectorModel ?? config.model,
+        tools,
+      ),
       rootCauseAnalyst: createRootCauseAnalystAgent(config.model),
       remediationPlanner: createRemediationPlannerAgent(config.model),
-      impactTriage: createImpactTriageAgent(config.model),
-      runbookEscalation: createRunbookEscalationAgent(config.model, escalationTools),
+      impactTriage: createImpactTriageAgent(config.triageModel ?? config.model),
+      runbookEscalation: createRunbookEscalationAgent(
+        config.escalationModel ?? config.model,
+        escalationTools,
+      ),
       remediationReviewer: createRemediationReviewerAgent(config.model, remediationReviewTools),
       correlationVerifier: createCorrelationVerifierAgent(
         config.verifierModel ?? config.model,

@@ -12,6 +12,14 @@ const TIMEOUT_MS = Math.max(
 );
 const MAX_ATTEMPTS = Math.max(1, parseInt(process.env.GEMINI_MAX_ATTEMPTS ?? "2"));
 
+// 思考トークン予算（fallback 第6原因＝思考が出力予算を食い潰し空応答の防御・単一Gemini経路版）。
+// ADK コーディネーターの AI_INVESTIGATION_COORDINATOR_THINKING_BUDGET と同思想の非ADK経路の対で、
+// この経路は主に edge（Cloud Run）の再調査（POST /alerts/:id/reinvestigate・in-process 実行）で走る。
+// gemini-2.5-pro は思考も maxOutputTokens を消費するため、上限にキャップして最終JSON用トークンを
+// 必ず残す（未キャップだと高推論シナリオで思考が既定予算を食い切り result.text="" → parse不能 →
+// fallback(confidence=0)）。有効域 128〜32768・-1 で動的。既定 16384（ADK 経路と同値）。
+const THINKING_BUDGET = parseInt(process.env.GEMINI_THINKING_BUDGET ?? "16384");
+
 /**
  * Gemini（@google/genai）固有の「text in → text out」実装。
  * SDK 初期化・generateContent 呼び出し・レスポンス本文の抽出に加え、
@@ -55,6 +63,10 @@ export class GeminiLLMClient implements LLMTextClient {
             config: {
               systemInstruction,
               responseMimeType: "application/json",
+              // 思考が出力予算を食い潰す空応答の防御（第6原因・ADK coordinator と同構え）。
+              // maxOutputTokens をモデル上限に確保しつつ思考を頭打ちにして回答用トークンを残す。
+              maxOutputTokens: 65535,
+              thinkingConfig: { thinkingBudget: THINKING_BUDGET },
             },
           }),
           new Promise<never>((_, reject) =>

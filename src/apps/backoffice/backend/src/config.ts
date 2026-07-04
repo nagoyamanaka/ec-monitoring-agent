@@ -39,6 +39,25 @@ export const config = {
     // keep/reject 判定で応答速度が効く（D3 の wall-clock 逼迫に LLM 1呼び出し足すため）ので既定 flash。
     adkVerifierModel:
       process.env.AI_INVESTIGATION_VERIFIER_MODEL ?? "gemini-2.5-flash",
+    // ロール別の静的モデル割当（D3 対策①・sub-agent 軽量化）。ロール＝難易度の代理変数なので
+    // 実行時のルーターLLMは挟まず、env で決定的にチューニングする（agentTrace/elapsedMs を見て調整）。
+    // evidence_collector: ツール往復が主で推論が薄く、自律ループで最も呼ばれる→既定 flash。
+    adkCollectorModel:
+      process.env.AI_INVESTIGATION_COLLECTOR_MODEL ?? "gemini-2.5-flash",
+    // runbook_escalation: 体制マスタ引き＋定型草案で推論が薄い→既定 flash。
+    adkEscalationModel:
+      process.env.AI_INVESTIGATION_ESCALATION_MODEL ?? "gemini-2.5-flash",
+    // impact_triage: citation 必須の算定（空なら impact ごと破棄されるガード直結）のため、
+    // 既定は主モデル（未指定=undefined→runner 側で model にフォールバック）。flash 化は env で計測してから。
+    adkTriageModel: process.env.AI_INVESTIGATION_TRIAGE_MODEL,
+    // コーディネーターの思考トークン予算（fallback 第6原因＝思考が maxOutputTokens を食い潰し空応答の防御レバー）。
+    // gemini-2.5-pro は思考も出力予算を消費するため上限にキャップして最終JSON用トークンを必ず残す。
+    // 有効域は 128〜32768、-1 で動的（モデル任せ）。増やすほど推論は深いが wall-clock が伸びて
+    // D3（無人審査のタイムアウト→fallback）リスクが上がるトレードオフ。既定 16384 はバランス点
+    // （最終JSONは高々2KB弱なので 65535 のうち約49Kが回答に残る）。
+    adkCoordinatorThinkingBudget: parseInt(
+      process.env.AI_INVESTIGATION_COORDINATOR_THINKING_BUDGET ?? "16384",
+    ),
     // AI調査1件のウォールクロック上限(ms)。ADK の8エージェント自律ループは実測 92-116秒かかり、
     // 既定120秒では並列実行時に超過して暫定落ちする。240秒へ広げて余裕を持たせる。
     investigationTimeoutMs: Math.max(
