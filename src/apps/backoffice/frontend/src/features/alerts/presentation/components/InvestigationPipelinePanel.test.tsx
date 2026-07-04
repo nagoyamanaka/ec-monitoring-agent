@@ -33,7 +33,7 @@ describe("InvestigationPipelinePanel", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/経過 \d+:\d{2}/)).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
-    // 7 エージェントの台帳（役割の1行つき）
+    // 8 エージェントの台帳（役割の1行つき）
     expect(screen.getByText("Coordinator")).toBeInTheDocument();
     expect(screen.getByText("EvidenceCollector")).toBeInTheDocument();
     expect(screen.getByText("RemediationReviewer")).toBeInTheDocument();

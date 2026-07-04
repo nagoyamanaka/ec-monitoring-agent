@@ -21,7 +21,7 @@
 ## 既知のドリフト（コードが正・主なもの）
 
 - **Gemini SDK/モデル**: docs は `@google/generative-ai`・`gemini-2.0-flash` と書くが、実装は **`@google/genai`・既定 `gemini-2.5-pro`・Vertex AI 経路（`GOOGLE_GENAI_USE_VERTEXAI=true`・ADC）が本番既定**。`VertexLLMClient` は別クラスとしては作らず env 切替で実現。
-- **フェーズ0〜3 は全て実装済み**（単一 Gemini／ADK 7エージェント／SimilarPatternRule 類似分類／学習ループ・昇格）。docs の「未実装・次フェーズ」表記の多くは古い。
+- **フェーズ0〜3 は全て実装済み**（単一 Gemini／ADK 8エージェント／SimilarPatternRule 類似分類／学習ループ・昇格）。docs の「未実装・次フェーズ」表記の多くは古い。
 - **既知/類似は AI 自動起動しない**（即確定・オンデマンドで `POST /alerts/:id/report`）。「既知でも毎回 AI」と読める古い記述は無効。
 - **シナリオ6/7 の自動修正は見送り**（調査まで）。[決定記録](../decisions/decision-scenario67-remediation-dropped.md) が正。
 - **デモ操作卓は 8 ボタン**（1/2/3/4/4b/5/6/7）。4b（合成・反復用インフラ障害）は docs 執筆後に追加。

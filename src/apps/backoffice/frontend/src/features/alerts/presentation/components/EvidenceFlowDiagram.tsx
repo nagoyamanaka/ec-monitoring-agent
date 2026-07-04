@@ -105,7 +105,7 @@ export function EvidenceFlowDiagram({
 
         <span className="text-center text-cyan-500/70 md:hidden">▼</span>
 
-        {/* AI 調査ノード（収束点）。ホバー/フォーカスで7エージェント台帳を出す
+        {/* AI 調査ノード（収束点）。ホバー/フォーカスで8エージェント台帳を出す
             （常時表示は図の邪魔＝要求時にだけ・D2 の段階開示と同方針）。 */}
         <div className="group relative shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30">
           <p className="text-sm font-semibold text-cyan-200">AI 調査</p>
@@ -113,7 +113,7 @@ export function EvidenceFlowDiagram({
             tabIndex={0}
             className="mt-0.5 cursor-help text-[11px] text-cyan-100/80 underline decoration-dotted decoration-cyan-400/50 underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
           >
-            7エージェントが
+            8エージェントが
             <br className="hidden md:block" />
             横断・突合
           </p>

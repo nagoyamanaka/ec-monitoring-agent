@@ -49,7 +49,7 @@ describe("EvidenceFlowDiagram", () => {
     const tooltip = screen.getByRole("tooltip", { hidden: true });
     expect(tooltip).toHaveTextContent("エージェント台帳");
     expect(tooltip).toHaveTextContent("✓＝この調査のステップに登場");
-    // 全7エージェントの台帳＋登場したものだけ data-mentioned
+    // 全8エージェントの台帳＋登場したものだけ data-mentioned
     expect(tooltip).toHaveTextContent("Coordinator");
     expect(tooltip).toHaveTextContent("RootCauseAnalyst");
     expect(

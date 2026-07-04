@@ -25,6 +25,7 @@ import { createRemediationPlannerAgent } from "./agents/RemediationPlannerAgent.
 import { createImpactTriageAgent } from "./agents/ImpactTriageAgent.js";
 import { createRunbookEscalationAgent } from "./agents/RunbookEscalationAgent.js";
 import { createRemediationReviewerAgent } from "./agents/RemediationReviewerAgent.js";
+import { createCorrelationVerifierAgent } from "./agents/CorrelationVerifierAgent.js";
 import { createInvestigationCoordinator } from "./agents/InvestigationCoordinator.js";
 
 const USER_ID = "monitoring-agent";
@@ -35,6 +36,12 @@ export type ADKInvestigationAgentRunnerConfig = InvestigationToolDeps &
   RemediationReviewToolDeps & {
   /** Gemini モデル名（env GEMINI_MODEL）。経路は GOOGLE_GENAI_USE_VERTEXAI で Vertex/AI Studio を ADK が自動選択。 */
   readonly model: string;
+  /**
+   * 相関検証（correlation_verifier・タスク J2）専用のモデル名。批判役は1ショットの keep/reject
+   * 判定で深い推論より応答速度が効き、D3 の wall-clock 逼迫（LLM 1呼び出し追加）を緩和するため
+   * 軽量モデル（flash）を想定。未指定は model と同一（新しい失敗モードを増やさない安全側）。
+   */
+  readonly verifierModel?: string;
   /** 自律ループの LLM 呼び出し上限（トークン暴走の安全弁）。 */
   readonly maxLlmCalls: number;
   /** 全体のウォールクロック上限(ms)。超過したらそれまでの最終応答で打ち切る。 */
@@ -86,6 +93,9 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
       impactTriage: createImpactTriageAgent(config.model),
       runbookEscalation: createRunbookEscalationAgent(config.model, escalationTools),
       remediationReviewer: createRemediationReviewerAgent(config.model, remediationReviewTools),
+      correlationVerifier: createCorrelationVerifierAgent(
+        config.verifierModel ?? config.model,
+      ),
     });
     this.runner = new InMemoryRunner({ agent: coordinator, appName: APP_NAME });
     this.maxLlmCalls = config.maxLlmCalls;

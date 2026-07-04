@@ -6,6 +6,7 @@ import type {
   ImpactAssessmentPrimitives,
   EscalationDraftPrimitives,
   RemediationReviewPrimitives,
+  RelatedAlertPrimitives,
 } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 import { collectCitedEvidenceText } from "../../domain/CitedEvidence.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
@@ -41,6 +42,29 @@ function guardEscalation(
 ): EscalationDraftPrimitives | undefined {
   if (!escalation || escalation.team.trim() === "") return undefined;
   return escalation;
+}
+
+/**
+ * 相関（relatedAlerts）のハルシネーションガード（タスク J1）。2段で落とす:
+ * (1) 収集済み証拠 id（collectCitableEvidenceIds の語彙）に解決しない citation を除去し、
+ * (2) 解決済み citation がゼロになった関連を丸ごと破棄する。
+ * 「指せる共有証拠が無い関連は関連にしない」＝時間的に近いだけの捏造因果（決済↔在庫）は
+ * 構造的に落ち、terraform/commit を共有する正当な相関（インフラ→アプリ）は残る。
+ * 解決判定は「citation 文字列が証拠 id を含む」（cited_commit と同じ流儀・case-insensitive）。
+ * Forecast の引用検証（偽引用ドロップ→裏付けゼロのリスク破棄）と同型の2段。
+ */
+function guardRelatedAlerts(
+  relatedAlerts: RelatedAlertPrimitives[],
+  citableEvidenceIds: readonly string[],
+): RelatedAlertPrimitives[] {
+  return relatedAlerts.flatMap((related) => {
+    const citations = (related.citations ?? []).filter((citation) => {
+      const lower = citation.toLowerCase();
+      return citableEvidenceIds.some((id) => lower.includes(id));
+    });
+    if (citations.length === 0) return [];
+    return [{ ...related, citations }];
+  });
 }
 
 /**
@@ -97,6 +121,9 @@ export function toInvestigationReport(
   // evidence から決定的に導出した外部リンク（LLM はテキストのみ・URL は作らせない）。
   // 「証拠を見るべき場所」として、AI が引用したコミットに絞ったうえで調査ステップ末尾へ追記する。
   evidenceLinks: InvestigationStepPrimitives[] = [],
+  // 相関ガードの照合語彙（collectCitableEvidenceIds で context から決定的に導出・小文字化済み）。
+  // 既定は空＝citation が解決できず relatedAlerts は全て落ちる（安全側。アダプタは必ず渡す）。
+  citableEvidenceIds: readonly string[] = [],
 ): InvestigationReport {
   // ハルシネーションガード適用後の値を引用源にする（証拠パネルの CitedCommitFilter は
   // 永続化後＝ガード済みの報告書を読むため、同じ土台で判定しないと両者がずれる）。
@@ -123,7 +150,7 @@ export function toInvestigationReport(
     investigatedAt: new Date(),
     isFallback: false,
     remediable: output.remediable,
-    relatedAlerts: output.relatedAlerts,
+    relatedAlerts: guardRelatedAlerts(output.relatedAlerts, citableEvidenceIds),
     impact,
     escalation,
     remediationReview,

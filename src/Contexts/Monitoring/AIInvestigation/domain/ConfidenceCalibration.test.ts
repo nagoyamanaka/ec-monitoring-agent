@@ -51,7 +51,7 @@ describe("calibrateConfidence", () => {
     });
   });
 
-  it("実在候補との相関＋類似事例（状況証拠2つ）で上限 0.7", () => {
+  it("citation を伴う実在候補との相関＋類似事例（状況証拠2つ）で上限 0.7", () => {
     const context: InvestigationContext = {
       ...baseContext,
       similarIncidents: [similarIncident],
@@ -68,7 +68,13 @@ describe("calibrateConfidence", () => {
     const report = makeReport({
       confidence: 0.8,
       relatedAlerts: [
-        { alertId: "upstream-1", relation: "upstream", rationale: "起因" },
+        {
+          alertId: "upstream-1",
+          relation: "upstream",
+          rationale: "起因",
+          // マッパの相関ガードを通った関連＝解決済みの共有証拠 citation を必ず持つ
+          citations: ["google_sql_database_instance.main"],
+        },
       ],
     });
 
@@ -83,11 +89,39 @@ describe("calibrateConfidence", () => {
     const report = makeReport({
       confidence: 0.8,
       relatedAlerts: [
-        { alertId: "ghost-1", relation: "upstream", rationale: "捏造の可能性" },
+        { alertId: "ghost-1", relation: "upstream", rationale: "捏造の可能性", citations: ["e12b655"] },
       ],
     });
 
     const result = calibrateConfidence(report, { ...baseContext, candidateAlerts: [] });
+
+    expect(result.signals).toEqual([]);
+    expect(result.calibrated).toBe(0.4);
+  });
+
+  it("citation 無しの相関は実在候補と突合できても裏付けに数えない（タスク J1）", () => {
+    const context: InvestigationContext = {
+      ...baseContext,
+      candidateAlerts: [
+        {
+          alertId: "inventory-1",
+          eventName: "ec.inventory.reservation_failed",
+          category: "APPLICATION",
+          occurredOn: "2026-07-04T07:20:50.000Z",
+          summary: "在庫予約失敗",
+        },
+      ],
+    };
+    // 共有証拠を指せない相関（旧データ・捏造の因果橋）は確信度を押し上げない
+    const report = makeReport({
+      confidence: 0.8,
+      relatedAlerts: [
+        { alertId: "inventory-1", relation: "upstream", rationale: "同時発生" },
+        { alertId: "inventory-1", relation: "upstream", rationale: "同時発生", citations: [] },
+      ],
+    });
+
+    const result = calibrateConfidence(report, context);
 
     expect(result.signals).toEqual([]);
     expect(result.calibrated).toBe(0.4);
