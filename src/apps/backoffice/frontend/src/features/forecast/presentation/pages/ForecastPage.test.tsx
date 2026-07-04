@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { HttpError } from "@shared/api/HttpClient";
+import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import type {
   ForecastApi,
   ForecastSnapshot,
@@ -25,6 +26,7 @@ const BRIEFING: ForecastBriefingView = {
       level: "HIGH",
       confidence: 0.8,
       reasoning: "縮小 PR と負荷スケジュールが重なる",
+      preventiveAction: "縮小 PR のマージをセール後へ延期する。",
       citations: [
         {
           id: "sig-pr",
@@ -55,15 +57,32 @@ function apiMock(over: Partial<ForecastApi> = {}): ForecastApi {
       .fn()
       .mockResolvedValue({ kind: "ready", briefing: BRIEFING }),
     generate: vi.fn().mockResolvedValue(BRIEFING),
+    reset: vi.fn().mockResolvedValue(undefined),
     ...over,
   };
 }
 
-function renderPage(api: ForecastApi) {
+/** デモ有効（/demo/status 200）を既定にする。404 でコンソールが伏せられる経路は個別テストで上書き。 */
+function demoApiMock(over: Partial<DemoApi> = {}): DemoApi {
+  return {
+    getStatus: vi.fn().mockResolvedValue({
+      demoEnabled: true,
+      totalAlerts: 0,
+      activeAlerts: 0,
+      promotedPatternCount: 0,
+      patternCount: 0,
+    }),
+    triggerScenario: vi.fn(),
+    reset: vi.fn(),
+    ...over,
+  };
+}
+
+function renderPage(api: ForecastApi, demoApi: DemoApi = demoApiMock()) {
   return render(
     <MemoryRouter initialEntries={["/forecast"]}>
       <ForecastProvider api={api}>
-        <ForecastPage />
+        <ForecastPage demoApi={demoApi} />
       </ForecastProvider>
     </MemoryRouter>,
   );
@@ -85,9 +104,29 @@ describe("ForecastPage", () => {
     // FORECAST_ENABLED 有効時はナビに Forecast タブ＋HIGH バッジ
     expect(screen.getByRole("link", { name: /Forecast/ })).toBeInTheDocument();
     expect(screen.getByText("HIGH 1件")).toBeInTheDocument();
+
+    // F11a: 先手（防ぐ）がカード内に出る＝ページの主役
+    expect(screen.getByText("今打てる先手")).toBeInTheDocument();
+    expect(
+      screen.getByText("縮小 PR のマージをセール後へ延期する。"),
+    ).toBeInTheDocument();
+
+    // F10-②/F11b: risks がある時はリスク一覧の末尾に橋渡しCTA（保険・ページ単位で1個）
+    expect(
+      screen.getByText("もし防ぎきれずに発火したら？"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /アラート一覧を見る/ }),
+    ).toHaveAttribute("href", "/alerts");
+
+    // F12: デモ有効ならデモコンソール（投入シグナル台帳＋操作）が右に出る
+    expect(
+      screen.getByRole("region", { name: "予兆デモコンソール" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("投入シグナル（予報の材料）")).toBeInTheDocument();
   });
 
-  it("未生成（empty）は案内を出し「予報を生成」で結果を反映する", async () => {
+  it("未生成（empty）はコンソールへの案内を出し「予報を生成」で結果を反映する", async () => {
     const api = apiMock({
       getLatest: vi.fn().mockResolvedValue({ kind: "empty" as const }),
     });
@@ -96,8 +135,13 @@ describe("ForecastPage", () => {
     expect(
       await screen.findByText(/予報はまだ生成されていません/),
     ).toBeInTheDocument();
+    expect(
+      await screen.findByText(/右のデモコンソールから「予報を生成」/),
+    ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "予報を生成" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "▶ 予報を生成（AI 突合・約1分）" }),
+    );
     expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
     expect(api.generate).toHaveBeenCalledTimes(1);
   });
@@ -112,11 +156,47 @@ describe("ForecastPage", () => {
     renderPage(api);
 
     await userEvent.click(
-      await screen.findByRole("button", { name: "予報を生成" }),
+      await screen.findByRole("button", {
+        name: "▶ 予報を生成（AI 突合・約1分）",
+      }),
     );
     expect(
       await screen.findByText(/デモ操作（予報の生成）が無効/),
     ).toBeInTheDocument();
+  });
+
+  it("「予報をリセット」で DELETE を呼び未生成状態へ戻す（F12）", async () => {
+    const api = apiMock();
+    renderPage(api);
+    expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "予報をリセット" }),
+    );
+
+    expect(api.reset).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByText(/予報はまだ生成されていません/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("article")).not.toBeInTheDocument();
+  });
+
+  it("DEMO 無効（/demo/status 404）ならデモコンソールを出さない（予報は見える）", async () => {
+    renderPage(
+      apiMock(),
+      demoApiMock({
+        getStatus: vi
+          .fn()
+          .mockRejectedValue(new HttpError(404, "Not Found", "Not Found")),
+      }),
+    );
+
+    expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", { name: "予兆デモコンソール" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("fallback 予報は失敗バナーを出しリスクは出さない", async () => {
@@ -135,6 +215,10 @@ describe("ForecastPage", () => {
       await screen.findByText(/予報の生成に失敗したため/),
     ).toBeInTheDocument();
     expect(screen.queryByRole("article")).not.toBeInTheDocument();
+    // 失敗バナーの下に橋渡しCTAは出さない（risks 空＝リンク先の物語が無い）
+    expect(
+      screen.queryByText("もし防ぎきれずに発火したら？"),
+    ).not.toBeInTheDocument();
   });
 
   it("FORECAST_ENABLED off（disabled）は無効の案内を出し、ナビにも Forecast を出さない", async () => {

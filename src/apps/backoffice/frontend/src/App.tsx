@@ -53,7 +53,10 @@ export function App() {
             path="/analytics"
             element={<AnalyticsPage api={analyticsApi} />}
           />
-          <Route path="/forecast" element={<ForecastPage />} />
+          <Route
+            path="/forecast"
+            element={<ForecastPage demoApi={demoApi} />}
+          />
           <Route path="*" element={<Navigate to="/alerts" replace />} />
         </Routes>
       </ForecastProvider>

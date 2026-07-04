@@ -15,6 +15,9 @@ export type RiskItem = {
   readonly confidence: number; // 0.0〜1.0（アダプタでクランプ）
   readonly citations: string[]; // 使った ForecastSignal.id。空は不正＝引用検証で落とす
   readonly reasoning: string; // 引用を踏まえた根拠文
+  // 発火自体を防ぐために人間が今打てる先手（1文・任意）。LLM が出さなければ
+  // フィールドごと欠落＝カードは先手行なしで成立する優雅な縮退（F11a）。
+  readonly preventiveAction?: string;
 };
 
 export type RiskForecast = {

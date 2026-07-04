@@ -82,6 +82,22 @@ describe("toForecastBriefingView", () => {
     expect(c.alertId).toBe("alert-123");
   });
 
+  it("preventiveAction（先手・F11a）はそのまま射影し、欠落時はフィールドごと出さない", () => {
+    const view = toForecastBriefingView(
+      briefing(
+        [
+          risk({ preventiveAction: "PR のマージをセール後へ延期する。" }),
+          risk({ level: "LOW" }),
+        ],
+        [signal()],
+      ),
+    );
+    expect(view.risks[0].preventiveAction).toBe(
+      "PR のマージをセール後へ延期する。",
+    );
+    expect(view.risks[1].preventiveAction).toBeUndefined();
+  });
+
   it("解決できない引用 id は表示から落とす（防御）", () => {
     const view = toForecastBriefingView(
       briefing([risk({ citations: ["sig-1", "ghost"] })], [signal()]),

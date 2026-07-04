@@ -32,6 +32,7 @@ describe("forecastRoutes (integration)", () => {
             confidence: 0.85,
             citations: ["sch-1", "ghost-9"],
             reasoning: "週末セール負荷とプール縮小が重なるため。",
+            preventiveAction: "縮小 plan の適用をセール後へ延期する。",
           },
           {
             window: "日中",
@@ -72,6 +73,10 @@ describe("forecastRoutes (integration)", () => {
     expect(res.body.forecast.risks).toHaveLength(1);
     expect(res.body.forecast.risks[0].subject).toBe("checkout");
     expect(res.body.forecast.risks[0].citations).toEqual(["sch-1"]);
+    // F11a: 先手は引用検証（spread）と wire 変換（明示マッピング）を通って配信まで届く。
+    expect(res.body.forecast.risks[0].preventiveAction).toBe(
+      "縮小 plan の適用をセール後へ延期する。",
+    );
     // 引用チップの解決先＝シグナル全量が同梱される（スケジュール seed 由来の sch-1）。
     expect(res.body.signals).toContainEqual(
       expect.objectContaining({ id: "sch-1", kind: "SCHEDULE", subject: "checkout" }),
@@ -85,5 +90,14 @@ describe("forecastRoutes (integration)", () => {
     expect(res.body.forecast.forecastId).toBe("forecast-int-1");
     expect(res.body.forecast.generatedAt).toBe("2026-07-03T12:00:00.000Z");
     expect(res.body.forecast.risks[0].citations).toEqual(["sch-1"]);
+  });
+
+  it("DELETE /forecast は生成済み予報を破棄し、GET が未生成（404）に戻る（F12）", async () => {
+    const del = await request(app.httpApp).delete("/forecast");
+    expect(del.status).toBe(204);
+
+    const res = await request(app.httpApp).get("/forecast");
+    expect(res.status).toBe(404);
+    // アラート側 /demo/reset とは独立（提出前に温めた予報キャッシュを巻き込まない設計）
   });
 });

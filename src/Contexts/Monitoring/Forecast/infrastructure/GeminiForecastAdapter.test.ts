@@ -85,6 +85,45 @@ describe("GeminiForecastAdapter", () => {
     });
   });
 
+  it("preventiveAction（先手・F11a）は trim して保持し、空白のみ・非文字列・欠落はフィールドごと落とす", async () => {
+    const raw = JSON.stringify({
+      risks: [
+        {
+          window: "w", subject: "a", level: "HIGH", confidence: 0.8, citations: ["chg-1"],
+          reasoning: "r",
+          preventiveAction: "  PR #123 のマージをセール後へ延期する。  ",
+        },
+        {
+          window: "w", subject: "b", level: "MEDIUM", confidence: 0.5, citations: ["chg-1"],
+          reasoning: "r",
+          preventiveAction: "   ",
+        },
+        {
+          window: "w", subject: "c", level: "LOW", confidence: 0.3, citations: ["chg-1"],
+          reasoning: "r",
+          preventiveAction: 42,
+        },
+        { window: "w", subject: "d", level: "LOW", confidence: 0.2, citations: ["chg-1"], reasoning: "r" },
+      ],
+    });
+    const adapter = new GeminiForecastAdapter(new FakeLLMClient(async () => raw));
+    const forecast = await adapter.forecast(context);
+
+    expect(forecast.risks[0].preventiveAction).toBe("PR #123 のマージをセール後へ延期する。");
+    // 先手が出なくてもリスク自体は残る（フィールドだけが欠落する縮退）。
+    expect(forecast.risks).toHaveLength(4);
+    expect(forecast.risks[1].preventiveAction).toBeUndefined();
+    expect(forecast.risks[2].preventiveAction).toBeUndefined();
+    expect(forecast.risks[3].preventiveAction).toBeUndefined();
+  });
+
+  it("SYSTEM_INSTRUCTION が先手（preventiveAction）の生成を指示している", async () => {
+    const llm = new FakeLLMClient(async () => riskJson());
+    await new GeminiForecastAdapter(llm).forecast(context);
+    expect(llm.lastSystemInstruction).toContain("preventiveAction");
+    expect(llm.lastSystemInstruction).toContain("先手");
+  });
+
   it("```json フェンス付き応答もパースできる", async () => {
     const adapter = new GeminiForecastAdapter(
       new FakeLLMClient(async () => "```json\n" + riskJson() + "\n```"),
@@ -274,6 +313,9 @@ describe("GeminiForecastAdapter × StubLLMClient（E2E 決定論経路の契約�
       "ghost-1",
     ]);
     expect(forecast.risks[1].citations).toEqual(["ghost-2"]);
+    // F11a: 1件目は先手つき・2件目は敢えて欠落＝両縮退経路を stub で固定。
+    expect(forecast.risks[0].preventiveAction).toContain("[STUB]");
+    expect(forecast.risks[1].preventiveAction).toBeUndefined();
   });
 
   it("予兆以外の instruction には調査用の固定出力を返す（既存経路を汚さない）", async () => {

@@ -101,6 +101,7 @@ todo実施後に
   - [x] `ScheduleSource` seed（土20:00 checkout 負荷x5）（✅ F6 着地済みの値をフラッグシップ確定値としてコメント更新のみ）
 - 【実装メモ】**MEMORY は生成時に再 warmUp**（`ForecastRiskUseCase.recallMemorySignals`）: 起動時 warmUp だけだと demo reset の再seed・デモ中に承認/解決した事例が記憶に載らない穴があった（reset → POST /forecast がデモ卓の手順）。主シグナル0件時は再投影もスキップ（課金ゼロ経路は不変）
 - [ ] 【検証】`POST /forecast` → HIGH リスク＋引用3系統＋confidence が安定して出る seed に調整 ← **実 Gemini での実走確認は人間**（配線と突合はE2Eで検証済み。引用3系統のうち PR は上記 draft PR 待ち）
+  - [ ] 同一セッションで **preventiveAction（先手・F11a）も目視**: 各リスクに先手1文が出るか・citations のシグナルに言及した具体的内容か（出なくても先手行が消えるだけでカードは成立＝縮退設計済み。プロンプト調整が要る場合のみ Claude Code へ差し戻し）
 - [x] 【引用検証の可視化】意図的に偽引用を混ぜたケースで**ドロップされる**ことをデモで見せられるようにする（✅ `StubLLMClient` が予兆 SYSTEM_INSTRUCTION を判別し**偽引用 ghost-\* 入りの固定予報**を返す→ローカルE2E `e2e/backoffice/forecast.e2e.test.ts` で「ghost-1 のみ citations から drop／ghost-2 だけのリスクは丸ごと破棄／MEMORY 引用が実在 Alert に解決／GET はキャッシュ配信」を決定論検証。e2e overlay に `FORECAST_ENABLED=true` 追加。stub の引用は `plan-1/sch-1/inc-1`＝**3系統が stub モードの UI にも揃い、記憶 seed が引けなければ inc-1 が偽引用として落ちて E2E が赤くなる**。実機の観測点は `forecast_fake_citation_dropped` ログ）
 - [x] 【バグ修正・実機で発見】MEMORY 引用「当時のアラートを開く」が「指定されたアラートは見つかりませんでした」になる（✅ 詳細ページは共有一覧 state から id を引くが、一覧 API は RESOLVED を除外＝アーカイブ seed に永遠に到達しない構造バグ。`useAlertDetail`（新規 hook・UT 5件）が現役＝共有一覧 state／アーカイブ＝`GET /alerts/:id` 単品の二源を単一インターフェース `{alert,status,refresh}` に畳む（一覧に無い id だけ単品 fetch）。**アーカイブは共有一覧へ merge しない**＝一覧ページに RESOLVED が混入しない。類似シナリオの関連アラート導線も同じ穴だったので同時に解消。Playwright 実クリックで /forecast → 引用チップ → 詳細描画 → 一覧混入なし を確認済み）
 - [x] 【UI・見やすさ（タイムチャート不採用の代替）】RiskCard は **window を主見出し**（「いつ危ないか」が予報の答え・subject は補足行）、引用は**種別レーン**（変更予定 cyan／負荷予定 amber／過去の記憶 emerald の左ボーダー・語り順固定）＋「根拠 n系統」チップで**収束の強さ**を可視化（`groupCitationsByKind`/`citationKindCount`＝domain 純関数・UT3件）。タイムチャートは window が LLM 由来の自由文字列で時刻を捏造せずには描けないため不採用。`FORECAST_HORIZON` は録画前に「今週末（7/5 土〜7/6 日）」等の具体日付へ（.env.example に注記）。seed の `ec.checkout.latency_degraded` を eventCatalog に追加（詳細ページ見出しの生英語防止）
@@ -111,19 +112,48 @@ todo実施後に
 
 - ~~新規コードは書かない。§3.2 の別ドメイン seed を追加し汎用性を示す。~~ 「同一機構で源を足すだけ」の汎用性は ProtoPedia ストーリー／アーキ図の `ForecastSignalSource[]` 継ぎ目で**語りで**示す。
 
-### タスク F10: 予兆からの「次の一手」（推奨アクション1行 ＋ 橋渡しCTA）〔設計確定・実装待ち〕
+### タスク F10: 予兆からの「次の一手」（推奨アクション1行 ＋ 橋渡しCTA）〔②着地✅・①は F11a へ再スコープ〕
 
 > **背景（2026-07-04 設計相談）**: 予兆ページは予報＋根拠（引用）を出すが「読んで終わり」感がある。reactive（/alerts）には **承認**という閉じるアクションがあるのに予兆には対の一手が無い＝物足りなさの正体。**ただし mutate（plan の適用保留・PR へレビュー要求・スケジュール調整）は足さない**——(1) write-zero は意図的な安全特性（全 Gateway read-only・F6）で無人デプロイURL審査での本番書き込みは David/Sarah の信頼を一発で失う、(2) 予兆の真の防御アクションは *システムの外*（GitHub/Terraform 側・実行主体は人間）にあり、ツール内ボタンは「偽物の演出」か「本当に危険」の二択にしかならない、(3) 締切（人間6時間は F8 に全振り）。→ 足すのは **B類（判断を助ける／物語を繋ぐ）のみ**。
 
-- [ ] **① 推奨アクション1行（助言・副作用ゼロ）**: citations と同じ「AI生成→防御的正規化→純表示」に乗せる
+- [ ] **① 推奨アクション1行（助言・副作用ゼロ）**〔**見送り 2026-07-05**〕: citations と同じ「AI生成→防御的正規化→純表示」に乗せる
+  - **見送り理由**: LLM 出力に1フィールド増える＝contract/adapter/stub/seed の同時更新＋「実 Gemini で安定して出るか」の人間検証が F8 に増え、録画クリティカルパスにリスクを足す。②（backend ゼロ）と違い波及が広い。F8 着地後に余力があれば再検討
+  - → **2026-07-05 方向性相談で F11a として再スコープ復活**: 上の見送りは①を「演出の追加」として評価した判断。「予兆の主目的＝発火前に握りつぶす」に照らすと①は本体機能であり、optional 縮退＋stub 決定論でリスクは絞れる（詳細・優先度は F11）
   - contract/domain: `RiskItem` に `recommendedAction?: string`（optional・後方互換）。`ForecastContract.ts` / `RiskForecast.ts`
   - `GeminiForecastAdapter`: プロンプトに「各リスクに *推奨される先手* を1文」追加。safeParse で trim・空はドロップ（citations と同扱い）。JSON を締める文言も足す
   - `StubLLMClient`: 固定予報に `recommendedAction` を1文追加（`forecast.e2e.test.ts` を緑に保つ）
   - `ForecastView` / `RiskCard`: `reasoning` の下に 🛡 付き1行。**reactive の推奨アクションと同じ視覚言語**。「システムがやる」でなく「人間が外で打つ先手の提案」と読める文言・スタイル（実行ボタンにはしない＝write-zero 維持）
   - 正直さ: reasoning と同レベルの助言テキスト（reactive `recommendedActions` と同じ honesty）
-- [ ] **② 橋渡しCTA（純ナビゲーション・backend ゼロ）**: `BriefingBody` 末尾に**ページ単位で1個**（per-risk にしない＝未発火リスクに対応する具体 alert がまだ無くリンク先を作れない）。risks がある時だけ表示。文言例「この予兆が**実際に発火したら** → 分類 → AI調査 → 承認 が同じ証拠で対応します」＋ `/alerts` への react-router Link。**D1 フック「では実際に起きたら?」をUI上で繋ぐだけ**（新機構ゼロ）
+- [x] **② 橋渡しCTA（純ナビゲーション・backend ゼロ）**: `BriefingBody` 末尾に**ページ単位で1個**（per-risk にしない＝未発火リスクに対応する具体 alert がまだ無くリンク先を作れない）。risks がある時だけ表示。文言例「この予兆が**実際に発火したら** → 分類 → AI調査 → 承認 が同じ証拠で対応します」＋ `/alerts` への react-router Link。**D1 フック「では実際に起きたら?」をUI上で繋ぐだけ**（新機構ゼロ）（✅ 2026-07-05 `ForecastBridgeCta` 新設。審査員レンズでの設計判断: 見出しは D1 台本フレーズ**そのまま**「では、実際に発火したら？」＝録画ナレーションと画面が同期（Marcus 60秒フック）／**破線ボーダー**＝「まだ発火していない未来」の視覚表現で実線 RiskCard（実在照合済みの根拠）と誤認させない（Lisa）／パイプラインは 検知→分類→AI調査→承認・学習 の小チップ連鎖＝FirstRunGuide と同語彙・新規概念ゼロ（D2 整合）／リンクはテキストリンク1個のみ・**button ロール不在を RTL で固定**＝write-zero を視覚語彙でも維持（David）／文言は「同じ証拠ソース（GitHub・Terraform・過去事例）を横断する反応的パイプラインが引き継ぐ」＝「同じ証拠で対応」より盛らない表現に調整。fallback 時は risks 空のため出ない。RTL 2件追加・frontend 295 全緑）**→ 同日 F11b で保険の位置づけへ降格**（見出し「もし防ぎきれずに発火したら？」・サイズ/明度を先手ブロックに従属。最新の見た目は F11b の記録が正）
 - 【留意】F8 録画依存: ① は LLM 出力に1フィールド増えるので stub/seed 同時更新が必須。実 Gemini での「推奨アクションも安定して出るか」確認が人間タスク（F8 §103）に1項目増える
 - 【却下記録】承認相当の状態アクション（確認済み/対応中のトリアージ状態）は write＋永続化＋状態管理が要り締切と critical path 外＝不採用。予兆の「アクション」はシステム外の人間判断という設計思想を貫く
+
+### タスク F11: 予防ファースト転回（「防ぐ」を主役に・「受ける」を保険に）〔実装✅ 2026-07-05・残りは F8 実走目視のみ〕
+
+> **背景（2026-07-05 方向性相談）**: 予兆の第一目的は**発火前にインシデントを握りつぶす（リスクそのものを減らす）**こと。「実際に発火したら反応的パイプラインが受ける」は保険＝サブ。ところが現状の予兆ページはアクション導線が F10-② 橋渡しCTA だけ＝**「受ける」がメインに見える主客転倒**。防ぐための一手が画面に無い。
+> **鍵になる事実**: 「握りつぶす」ループは **write なしで既に閉じられる**——先手の実行先（PR・plan・スケジュール）への実リンクは CitationList が既に持っている。①（先手1行）を足せば「先手を読む → 引用チップから GitHub/plan へ飛ぶ → 人間が外で実行（マージ延期・縮小幅見直し・事前スケールアップ）」が1クリック動線で成立する。write-zero の設計思想（防ぐのは人間・システムは根拠付き助言まで）と完全に整合。
+> **F10 との関係**: F10-① の見送りを撤回して防御的に再スコープ（F11a）。F10-② は成果物を活かしたまま**保険の位置づけへ降格**（F11b）。F10 の mutate 却下・トリアージ状態却下は不変。
+
+- [x] **F11a 先手（回避アクション）1行 ＝ F10-① の再スコープ復活**〔LLM 変更あり・防御的設計で録画リスクを絞る〕（✅ 2026-07-05 実装。`RiskItemPrimitives.preventiveAction?`（contracts）→ `RiskItem`（domain）→ `toForecastBriefingPrimitives`（wire 明示マッピング・欠落時はキーごと省略）。プロンプトは「citations の実在シグナルに言及する具体的な先手・実行主体は人間・無理に作らない（省略可）」を強制。safeParse は trim・空白のみ/非文字列はフィールドごと drop（リスクは残す）。引用検証（F5）は `{ ...risk }` spread のため**変更ゼロで先手が素通し**。stub は1件目に先手つき・2件目は敢えて省略＝**出る/出ないの両縮退経路を決定論固定**（adapter UT 3件・stub 契約 UT・E2E `preventiveAction` 到達アサート追加）。UI は `RiskCard` reasoning 直下に cyan パネル「🛡 今打てる先手」＋「実行先は下の引用リンクから」の添え書き＝引用チップの実リンク（PR/plan/過去 Alert）が実行先という1クリック動線を明示。button ロール不在を RTL で固定）
+  - **追記 2026-07-05（実機フィードバック）**: 実走で reasoning が「〜懸念があります」で終わり次の一手が見えないケースを観察 → プロンプトを強化: preventiveAction は**「〜することを推奨します」形**で・**HIGH/MEDIUM は原則必須**（捏造はしない・どうしても無い場合のみ省略）・**reasoning は診断に徹し対処を書かない**（先手との役割分担を明文化）。stub も推奨します形へ追従
+  - contract/domain: `RiskItem.preventiveAction?: string`（optional・後方互換）。`ForecastContract.ts` / `RiskForecast.ts`。**reactive の `recommendedActions`（事後対応）と意味が異なるため別名**＝「防ぐ」と「対応する」を型名でも区別
+  - `GeminiForecastAdapter` プロンプト: 「各リスクに、**発火自体を防ぐために人間が今打てる先手**を1文。必ず citations の実在シグナルに言及する形で」（例: PR のマージをセール後へ延期／plan の縮小幅を見直し／セール前に接続上限を一時引き上げ）。safeParse で trim・空/欠落は**フィールドだけ落とす**（リスク自体は残す＝実 Gemini が出さなくてもカードは壊れず先手行が消えるだけの優雅な縮退）
+  - `StubLLMClient`: 固定予報に preventiveAction を追加（`forecast.e2e.test.ts` の決定論維持・E2E で先手表示も固定）
+  - UI（`RiskCard`）: 「🛡 先手」ブロックを reasoning 直下・**カード内の視覚的主役**（cyan 系の明確なパネル・引用レーンより手前）に。実行ボタンにはしない。実行先への動線は既存 CitationList の実リンクが担う
+  - 正直さ: 助言テキストのみ・「システムが防いだ」とは言わない（防ぐのは人間）。効果数値（防げた件数等）は捏造しない
+- [x] **F11b 導線の階層是正**〔copy/デザインのみ・LLM 無関係・F11a と独立に着地可〕（✅ 2026-07-05: ページヘッダを「障害が**起きる前に、先手を打って握りつぶす**ための予報です。（…）直近のリスクと今打てる先手を提示します」へ。`ForecastBridgeCta` は見出し「もし防ぎきれずに発火したら？」・本文「先手を打てないまま予兆が現実になっても〜」・p-5→p-4・見出し/本文/リンクを text-xs・チップ/ボーダー/リンクの明度を一段落とし先手ブロック（cyan パネル）に視覚的に従属。RTL の見出しアサート追従）
+- [x] **F11c F8 への波及（人間検証 +1 目視）**: 実 Gemini 実走確認（F8 §103）に「preventiveAction が安定して出るか・citations 言及が妥当か」を追加。**既存の「HIGH＋引用3系統＋confidence 安定」確認と同一セッションで見られる**＝追加の実走は不要（✅ F8 §103 に子項目として登録済み）
+- 【審査への効き】Alex: 「読んで終わり」→「今日打つ手が1行で出る」＝ペインキラーの完成形／Marcus: 60秒フックが「起きる前に当てる」から「**起きる前に潰させる**」へ強化（0-15秒の予報カードに先手が載る）／David: write-zero・引用接地・欠落縮退で堅牢性は不変／Sarah: 新機構ゼロ（既存の「AI生成→防御的正規化→純表示」パターンの1フィールド追加）
+- 【やらない（既決の再確認）】mutate 系（plan 保留・PR レビュー要求・スケジュール調整）／トリアージ状態／効果測定の数値化（「一般に」の枕詞つきで語り・ProtoPedia 側が担当）
+
+### タスク F12: 予兆デモコンソール（生成/リセット＋投入シグナル台帳）〔実装✅ 2026-07-05〕
+
+> **背景（2026-07-05 実機フィードバック）**: (1) 生成済み予報を**リセットできない**（デモ卓で初期状態に戻せない）。(2) ヘッダ右の「予報を再生成」ボタンだけでは、初見の審査員に**投入データがデモ用サンプルであること・ボタンが何をするのか**が伝わらない（UX 欠陥）。→ アラート一覧の DEMO CONSOLE と**同型のデモコンソール**を予兆ページにも置き、デモ系 UI をそこへ閉じ込める（似た機能は似た見た目・同じ場所＝一覧で学んだ操作文法がそのまま通じる）。
+
+- [x] **backend: `DELETE /forecast`**（`RiskForecastRepository.clearLatest()`＋`ForecastResetController`・`demoGuard` 配下）。**アラート側 `/demo/reset` にはあえて相乗りしない**: 審査員が一覧のリセットを押しただけで提出前に温めた予報キャッシュ（無人閲覧の要・GET /forecast）まで消えると一次審査で不利になるため、予報のリセットは予兆ページ内の明示操作のみ（結合テストで独立性を担保）
+- [x] **frontend: `ForecastDemoConsole`**（右 aside・`lg:grid-cols-[minmax(0,1fr)_20rem]`＋sticky＝AlertsLayout と同じ空間文法）。DemoDrawer と同一の視覚言語: fuchsia「🕹️ デモコンソール」ピル／**投入シグナル台帳**（未適用 plan・未マージ PR・負荷スケジュール・過去事例の4行に realness バッジ＝**実データ emerald は実 GitHub PR の1つだけ・残り3つは合成seed amber**・ホバーで「入口のみ合成・突合→AI予報→引用検証は実経路」の正直さ全文）／操作は cyan「▶ 予報を生成（AI 突合・約1分）」（生成済みなら再生成表記・実行中「AI が突合中…」）＋ slate/rose「予報をリセット」（title で「シグナルは残る＝もう一度生成できる」を明示）。可用性は DemoDrawer と同じ **GET /demo/status 404 判定**＝本番（DEMO off）ではコンソールごと非表示・予報閲覧は無傷
+- [x] ヘッダの単独「予報を再生成」ボタンは廃止（デモ操作はコンソールへ集約）。empty 状態の案内は「→ 右のデモコンソールから『予報を生成』」（アラート一覧の空状態 CTA と同文法・コンソール非表示時は出さない）
+- テスト: forecastApi UT2・ForecastDemoConsole RTL4・ForecastPage RTL（リセット/コンソール非表示ほか）・結合（DELETE→GET 404）＝全緑（root 934・int 28・frontend 306）
 
 ---
 
@@ -342,22 +372,24 @@ todo実施後に
 >
 > **設計の据わり**: これは既存の「引用検証＝偽引用を実在照合で落とす」（Forecast §3.1・impact.citations ガード）と**同型**。「LLM は適当」への David/Lisa の懸念に、Forecast（予兆の引用）だけでなく**調査の相関**でも同じ答えを出す＝審査観点（自律的判断の設計・実運用の堅牢性）に直撃。
 
-### タスク J1: relatedAlerts の citation 必須化＋構造ドロップ〔案B・構造の歯・P0候補〕
+### タスク J1: relatedAlerts の citation 必須化＋構造ドロップ〔案B・構造の歯・P0候補〕✅
 
-- 【契約】`relatedAlerts` の wire 型に `citations: string[]`（根拠＝収集済み証拠 id: commit sha / terraform address / log id / 類似事例 id）を追加（contracts 単一ソース・後方互換 optional で開始）
-- 【プロンプト】SYSTEM_INSTRUCTION の relatedAlerts に「各関連に citations 必須。指せる共有証拠が無ければ関連にしない」を明記（既存の厳格化に citation 要求を接続）
-- 【ガード】`InvestigationReportMapper`/`LLMOutputParser` で **citations が収集済み証拠 id に解決しない関連を破棄**（impact.citations の既存ガードと同じ場所・同じ思想＝「根拠なき主張は落とす」）
-- 【確信度の健全化】`ConfidenceCalibration.ts:71` の `related_alert` 加点を「**citation 解決済みの関連のみ**」にゲート＝捏造相関が確信度を押し上げる現行バグ（意図的に残した残課題）を解消。**正当な相関は実在証拠を指せるので加点は温存**（削りすぎない）
-- 【テスト】`ConfidenceCalibration.test.ts:55-79`（証拠 id を伴わない純相関を正当扱い）を「citation を伴う正当相関＝加点／citation 無し＝非加点」へ更新。決済↔在庫（共有証拠ゼロ）が落ちること・インフラ→アプリ（terraform/commit 共有）が残ることを固定
+- [x] 【契約】`relatedAlerts` の wire 型に `citations: string[]`（根拠＝収集済み証拠 id: commit sha / terraform address / log id / 類似事例 id）を追加（contracts 単一ソース・後方互換 optional で開始）
+- [x] 【プロンプト】SYSTEM_INSTRUCTION の relatedAlerts に「各関連に citations 必須。指せる共有証拠が無ければ関連にしない」を明記（既存の厳格化に citation 要求を接続）
+- [x] 【ガード】`InvestigationReportMapper`/`LLMOutputParser` で **citations が収集済み証拠 id に解決しない関連を破棄**（impact.citations の既存ガードと同じ場所・同じ思想＝「根拠なき主張は落とす」）
+- [x] 【確信度の健全化】`ConfidenceCalibration.ts:71` の `related_alert` 加点を「**citation 解決済みの関連のみ**」にゲート＝捏造相関が確信度を押し上げる現行バグ（意図的に残した残課題）を解消。**正当な相関は実在証拠を指せるので加点は温存**（削りすぎない）
+- [x] 【テスト】`ConfidenceCalibration.test.ts:55-79`（証拠 id を伴わない純相関を正当扱い）を「citation を伴う正当相関＝加点／citation 無し＝非加点」へ更新。決済↔在庫（共有証拠ゼロ）が落ちること・インフラ→アプリ（terraform/commit 共有）が残ることを固定
 - 【なぜ効くか】決済タイムアウトは infraEvidence（commit/terraform）がゼロ＝指せる共有証拠が無い→捏造相関は構造的に落ちる。インフラ→アプリは terraform/commit を共有→残る
+- ✅ **実装済み（2026-07-05）**: 照合語彙は `collectCitableEvidenceIds`（`CitedEvidence.ts`＝引用判定の単一ソースに同居・小文字化済み）＝ **commit sha / terraform リソースアドレス・由来 sha / メトリクス名（metricType・displayName）に限定**。todo 記載の「log id / 類似事例 id」は語彙に**含めない**設計判断: appLogs は安定 id が無く resource 名は「同時期にログが存在する」程度の弱い歯＝捏造を通す／similarIncidents は「自分の類似事例」を写すだけで解決してしまい「infraEvidence ゼロの他責障害では指せる共有証拠が無い」という構造の歯（上記【なぜ効くか】）が抜ける。precision 優先・向きの妥当性は J2 の領分。ガードは `guardRelatedAlerts`（マッパ・Forecast 引用検証と同型の2段: 未解決 citation を除去→解決ゼロの関連を丸ごと破棄。解決判定は「citation 文字列が証拠 id を含む」＝cited_commit と同じ流儀・case-insensitive）。両アダプタ（単一Gemini/ADK）が `toInvestigationReport(output, evidenceLinks, citableEvidenceIds)` で語彙を渡す（未指定の既定は空＝安全側で全破棄）・salvage（切断回収）経路にも同ガード適用。確信度は「candidateAlerts 突合 ∧ citations 非空」で加点（マッパ通過後の関連は解決済み citation を必ず持つ＝正当相関の加点温存・旧データの citation 無し相関は非加点）。UT: mapper 3件（未解決 citation のみ除去・共有証拠ゼロの捏造は丸ごと破棄・case-insensitive）/ parser 2件 / calibration 1件 / `CitedEvidence.test.ts` 3件を追加。全921テスト緑・frontend tsc 緑（wire は optional 追加のみ・UI 変更なし）。E2E は stub が relatedAlerts を返さないため影響なし。**実 Gemini で 3b→5 の正当相関（terraform 共有）が残ることの実走確認は人間**（F8 実走と同時が効率的）
 
-### タスク J2: 相関検証エージェント（correlation_verifier）〔案A・向きの推論・stretch〕
+### タスク J2: 相関検証エージェント（correlation_verifier）〔案A・向きの推論・stretch〕✅
 
-- 【新規】`agents/CorrelationVerifierAgent.ts`＝`remediation_reviewer` と同型の**批判役（read-only・推論のみ）**。root_cause が挙げた relatedAlerts 候補ごとに verdict（keep/reject＋理由）を返す
-- 判定基準: ① 具体的な共有証拠を指せるか（案B の citation と同基準）② **fault 分類に対し因果の向きが妥当か**（外部起因＝他責の障害を内部原因で説明していないか＝人間なら取らない向きの排除）
-- 【配線】`InvestigationCoordinator` の手順に「root_cause の相関案を確定前に correlation_verifier へ通す」を追加。maxLlmCalls 予算に載る（既知パターン時は既存方針どおり省略可）
+- [x] 【新規】`agents/CorrelationVerifierAgent.ts`＝`remediation_reviewer` と同型の**批判役（read-only・推論のみ）**。root_cause が挙げた relatedAlerts 候補ごとに verdict（keep/reject＋理由）を返す
+- [x] 判定基準: ① 具体的な共有証拠を指せるか（案B の citation と同基準）② **fault 分類に対し因果の向きが妥当か**（外部起因＝他責の障害を内部原因で説明していないか＝人間なら取らない向きの排除）
+- [x] 【配線】`InvestigationCoordinator` の手順に「root_cause の相関案を確定前に correlation_verifier へ通す」を追加。maxLlmCalls 予算に載る（既知パターン時は既存方針どおり省略可）
 - 【役割分担】案B＝「証拠 id の有無」を機械判定（決定論の歯）／案A＝「向きの妥当性」を推論判定。二段で precision を上げつつ recall（正当な相関）を守る
 - 【コスト注意】D3 の ADK 遅延（maxLlmCalls×gemini-2.5-pro）に1段足すので、verifier は軽量モデル（flash）候補＝§D3 (a) と併せて検討
+- ✅ **実装済み（2026-07-05）**: `CorrelationVerifierAgent`（推論のみ・ツール無し＝root_cause_analyst と同構成・「迷う場合は reject 側に倒す」を明記＝疑わしい相関を残す利益は無い）。Coordinator の手順に**新ステップ5**（impact.fault 確定後・最終 JSON 出力前）: 候補一覧＋根本原因＋fault＋収集済み証拠を渡し **keep のみ relatedAlerts に載せる**・候補ゼロ/既知パターンで相関を挙げない場合は呼ばない（呼び出し予算は impact_triage/runbook_escalation 優先）。**モデルは D3 対策で分離**: `AI_INVESTIGATION_VERIFIER_MODEL`（`config.ai.adkVerifierModel`・**既定 gemini-2.5-flash**＝1ショット判定は速度優先。runner の `verifierModel` 未指定時は本体 model にフォールバック＝新しい失敗モードを増やさない）。フロントは `INVESTIGATION_AGENTS` 台帳に correlation_verifier を追加（impact_triage の次）＝E1 ライブ中継・台帳表示・人間語化は台帳から自動導出。**7→8エージェント**（README・architecture 図・提出資料プロンプト・UI 文言・.env.example を一括更新）。J1 のマッパガードは決定論のバックストップとして不変（verifier が keep を誤っても citation 未解決なら落ちる）。全923テスト緑・frontend tsc 緑（ADK graph は「疎通主体の薄い infra」＝既存方針どおりエージェント factory の UT は作らない）。**実 Gemini での実走確認（3b→5 の正当相関が verifier を通って keep されること・LLM 1呼び出し追加で fallback 率が悪化しないこと・flash がプロジェクトで有効なこと）は人間**（F8/D3 実走と同時が効率的）
 
 ### 案D（依存グラフ/トポロジ制約）〔不採用・ハッカソン後の布石〕
 

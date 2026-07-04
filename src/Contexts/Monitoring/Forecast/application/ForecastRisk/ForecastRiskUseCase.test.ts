@@ -64,6 +64,9 @@ class FakeRepository implements RiskForecastRepository {
   async findLatest(): Promise<ForecastBriefing | null> {
     return this.saved[this.saved.length - 1] ?? null;
   }
+  async clearLatest(): Promise<void> {
+    this.saved = [];
+  }
 }
 
 class RecordingLogger extends Logger {

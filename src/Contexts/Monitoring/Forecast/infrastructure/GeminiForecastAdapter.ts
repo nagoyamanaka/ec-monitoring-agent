@@ -33,6 +33,15 @@ confidence（0〜1）は「リスクをどれだけシグナルで裏付けら�
 実際に引用したシグナルの強さだけを反映し、過大評価しないこと。
 risks は level 降順で並べ、対象期間内にリスクが無ければ空配列を返してください（無理に作らない）。
 reasoning には引用シグナルを踏まえた根拠を日本語1〜2文で書いてください。
+reasoning は診断（どのシグナルがどう重なって危ないか）に徹し、対処の提案は書かないこと。
+preventiveAction には「発火自体を防ぐために人間が今打てる先手」を
+「〜することを推奨します」の形の日本語1文で書いてください。
+必ず citations に載せた実在シグナルに言及する具体的な先手にすること
+（例: 該当PR（pr-55）のマージを負荷スケジュール後へ延期することを推奨します／
+planの縮小幅を見直すことを推奨します／負荷前に上限を一時引き上げることを推奨します）。
+実行主体は人間です。「システムが自動で防ぐ」とは書かないこと。
+HIGH・MEDIUM のリスクには原則 preventiveAction を必ず出してください。
+具体的な先手がどうしても無いリスクに限り省略できます（捏造はしない）。
 なお下の JSON 例の confidence 値（0.7）は出力形式の見本であり、目標値ではありません。
 {
   "risks": [
@@ -42,7 +51,8 @@ reasoning には引用シグナルを踏まえた根拠を日本語1〜2文で�
       "level": "HIGH" | "MEDIUM" | "LOW",
       "confidence": 0.7,
       "citations": ["chg-1", "sch-1", "inc-7"],
-      "reasoning": "根拠（1〜2文）"
+      "reasoning": "根拠（1〜2文）",
+      "preventiveAction": "先手（1文・省略可）"
     }
   ]
 }`;
@@ -102,6 +112,12 @@ function toRiskItems(value: unknown): RiskItem[] | null {
     ) {
       return [];
     }
+    // 先手（F11a）は optional: 文字列以外・空白のみはフィールドごと落とす＝
+    // 出なくてもリスク自体は残り、カードは先手行なしで成立する（優雅な縮退）。
+    const preventiveAction =
+      typeof o["preventiveAction"] === "string" && o["preventiveAction"].trim() !== ""
+        ? o["preventiveAction"].trim()
+        : undefined;
     return [
       {
         window: o["window"],
@@ -110,6 +126,7 @@ function toRiskItems(value: unknown): RiskItem[] | null {
         confidence: clampConfidence(o["confidence"]),
         citations: toStringArray(o["citations"]),
         reasoning: o["reasoning"],
+        ...(preventiveAction ? { preventiveAction } : {}),
       },
     ];
   });
