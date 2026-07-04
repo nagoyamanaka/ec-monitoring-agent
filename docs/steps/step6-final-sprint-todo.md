@@ -6,6 +6,7 @@ todo実施後に
 
 - プロジェクトルートのREADME.md
 - docs/architecture.md
+- docs/steps/step6-final-sprint-strategy.md
   を最新化すること(todoの内容を反映しているか確認して、遅れてるなら更新すること)
 
 > 対応設計: `docs/steps/step6-final-sprint-strategy.md`
@@ -121,18 +122,19 @@ todo実施後に
 - 【設計】`step6-final-sprint-strategy.md` §5 の 0-15/15-35/35-60 秒構成をデモ台本に落とす
 - 【UI】予兆の予報カード＋引用チップを**最初に見せられる**導線（`ForecastPage` を開幕に置く or 専用 demo 開幕ビュー）
 - 【接続】「では実際に起きたら？」で反応的パイプライン（分類→ADK調査→承認）へ滑らかに遷移
-- 【台本メモ・I4 より】**4b と 6 は同一根本原因（Cloud SQL 縮小）の物語**。連続で見せると重複感が出る一方、6 の関連アラートに「同一根本原因: インフラ障害（CRITICAL ログ検知）」が張られるクロスアラート相関の見せ場になる＝台本は「**4b →（波及）→ 6 で相関を回収**」の順を明記する
+- 【台本メモ・I4 より】**3b と 5 は同一根本原因（Cloud SQL 縮小）の物語**。連続で見せると重複感が出る一方、5 の関連アラートに「同一根本原因: インフラ障害（CRITICAL ログ検知）」が張られるクロスアラート相関の見せ場になる＝台本は「**3b →（波及）→ 5 で相関を回収**」の順を明記する
 
 ### タスク D2: 認知負荷トリム〔取り: Lisa〕
 
 - [x] 【UI】デモ卓（`ScenarioControls`）のシナリオ単位開示・調査中表示・昇格通知・戻る導線・アラート名日本語化（✅ 12f517e で着地）
-- [x] realness バッジ／確度スペクトルの説明文を「読む物」から「一目で分かる」へ圧縮（文言短縮・凡例のホバー化など）＝残りはこれのみ（✅ `ScenarioControls`: aiRole/description を各1行へ短縮（4/4b の長文も圧縮・⏱1分ラグと 4b 推奨は温存）、realness 凡例は常時表示を `short` 1行に絞り全文 `note` はバッジホバー（title・cursor-help）へ退避＝正直さの情報は tooltip に残す。全891テスト緑・frontend tsc 緑）
+- [x] realness バッジ／確度スペクトルの説明文を「読む物」から「一目で分かる」へ圧縮（文言短縮・凡例のホバー化など）＝残りはこれのみ（✅ `ScenarioControls`: aiRole/description を各1行へ短縮（3/3b の長文も圧縮・⏱1分ラグと 3b 推奨は温存）、realness 凡例は常時表示を `short` 1行に絞り全文 `note` はバッジホバー（title・cursor-help）へ退避＝正直さの情報は tooltip に残す。全891テスト緑・frontend tsc 緑）
 - 既存の段階開示方針の延長＝新規概念は増やさない
 
 ### タスク D3: ライブ脆さ対策〔取り: David・**最終ピッチ=渋谷ライブ確定で重要度up**〕
 
 - 【実地データ 2026-07-02】ローカル実機で fallback を再現・計測: `adk_investigation_run_completed: elapsedMs=59396, events=1, timedOut=false, finalTextLen=0, agentTrace=[(no tool calls)]` → `ai_investigation_unparseable: rawLen=0`。**ADC マウント・env は正常なのに最初の LLM 呼び出しが応答イベント無しで59秒後に終了**（散文ですらなく空＝ADK がエラーを飲み込んだ形。トークン失効 or Vertex 側エラーの無言ドロップが疑い）。散文パターンとは別の第3の fallback 原因として真因追跡に追加
-- 【実地データ 2026-07-03】**第4の原因を rawSnippet ログで確定＝最終出力 JSON の途中切断**（→ 対策はタスク I1 に集約）: シナリオ7実走で fallback 発生。finalText は正しい JSON（e12b655 正引用・confidence 0.95）だが **794 字で mid-string 切断**→parse 不能。timedOut=false・agentTrace 3委譲とも正常・成功時 finalTextLen=1182〜1642
+- 【実地データ 2026-07-03】**第4の原因を rawSnippet ログで確定＝最終出力 JSON の途中切断**（→ 対策はタスク I1 に集約）: シナリオ6実走で fallback 発生。finalText は正しい JSON（e12b655 正引用・confidence 0.95）だが **794 字で mid-string 切断**→parse 不能。timedOut=false・agentTrace 3委譲とも正常・成功時 finalTextLen=1182〜1642
+- 【実地データ 2026-07-04・第5の原因＝wall-clock タイムアウト】シナリオ6（アプリコード退行）実走で再び fallback。ただし今回は前回と別モード: `elapsedMs=256722・timedOut=true・events=12・maxLlmCalls=16・finalTextLen=0`、agentTrace は **coordinator→root_cause_analyst を反復→impact_triage→root_cause_analyst… と実際に多段オーケストレーションが回っている**（証拠収集も成功＝fallback 画面に e12b655 等の実コミットリンクが残る）。**問題は "壊れた" ではなく "遅い"**——16 LLM 呼び出し × gemini-2.5-pro 約18-20秒/回 ≒ 250秒超 が `AI_INVESTIGATION_TIMEOUT_MS` を食い破り、coordinator が最終 JSON を吐く前に打ち切られている。**これが無人デプロイURL審査での最大リスク**（審査員が未知シナリオを踏むと4分待って fallback）。対策候補（I1 と別枠）: (a) sub-agent を gemini-flash に（推論以外の証拠収集/整形は速いモデルで十分）／(b) maxLlmCalls を 16→8-10 に絞る／(c) coordinator に「時間/呼び出しが尽きたら現時点の JSON を必ず出す」early-emit を強制／(d) timeout を実測 p95 に合わせて引き上げ。**録画・デモは known/similar/forecast（事前キャッシュ）中心にすれば回避可能だが、"未知→ADK自律調査" こそ本作の必然性の核なので、成功テイクを1本は録れる状態にするのが D3 の到達点**
 - 【明文化】AI経路タイムアウト時のフォールバック導線（`GEMINI_TIMEOUT_MS`/`AI_INVESTIGATION_TIMEOUT_MS`・fallback confidence の見え方）をデモ台本に記述。fallback でも証拠リンクが残る改善（evidenceLinks 温存）は着地済み＝「失敗しても空にならない」ことを台本の保険として明記
 - 【真因】ADK 散文出力（JSONでなく地の文が返る）の rawSnippet ログで真因を確定し、プロンプト側で JSON 強制を締める（fallback 率を下げる＝ライブ耐性の本丸）
 - 【退避】録画テイクを正とし、ライブは「録画済みを再現する」位置づけにする（`AI_INVESTIGATION_STUB` の決定的応答経路を演出上どう使うか整理）
@@ -140,8 +142,8 @@ todo実施後に
 
 ### タスク D4: DevOpsドッグフーディング可視化〔取り: 公式審査観点「実運用を見据えたDevOpsプロセス」〕✅
 
-- [x] 【整理】自リポジトリの CI/CD が本プロダクト自身の運用である事実を1枚図に: app.yml（typecheck/UT/E2E→build→Cloud Run/GCE deploy）・Trivy→実 ingest（シナリオ5の実経路）・terraform.yml（plan/apply・state lock 対策済み）・ai-remediation.yml（dispatch→実修正→テストゲート→draft PR）（✅ `architecture.md §6.5 DevOps ドッグフーディング（自己運用ループ）` に自己参照ループの mermaid 1枚図＋①自己デプロイ/②自己IaC/③自己検知（ループの閉じ＝Trivy→自 ingest）/④自己修復（AI→自リポジトリ draft PR）の対応を追加。README のドッグフーディング箇条書きも §6.5 へ導線）
-- [x] 【デモ導線】「監視対象のECも、監視するエージェント自身も、同じ DevOps ループの中にいる」をデモ or 録画のどこで見せるか決める（発表資料側と分担）（✅ 決定記録 `docs/steps/step6-d4-devops-dogfooding.md`: **動画の"技術の裏側"パートで §6.5 図を1カット＋③を名指しナレーション**／ライブ本編には挿さない（D1 フックを薄めない）／シナリオ5 は③④の実経路なので触る際に1文添えて接地／専用ダッシュボードは不採用（D2 逆行）。ナレーション15秒案・README/ProtoPedia 分担を明記）
+- [x] 【整理】自リポジトリの CI/CD が本プロダクト自身の運用である事実を1枚図に: app.yml（typecheck/UT/E2E→build→Cloud Run/GCE deploy）・Trivy→実 ingest（シナリオ4の実経路）・terraform.yml（plan/apply・state lock 対策済み）・ai-remediation.yml（dispatch→実修正→テストゲート→draft PR）（✅ `architecture.md §6.5 DevOps ドッグフーディング（自己運用ループ）` に自己参照ループの mermaid 1枚図＋①自己デプロイ/②自己IaC/③自己検知（ループの閉じ＝Trivy→自 ingest）/④自己修復（AI→自リポジトリ draft PR）の対応を追加。README のドッグフーディング箇条書きも §6.5 へ導線）
+- [x] 【デモ導線】「監視対象のECも、監視するエージェント自身も、同じ DevOps ループの中にいる」をデモ or 録画のどこで見せるか決める（発表資料側と分担）（✅ 決定記録 `docs/steps/step6-d4-devops-dogfooding.md`: **動画の"技術の裏側"パートで §6.5 図を1カット＋③を名指しナレーション**／ライブ本編には挿さない（D1 フックを薄めない）／シナリオ4 は③④の実経路なので触る際に1文添えて接地／専用ダッシュボードは不採用（D2 逆行）。ナレーション15秒案・README/ProtoPedia 分担を明記）
 
 ### タスク D5: ドロワー→詳細ページ導線のティザーCTA 〔P1・Lisa/E系連動〕完了✅
 
@@ -177,7 +179,7 @@ todo実施後に
 ### タスク E3: fallback 体験の格上げ 〔P0・D3連動〕完了✅
 
 **問題（実測）**: fallback 時のドロワーが「自動調査に失敗しました。手動での確認が必要です。」＋「証拠は見つかりませんでした。」で行き止まり。バナーは「再調査をおすすめします」と言うのに**再調査ボタンがドロワーに無い**。一覧カードは「AI推定: 」と**空文字**を表示。
-**P0 維持の根拠補強（2026-07-03 実機総点検・I4）**: シナリオ7で fallback が実発生した際、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを再確認（`POST /alerts/:id/reinvestigate` は backend 実装済みのまま未結線）。ライブ・無人デプロイ審査の両方で fallback は現実に起きる＝導線の格上げは演出でなく必須。
+**P0 維持の根拠補強（2026-07-03 実機総点検・I4）**: シナリオ6で fallback が実発生した際、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを再確認（`POST /alerts/:id/reinvestigate` は backend 実装済みのまま未結線）。ライブ・無人デプロイ審査の両方で fallback は現実に起きる＝導線の格上げは演出でなく必須。
 
 - [x] ドロワーのfallbackバナー直下に**「再調査を実行」ボタン**（既存 `POST /alerts/:id/reinvestigate` を結線するだけ）（✅ `FallbackRecoveryBanner` 新設＝警告バナー＋ワンクリック再調査。operatorNote 必須の既存契約は「前回の自動調査は出力不正で失敗しました…」の定型指摘文で満たす。ドロワーの既存インラインバナーを置換＋**詳細ページにも同バナーを追加**（I4 で確認した「どちらにも無い」行き止まりを両方解消）。再調査中（ANALYZING）はパイプラインビューが進行を示すため非表示）
 - [x] fallback でも evidenceLinks（温存済み）を「収集済みの証拠リンク」として表示（backend は対応済み・UI 側の出し分け）（✅ `AlertCardExpanded`＝fallback の investigationSteps を「収集済みの証拠リンク」見出し＋「一次情報へのリンクは残っています」注記で **summary 射影でも**表示。full の「調査ステップ」とは排他＝二重表示なし）
@@ -287,15 +289,15 @@ todo実施後に
 
 ## I. デモシナリオ実機総点検（2026-07-03・Playwright 実走・AI審査員レンズ）
 
-> **根拠**: ローカル実機（実 ADK・非 stub）を Playwright で全シナリオ実走（4 は GCP 専用のため 4b で代替）。実測: 既知 484ms/類似 413ms/未知カード着弾 906〜909ms・AI 調査 105〜134 秒（5走）・承認→昇格→再注入 910ms で結晶化既知。**検証済みで良好**: 初回ガイド・空状態CTA・生500非露出・dedup×N・類似67%ゲージ・E1ライブパイプライン（実イベント中継）・昇格学習ループ・4b の Terraform 差分証拠・6 の「同一根本原因」相関・5 の CVE 特定と修正起票 UI・Esc/✕/バックドロップのドロワー閉。
-> その場修正済み（✅・全778テスト緑）: similarity 生 float 丸め（`AlertCardExpanded.formatValue`）／4・4b の生イベント名→ `eventCatalog` に `critical_log_entries` 追加／詳細ページ h2 の生 eventName → `eventTitle` 化／デモコンソール件数の SSE 追随（`DemoDrawer` に `refreshKey`・RTL テスト付き）／ライブパイプライン注記「実測 60〜120 秒」→「およそ 2 分前後」（実測に整合）。
+> **根拠**: ローカル実機（実 ADK・非 stub）を Playwright で全シナリオ実走（3 は GCP 専用のため 3b で代替）。実測: 既知 484ms/類似 413ms/未知カード着弾 906〜909ms・AI 調査 105〜134 秒（5走）・承認→昇格→再注入 910ms で結晶化既知。**検証済みで良好**: 初回ガイド・空状態CTA・生500非露出・dedup×N・類似67%ゲージ・E1ライブパイプライン（実イベント中継）・昇格学習ループ・3b の Terraform 差分証拠・5 の「同一根本原因」相関・4 の CVE 特定と修正起票 UI・Esc/✕/バックドロップのドロワー閉。
+> その場修正済み（✅・全778テスト緑）: similarity 生 float 丸め（`AlertCardExpanded.formatValue`）／3・3b の生イベント名→ `eventCatalog` に `critical_log_entries` 追加／詳細ページ h2 の生 eventName → `eventTitle` 化／デモコンソール件数の SSE 追随（`DemoDrawer` に `refreshKey`・RTL テスト付き）／ライブパイプライン注記「実測 60〜120 秒」→「およそ 2 分前後」（実測に整合）。
 
-### タスク I1: fallback 第4原因＝最終出力 JSON の途中切断への防御 〔P0・D3 の本丸・シナリオ7で実発生〕
+### タスク I1: fallback 第4原因＝最終出力 JSON の途中切断への防御 〔P0・D3 の本丸・シナリオ6で実発生〕
 
-- 【実測 2026-07-03】シナリオ7（アプリコード退行＝実コミット差分が売りの本丸）が fallback。rawSnippet ログで真因確定: **finalText は正しい JSON（e12b655 正引用・confidence 0.95・修正方針まで正確）だが 794 字で mid-string 切断**→ safeParse 失敗 → UI は「自動調査に失敗しました」。分析は正解なのに失敗表示＝一次審査（無人デプロイ URL）でのデモ即死パターン
+- 【実測 2026-07-03】シナリオ6（アプリコード退行＝実コミット差分が売りの本丸）が fallback。rawSnippet ログで真因確定: **finalText は正しい JSON（e12b655 正引用・confidence 0.95・修正方針まで正確）だが 794 字で mid-string 切断**→ safeParse 失敗 → UI は「自動調査に失敗しました」。分析は正解なのに失敗表示＝一次審査（無人デプロイ URL）でのデモ即死パターン
 - 対策（いずれか/併用）: ① parse 失敗時に**最終合成のみ1回リトライ** ② **途切れ JSON のサルベージパース**（完成済みフィールド summary/confidence/steps を best-effort 回収し、fallback でなく部分レポートとして表示） ③ 最終出力の maxOutputTokens 引き上げ
 - ✅ 実装済み（2026-07-03）: **②＋③を採用**。② `salvageLLMOutput`（`LLMOutputParser`）＝括弧/文字列の状態機械で「最後に完成した値」まで巻き戻して修復パースし、summary が回収できれば部分レポート（isFallback=false）として返す。ADK/単一Gemini 両アダプタに組み込み、回収時は `ai_investigation_salvaged` を warn ログ（rawLen/rawSnippet 付き＝切断頻度の観測点）。③ Coordinator の `generateContentConfig.maxOutputTokens=65535` 明示（gemini-2.5 系は思考トークンも上限を消費するため既定値頼みにしない）。①は `runEphemeral` がセッション破棄する契約のため「最終合成のみ」の安価なリトライが組めず見送り（全グラフ再走＝2分追加は demo に不適）
-- 検証: シナリオ7を複数回実走し fallback 率が下がることを確認（E2E は stub のため実走でのみ検証可能）
+- 検証: シナリオ6を複数回実走し fallback 率が下がることを確認（E2E は stub のため実走でのみ検証可能）
 
 ### タスク I2: make e2e がローカル環境を STUB のまま残す罠 〔P0・録画/デモ前の事故防止〕
 
@@ -305,16 +307,48 @@ todo実施後に
 
 ### タスク I3: investigationSteps への evidenceLinks 全件連結ノイズ 〔P0→P1・レポート信頼性〕
 
-- 【実測】シナリオ3/5 で `demo/regression` の直近コミット10件（merge 含む・原因と無関係）が「調査完了 — AI がたどったステップ」に混入。D5 ティザー「調査ステップ 13」も水増し。同時に証拠パネルは「証拠は見つかりませんでした」（CitedCommitFilter は引用絞り済み）＝**ステップには10コミット・証拠は0件という矛盾に見える**
-- 方向: `InvestigationReportMapper` の evidenceLinks 連結（`InvestigationReportMapper.ts:79`）に CitedCommitFilter と同じ**引用 sha 絞り**を適用（シナリオ7では正解 e12b655 が引用されるので残る）。**fallback 時は全件温存**＝「失敗しても空にしない」の D3 意図は守る
+- 【実測】シナリオ4/6 で `demo/regression` の直近コミット10件（merge 含む・原因と無関係）が「調査完了 — AI がたどったステップ」に混入。D5 ティザー「調査ステップ 13」も水増し。同時に証拠パネルは「証拠は見つかりませんでした」（CitedCommitFilter は引用絞り済み）＝**ステップには10コミット・証拠は0件という矛盾に見える**
+- 方向: `InvestigationReportMapper` の evidenceLinks 連結（`InvestigationReportMapper.ts:79`）に CitedCommitFilter と同じ**引用 sha 絞り**を適用（シナリオ6では正解 e12b655 が引用されるので残る）。**fallback 時は全件温存**＝「失敗しても空にしない」の D3 意図は守る
 - 表示だけの代替案: ステップと分離して「参照した直近コミット」見出しにするだけでも矛盾は解消する
 - ✅ 実装済み（2026-07-03）: 引用判定を `CitedEvidence`（AIInvestigation/domain）に**単一ソース化**（引用源 = summary / impact.citations / escalation.evidenceBundle / remediationReview.citations）し、CitedCommitFilter（証拠パネル）と `toInvestigationReport` の evidenceLinks 絞り（調査ステップ）が同じ基準を共有＝「ステップには10件・証拠は0件」の食い違いが構造的に起きない。コミットリンクは href の `/commit/{sha}` から sha を逆引きして照合、Cloud Logging 等コミット以外のリンクは決定的導出のまま温存。ガード適用後（citations 空 impact 除去後）の値を引用源にし、永続化後に読む CitedCommitFilter とずれない。`buildFallbackReport` は絞らず全件温存（D3 意図維持・回帰テストで固定）
 
 ### タスク I4: 残りの文言・整合の小粒 〔P2〕
 
 - リセット直後の ValueStrip が「自動トリアージ 1・AI 調査 1」（seed の過去解決事例 5eed0000… が集計に乗る）: 学習履歴の種として意図的なら現状維持可。気になる場合のみ「過去実績を含む」注記 or 集計から RESOLVED 除外を判断（✅ **注記案を採用**: ストリップ末尾に「※過去実績含む」＋ tooltip に累計の説明・RTL テスト追加。RESOLVED 除外は GET /analytics の集計が Analytics ページ・昇格ファネルと共有のためここだけ意味を変えない＝不採用）
-- デモ台本メモ（D1 連動）: **4b と 6 は同一根本原因（Cloud SQL 縮小）の物語**。連続で見せると重複感が出る一方、6 の関連アラートに「同一根本原因: インフラ障害（CRITICAL ログ検知）」が張られ**クロスアラート相関の見せ場**になる＝台本は「4b →（波及）→ 6 で相関を回収」の順を明記（✅ D1 のタスク本文に台本メモとして転記済み＝台本作成時に確実に乗る）
+- デモ台本メモ（D1 連動）: **3b と 5 は同一根本原因（Cloud SQL 縮小）の物語**。連続で見せると重複感が出る一方、5 の関連アラートに「同一根本原因: インフラ障害（CRITICAL ログ検知）」が張られ**クロスアラート相関の見せ場**になる＝台本は「3b →（波及）→ 5 で相関を回収」の順を明記（✅ D1 のタスク本文に台本メモとして転記済み＝台本作成時に確実に乗る）
 - E3（fallback 体験の格上げ）の優先度維持の根拠を実測で補強: 今回 fallback 実発生時、バナーは「再調査をおすすめします」と言うのに**ドロワー/詳細ページのどちらにも再調査ボタンが無い**行き止まりを確認（E3 は未実装のまま）（✅ E3 の問題文に「P0 維持の根拠補強（2026-07-03）」として追記済み）
+
+---
+
+## J. 相関の健全化＝ハルシネーション vs 関連（案B＋案A・2026-07-04）〔stretch・審査加点〕
+
+> **背景（実機確認）**: 決済タイムアウト（他責・外部決済サービス起因）のオンデマンドレポートが、同時発生した在庫系アラートを根拠に「在庫競合→DB高負荷→決済タイムアウト」という**証拠のない因果を捏造**していた。相関は「精度 vs 再現率」の綱引き＝**ハルシネーション（でっち上げ）と関連見落とし（削りすぎ）の両にらみ**。時間窓等の決定論フィルタは正当な相関（例: インフラ障害→アプリ500＝**旧4b→6・現3b→5** の Cloud SQL 縮小の物語）まで削るため**不採用**。判別軸は「時間の近さ」でなく「**共有証拠の有無＋因果の向きの妥当性**」＝証拠グラウンディングで行う。
+>
+> **既に着手済み（2026-07-04）**: ① 在庫競合デモシナリオ（旧3）を廃止し汚染源を除去＋シナリオ番号 -1 繰り上げ（4→3…7→6・3b合成）。② `InvestigationPromptBuilder` の SYSTEM_INSTRUCTION で relatedAlerts の契約を厳格化（共有証拠必須・推測の因果橋禁止・他責の再分類禁止）。**本章はこの契約を"構造の歯"と"推論役"で実効化する残タスク。**
+>
+> **設計の据わり**: これは既存の「引用検証＝偽引用を実在照合で落とす」（Forecast §3.1・impact.citations ガード）と**同型**。「LLM は適当」への David/Lisa の懸念に、Forecast（予兆の引用）だけでなく**調査の相関**でも同じ答えを出す＝審査観点（自律的判断の設計・実運用の堅牢性）に直撃。
+
+### タスク J1: relatedAlerts の citation 必須化＋構造ドロップ〔案B・構造の歯・P0候補〕
+
+- 【契約】`relatedAlerts` の wire 型に `citations: string[]`（根拠＝収集済み証拠 id: commit sha / terraform address / log id / 類似事例 id）を追加（contracts 単一ソース・後方互換 optional で開始）
+- 【プロンプト】SYSTEM_INSTRUCTION の relatedAlerts に「各関連に citations 必須。指せる共有証拠が無ければ関連にしない」を明記（既存の厳格化に citation 要求を接続）
+- 【ガード】`InvestigationReportMapper`/`LLMOutputParser` で **citations が収集済み証拠 id に解決しない関連を破棄**（impact.citations の既存ガードと同じ場所・同じ思想＝「根拠なき主張は落とす」）
+- 【確信度の健全化】`ConfidenceCalibration.ts:71` の `related_alert` 加点を「**citation 解決済みの関連のみ**」にゲート＝捏造相関が確信度を押し上げる現行バグ（意図的に残した残課題）を解消。**正当な相関は実在証拠を指せるので加点は温存**（削りすぎない）
+- 【テスト】`ConfidenceCalibration.test.ts:55-79`（証拠 id を伴わない純相関を正当扱い）を「citation を伴う正当相関＝加点／citation 無し＝非加点」へ更新。決済↔在庫（共有証拠ゼロ）が落ちること・インフラ→アプリ（terraform/commit 共有）が残ることを固定
+- 【なぜ効くか】決済タイムアウトは infraEvidence（commit/terraform）がゼロ＝指せる共有証拠が無い→捏造相関は構造的に落ちる。インフラ→アプリは terraform/commit を共有→残る
+
+### タスク J2: 相関検証エージェント（correlation_verifier）〔案A・向きの推論・stretch〕
+
+- 【新規】`agents/CorrelationVerifierAgent.ts`＝`remediation_reviewer` と同型の**批判役（read-only・推論のみ）**。root_cause が挙げた relatedAlerts 候補ごとに verdict（keep/reject＋理由）を返す
+- 判定基準: ① 具体的な共有証拠を指せるか（案B の citation と同基準）② **fault 分類に対し因果の向きが妥当か**（外部起因＝他責の障害を内部原因で説明していないか＝人間なら取らない向きの排除）
+- 【配線】`InvestigationCoordinator` の手順に「root_cause の相関案を確定前に correlation_verifier へ通す」を追加。maxLlmCalls 予算に載る（既知パターン時は既存方針どおり省略可）
+- 【役割分担】案B＝「証拠 id の有無」を機械判定（決定論の歯）／案A＝「向きの妥当性」を推論判定。二段で precision を上げつつ recall（正当な相関）を守る
+- 【コスト注意】D3 の ADK 遅延（maxLlmCalls×gemini-2.5-pro）に1段足すので、verifier は軽量モデル（flash）候補＝§D3 (a) と併せて検討
+
+### 案D（依存グラフ/トポロジ制約）〔不採用・ハッカソン後の布石〕
+
+- サービス依存（payment→外部 / order→inventory→DB…）を宣言し、依存エッジの向きにしか相関を張らせない＝「payment の上流に internal DB」を構造的に不可能化。成熟した observability の定番（因果グラフ/サービスマップ）。
+- **今回不採用**: 依存モデルの導入コストが重く、案B＋案A で本問題は解ける。将来価値が出たら `ForecastSignalSource[]` 同様の継ぎ目として設計/ADR で語る。
 
 ---
 

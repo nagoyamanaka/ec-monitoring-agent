@@ -113,40 +113,34 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
     scenarios: [
       {
         id: "3",
-        label: "在庫競合",
-        description: "同時注文で在庫が競合 → 未知 → AI 調査 → 承認で新パターン昇格",
-        realness: "live",
-      },
-      {
-        id: "4",
         label: "インフラ障害（実 Cloud Monitoring）",
         description:
-          "CRITICAL ログ + HTTP 500 → 実 Cloud Monitoring が発報（GCP のみ）。⏱ 検知まで約1分・GCP にインシデントが残るため、反復は 4b を推奨",
+          "CRITICAL ログ + HTTP 500 → 実 Cloud Monitoring が発報（GCP のみ）。⏱ 検知まで約1分・GCP にインシデントが残るため、反復は 3b を推奨",
         realness: "cloud",
       },
       {
-        id: "4b",
+        id: "3b",
         label: "インフラ障害（合成・反復用）",
         description:
-          "4 と同型の発報を合成で即・新鮮に再現（reset で消える・反復用）。下流の分類→AI 調査は 4 と同一経路",
+          "3 と同型の発報を合成で即・新鮮に再現（reset で消える・反復用）。下流の分類→AI 調査は 3 と同一経路",
         realness: "synthetic",
       },
       {
-        id: "5",
+        id: "4",
         label: "脆弱性検知",
         description:
           "CI(Trivy) の HIGH/CRITICAL を合成 → AI 調査 → 修正 PR 起票（DevOps ループ）",
         realness: "synthetic",
       },
       {
-        id: "6",
+        id: "5",
         label: "構成変更障害",
         description:
           "Cloud SQL 設定縮小（IaC apply）が原因 → AI が terraform 差分を特定",
         realness: "synthetic",
       },
       {
-        id: "7",
+        id: "6",
         label: "アプリコード退行",
         description:
           "テスト通過のコード変更が挙動退行 → AI が実コミット差分を読んで原因特定",

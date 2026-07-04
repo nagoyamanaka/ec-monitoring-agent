@@ -30,7 +30,7 @@ describe("TriggerDemoScenarioUseCase", () => {
     collect = { run: vi.fn().mockResolvedValue(undefined) } as unknown as CollectMonitoringEventUseCase;
   });
 
-  it("シナリオ5（security-vuln）は CI(Trivy)検知を合成し CollectMonitoringEventUseCase に流す", async () => {
+  it("シナリオ4（security-vuln）は CI(Trivy)検知を合成し CollectMonitoringEventUseCase に流す", async () => {
     const useCase = new TriggerDemoScenarioUseCase(
       fakeEcGateway(),
       "p-1",
@@ -38,7 +38,7 @@ describe("TriggerDemoScenarioUseCase", () => {
       collect,
     );
 
-    const result = await useCase.run("5");
+    const result = await useCase.run("4");
 
     expect(result).toEqual({ scenarioId: "security-vuln", label: "脆弱性検知", orderId: "" });
     expect(collect.run).toHaveBeenCalledTimes(1);
@@ -60,11 +60,11 @@ describe("TriggerDemoScenarioUseCase", () => {
     expect(ec.injectInfraFault).not.toHaveBeenCalled();
   });
 
-  it("シナリオ6（infra-config-change）は apply 差分を記録し、INFRASTRUCTURE の合成イベントを実経路へ流す", async () => {
+  it("シナリオ5（infra-config-change）は apply 差分を記録し、INFRASTRUCTURE の合成イベントを実経路へ流す", async () => {
     const store = fakeInfraStore();
     const useCase = new TriggerDemoScenarioUseCase(fakeEcGateway(), "p-1", store, collect);
 
-    const result = await useCase.run("6");
+    const result = await useCase.run("5");
 
     expect(result).toEqual({ scenarioId: "infra-config-change", label: "構成変更障害", orderId: "" });
 
@@ -90,11 +90,11 @@ describe("TriggerDemoScenarioUseCase", () => {
     expect(ec.injectInfraFault).not.toHaveBeenCalled();
   });
 
-  it("シナリオ7（appcode-regression）は APPLICATION の合成イベントを実経路へ流す（注文/注入なし）", async () => {
+  it("シナリオ6（appcode-regression）は APPLICATION の合成イベントを実経路へ流す（注文/注入なし）", async () => {
     const ec = fakeEcGateway();
     const useCase = new TriggerDemoScenarioUseCase(ec, "p-1", fakeInfraStore(), collect);
 
-    const result = await useCase.run("7");
+    const result = await useCase.run("6");
 
     expect(result).toEqual({ scenarioId: "appcode-regression", label: "アプリコード退行", orderId: "" });
 

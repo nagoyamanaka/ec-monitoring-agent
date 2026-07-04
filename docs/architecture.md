@@ -115,7 +115,7 @@ flowchart TD
 
 - 調査=read / 修正=write を構造分離。自動マージは一切しない。
 - 2モード（`REMEDIATION_MODE`）: **advisory**（in-process で方針テキスト→`SECURITY_REMEDIATION.md` 草案PR）／**dispatch**（`repository_dispatch` → `ai-remediation.yml` でランナー上の AI が実コード修正→Trivy 再スキャン＋テスト緑→draft PR→`POST /ingest/remediation-result` で結果確定）。
-- 自己修正ループは `REMEDIATION_MAX_ATTEMPTS`（既定2）で打ち切り（課金暴走の安全弁）。対象はシナリオ5（脆弱性）のみ（6/7 は調査まで。[決定記録](decisions/decision-scenario67-remediation-dropped.md)）。
+- 自己修正ループは `REMEDIATION_MAX_ATTEMPTS`（既定2）で打ち切り（課金暴走の安全弁）。対象はシナリオ4（脆弱性）のみ（5/6 は調査まで。[決定記録](decisions/decision-scenario67-remediation-dropped.md)）。
 
 ## 6. デプロイ構成
 
@@ -172,7 +172,7 @@ flowchart TB
 
   SRC --> APP --> prod
   IAC --> TF --> prod
-  SRC --> TRIVY -->|"POST /ingest/security-scan<br/>(実 ingest・シナリオ5 の実経路)"| AGENT
+  SRC --> TRIVY -->|"POST /ingest/security-scan<br/>(実 ingest・シナリオ4 の実経路)"| AGENT
   AGENT -->|"SECURITY 調査 → repository_dispatch"| REM
   REM -->|"draft PR（人間承認ゲート）"| SRC
   AGENT -.監視.-> ECPROD
@@ -180,10 +180,10 @@ flowchart TB
 
 - **① 自己デプロイ**（`app.yml`）: `main` push で typecheck/UT/E2E → image build&push → Cloud Run（frontend/edge）更新＋GCE backbone 再起動。エージェント本体の CD がプロダクトの CD そのもの。
 - **② 自己 IaC**（`terraform.yml`）: `plan` は PR・`apply` は `main`（`environment: prod` 承認ゲート）。PR とマージの plan/apply が同一 tfstate ロックを奪い合うレースを `concurrency` で直列化済み（1回目失敗→rerun 成功の既知事象を解消）。
-- **③ 自己検知（ループの閉じ）**（`app.yml` の `security-scan` job）: Trivy が**自リポジトリの依存**を fs スキャン→HIGH/CRITICAL を代表 CVE に昇格し全件同梱→本番 `/ingest/security-scan` に POST。**検知入力が外部イベントではなく自分自身の CI から来る**＝ドッグフーディングの核。これが[シナリオ5](#9-デモシナリオ8ボタンリアルさバッジ付き)の実経路。
+- **③ 自己検知（ループの閉じ）**（`app.yml` の `security-scan` job）: Trivy が**自リポジトリの依存**を fs スキャン→HIGH/CRITICAL を代表 CVE に昇格し全件同梱→本番 `/ingest/security-scan` に POST。**検知入力が外部イベントではなく自分自身の CI から来る**＝ドッグフーディングの核。これが[シナリオ4](#9-デモシナリオ7ボタンリアルさバッジ付き)の実経路。
 - **④ 自己修復**（`ai-remediation.yml`）: SECURITY 調査が `repository_dispatch` を発火→ランナー上で AI が実コードを修正→Trivy 再スキャン＋テスト緑になるまで自己修正（`REMEDIATION_MAX_ATTEMPTS` で打ち切り＝課金暴走の安全弁）→**自リポジトリに draft PR**（自動マージなし・人間承認）。マージされれば ① に戻り再デプロイ＝**完全な自己参照 DevOps ループ**。
 
-> **正直さの境界**: ①②③④は実ワークフロー。ただしデモ卓のシナリオ5は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
+> **正直さの境界**: ①②③④は実ワークフロー。ただしデモ卓のシナリオ4は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
 
 ## 7. コード構成（DDD + Clean Architecture + CQRS + EDA）
 
@@ -222,18 +222,19 @@ src/
 | `GET /forecast`                   | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）                               |
 | `POST /forecast`                  | 予報の生成（`FORECAST_ENABLED` かつ `DEMO_ENABLED` 配下・Gemini 呼び出し・horizon は `FORECAST_HORIZON` 固定）                                           |
 
-## 9. デモシナリオ（8ボタン・リアルさバッジ付き）
+## 9. デモシナリオ（7ボタン・リアルさバッジ付き）
+
+> 旧「在庫競合（未知）」は廃止（実コードに楽観ロック＋指数バックオフのリトライが実装済みで、AI 生成の「楽観ロックを導入せよ」推奨と矛盾するため。詳細は [step6 §J](steps/step6-final-sprint-todo.md)）。以降を -1 繰り上げ済み。
 
 | #   | シナリオ                             | 分類スペクトル               | 入力のリアルさ                                                 |
 | --- | ------------------------------------ | ---------------------------- | -------------------------------------------------------------- |
 | 1   | 決済タイムアウト                     | 完全一致（既知・1秒）        | 実トリガ（実注文投入）                                         |
 | 2   | DBコネクションプール枯渇             | 類似（準・既知・confidence） | 実トリガ                                                       |
-| 3   | 在庫競合                             | 未知 → ADK 調査              | 実トリガ                                                       |
-| 4   | インフラ障害                         | 未知                         | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ）           |
-| 4b  | インフラ障害（反復用）               | 未知                         | 合成入力（入口のみ合成・パイプラインは実経路）                 |
-| 5   | 脆弱性検知 → 修正 draft PR           | SECURITY                     | 合成入力（実 CI と同一経路）                                   |
-| 6   | 構成変更障害（terraform apply 起因） | 未知                         | 合成入力（構造化差分は実機構）                                 |
-| 7   | アプリコード退行                     | 未知                         | 合成入力（**コミット・diff・修正PRは実物**・demo隔離ブランチ） |
+| 3   | インフラ障害                         | 未知                         | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ）           |
+| 3b  | インフラ障害（反復用）               | 未知                         | 合成入力（入口のみ合成・パイプラインは実経路）                 |
+| 4   | 脆弱性検知 → 修正 draft PR           | SECURITY                     | 合成入力（実 CI と同一経路）                                   |
+| 5   | 構成変更障害（terraform apply 起因） | 未知                         | 合成入力（構造化差分は実機構）                                 |
+| 6   | アプリコード退行                     | 未知                         | 合成入力（**コミット・diff・修正PRは実物**・demo隔離ブランチ） |
 
 **正直さの原則**: 合成入力は UI に amber バッジで明示。エンドポイントの無い偽ボタンは作らない。
 

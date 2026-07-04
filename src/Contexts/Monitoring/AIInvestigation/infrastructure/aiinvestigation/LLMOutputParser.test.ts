@@ -282,7 +282,7 @@ describe("LLMOutputParser", () => {
   // fallback 第4原因（最終出力 JSON の mid-string 切断・タスク I1）への防御。
   // 完成済みフィールドだけを best-effort で回収し、部分レポートとして成立させる。
   describe("salvageLLMOutput", () => {
-    // シナリオ7実発生系の再現: 正しい JSON が値文字列の途中で切断されている
+    // アプリコード退行シナリオ実発生系の再現: 正しい JSON が値文字列の途中で切断されている
     const regressionJson = JSON.stringify({
       summary: "コミット e12b655 の SubtotalAmount 変更による退行",
       confidence: 0.95,
