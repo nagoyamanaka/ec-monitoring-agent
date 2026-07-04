@@ -7,6 +7,7 @@ import type {
   AnalyticsView,
   ApprovedAlertSummaryDto,
 } from "../../domain/AnalyticsView";
+import { eventInfo, eventTitle } from "@features/alerts/domain/eventCatalog";
 import { useAnalytics } from "../hooks/useAnalytics";
 
 export interface AnalyticsPageProps {
@@ -218,9 +219,18 @@ function ApprovedAlertsSection({
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-baseline gap-2">
-                    <code className="truncate text-sm font-medium text-slate-100">
-                      {alert.eventName}
-                    </code>
+                    {/* アラート一覧と同じ人間語タイトル（eventCatalog）。未登録は eventName にフォールバック。 */}
+                    <span className="truncate text-sm font-medium text-slate-100">
+                      {eventTitle(alert.eventName)}
+                    </span>
+                    {eventInfo(alert.eventName) && (
+                      <code
+                        className="shrink-0 text-xs text-slate-400"
+                        title={alert.eventName}
+                      >
+                        {alert.eventName}
+                      </code>
+                    )}
                     {alert.occurrenceCount > 1 && (
                       <span className="shrink-0 text-xs text-slate-400">
                         重複 {alert.occurrenceCount}件
