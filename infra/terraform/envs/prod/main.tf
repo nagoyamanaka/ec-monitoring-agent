@@ -55,10 +55,26 @@ module "cloud_run" {
   image                = local.image_backoffice
   vpc_connector_id     = module.networking.connector_id
   backbone_internal_ip = module.gce_backbone.internal_ip
-  # edge は ROLE=edge（consumer を張らない）＋ Valkey Pub/Sub fan-out なので scale-to-zero 可。
-  # 常駐 RabbitMQ Subscriber は GCE worker（ROLE=worker）が担う。
-  min_instances = 0
-  max_instances = 2
+  # edge は ROLE=edge（consumer を張らない）＋ Valkey Pub/Sub fan-out なので構造上は scale-to-zero 可。
+  # ただしハッカソン審査中は「開いた瞬間の初動（SSE 初回接続はここで終端）」を守るため min=1 で暖機。
+  # 加えて予兆（Forecast）の RiskForecastRepository は InMemory＝プロセス内保持なので、scale-to-zero
+  # すると生成済み予報が揮発する。審査後にコスト最適化へ戻すなら 0 に戻す。
+  min_instances = 1
+  # max=1 は審査中の一貫性担保: 予報（InMemoryRiskForecastRepository）は instance ローカルなので、
+  # 2台に散ると「生成した人には見える/別 instance に当たった人には未生成」の split-brain になる。
+  # demo reset の効きも1台なら全員に予測どおり。審査後にスケール戻すなら 0/2 へ。
+  max_instances = 1
+
+  # 予兆ブリーフィングは /forecast ルート＝edge（role!=worker）で提供される。FORECAST_ENABLED を
+  # 付けないと forecastGuard が 404（docker-compose.prod.yml は GCE worker にしか設定しておらず、
+  # worker はこのルートを持たないため本番で 404 になっていた）。GET 閲覧はこのフラグで開く。
+  # DEMO_ENABLED: ハッカソン審査＝本番で予報生成（POST /forecast は demoGuard）とデモ卓を使うため
+  # 公開エッジで true。審査用途に限定した意図的な露出（審査後は false へ）。
+  plain_env = {
+    FORECAST_ENABLED = "true"
+    FORECAST_HORIZON = "今週末"
+    DEMO_ENABLED     = "true"
+  }
 
   depends_on = [module.bootstrap]
 }
@@ -70,6 +86,9 @@ module "cloud_run_frontend" {
   region           = var.region
   image            = local.image_frontend
   backend_edge_url = module.cloud_run.service_uri
+  # 審査員が最初に踏む nginx。edge と揃えて審査中は min=1 で暖機（コールドスタート除去）。
+  # 審査後にコスト最適化へ戻すなら 0 に戻す。
+  min_instances = 1
 
   depends_on = [module.bootstrap, module.cloud_run]
 }

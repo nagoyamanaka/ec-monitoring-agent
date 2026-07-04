@@ -25,6 +25,11 @@ locals {
     "iamcredentials.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "sts.googleapis.com",
+    # cloudtrace.googleapis.com は意図的に未有効化（現状ギャップ・ROI 低で審査時は見送り）。
+    # start.ts が OTel の TraceExporter でスパンを送出し、SA には roles/cloudtrace.agent も付与済みだが、
+    # この API 未有効のためスパンは Cloud Trace に着かない（ログ↔トレース相関フィールドは出る）。
+    # 分散トレースを実際に可視化したくなったら次の1行を有効化するだけでよい。
+    # "cloudtrace.googleapis.com",
   ]
 
   # Secret コンテナ（値=version は tf に置かず gcloud で投入する。§11.5）
