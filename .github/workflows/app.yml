@@ -242,6 +242,11 @@ jobs:
               echo \"\$TOKEN\" | sudo docker login -u oauth2accesstoken --password-stdin 'https://${{ vars.AR_HOST }}'
               sudo curl -fsS -H \"Authorization: Bearer \$TOKEN\" -o /opt/app/docker-compose.base.yml 'https://storage.googleapis.com/storage/v1/b/${{ vars.DEPLOY_BUCKET }}/o/docker-compose.yml?alt=media'
               sudo curl -fsS -H \"Authorization: Bearer \$TOKEN\" -o /opt/app/docker-compose.prod.yml 'https://storage.googleapis.com/storage/v1/b/${{ vars.DEPLOY_BUCKET }}/o/docker-compose.prod.yml?alt=media'
+              # デプロイ毎に旧 :sha / dangling イメージが VM に溜まり /var/lib/containerd を圧迫して
+              # pull が 'no space left on device' で落ちるため、pull 前に未使用イメージを掃除する。
+              # この時点では旧コンテナがまだ稼働中なので、その参照イメージは保護され過去分だけ消える。
+              # 手動で掃除したい場合は infra/terraform/prune_gce.sh も利用可。
+              sudo docker image prune -a -f
               sudo docker compose \
                 --env-file /opt/app/.env \
                 -f /opt/app/docker-compose.base.yml \
