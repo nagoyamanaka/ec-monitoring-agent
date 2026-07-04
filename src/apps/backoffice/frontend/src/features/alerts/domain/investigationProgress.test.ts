@@ -37,12 +37,13 @@ describe("investigationProgress", () => {
     });
   });
 
-  it("台帳は 7 エージェント（backend の ADK 名と整合）", () => {
+  it("台帳は 8 エージェント（backend の ADK 名と整合）", () => {
     expect(INVESTIGATION_AGENTS.map((a) => a.name)).toEqual([
       "investigation_coordinator",
       "evidence_collector",
       "root_cause_analyst",
       "impact_triage",
+      "correlation_verifier",
       "remediation_planner",
       "runbook_escalation",
       "remediation_reviewer",

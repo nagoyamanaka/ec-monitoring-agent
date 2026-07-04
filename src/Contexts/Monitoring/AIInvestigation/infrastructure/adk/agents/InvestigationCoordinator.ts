@@ -18,6 +18,7 @@ export function createInvestigationCoordinator(params: {
   impactTriage: LlmAgent;
   runbookEscalation: LlmAgent;
   remediationReviewer: LlmAgent;
+  correlationVerifier: LlmAgent;
 }): LlmAgent {
   const orchestration = `
 
@@ -33,6 +34,8 @@ export function createInvestigationCoordinator(params: {
   暫定回避手順・添付証拠）を起案する。通知送信はしない（草案まで）。
 - remediation_reviewer: 既に起票済みの修正PR（PR番号が分かる場合）を読み取り専用でレビューし、引用根本原因
   への対応・証拠との整合・テストのカバレッジを判定して verdict を出す。マージはしない（read-only）。
+- correlation_verifier: relatedAlerts 候補（関連アラート）ごとに「共有証拠を指せるか」「fault 分類に対し
+  因果の向きが妥当か」を検証し keep/reject を返す批判役。証拠の追加収集・書き換えはしない（read-only）。
 
 手順:
 1. まず root_cause_analyst で初期仮説と確度を得る。
@@ -51,10 +54,16 @@ export function createInvestigationCoordinator(params: {
      呼んだ結果、体制マスタから宛先（team）を引けなかった場合のみ escalation を省略できる。
    - 自責・他責の両方がありうる場合は両方（remediation_planner と runbook_escalation）を呼び、人間の判断に委ねる。
    - unknown のときは断定せず、確度の高い側を起案する（証拠不足なら escalation を省略してよい）。
-5. 既に修正PRが起票済みで PR 番号が分かる場合（advisory モードでは草案PRも対象）に限り、remediation_reviewer を
+5. relatedAlerts に候補を載せる場合は、最終 JSON を出力する前に【必ず】correlation_verifier を呼び、
+   候補一覧（alertId/relation/rationale/citations）・確定した根本原因・impact.fault・収集済み証拠を渡して
+   候補ごとの verdict を得る。keep と判定された候補だけを relatedAlerts に載せ、reject は捨てる
+   （reject の理由は最終 JSON に載せない）。相関候補が無い場合、および既知パターン一致で相関を
+   挙げない場合は correlation_verifier を呼ばなくてよい（呼び出し予算は impact_triage /
+   runbook_escalation を優先する）。
+6. 既に修正PRが起票済みで PR 番号が分かる場合（advisory モードでは草案PRも対象）に限り、remediation_reviewer を
    呼んで PR をレビューし、remediationReview（verdict/concerns/pullRequestUrl/citations）を埋める。PR が未起票で
    レビュー対象が無い場合は remediationReview を省略する（pullRequestUrl を埋めない＝マッパ側で落ちる）。
-6. 最後に、上で定義した JSON スキーマ「だけ」を出力する（前後に説明文・コードフェンス以外の地の文を付けない）。
+7. 最後に、上で定義した JSON スキーマ「だけ」を出力する（前後に説明文・コードフェンス以外の地の文を付けない）。
    confidence は実際に積み上げた証拠の強さを反映させ、impact は impact_triage の算定をそのまま載せること
    （citation を出せなかった場合は impact を省略する）。escalation は runbook_escalation の草案をそのまま載せ、
    宛先（team）を引けなかった場合・自責でコードで直す場合は escalation を省略すること。remediationReview は
@@ -76,6 +85,7 @@ export function createInvestigationCoordinator(params: {
       new AgentTool({ agent: params.impactTriage }),
       new AgentTool({ agent: params.runbookEscalation }),
       new AgentTool({ agent: params.remediationReviewer }),
+      new AgentTool({ agent: params.correlationVerifier }),
     ],
   });
 }

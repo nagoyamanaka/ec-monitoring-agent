@@ -35,7 +35,11 @@ export const config = {
       1,
       parseInt(process.env.AI_INVESTIGATION_ADK_MAX_LLM_CALLS ?? "8"),
     ),
-    // AI調査1件のウォールクロック上限(ms)。ADK の7エージェント自律ループは実測 92-116秒かかり、
+    // 相関検証エージェント（correlation_verifier・タスク J2）専用のモデル。批判役は1ショットの
+    // keep/reject 判定で応答速度が効く（D3 の wall-clock 逼迫に LLM 1呼び出し足すため）ので既定 flash。
+    adkVerifierModel:
+      process.env.AI_INVESTIGATION_VERIFIER_MODEL ?? "gemini-2.5-flash",
+    // AI調査1件のウォールクロック上限(ms)。ADK の8エージェント自律ループは実測 92-116秒かかり、
     // 既定120秒では並列実行時に超過して暫定落ちする。240秒へ広げて余裕を持たせる。
     investigationTimeoutMs: Math.max(
       1_000,
@@ -43,8 +47,8 @@ export const config = {
     ),
   },
   forecast: {
-    // 予兆ブリーフィング（step6 F系）。既定 off＝forecast ルートは 404・既存P0経路に影響ゼロ。
-    enabled: process.env.FORECAST_ENABLED === "true",
+    // 予兆ブリーフィング（step6 F系）。既定 on＝forecast ルートは 404・既存P0経路に影響ゼロ。
+    enabled: process.env.FORECAST_ENABLED ?? "true",
     // 予報の対象期間。POST /forecast はこの値で固定生成する（無認証デモ経路に入力面を作らない）。
     horizon: process.env.FORECAST_HORIZON ?? "今週末",
   },

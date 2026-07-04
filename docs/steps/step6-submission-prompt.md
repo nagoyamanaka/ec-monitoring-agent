@@ -39,7 +39,7 @@ EC等のWebサービスを運用する SRE・オンコールエンジニア・�
   ① EC 業務イベント（RabbitMQ購読） ② Cloud Monitoring webhook ③ CI/Trivy の脆弱性検知。
 - 分類: Classifier/Policy/Rule 3層。完全一致（既知・即時1秒・決定論）→
   類似（Elasticsearch or InMemory Jaccard・confidence付き「準・既知」）→ 未知。
-- AI調査（未知のみ起動）: Google ADK による 7エージェント hub-and-spoke
+- AI調査（未知のみ起動）: Google ADK による 8エージェント hub-and-spoke
   マルチエージェント（Coordinator / EvidenceCollector / RootCauseAnalyst /
   ImpactTriage / RemediationPlanner / RunbookEscalation / RemediationReviewer）。
   EvidenceCollector は read-only ツールで Cloud Logging・Terraform適用差分・
@@ -123,7 +123,7 @@ AI-SRE エージェント」の趣旨で掴む。検知はしない（既存観�
 - 0:15-0:35 引用チップをクリック→実在のPR・過去アラートに解決（根拠が本物・
   偽引用は検証で自動除外、と一言）
 - 0:35-1:00 「では実際に起きたら？」→アラート降着(SSE)→未知と分類→
-  ADK 7エージェントが自律調査を開始する画面
+  ADK 8エージェントが自律調査を開始する画面
 - 1:00-2:00 調査結果: 実コミットdiff引用の原因特定→影響トリアージ→
   修正draft PR（人間承認ゲート）。既知なら1秒で分類される対比も見せる
 - 2:00-2:40 学習ループ（フィードバック→昇格→次回1秒）と
@@ -141,7 +141,7 @@ docs/architecture.md
 システムアーキテクチャ図を作図ツールで描くための構成指示書を作ってください。
 レイヤーは4段: ①検知（境界の外: Cloud Monitoring / CI・Trivy / EC業務イベント→
 3つの peer ingest で合流） ②分類（既知1秒/類似confidence/未知の3分岐）
-③AI調査（ADK 7エージェント hub-and-spoke・read-onlyツール群: Cloud Logging/
+③AI調査（ADK 8エージェント hub-and-spoke・read-onlyツール群: Cloud Logging/
 Terraform/GitHub/類似DB）＋予兆（未来シグナル×記憶→引用検証）
 ④人間ゲート（承認/却下→学習ループ→昇格、修正draft PR）。
 GCPプロダクト（Cloud Run/GCE/Cloud Monitoring/Cloud Logging/Vertex AI・Gemini）と
@@ -156,7 +156,7 @@ ADKグラフ§4・デプロイ§6）が既にあるので、それを貼れば�
 ```
 ProtoPedia 紹介画像（最大5枚）の構成案を作ってください。
 1枚目=予報カード＋引用チップ（60秒フックの静止画版）
-2枚目=アーキ図 3枚目=ADK 7エージェントの調査タイムライン画面
+2枚目=アーキ図 3枚目=ADK 8エージェントの調査タイムライン画面
 4枚目=証拠パネル（実ログ・実diff・実PRリンク） 5枚目=学習ループ（既知1秒の対比）
 各画像のキャプション（30字以内）とスクショで押さえるべきUI状態も書いてください。
 ```

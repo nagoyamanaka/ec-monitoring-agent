@@ -30,7 +30,7 @@ export type AgentInfo = {
 };
 
 /**
- * hub-and-spoke 7 エージェントの台帳（表示順＝調査の概念的な流れ）。
+ * hub-and-spoke 8 エージェントの台帳（表示順＝調査の概念的な流れ）。
  * name は ADK の agent 名（進行イベントの author / AgentTool 委譲名）と一致させる。
  */
 export const INVESTIGATION_AGENTS: readonly AgentInfo[] = [
@@ -53,6 +53,11 @@ export const INVESTIGATION_AGENTS: readonly AgentInfo[] = [
     name: "impact_triage",
     label: "ImpactTriage",
     role: "自責/他責・影響範囲・障害規模を評価",
+  },
+  {
+    name: "correlation_verifier",
+    label: "CorrelationVerifier",
+    role: "相関主張の共有証拠と因果の向きを検証（批判役）",
   },
   {
     name: "remediation_planner",

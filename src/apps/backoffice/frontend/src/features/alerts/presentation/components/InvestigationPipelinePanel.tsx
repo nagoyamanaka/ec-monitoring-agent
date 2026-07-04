@@ -44,7 +44,7 @@ function useNow(active: boolean): number {
 /**
  * AI 調査ライブ・タイムライン（タスク E1・最大の wow）。
  *
- * ANALYZING 中: 経過時間タイマー（実測）＋不確定プログレス＋7エージェント台帳＋
+ * ANALYZING 中: 経過時間タイマー（実測）＋不確定プログレス＋8エージェント台帳＋
  * SSE "investigation-progress" の実行イベントをライブ表示する。表示するのは
  * **システムが実際に観測したイベントのみ**（演出の捏造はしない）。イベントが無い経路
  * （単一 Gemini／中継前）でも台帳とタイマーで「何が動いているか」を伝える。
@@ -134,7 +134,7 @@ export function InvestigationPipelinePanel({
           <span aria-hidden className="pipeline-sweep absolute inset-y-0 w-2/5 rounded-full bg-cyan-400/70" />
         </div>
 
-        {/* 7エージェント台帳: 誰が何の係か＋実イベントに登場したかを示す。 */}
+        {/* 8エージェント台帳: 誰が何の係か＋実イベントに登場したかを示す。 */}
         <ul className="space-y-1">
           {INVESTIGATION_AGENTS.map((agent) => {
             const isCurrent = currentAgent === agent.name;

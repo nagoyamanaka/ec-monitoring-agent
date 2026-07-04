@@ -251,6 +251,8 @@ export class BackofficeApp {
       aiInvestigationPort = new ADKAgentInvestigationAdapter(
         new ADKInvestigationAgentRunner({
           model: config.gemini.model,
+          // 相関検証（批判役）だけ軽量モデル＝D3 の wall-clock 逼迫に配慮（タスク J2）。
+          verifierModel: config.ai.adkVerifierModel,
           maxLlmCalls: config.ai.adkMaxLlmCalls,
           timeoutMs: config.ai.investigationTimeoutMs,
           logger,
