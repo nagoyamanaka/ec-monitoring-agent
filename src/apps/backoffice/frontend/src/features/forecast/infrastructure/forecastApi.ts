@@ -28,6 +28,8 @@ export interface ForecastApi {
   getLatest(signal?: AbortSignal): Promise<ForecastSnapshot>;
   /** 予報を生成して返す。DEMO_ENABLED off は HttpError(404) がそのまま伝播する。 */
   generate(signal?: AbortSignal): Promise<ForecastBriefingView>;
+  /** 生成済み予報を破棄して未生成に戻す（DELETE /forecast・DEMO_ENABLED 配下・F12）。 */
+  reset(signal?: AbortSignal): Promise<void>;
 }
 
 /** シグナル収集＋Gemini 1ショット合成で数十秒かかり得るため、生成だけ長めのタイムアウト。 */
@@ -57,6 +59,10 @@ export function createForecastApi(http: HttpClient): ForecastApi {
         { signal, timeoutMs: GENERATE_TIMEOUT_MS },
       );
       return toForecastBriefingView(dto);
+    },
+
+    async reset(signal) {
+      await http.delete<void>("/forecast", { signal });
     },
   };
 }

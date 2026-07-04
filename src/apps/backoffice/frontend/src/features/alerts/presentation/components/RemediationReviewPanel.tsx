@@ -1,3 +1,9 @@
+import type { ComponentType } from "react";
+import {
+  AlertTriangleIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+} from "@shared/ui/DecisionIcon";
 import type {
   RemediationReviewView,
   RemediationVerdict,
@@ -8,22 +14,29 @@ export interface RemediationReviewPanelProps {
   review: RemediationReviewView;
 }
 
-/** 判定の表示用ラベル＋配色。reject は誤修正＝危険色、concerns は要確認＝注意色。 */
+/** 判定の表示用ラベル＋配色＋アイコン。reject は誤修正＝危険色、concerns は要確認＝注意色。 */
 const VERDICT_STYLE: Record<
   RemediationVerdict,
-  { label: string; className: string }
+  {
+    label: string;
+    className: string;
+    Icon: ComponentType<{ className?: string }>;
+  }
 > = {
   pass: {
-    label: "✓ 整合（pass）",
+    label: "整合（pass）",
     className: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+    Icon: CheckCircleIcon,
   },
   concerns: {
-    label: "⚠ 要確認（concerns）",
+    label: "要確認（concerns）",
     className: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+    Icon: AlertTriangleIcon,
   },
   reject: {
-    label: "✗ 不整合（reject）",
+    label: "不整合（reject）",
     className: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+    Icon: XCircleIcon,
   },
 };
 
@@ -41,8 +54,9 @@ export function RemediationReviewPanel({ review }: RemediationReviewPanelProps) 
           修正PR 自動レビュー
         </h4>
         <span
-          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${verdict.className}`}
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${verdict.className}`}
         >
+          <verdict.Icon className="h-3 w-3 shrink-0" />
           {verdict.label}
         </span>
       </div>

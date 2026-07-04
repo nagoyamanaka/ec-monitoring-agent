@@ -45,6 +45,24 @@ export function RiskCard({ risk }: RiskCardProps) {
         </div>
       </div>
       <p className="text-sm leading-relaxed text-slate-300">{risk.reasoning}</p>
+      {/* F11a: 先手＝カード内の視覚的主役。実行主体は人間（write-zero）＝ボタンにしない。
+          実行先（PR/plan/過去事例）への動線は下の CitationList の実リンクが担う。
+          LLM が出さなければフィールドごと欠落＝このブロックが消えるだけの縮退。 */}
+      {risk.preventiveAction && (
+        <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-3">
+          <p className="flex flex-wrap items-center justify-between gap-x-3 text-[11px] font-semibold tracking-wide text-cyan-300">
+            <span>
+              <span aria-hidden>🛡 </span>今打てる先手
+            </span>
+            <span className="font-normal text-slate-400">
+              実行先は下の引用リンクから
+            </span>
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-cyan-100">
+            {risk.preventiveAction}
+          </p>
+        </div>
+      )}
       <CitationList citations={risk.citations} />
     </article>
   );

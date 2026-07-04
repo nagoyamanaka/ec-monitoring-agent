@@ -12,4 +12,8 @@ export class InMemoryRiskForecastRepository implements RiskForecastRepository {
   async findLatest(): Promise<ForecastBriefing | null> {
     return this.latest;
   }
+
+  async clearLatest(): Promise<void> {
+    this.latest = null;
+  }
 }

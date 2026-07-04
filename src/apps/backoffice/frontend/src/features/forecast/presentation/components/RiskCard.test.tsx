@@ -86,4 +86,22 @@ describe("RiskCard", () => {
     renderCard({ ...RISK, citations: [] });
     expect(screen.queryByText("根拠（引用）")).not.toBeInTheDocument();
   });
+
+  it("先手（F11a）があれば「今打てる先手」ブロックを出す（実行ボタンにはしない）", () => {
+    renderCard({
+      ...RISK,
+      preventiveAction: "接続上限を縮小する plan の適用をセール後へ延期する。",
+    });
+    expect(screen.getByText("今打てる先手")).toBeInTheDocument();
+    expect(
+      screen.getByText("接続上限を縮小する plan の適用をセール後へ延期する。"),
+    ).toBeInTheDocument();
+    // write-zero: 先手は助言テキストのみ＝実行ボタンを持ち込まない
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("先手が無ければ先手ブロックごと出さない（優雅な縮退）", () => {
+    renderCard();
+    expect(screen.queryByText("今打てる先手")).not.toBeInTheDocument();
+  });
 });

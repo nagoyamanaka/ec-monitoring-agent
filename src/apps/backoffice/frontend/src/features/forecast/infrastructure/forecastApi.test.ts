@@ -112,3 +112,20 @@ describe("generate / triggerForecast", () => {
     await expect(triggerForecast(api)).rejects.toBe(denied);
   });
 });
+
+describe("reset（F12）", () => {
+  it("DELETE /forecast を呼ぶ", async () => {
+    const del = vi.fn().mockResolvedValue(undefined);
+    const api = createForecastApi(httpMock({ delete: del }));
+    await api.reset();
+    expect(del).toHaveBeenCalledWith("/forecast", expect.anything());
+  });
+
+  it("DEMO_ENABLED off の 404 は呼び出し側へ伝播する", async () => {
+    const denied = new HttpError(404, "Not Found", "Not Found");
+    const api = createForecastApi(
+      httpMock({ delete: vi.fn().mockRejectedValue(denied) }),
+    );
+    await expect(api.reset()).rejects.toBe(denied);
+  });
+});

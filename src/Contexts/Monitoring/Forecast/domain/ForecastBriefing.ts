@@ -18,6 +18,8 @@ export type ForecastBriefing = {
 export interface RiskForecastRepository {
   saveLatest(briefing: ForecastBriefing): Promise<void>;
   findLatest(): Promise<ForecastBriefing | null>;
+  /** 生成済み予報を破棄して未生成状態に戻す（デモ卓のリセット・F12）。 */
+  clearLatest(): Promise<void>;
 }
 
 // wire 変換（Date→ISO文字列のみ・純関数）。frontend は contracts の Primitives を直接 import する。
@@ -36,6 +38,7 @@ export function toForecastBriefingPrimitives(
         confidence: risk.confidence,
         citations: [...risk.citations],
         reasoning: risk.reasoning,
+        ...(risk.preventiveAction ? { preventiveAction: risk.preventiveAction } : {}),
       })),
       isFallback: briefing.forecast.isFallback,
     },

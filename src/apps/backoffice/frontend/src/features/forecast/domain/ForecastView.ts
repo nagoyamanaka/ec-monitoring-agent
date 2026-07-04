@@ -65,6 +65,8 @@ export type RiskCardView = {
   readonly confidence: number;
   readonly reasoning: string;
   readonly citations: CitationView[];
+  /** 発火自体を防ぐために人間が今打てる先手（F11a・無ければ先手行ごと非表示）。 */
+  readonly preventiveAction?: string;
 };
 
 export type ForecastBriefingView = {
@@ -151,6 +153,7 @@ function toRiskCardView(
     confidence: Math.min(1, Math.max(0, risk.confidence)),
     reasoning: risk.reasoning,
     citations,
+    ...(risk.preventiveAction ? { preventiveAction: risk.preventiveAction } : {}),
   };
 }
 

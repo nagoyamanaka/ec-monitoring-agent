@@ -44,6 +44,9 @@ export class StubLLMClient implements LLMTextClient {
         citations: ["plan-1", "sch-1", "inc-1", "ghost-1"],
         reasoning:
           "[STUB] 接続上限の縮小予定（未適用 plan）と週末セールの checkout 負荷・過去の同型枯渇が重なるため。",
+        // F11a: 先手1行の wire 到達を決定論検証する（2件目は敢えて省略＝欠落縮退の経路も固定）。
+        preventiveAction:
+          "[STUB] 接続上限を縮小する plan（plan-1）の適用を週末セール後へ延期することを推奨します。",
       },
       {
         window: "今週末",

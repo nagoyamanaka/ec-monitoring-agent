@@ -20,6 +20,9 @@ export type RiskItemPrimitives = {
   readonly confidence: number; // 0.0〜1.0
   readonly citations: string[]; // 引用検証済み＝実在する ForecastSignal.id のみ
   readonly reasoning: string;
+  // 発火自体を防ぐために人間が今打てる先手（1文・任意）。実行主体は人間＝
+  // reactive の recommendedActions（事後対応）と意味が異なるため別名（F11a）。
+  readonly preventiveAction?: string;
 };
 
 export type RiskForecastPrimitives = {

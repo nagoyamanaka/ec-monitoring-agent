@@ -33,6 +33,9 @@ interface ForecastData {
   generating: boolean;
   /** POST /forecast。成功時は snapshot も更新する。失敗は throw（呼び出し側で文言化）。 */
   generate(): Promise<ForecastBriefingView>;
+  resetting: boolean;
+  /** DELETE /forecast（F12）。成功時は snapshot を empty へ。失敗は throw（呼び出し側で文言化）。 */
+  reset(): Promise<void>;
 }
 
 const ForecastContext = createContext<ForecastData | null>(null);
@@ -77,9 +80,32 @@ export function ForecastProvider({ api, children }: ForecastProviderProps) {
     }
   }, [api]);
 
+  const [resetting, setResetting] = useState(false);
+  const reset = useCallback(async () => {
+    setResetting(true);
+    try {
+      await api.reset();
+      // GET を挟まず直接 empty へ（DELETE 成功＝未生成が確定している）。
+      setSnapshot({ kind: "empty" });
+      setStatus("ready");
+      setError(null);
+    } finally {
+      setResetting(false);
+    }
+  }, [api]);
+
   const value = useMemo<ForecastData>(
-    () => ({ snapshot, status, error, refresh, generating, generate }),
-    [snapshot, status, error, refresh, generating, generate],
+    () => ({
+      snapshot,
+      status,
+      error,
+      refresh,
+      generating,
+      generate,
+      resetting,
+      reset,
+    }),
+    [snapshot, status, error, refresh, generating, generate, resetting, reset],
   );
 
   return (
