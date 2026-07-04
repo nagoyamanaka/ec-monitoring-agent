@@ -138,10 +138,10 @@ todo実施後に
 - 【退避】録画テイクを正とし、ライブは「録画済みを再現する」位置づけにする（`AI_INVESTIGATION_STUB` の決定的応答経路を演出上どう使うか整理）
 - 【確認】予兆導入後も main が全テスト緑・提出可能を維持（`feature/forecast` を merge する条件＝全緑）
 
-### タスク D4: DevOpsドッグフーディング可視化〔取り: 公式審査観点「実運用を見据えたDevOpsプロセス」〕
+### タスク D4: DevOpsドッグフーディング可視化〔取り: 公式審査観点「実運用を見据えたDevOpsプロセス」〕✅
 
-- 【整理】自リポジトリの CI/CD が本プロダクト自身の運用である事実を1枚図に: app.yml（typecheck/UT/E2E→build→Cloud Run/GCE deploy）・Trivy→実 ingest（シナリオ5の実経路）・terraform.yml（plan/apply・state lock 対策済み）・ai-remediation.yml（dispatch→実修正→テストゲート→draft PR）
-- 【デモ導線】「監視対象のECも、監視するエージェント自身も、同じ DevOps ループの中にいる」をデモ or 録画のどこで見せるか決める（発表資料側と分担）
+- [x] 【整理】自リポジトリの CI/CD が本プロダクト自身の運用である事実を1枚図に: app.yml（typecheck/UT/E2E→build→Cloud Run/GCE deploy）・Trivy→実 ingest（シナリオ5の実経路）・terraform.yml（plan/apply・state lock 対策済み）・ai-remediation.yml（dispatch→実修正→テストゲート→draft PR）（✅ `architecture.md §6.5 DevOps ドッグフーディング（自己運用ループ）` に自己参照ループの mermaid 1枚図＋①自己デプロイ/②自己IaC/③自己検知（ループの閉じ＝Trivy→自 ingest）/④自己修復（AI→自リポジトリ draft PR）の対応を追加。README のドッグフーディング箇条書きも §6.5 へ導線）
+- [x] 【デモ導線】「監視対象のECも、監視するエージェント自身も、同じ DevOps ループの中にいる」をデモ or 録画のどこで見せるか決める（発表資料側と分担）（✅ 決定記録 `docs/steps/step6-d4-devops-dogfooding.md`: **動画の"技術の裏側"パートで §6.5 図を1カット＋③を名指しナレーション**／ライブ本編には挿さない（D1 フックを薄めない）／シナリオ5 は③④の実経路なので触る際に1文添えて接地／専用ダッシュボードは不採用（D2 逆行）。ナレーション15秒案・README/ProtoPedia 分担を明記）
 
 ### タスク D5: ドロワー→詳細ページ導線のティザーCTA 〔P1・Lisa/E系連動〕完了✅
 
