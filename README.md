@@ -8,6 +8,7 @@ Findy **DevOps × AI Agent Hackathon 2026** 出展作品。
 
 - **検知はしない**（Cloud Monitoring 等の上流の責務）。発火済みアラートを受け、**ADK 7エージェント**（hub-and-spoke）が Cloud Logging・Terraform 適用差分・GitHub 実コミット diff・過去類似インシデントを **read-only で自律横断**し、根拠リンク付きで原因を推定する。
 - **既知は1秒・未知だけ AI**。完全一致（決定論）→ 類似（confidence 付き「準・既知」）→ 未知（AI 調査）の確度スペクトルで分類し、コストの重い調査は未知のみ起動。
+- **ハルシネーション対策＝相関は証拠で裏づける**。AI が別アラートとの因果を張るときは、共有する具体的証拠（同一の commit/terraform 差分・メトリクス急増・引用）がある場合のみ関連づけ、時間が近いだけの"それっぽい因果"は張らせない。他責（外部起因・例: 決済タイムアウト）を同時発生の別障害で内部原因へ言い換えない＝「関連を見失う」と「でっち上げる」を**両方**避ける（引用の実在照合で偽を落とす思想を、予兆の引用にも調査の相関にも一貫適用）。
 - **学習ループ**。人間の正解フィードバックが類似分類の母集団になり、頻出は既知パターンへ昇格 → 次回は1秒で分類（AI 呼び出し不要）。
 - **調査=read / 修正=write の構造分離**。脆弱性は GitHub Actions 上で AI が実コードを修正し、Trivy 再スキャン＋テスト緑を通って **draft PR**（自動マージなし・人間承認ゲート）。
 - **ドッグフーディング（自己運用ループ）**: このリポジトリ自身の CI（Trivy）の検出が本番の `/ingest/security-scan` に流れ、SECURITY 調査が AI 実修正 → 自リポジトリへの draft PR を起こす＝**監視対象の EC も、監視するエージェント自身も、同じ DevOps ループの中にいる**（`.github/workflows/` の実ワークフローが運用系そのもの。図解 → [architecture.md §6.5](docs/architecture.md#65-devops-ドッグフーディング自己運用ループ)）。
@@ -60,11 +61,11 @@ make test        # ユニットテスト
 make e2e         # E2E
 ```
 
-バックオフィス UI の **DEMO CONSOLE** から障害シナリオを注入できる（[シナリオ一覧](docs/architecture.md#9-デモシナリオ8ボタンリアルさバッジ付き)）。AI 調査を動かすには Gemini 認証（`GOOGLE_GENAI_USE_VERTEXAI=true`＋ADC、または `GEMINI_API_KEY`）が必要。決定的スタブは `AI_INVESTIGATION_STUB=true`。環境変数は [.env.example](.env.example) を参照。
+バックオフィス UI の **DEMO CONSOLE** から障害シナリオを注入できる（[シナリオ一覧](docs/architecture.md#9-デモシナリオ7ボタンリアルさバッジ付き)）。AI 調査を動かすには Gemini 認証（`GOOGLE_GENAI_USE_VERTEXAI=true`＋ADC、または `GEMINI_API_KEY`）が必要。決定的スタブは `AI_INVESTIGATION_STUB=true`。環境変数は [.env.example](.env.example) を参照。
 
-## デモシナリオ（8本）
+## デモシナリオ（7本）
 
-決済タイムアウト（既知・1秒）／DB プール枯渇（類似・confidence）／在庫競合（未知→AI 調査）／インフラ障害（実 Cloud Monitoring 経路＋合成反復用）／脆弱性検知→AI 実修正 draft PR／terraform apply 起因の構成変更障害／アプリコード退行（**実コミットの実 diff を AI が読んで原因特定**）。各シナリオの分類スペクトルと入力のリアルさは [docs/architecture.md §9](docs/architecture.md) に一覧。
+決済タイムアウト（既知・1秒）／DB プール枯渇（類似・confidence）／インフラ障害（実 Cloud Monitoring 経路＋合成反復用）／脆弱性検知→AI 実修正 draft PR／terraform apply 起因の構成変更障害／アプリコード退行（**実コミットの実 diff を AI が読んで原因特定**）。各シナリオの分類スペクトルと入力のリアルさは [docs/architecture.md §9](docs/architecture.md) に一覧。
 
 ## ドキュメント
 
@@ -72,7 +73,7 @@ make e2e         # E2E
 | --- | --- |
 | [docs/architecture.md](docs/architecture.md) | **アーキテクチャ（コード準拠・現状の正）**。全体図・分類/調査/学習フロー・ADK グラフ・デプロイ・API・シナリオ |
 | [docs/steps/](docs/steps/README.md) | 設計書（step 系・経緯と理由）。索引に実装とのドリフト注記あり |
-| [docs/decisions/](docs/decisions/) | 決定記録（例: シナリオ6/7 の自動修正見送り） |
+| [docs/decisions/](docs/decisions/) | 決定記録（例: 構成変更/アプリコード退行シナリオの自動修正見送り） |
 | [docs/steps/step6-final-sprint-strategy.md](docs/steps/step6-final-sprint-strategy.md) | 現役スプリント戦略（予兆ブリーフィング×デモ防御） |
 
 ## ステータス（2026-07-03）

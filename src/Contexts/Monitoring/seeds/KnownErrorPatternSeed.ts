@@ -22,7 +22,7 @@ export const KNOWN_ERROR_PATTERN_SEEDS: KnownErrorPattern[] = [
     suggestedAction: "在庫を補充するか、該当商品を販売停止にしてください。",
     createdAt: new Date("2026-01-01T00:00:01.000Z"),
   }),
-  // INVENTORY_CONCURRENT_CONFLICT はあえて未seed。
-  // デモで「在庫競合」を注入すると既知に一致せず未知分類 → AI（Gemini）が生で調査する経路を見せ、
-  // オペレータが承認すれば新しい既知パターンへ昇格する学習ループを実演するため。
+  // INVENTORY_CONCURRENT_CONFLICT は未seed（在庫競合デモシナリオは廃止済み）。
+  // 楽観ロック＋指数バックオフのリトライは実装済み（ReserveInventoryUseCase）で、AI が生成した
+  // 「楽観ロックを導入せよ」という推奨が実コードと矛盾するため、当該シナリオはデモから外した。
 ];

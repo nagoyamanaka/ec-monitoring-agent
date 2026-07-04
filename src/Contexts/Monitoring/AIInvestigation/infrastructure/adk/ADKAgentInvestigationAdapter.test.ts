@@ -95,7 +95,7 @@ describe("ADKAgentInvestigationAdapter", () => {
   });
 
   it("最終出力が途中切断されたJSONなら fallback でなく部分レポートを回収する（タスク I1）", async () => {
-    // シナリオ7実発生系: 正しい JSON が値文字列の途中で切断されている
+    // アプリコード退行シナリオ実発生系: 正しい JSON が値文字列の途中で切断されている
     const truncated = validJson.slice(0, validJson.indexOf('"DB_CONNECTION_EXHAUSTION"') + 5);
     const logger = new RecordingLogger();
     const adapter = new ADKAgentInvestigationAdapter(

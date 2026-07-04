@@ -51,7 +51,8 @@ describe("DemoDrawer", () => {
     expect(screen.getByText("決済タイムアウト")).toBeInTheDocument();
     // app 枠は 完全一致/類似/未知 の3段。類似（準・既知）シナリオが出る（障害名で表示）。
     expect(screen.getByText("DBコネクションプール枯渇")).toBeInTheDocument();
-    expect(screen.getByText("在庫競合")).toBeInTheDocument();
+    // 未知（AI 調査）群のシナリオも出る。
+    expect(screen.getByText("アプリコード退行")).toBeInTheDocument();
   });
 
   it("シナリオ行を開いてトリガーで triggerScenario を呼ぶ", async () => {

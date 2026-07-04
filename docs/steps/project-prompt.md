@@ -796,6 +796,7 @@ interface StructuredLog {
 - MonitoringドメインはECコンテキストの型を直接importしない（`MonitoringEvent` で変換して受け取る）
 - **検知ソース（EC イベント / Cloud Monitoring / CI）は peer な ingest アダプタで合流する。源固有の型に触れるのは ingest 境界だけ。検知（dedup/相関/閾値発火）は上流の責務＝境界の外**（v19）
 - **重複観測は `MonitoringEvent.dedupKey()` で畳む。同一 dedupKey の未解決 Alert は再分類・再調査せず `occurrenceCount` 加算。被りの主防御は category オーナーシップ、異症状・同一根本原因の相関は AI 調査に委譲しエンジン化しない**（v19）
+- **AI が張る相関（`relatedAlerts`）は「具体的な共有証拠」（同一 commit/terraform 差分・メトリクス急増・引用 id）で裏付けられる場合のみ載せる。時間的近接・もっともらしい機序だけの"推測の因果橋"は禁止（証拠が無ければ空配列）。とりわけ既知パターンで外部要因（他責・例: 決済タイムアウト＝外部決済サービス起因）に分類される障害を、同時発生した別アラートを根拠に自責の内部原因へ再分類しない（直接証拠がある場合を除く）。相関は「精度 vs 再現率」＝ハルシネーションと関連見落としの両にらみで、時間窓等の決定論フィルタは正当な相関まで削るため使わず、判別は証拠グラウンディング（citations の実在照合＝impact.citations と同じ思想）＋推論役（因果の向きの妥当性）で行う**（v21・2026-07-04）
 - `DemoDrawer.tsx` は `/alerts` のレイアウト層にのみ差し込む
 - ApplicationService / CommandHandler は `Logger` interfaceにのみ依存し、GCP固有実装を直接importしない
 - ApplicationServiceのメソッド名は `run()` で統一する（CodelyTV準拠）

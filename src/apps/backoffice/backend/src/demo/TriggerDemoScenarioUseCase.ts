@@ -29,39 +29,37 @@ type ScenarioRecipe = {
 const RECIPES: Record<string, ScenarioRecipe> = {
   "payment-timeout": { label: "決済タイムアウト", paymentMode: "TIMEOUT", inventoryMode: "SUCCESS" },
   "inventory-insufficient": { label: "在庫不足", paymentMode: "SUCCESS", inventoryMode: "INSUFFICIENT_STOCK" },
-  "inventory-conflict": { label: "在庫競合", paymentMode: "SUCCESS", inventoryMode: "CONCURRENT_CONFLICT" },
 };
 
-// 数字エイリアス（UIのシナリオ1/2/3/4/5）も受ける。
-// app 枠は 1=完全一致(既知) / 2=類似(準・既知) / 3=未知 の3段スペクトルにする。
-// 4b は 4（実 Cloud Monitoring 経路）の合成注入版＝デモ反復用（後述）。
+// 数字エイリアス（UIのシナリオ1/2/3/4…）も受ける。
+// app 枠は 1=完全一致(既知) / 2=類似(準・既知) / 3以降=未知 のスペクトルにする。
+// 3b は 3（実 Cloud Monitoring 経路）の合成注入版＝デモ反復用（後述）。
 const ALIASES: Record<string, string> = {
   "1": "payment-timeout",
   "2": "similar-known",
-  "3": "inventory-conflict",
-  "4": "infra-fault",
-  "4b": "infra-fault-synthetic",
-  "5": "security-vuln",
-  "6": "infra-config-change",
-  "7": "appcode-regression",
+  "3": "infra-fault",
+  "3b": "infra-fault-synthetic",
+  "4": "security-vuln",
+  "5": "infra-config-change",
+  "6": "appcode-regression",
 };
 
 // infra-fault は他シナリオと違い「注文の業務失敗」ではなくインフラ級異常の注入なので、
 // payment/inventory のモード設定も注文投入も伴わない（EcDemoGateway.injectInfraFault のみ）。
 const INFRA_FAULT_SCENARIO_ID = "infra-fault";
 
-// infra-fault-synthetic は 4（infra-fault）の「デモ反復用」合成版。
-// 4 は実 CRITICAL ログ→実 Cloud Monitoring 発報（経路B）で真正だが、インシデントが GCP 側に開いたまま
+// infra-fault-synthetic は 3（infra-fault）の「デモ反復用」合成版。
+// 3 は実 CRITICAL ログ→実 Cloud Monitoring 発報（経路B）で真正だが、インシデントが GCP 側に開いたまま
 // 残り（閉じる公開 API が無い）、開いている間は再発火しても新規 webhook が飛ばず started_at も古いまま。
-// そこで scenario 6/5 と同じ「入口だけ合成」で、実 CM が送るのと同型の webhook を
+// そこで scenario 5/4 と同じ「入口だけ合成」で、実 CM が送るのと同型の webhook を
 // CloudMonitoringAlertTranslator→CollectMonitoringEventUseCase に直接通す。
 // → started_at=now の新鮮な Alert が即・確実に立ち、GCP 側にインシデントを残さないのでデモ reset で完全に消える。
-//   eventName/category/severity は 4 と同一（condition_name を実ポリシーと合わせる）ため下流は完全に同じ経路。
+//   eventName/category/severity は 3 と同一（condition_name を実ポリシーと合わせる）ため下流は完全に同じ経路。
 const INFRA_FAULT_SYNTHETIC_SCENARIO_ID = "infra-fault-synthetic";
 
 // 実ポリシー「アプリ CRITICAL ログ検知」の condition（display_name="CRITICAL log entries"）が発火した体の
 // 最小 webhook。translator は eventName=gcp.monitoring.critical_log_entries（slugify 一致）・
-// INFRASTRUCTURE・Critical を導く＝実 CM 発報（scenario 4）と同一の dedupKey/分類になる。
+// INFRASTRUCTURE・Critical を導く＝実 CM 発報（scenario 3）と同一の dedupKey/分類になる。
 function buildInfraFaultSyntheticWebhook(): unknown {
   return {
     incident: {
@@ -172,7 +170,7 @@ function buildInfraConfigChangeWebhook(): unknown {
 // appcode-regression は「テストは通過したアプリコード変更そのものが挙動を退行させた障害」。
 // 検知の入口だけ合成（APPLICATION の MonitoringEvent を直接 ingest 経路に通す）し、原因の実コード差分は
 // demo/regression ブランチに静的に積んだ実コミットに置く（AI が getCommitDiff で本物を引いて分析する）。
-// 4（経路B=GCP依存）と違いローカルでも実 Alert→AI 調査が走る。5/6 と同じ「正直な合成」。
+// 3（経路B=GCP依存）と違いローカルでも実 Alert→AI 調査が走る。4/5 と同じ「正直な合成」。
 const APPCODE_REGRESSION_SCENARIO_ID = "appcode-regression";
 
 // 症状（WHAT）は Alert が運ぶ。原因（WHY）は demo ブランチの実コミット差分が運ぶ＝AI が両者を相関する。
@@ -255,7 +253,7 @@ export class TriggerDemoScenarioUseCase {
     }
 
     if (resolvedId === INFRA_FAULT_SYNTHETIC_SCENARIO_ID) {
-      // 4 と同じ根本原因証跡（直前の Cloud SQL apply）を記録してから、実 CM が送るのと同型の
+      // 3 と同じ根本原因証跡（直前の Cloud SQL apply）を記録してから、実 CM が送るのと同型の
       // CRITICAL ログ発報 webhook を合成入力で流す。GCP 側にインシデントを残さず即・新鮮に再現する。
       await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent());
       const event = CloudMonitoringAlertTranslator.toMonitoringEvent(
