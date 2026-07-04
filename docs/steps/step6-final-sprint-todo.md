@@ -126,7 +126,7 @@ todo実施後に
 ### タスク D2: 認知負荷トリム〔取り: Lisa〕
 
 - [x] 【UI】デモ卓（`ScenarioControls`）のシナリオ単位開示・調査中表示・昇格通知・戻る導線・アラート名日本語化（✅ 12f517e で着地）
-- [ ] realness バッジ／確度スペクトルの説明文を「読む物」から「一目で分かる」へ圧縮（文言短縮・凡例のホバー化など）＝残りはこれのみ
+- [x] realness バッジ／確度スペクトルの説明文を「読む物」から「一目で分かる」へ圧縮（文言短縮・凡例のホバー化など）＝残りはこれのみ（✅ `ScenarioControls`: aiRole/description を各1行へ短縮（4/4b の長文も圧縮・⏱1分ラグと 4b 推奨は温存）、realness 凡例は常時表示を `short` 1行に絞り全文 `note` はバッジホバー（title・cursor-help）へ退避＝正直さの情報は tooltip に残す。全891テスト緑・frontend tsc 緑）
 - 既存の段階開示方針の延長＝新規概念は増やさない
 
 ### タスク D3: ライブ脆さ対策〔取り: David・**最終ピッチ=渋谷ライブ確定で重要度up**〕
@@ -215,6 +215,18 @@ todo実施後に
 - [x] 狭幅（〜480px）でのバッジ縦書き崩れと カード内折返しの調整（✅ AlertCard メタ行を flex-wrap 化＋category チップ/重複バッジに whitespace-nowrap（1文字ずつ縦になる圧縮を根絶）・ドロワー header の category チップも同様・ドロワー幅 `w-[clamp(480px,38vw,480px)]`（常に480px＝狭幅で溢れる）→ `w-full max-w-[480px]`）
 - [x] フォーカスリング/キーボード操作の一貫性（✅ Esc でドロワー閉は既存実装＋既存 RTL テストで固定済みを確認。focus-visible リング（cyan・ring-2）を AlertCard 本体・ドロワー✕・ヘッダ FilterChip・絞り込み解除・再接続ボタンに統一追加＝Tab 巡回で現在地が常に見える）
 - [ ] README 用スクショ・GIF の撮影（E1 完成後の画面で）← **残り。実機起動＋実走が必要なため録画テイク（F8）と同時に人間が撮るのが効率的**
+
+### タスク E8: アラート詳細 AI レポートの視覚再設計 〔P0・設計済み・実装待ち〕
+
+**問題（実機スクショ 2026-07-04）**: 詳細ページの報告書は情報粒度・カテゴリは良いが、全セクションが同じ視覚密度のテキスト縦積みで「読む物」。証拠がどこから流入し結論へ収束したかの*構造*が文でしか表現されていない。調査ステップは生エージェント名の ol リスト・算定根拠は生ログチップの横並び。
+
+- 設計: `docs/steps/step6-report-visual-design.md`（審査員5レンズ→原則、提案A〜E、棄却案、実装計画）
+- [x] (A) 証拠フローダイアグラム（metrics.evidenceCounts→SVG手組み・実測のみ・G1 の⏱1行を吸収）〔P0〕（✅ `evidenceFlowModel` domain 純関数（>0ソースのみ・太さは離散3段階・ariaSummary 1文）＋`EvidenceFlowDiagram`（流入源→AI調査→結論ノード・結論に ConfidenceGauge＋キャリブレーション注記を合流・狭幅は▼で縦積み）。fallback/旧データ/0件は null→⏱1行へ劣化。図が描けるとき ⏱1行は図ヘッダに吸収。**AI調査ノードはホバー/フォーカスで7エージェント台帳**＝「✓＝この調査のステップに登場」（`mentionedAgents`＝ステップ文の生エージェント名から決定論導出・言及ゼロならハイライト無し台帳・読み上げは sr-only 1行で代替。常時表示は図の邪魔＝D2 と同じ段階開示））
+- [x] (B) 調査ステップの縦タイムライン化＋エージェント名の人間語化（時刻は捏造しない・順序のみ）〔P0〕（✅ `InvestigationTimeline`（接続線＋ノード・full のみ）＋`humanizeAgentNames`（INVESTIGATION_AGENTS 台帳へ写像・不一致は原文）。fallback の証拠リンク表示（E3）はタイムライン化しない）
+- [x] (C) 結論ファースト再配置（fault/scale をヒーローへ昇格・summary 射影はノータッチ）〔P0〕（✅ AI推定パターン直下に FaultBadge＋障害規模1行（ImpactPanel と共用の FaultBadge を export）・推奨アクションを調査ステップより先に・summary は max-w-prose）
+- [x] (D) 引用チップの折りたたみ＋ソース種別レーン（F8 引用レーンと同じ視覚言語）〔P1〕（✅ `groupCitations`（プレフィックス→観測データ cyan／変更履歴 amber／過去事例 emerald／その他・語り順固定）＋`CitationChips`（既定は「n件」トグルのみ・展開でレーン表示・全文 row 化で mono の可読性改善）。ImpactPanel 算定根拠／EscalationPanel 添付証拠／RemediationReviewPanel 判定根拠の3箇所を置換）
+- [x] (E) 余白・見出し階層の微調整〔P1〕（✅ full は space-y-5・summary 射影は現状維持）
+- backend 変更ゼロ・frontend 射影のみ。**F8 録画前に A〜C 着地が最大価値**。merge 条件＝全緑＋RTL 同時更新（✅ 全908テスト緑・frontend tsc 緑・UT/RTL 15件追加。**実機確認済み**: ローカル実スタック＋Playwright で 在庫引当の失敗（metrics 付き実レポート）の詳細ページを 1280px/420px で実描画・引用レーン展開も確認）
 
 > **実装順（推奨）**: E2バグ修正＋E4（半日相当・審査員の初撃体験）→ E1(a)（wow の土台）→ E3 → E1(b)（本線タップ・慎重に）→ E5〜E7。各タスク独立コミット・全緑維持。
 

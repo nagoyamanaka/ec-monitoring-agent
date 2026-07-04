@@ -1,4 +1,5 @@
 import type { EscalationView } from "../../domain/InvestigationReportView";
+import { CitationChips } from "./CitationChips";
 
 export interface EscalationPanelProps {
   escalation: EscalationView;
@@ -57,23 +58,8 @@ export function EscalationPanel({ escalation }: EscalationPanelProps) {
         </div>
       </div>
 
-      {escalation.evidenceBundle.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-            添付証拠
-          </p>
-          <ul className="flex flex-wrap gap-1.5">
-            {escalation.evidenceBundle.map((evidence, i) => (
-              <li
-                key={i}
-                className="rounded bg-slate-800/70 px-1.5 py-0.5 font-mono text-[11px] text-slate-300 ring-1 ring-inset ring-slate-700/60"
-              >
-                {evidence}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* 生ログ引用は既定折りたたみ＋種別レーン（タスク E8-D・ImpactPanel と同じ畳み方）。 */}
+      <CitationChips heading="添付証拠" citations={escalation.evidenceBundle} />
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { makeAlert, makeReport } from "../../test-support/alertFixture";
@@ -172,6 +173,66 @@ describe("AlertCardExpanded", () => {
     expect(screen.getByText(/証拠 27 件/)).toBeInTheDocument();
   });
 
+  // タスク E8: 証拠フローダイアグラム・調査タイムライン（報告用フルの視覚再設計）。
+  describe("証拠フロー・タイムライン（タスク E8）", () => {
+    const metricsReport = makeReport({
+      confidence: 0.7,
+      metrics: {
+        elapsedMs: 143_000,
+        evidenceCounts: {
+          logs: 4,
+          metrics: 0,
+          terraformChanges: 0,
+          commits: 6,
+          similarIncidents: 5,
+        },
+      },
+    });
+
+    it("full＋実測メトリクスでは ⏱1行の代わりに証拠フローダイアグラムを出す", () => {
+      render(
+        <AlertCardExpanded
+          variant="full"
+          alert={makeAlert({ report: metricsReport })}
+        />,
+      );
+      expect(screen.getByLabelText("証拠の流れ")).toBeInTheDocument();
+      expect(screen.getByText("Cloud Logging")).toBeInTheDocument();
+      expect(screen.getByText("類似事例DB")).toBeInTheDocument();
+      // G1 の ⏱1行は図に吸収（同じ実測を二度出さない）
+      expect(screen.queryByText(/を横断し、/)).not.toBeInTheDocument();
+    });
+
+    it("summary 射影では図を出さず ⏱1行のまま（射影境界ノータッチ）", () => {
+      render(
+        <AlertCardExpanded
+          variant="summary"
+          alert={makeAlert({ report: metricsReport })}
+        />,
+      );
+      expect(screen.queryByLabelText("証拠の流れ")).not.toBeInTheDocument();
+      expect(screen.getByText(/を横断し、/)).toBeInTheDocument();
+    });
+
+    it("調査ステップの生エージェント名はタイムラインで人間語化される（タスク E8-B）", () => {
+      render(
+        <AlertCardExpanded
+          variant="full"
+          alert={makeAlert({
+            report: makeReport({
+              investigationSteps: [
+                { text: "root_cause_analystで根本原因を分析" },
+              ],
+            }),
+          })}
+        />,
+      );
+      expect(
+        screen.getByText("RootCauseAnalystで根本原因を分析"),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("metrics 無し（旧データ）・fallback では働きの明細を出さない", () => {
     const { rerender } = render(
       <AlertCardExpanded alert={makeAlert({ report: makeReport() })} />,
@@ -299,13 +360,12 @@ describe("AlertCardExpanded", () => {
           alert={makeAlert({ report: fullReport })}
         />,
       );
-      // impact 全項目
+      // impact 全項目（fault/scale はヒーロー行にも昇格＝2箇所・タスク E8-C）
       expect(screen.getByText("影響評価")).toBeInTheDocument();
-      expect(screen.getByText(/他責/)).toBeInTheDocument();
+      expect(screen.getAllByText(/他責/)).toHaveLength(2);
       expect(screen.getByText("決済導線の一部ユーザ")).toBeInTheDocument();
-      expect(screen.getByText("約1,200件・15分継続")).toBeInTheDocument();
+      expect(screen.getAllByText("約1,200件・15分継続")).toHaveLength(2);
       expect(screen.getByText("payment-api")).toBeInTheDocument();
-      expect(screen.getByText("inc:past-42")).toBeInTheDocument();
       // escalation
       expect(screen.getByText("エスカレーション草案")).toBeInTheDocument();
       expect(screen.getByText("external-vendor-liaison")).toBeInTheDocument();
@@ -318,6 +378,27 @@ describe("AlertCardExpanded", () => {
       expect(
         screen.getByRole("link", { name: /レビュー対象 PR/ }),
       ).toHaveAttribute("href", "https://github.com/acme/repo/pull/7");
+    });
+
+    it("引用は既定折りたたみ（件数のみ）・クリックで種別レーン展開（タスク E8-D）", async () => {
+      render(
+        <AlertCardExpanded
+          variant="full"
+          alert={makeAlert({ report: fullReport })}
+        />,
+      );
+      // 折りたたみ中: 件数トグルは見えるが生引用チップは出さない
+      const toggle = screen.getByRole("button", {
+        name: /算定根拠（引用）.*2.*件/,
+      });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText("inc:past-42")).not.toBeInTheDocument();
+
+      await userEvent.click(toggle);
+      // 展開後: 種別レーン（過去事例）にグルーピングされて出る
+      expect(screen.getByText("inc:past-42")).toBeInTheDocument();
+      expect(screen.getByText("log:err-503")).toBeInTheDocument();
+      expect(screen.getByText("過去事例")).toBeInTheDocument();
     });
 
     it("impact/escalation/review の無い旧 Alert でも両 variant で壊れない", () => {
