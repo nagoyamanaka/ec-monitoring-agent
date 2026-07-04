@@ -111,6 +111,20 @@ todo実施後に
 
 - ~~新規コードは書かない。§3.2 の別ドメイン seed を追加し汎用性を示す。~~ 「同一機構で源を足すだけ」の汎用性は ProtoPedia ストーリー／アーキ図の `ForecastSignalSource[]` 継ぎ目で**語りで**示す。
 
+### タスク F10: 予兆からの「次の一手」（推奨アクション1行 ＋ 橋渡しCTA）〔設計確定・実装待ち〕
+
+> **背景（2026-07-04 設計相談）**: 予兆ページは予報＋根拠（引用）を出すが「読んで終わり」感がある。reactive（/alerts）には **承認**という閉じるアクションがあるのに予兆には対の一手が無い＝物足りなさの正体。**ただし mutate（plan の適用保留・PR へレビュー要求・スケジュール調整）は足さない**——(1) write-zero は意図的な安全特性（全 Gateway read-only・F6）で無人デプロイURL審査での本番書き込みは David/Sarah の信頼を一発で失う、(2) 予兆の真の防御アクションは *システムの外*（GitHub/Terraform 側・実行主体は人間）にあり、ツール内ボタンは「偽物の演出」か「本当に危険」の二択にしかならない、(3) 締切（人間6時間は F8 に全振り）。→ 足すのは **B類（判断を助ける／物語を繋ぐ）のみ**。
+
+- [ ] **① 推奨アクション1行（助言・副作用ゼロ）**: citations と同じ「AI生成→防御的正規化→純表示」に乗せる
+  - contract/domain: `RiskItem` に `recommendedAction?: string`（optional・後方互換）。`ForecastContract.ts` / `RiskForecast.ts`
+  - `GeminiForecastAdapter`: プロンプトに「各リスクに *推奨される先手* を1文」追加。safeParse で trim・空はドロップ（citations と同扱い）。JSON を締める文言も足す
+  - `StubLLMClient`: 固定予報に `recommendedAction` を1文追加（`forecast.e2e.test.ts` を緑に保つ）
+  - `ForecastView` / `RiskCard`: `reasoning` の下に 🛡 付き1行。**reactive の推奨アクションと同じ視覚言語**。「システムがやる」でなく「人間が外で打つ先手の提案」と読める文言・スタイル（実行ボタンにはしない＝write-zero 維持）
+  - 正直さ: reasoning と同レベルの助言テキスト（reactive `recommendedActions` と同じ honesty）
+- [ ] **② 橋渡しCTA（純ナビゲーション・backend ゼロ）**: `BriefingBody` 末尾に**ページ単位で1個**（per-risk にしない＝未発火リスクに対応する具体 alert がまだ無くリンク先を作れない）。risks がある時だけ表示。文言例「この予兆が**実際に発火したら** → 分類 → AI調査 → 承認 が同じ証拠で対応します」＋ `/alerts` への react-router Link。**D1 フック「では実際に起きたら?」をUI上で繋ぐだけ**（新機構ゼロ）
+- 【留意】F8 録画依存: ① は LLM 出力に1フィールド増えるので stub/seed 同時更新が必須。実 Gemini での「推奨アクションも安定して出るか」確認が人間タスク（F8 §103）に1項目増える
+- 【却下記録】承認相当の状態アクション（確認済み/対応中のトリアージ状態）は write＋永続化＋状態管理が要り締切と critical path 外＝不採用。予兆の「アクション」はシステム外の人間判断という設計思想を貫く
+
 ---
 
 ## B. デモ防御（今の強みを守る）〔本スプリント〕
