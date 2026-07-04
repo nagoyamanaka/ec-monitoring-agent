@@ -145,7 +145,45 @@ flowchart LR
 ```
 
 - EDA 常駐 Subscriber（RabbitMQ）はステートレスな Cloud Run と相性が悪いため GCE に置く折衷。IaC は Terraform（`infra/terraform/`・WIF で CI から plan/apply）。
-- **ドッグフーディング**: このリポジトリ自身の CI（Trivy）が検出した脆弱性を本番の `/ingest/security-scan` に送る＝監視エージェント自身が同じ DevOps ループの中にいる。
+- **ドッグフーディング**: このリポジトリ自身の CI（Trivy）が検出した脆弱性を本番の `/ingest/security-scan` に送る＝監視エージェント自身が同じ DevOps ループの中にいる（詳細は §6.5）。
+
+## 6.5 DevOps ドッグフーディング（自己運用ループ）
+
+> 観点「実運用を見据えた DevOps プロセス」。**監視対象の EC も、監視するエージェント自身も、同じ DevOps ループの中にいる**——このプロダクトは自分自身を CI/CD で運用し、自分自身の脆弱性を自分の検知パイプラインで拾い、自分自身のコードを AI が修正して自分のリポジトリに PR を出す。デモ用の飾りではなく、`.github/workflows/` の実ワークフローがそのままプロダクトの運用系である。
+
+```mermaid
+flowchart TB
+  subgraph repo["このリポジトリ = 監視エージェント本体（自己運用の対象）"]
+    SRC["アプリ資材 src/<br/>(EC + backoffice)"]
+    IAC["インフラ資材<br/>infra/terraform/"]
+  end
+
+  subgraph gha["GitHub Actions（自リポジトリの DevOps パイプライン）"]
+    APP["app.yml<br/>typecheck/UT/E2E → build&push → deploy"]
+    TF["terraform.yml<br/>plan(PR) / apply(main・承認ゲート)<br/>state lock 直列化済み"]
+    TRIVY["app.yml: Trivy fs scan<br/>HIGH/CRITICAL 抽出→整形"]
+    REM["ai-remediation.yml<br/>AI が実修正→テストゲート→draft PR"]
+  end
+
+  subgraph prod["本番（Cloud Run + GCE）＝ 監視エージェント稼働"]
+    AGENT["監視エージェント<br/>/ingest → 分類 → ADK 調査 → レビュー"]
+    ECPROD["監視対象の EC 本番"]
+  end
+
+  SRC --> APP --> prod
+  IAC --> TF --> prod
+  SRC --> TRIVY -->|"POST /ingest/security-scan<br/>(実 ingest・シナリオ5 の実経路)"| AGENT
+  AGENT -->|"SECURITY 調査 → repository_dispatch"| REM
+  REM -->|"draft PR（人間承認ゲート）"| SRC
+  AGENT -.監視.-> ECPROD
+```
+
+- **① 自己デプロイ**（`app.yml`）: `main` push で typecheck/UT/E2E → image build&push → Cloud Run（frontend/edge）更新＋GCE backbone 再起動。エージェント本体の CD がプロダクトの CD そのもの。
+- **② 自己 IaC**（`terraform.yml`）: `plan` は PR・`apply` は `main`（`environment: prod` 承認ゲート）。PR とマージの plan/apply が同一 tfstate ロックを奪い合うレースを `concurrency` で直列化済み（1回目失敗→rerun 成功の既知事象を解消）。
+- **③ 自己検知（ループの閉じ）**（`app.yml` の `security-scan` job）: Trivy が**自リポジトリの依存**を fs スキャン→HIGH/CRITICAL を代表 CVE に昇格し全件同梱→本番 `/ingest/security-scan` に POST。**検知入力が外部イベントではなく自分自身の CI から来る**＝ドッグフーディングの核。これが[シナリオ5](#9-デモシナリオ8ボタンリアルさバッジ付き)の実経路。
+- **④ 自己修復**（`ai-remediation.yml`）: SECURITY 調査が `repository_dispatch` を発火→ランナー上で AI が実コードを修正→Trivy 再スキャン＋テスト緑になるまで自己修正（`REMEDIATION_MAX_ATTEMPTS` で打ち切り＝課金暴走の安全弁）→**自リポジトリに draft PR**（自動マージなし・人間承認）。マージされれば ① に戻り再デプロイ＝**完全な自己参照 DevOps ループ**。
+
+> **正直さの境界**: ①②③④は実ワークフロー。ただしデモ卓のシナリオ5は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
 
 ## 7. コード構成（DDD + Clean Architecture + CQRS + EDA）
 
@@ -169,33 +207,33 @@ src/
 
 ## 8. 主要 API（backoffice）
 
-| エンドポイント | 役割 |
-| --- | --- |
+| エンドポイント                    | 役割                                                                                                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /alerts` / `GET /alerts/:id` | 一覧・詳細（一覧は SSE `GET /stream` でライブ更新。名前付きイベント: `remediation`＝リメディ確定、`investigation-progress`＝ADK 調査の実行イベント中継） |
-| `PATCH /alerts/:id/feedback` | 正解/不正解フィードバック（正解→SimilarIncident 蓄積→閾値で自動昇格） |
-| `POST /alerts/:id/promote` | 手動即時昇格（結晶化） |
-| `POST /alerts/:id/report` | 既知/類似へのオンデマンド AI レポート生成（202→SSE） |
-| `POST /alerts/:id/reinvestigate` | オペレーターノート付き再調査 |
-| `POST /ingest/cloud-monitoring` | Cloud Monitoring webhook（Basic 認証） |
-| `POST /ingest/security-scan` | CI/Trivy 検知（`INGEST_TOKEN`） |
-| `POST /ingest/remediation-result` | AI リメディ CI の結果 callback |
-| `GET /analytics` | 承認済みアラート等の集計ビュー |
-| `POST /demo/scenario` ほか | デモ操作卓（`DEMO_ENABLED` 配下） |
-| `GET /forecast` | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える） |
-| `POST /forecast` | 予報の生成（`FORECAST_ENABLED` かつ `DEMO_ENABLED` 配下・Gemini 呼び出し・horizon は `FORECAST_HORIZON` 固定） |
+| `PATCH /alerts/:id/feedback`      | 正解/不正解フィードバック（正解→SimilarIncident 蓄積→閾値で自動昇格）                                                                                    |
+| `POST /alerts/:id/promote`        | 手動即時昇格（結晶化）                                                                                                                                   |
+| `POST /alerts/:id/report`         | 既知/類似へのオンデマンド AI レポート生成（202→SSE）                                                                                                     |
+| `POST /alerts/:id/reinvestigate`  | オペレーターノート付き再調査                                                                                                                             |
+| `POST /ingest/cloud-monitoring`   | Cloud Monitoring webhook（Basic 認証）                                                                                                                   |
+| `POST /ingest/security-scan`      | CI/Trivy 検知（`INGEST_TOKEN`）                                                                                                                          |
+| `POST /ingest/remediation-result` | AI リメディ CI の結果 callback                                                                                                                           |
+| `GET /analytics`                  | 承認済みアラート等の集計ビュー                                                                                                                           |
+| `POST /demo/scenario` ほか        | デモ操作卓（`DEMO_ENABLED` 配下）                                                                                                                        |
+| `GET /forecast`                   | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）                               |
+| `POST /forecast`                  | 予報の生成（`FORECAST_ENABLED` かつ `DEMO_ENABLED` 配下・Gemini 呼び出し・horizon は `FORECAST_HORIZON` 固定）                                           |
 
 ## 9. デモシナリオ（8ボタン・リアルさバッジ付き）
 
-| # | シナリオ | 分類スペクトル | 入力のリアルさ |
-| --- | --- | --- | --- |
-| 1 | 決済タイムアウト | 完全一致（既知・1秒） | 実トリガ（実注文投入） |
-| 2 | DBコネクションプール枯渇 | 類似（準・既知・confidence） | 実トリガ |
-| 3 | 在庫競合 | 未知 → ADK 調査 | 実トリガ |
-| 4 | インフラ障害 | 未知 | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ） |
-| 4b | インフラ障害（反復用） | 未知 | 合成入力（入口のみ合成・パイプラインは実経路） |
-| 5 | 脆弱性検知 → 修正 draft PR | SECURITY | 合成入力（実 CI と同一経路） |
-| 6 | 構成変更障害（terraform apply 起因） | 未知 | 合成入力（構造化差分は実機構） |
-| 7 | アプリコード退行 | 未知 | 合成入力（**コミット・diff・修正PRは実物**・demo隔離ブランチ） |
+| #   | シナリオ                             | 分類スペクトル               | 入力のリアルさ                                                 |
+| --- | ------------------------------------ | ---------------------------- | -------------------------------------------------------------- |
+| 1   | 決済タイムアウト                     | 完全一致（既知・1秒）        | 実トリガ（実注文投入）                                         |
+| 2   | DBコネクションプール枯渇             | 類似（準・既知・confidence） | 実トリガ                                                       |
+| 3   | 在庫競合                             | 未知 → ADK 調査              | 実トリガ                                                       |
+| 4   | インフラ障害                         | 未知                         | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ）           |
+| 4b  | インフラ障害（反復用）               | 未知                         | 合成入力（入口のみ合成・パイプラインは実経路）                 |
+| 5   | 脆弱性検知 → 修正 draft PR           | SECURITY                     | 合成入力（実 CI と同一経路）                                   |
+| 6   | 構成変更障害（terraform apply 起因） | 未知                         | 合成入力（構造化差分は実機構）                                 |
+| 7   | アプリコード退行                     | 未知                         | 合成入力（**コミット・diff・修正PRは実物**・demo隔離ブランチ） |
 
 **正直さの原則**: 合成入力は UI に amber バッジで明示。エンドポイントの無い偽ボタンは作らない。
 
