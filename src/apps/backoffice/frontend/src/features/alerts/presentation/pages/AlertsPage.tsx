@@ -40,6 +40,7 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
     streamStatus,
     lastUpdatedAt,
     lastEvent,
+    lastIncomingAlert,
     refreshAlert,
     refreshAlerts,
     reconnectStream,
@@ -201,6 +202,7 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
             api={demoApi}
             onAfterReset={refreshAlerts}
             refreshKey={lastUpdatedAt?.getTime() ?? null}
+            lastIncomingAlert={lastIncomingAlert}
           />
         }
       >

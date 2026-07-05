@@ -30,6 +30,11 @@ export type UseAlertsResult = {
   readonly lastUpdatedAt: Date | null;
   /** 最後に届いた SSE イベントの種別（「アラート受信」等）。ライブ表示に一言添える。 */
   readonly lastEvent: LastStreamEvent | null;
+  /**
+   * 最後に SSE で受信したアラート（新規・更新）。参照は受信ごとに変わる（remediation では変わらない）。
+   * デモの「検知待ち」バナーが、待った当のアラート（category 一致）の着弾で畳むために読む。
+   */
+  readonly lastIncomingAlert: AlertView | null;
   /** 1 件を再取得して一覧へマージする。フィードバック送信後の即時反映に使う（SSE push が無いため）。 */
   readonly refreshAlert: (id: string) => Promise<void>;
   /** 全件を再取得して一覧を置き換える。デモリセット後など全件変わる操作の後に使う。 */
@@ -75,6 +80,9 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
   const [retrying, setRetrying] = useState(false);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("connecting");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [lastIncomingAlert, setLastIncomingAlert] = useState<AlertView | null>(
+    null,
+  );
   const [lastEvent, setLastEvent] = useState<LastStreamEvent | null>(null);
   // 「受信＝新規」と「更新＝既存の置換」をイベントラベルで区別するための既知 id 集合。
   // alerts state の写し（描画後に追随）。ラベル用途なので一瞬の遅れは許容する。
@@ -157,6 +165,8 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
       });
       setAlerts((prev) => mergeAlert(prev, incoming));
       setLastUpdatedAt(new Date());
+      // 受信ごとに参照を更新（デモの検知待ちが category 一致の着弾で畳むために読む）。
+      setLastIncomingAlert(incoming);
     },
     (s) => setStreamStatus(s),
     (remediation) => {
@@ -203,6 +213,7 @@ export function useAlerts(api: AlertsApi, stream: AlertStream): UseAlertsResult 
     streamStatus,
     lastUpdatedAt,
     lastEvent,
+    lastIncomingAlert,
     refreshAlert,
     refreshAlerts,
     reconnectStream,

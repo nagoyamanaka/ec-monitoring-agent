@@ -15,6 +15,12 @@ export interface DemoDrawerProps {
    * （useAlerts の lastUpdatedAt）を渡して件数を追随させる。
    */
   refreshKey?: number | null;
+  /**
+   * 最後に SSE で受信したアラート（category だけ読む・受信ごとに参照が変わる）。
+   * 「検知待ち」バナーを、待った当のアラート（pendingDetection.matchCategory 一致）の
+   * 着弾でのみ畳むために使う。remediation 等では参照が変わらないので誤クリアしない。
+   */
+  lastIncomingAlert?: { readonly category: string } | null;
 }
 
 /**
@@ -22,16 +28,23 @@ export interface DemoDrawerProps {
  * DEMO_ENABLED=false の本番では /demo/status が 404 → available=false で**何も描画しない**。
  * シナリオ注入→一覧に SSE で障害が流れる、という「デモの舞台裏の操作卓」。
  */
-export function DemoDrawer({ api, onAfterReset, refreshKey }: DemoDrawerProps) {
+export function DemoDrawer({
+  api,
+  onAfterReset,
+  refreshKey,
+  lastIncomingAlert,
+}: DemoDrawerProps) {
   const {
     available,
     loading,
     status,
     error,
     busy,
+    pendingDetection,
     triggerScenario,
     reset,
     refresh,
+    clearPendingDetection,
   } = useDemoControls(api, { onAfterReset });
 
   // SSE 着弾（refreshKey 変化）で件数を追随。初回はフック側の初期取得に任せる。
@@ -44,6 +57,31 @@ export function DemoDrawer({ api, onAfterReset, refreshKey }: DemoDrawerProps) {
     if (refreshKey == null) return;
     void refresh();
   }, [refreshKey, refresh]);
+
+  // 「検知待ち」を、待った当のアラートの着弾でだけ畳む（当てずっぽうで閉じない）。
+  // 待機開始時点の lastIncomingAlert を snapshot し、その後に別参照の受信が来て、かつ
+  // category が matchCategory と一致したときにのみ閉じる。lastIncomingAlert は remediation では
+  // 参照が変わらないので誤クリアしない。matchCategory 未指定なら最初の受信で閉じる（緩い）。
+  const pendingStartIncomingRef = useRef<{ category: string } | null>(null);
+  const wasPendingRef = useRef(false);
+  useEffect(() => {
+    const isPending = pendingDetection !== null;
+    if (isPending && !wasPendingRef.current) {
+      // 待機開始: この瞬間の受信を基準にする（これ以前の着弾では閉じない）。
+      pendingStartIncomingRef.current = lastIncomingAlert ?? null;
+    } else if (
+      isPending &&
+      lastIncomingAlert != null &&
+      lastIncomingAlert !== pendingStartIncomingRef.current
+    ) {
+      const want = pendingDetection?.matchCategory;
+      if (want == null || lastIncomingAlert.category === want) {
+        // 開始後に「当の category」の新規受信が来た＝アラート着弾。
+        clearPendingDetection();
+      }
+    }
+    wasPendingRef.current = isPending;
+  }, [pendingDetection, lastIncomingAlert, clearPendingDetection]);
 
   // デモ無効（本番）なら丸ごと出さない。
   if (!available) return null;
@@ -60,7 +98,12 @@ export function DemoDrawer({ api, onAfterReset, refreshKey }: DemoDrawerProps) {
       </div>
 
       <SystemStatus status={status} loading={loading} />
-      <ScenarioControls busy={busy} onTrigger={triggerScenario} />
+      <ScenarioControls
+        busy={busy}
+        onTrigger={triggerScenario}
+        pendingDetection={pendingDetection}
+        onDismissPending={clearPendingDetection}
+      />
 
       <div className="space-y-2 border-t border-slate-700/50 pt-3">
         <button

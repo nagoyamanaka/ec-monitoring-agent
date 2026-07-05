@@ -11,6 +11,8 @@ import {
 import { ClassificationRuleKind } from "../../domain/classification/ClassificationRuleKind.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../../../Shared/domain/MonitoringEventCategory.js";
+import { InvestigationReport } from "../../domain/InvestigationReport.js";
+import { ReviewStatus } from "../../domain/ReviewStatus.js";
 
 let seq = 0;
 const nextId = () =>
@@ -41,6 +43,21 @@ const makeKnownClassification = (): KnownAlertClassification => ({
 
 const makeUnknownAlert = () =>
   Alert.createAsUnknown({ id: new AlertId(nextId()), monitoringEvent: makeEvent() });
+
+// LLM 出力の途中切断→salvage を再現: summary は回収できたが suggestedPatternName に
+// 到達する前に切れて "" に丸められた、isFallback=false の部分レポート（シナリオ4で頻発）。
+const makeSalvagedReport = () =>
+  new InvestigationReport({
+    summary: "脆弱性を検出（部分回収）",
+    confidence: 0.8,
+    severity: AlertSeverity.critical(),
+    investigationSteps: [],
+    suggestedActions: [],
+    suggestedPatternName: "", // ← 切断で欠落
+    reviewStatus: ReviewStatus.pendingReview(),
+    investigatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    isFallback: false,
+  });
 
 const makeKnownAlert = () =>
   Alert.createFromKnownPattern({
@@ -120,5 +137,19 @@ describe("GetAnalyticsUseCase", () => {
     expect(summary.patternName).toBe("PAYMENT_TIMEOUT");
     expect(summary.operatorNote).toBe("既知どおり");
     expect(summary.category).toBe("APPLICATION");
+  });
+
+  it("空の suggestedPatternName（salvage 欠落）は patternName を null に畳む", async () => {
+    // シナリオ4: 途中切断で推定パターン名が欠落した未知アラートを承認クローズしたケース。
+    const salvaged = makeUnknownAlert()
+      .attachInvestigationReport(makeSalvagedReport())
+      .submitFeedback({ isCorrect: true });
+    await alertRepo.save(salvaged);
+
+    const response = await useCase.run();
+
+    expect(response.approvedAlerts).toHaveLength(1);
+    // "" のまま漏らすと UI が「AI推定: 」の後を空欄で描く。null に畳めば placeholder に倒せる。
+    expect(response.approvedAlerts[0].patternName).toBeNull();
   });
 });

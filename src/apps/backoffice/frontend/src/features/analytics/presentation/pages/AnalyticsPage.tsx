@@ -249,7 +249,11 @@ function ApprovedAlertsSection({
                         ? "既知: "
                         : "AI推定: "}
                     </span>
-                    {alert.patternName ?? "（パターン未特定）"}
+                    {/* patternName は空文字で届き得る（salvage 由来の推定パターン名欠落）。
+                        `??` は空文字を捕まえないので trim して placeholder に倒す。 */}
+                    {alert.patternName?.trim()
+                      ? alert.patternName
+                      : "（パターン未特定）"}
                     {alert.operatorNote ? ` — ${alert.operatorNote}` : ""}
                   </p>
                 </div>
