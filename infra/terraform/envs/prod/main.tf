@@ -74,6 +74,12 @@ module "cloud_run" {
     FORECAST_ENABLED = "true"
     FORECAST_HORIZON = "今週末"
     DEMO_ENABLED     = "true"
+    # 予報生成（POST /forecast）の Gemini は edge プロセス内で呼ぶ。このフラグが無いと
+    # GeminiLLMClient が GEMINI_API_KEY=""（未設定）で AI Studio 経路に落ち、403
+    # PERMISSION_DENIED → fallback 空予報になる（worker は compose.prod で true 済み）。
+    # 認証は edge SA の ADC（roles/aiplatform.user 付与済み）。
+    GOOGLE_GENAI_USE_VERTEXAI = "true"
+    GOOGLE_CLOUD_LOCATION     = "asia-northeast1"
   }
 
   depends_on = [module.bootstrap]
