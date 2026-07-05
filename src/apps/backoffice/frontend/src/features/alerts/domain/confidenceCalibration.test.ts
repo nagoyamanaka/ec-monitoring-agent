@@ -14,6 +14,15 @@ describe("calibrationNote", () => {
     );
   });
 
+  it("実在 CVE 引用（verifiable_cve）を日本語ラベルで出す", () => {
+    const note = calibrationNote(
+      { signals: ["verifiable_cve"], cap: 0.75, original: 0.95 },
+      0.75,
+    );
+
+    expect(note.basis).toBe("裏付け: 実在 CVE 引用 ─ 確信度上限 75%");
+  });
+
   it("裏付けゼロは「証拠なし」と正直に言う", () => {
     const note = calibrationNote({ signals: [], cap: 0.4, original: 0.9 }, 0.4);
 

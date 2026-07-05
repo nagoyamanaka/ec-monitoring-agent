@@ -38,6 +38,7 @@ function toTerraformDiff(change: AppliedInfraChange): TerraformDiff {
     resourceChanges: change.resourceChanges,
     appliedAt: change.appliedAt.toISOString(),
     ...(change.commitSha ? { commitSha: change.commitSha } : {}),
+    ...(change.url ? { url: change.url } : {}),
     changedResources: change.resourceChanges.map((r) => r.address),
     summary: change.summary,
   };

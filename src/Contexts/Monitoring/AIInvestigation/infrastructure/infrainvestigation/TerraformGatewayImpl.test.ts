@@ -39,7 +39,13 @@ describe("TerraformGatewayImpl", () => {
   it("窓内で最新の apply を採用し、address を changedResources に導出する", async () => {
     const store = new InMemoryAppliedInfraChangeStore();
     await store.record(change(new Date("2026-01-01T00:01:00Z"), { summary: "古い" }));
-    await store.record(change(new Date("2026-01-01T00:05:00Z"), { summary: "新しい", commitSha: "abc1234" }));
+    await store.record(
+      change(new Date("2026-01-01T00:05:00Z"), {
+        summary: "新しい",
+        commitSha: "abc1234",
+        url: "https://github.com/o/r/pull/30",
+      }),
+    );
     const gw = new TerraformGatewayImpl(store);
 
     const diff = await gw.getAppliedDiff({ since: new Date("2026-01-01T00:00:00Z") });
@@ -47,6 +53,8 @@ describe("TerraformGatewayImpl", () => {
     expect(diff?.summary).toBe("新しい");
     expect(diff?.appliedAt).toBe("2026-01-01T00:05:00.000Z");
     expect(diff?.commitSha).toBe("abc1234");
+    // 由来変更の Web リンク（実在 PR）は診断証拠の原典として透過する。
+    expect(diff?.url).toBe("https://github.com/o/r/pull/30");
     expect(diff?.changedResources).toEqual(["google_sql_database_instance.main"]);
     expect(diff?.resourceChanges[0].attributeDeltas[0]).toEqual({
       key: "max_connections",

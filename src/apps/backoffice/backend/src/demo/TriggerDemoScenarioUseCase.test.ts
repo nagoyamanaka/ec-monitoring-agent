@@ -72,12 +72,30 @@ describe("TriggerDemoScenarioUseCase", () => {
     expect(store.record).toHaveBeenCalledTimes(1);
     const recorded = (store.record as ReturnType<typeof vi.fn>).mock.calls[0][0] as AppliedInfraChange;
     expect(recorded.resourceChanges[0].address).toBe("google_sql_database_instance.main");
+    // 由来 PR URL 未設定なら url は付けない（合成 sha からリンクを組み立てて 404 を作らない）。
+    expect(recorded.url).toBeUndefined();
 
     // ② 合成イベントが実 ingest 経路へ流れ、INFRASTRUCTURE 分類で調査が terraform 差分を収集できる。
     expect(collect.run).toHaveBeenCalledTimes(1);
     const event = (collect.run as ReturnType<typeof vi.fn>).mock.calls[0][0] as MonitoringEvent;
     expect(event.category.value).toBe("INFRASTRUCTURE");
     expect(event.isAlertable()).toBe(true);
+  });
+
+  it("infra-config-change は設定された実在 PR URL を apply 差分に添える（証拠の原典リンク）", async () => {
+    const store = fakeInfraStore();
+    const useCase = new TriggerDemoScenarioUseCase(
+      fakeEcGateway(),
+      "p-1",
+      store,
+      collect,
+      "https://github.com/o/r/pull/30",
+    );
+
+    await useCase.run("5");
+
+    const recorded = (store.record as ReturnType<typeof vi.fn>).mock.calls[0][0] as AppliedInfraChange;
+    expect(recorded.url).toBe("https://github.com/o/r/pull/30");
   });
 
   it("infra-config-change では EC への注文投入・障害注入を行わない（検知の合成のみ）", async () => {

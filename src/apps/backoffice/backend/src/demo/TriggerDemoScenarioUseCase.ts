@@ -129,11 +129,15 @@ const INFRA_CONFIG_CHANGE_SCENARIO_ID = "infra-config-change";
 // Cloud SQL の接続上限縮小＝接続枯渇 → CRITICAL/500（注入される障害）の決定打になる因果。
 const INFRA_FAULT_APPLY_LEAD_MINUTES = 3;
 
-function buildInfraFaultApplyEvent(): AppliedInfraChange {
+// prUrl は事前に手動起票した「同内容の本物 PR」の URL（config.demo.infraApplyPrUrl・任意）。
+// commitSha は合成のダミーで実リポジトリに存在しないため、リンクは sha からは組み立てず
+// 実在 PR の URL をそのまま添える（リンク先 404 を作らない）。空なら従来通り非リンク表示。
+function buildInfraFaultApplyEvent(prUrl: string): AppliedInfraChange {
   return {
     // 障害イベントより少し前（証拠収集窓 30 分以内）に適用された体にする。
     appliedAt: new Date(Date.now() - INFRA_FAULT_APPLY_LEAD_MINUTES * 60 * 1000),
     commitSha: "deadbeefcafe1234",
+    ...(prUrl !== "" ? { url: prUrl } : {}),
     summary: "Cloud SQL の接続上限を縮小（コスト最適化）— 接続枯渇の起点",
     resourceChanges: [
       {
@@ -231,6 +235,8 @@ export class TriggerDemoScenarioUseCase {
     private readonly productId: string,
     private readonly appliedInfraChangeStore: AppliedInfraChangeStore,
     private readonly collectMonitoringEventUseCase: CollectMonitoringEventUseCase,
+    // 構成変更シナリオの apply 差分に添える実在 PR の URL（空＝リンクなし）。
+    private readonly infraApplyPrUrl: string = "",
   ) {}
 
   async run(scenarioId: string): Promise<{ scenarioId: string; label: string; orderId: string }> {
@@ -246,7 +252,7 @@ export class TriggerDemoScenarioUseCase {
 
     if (resolvedId === INFRA_FAULT_SCENARIO_ID) {
       // 注入の前に apply イベントを記録しておく（調査時に「直前の変更」として時間窓で引ける）。
-      await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent());
+      await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent(this.infraApplyPrUrl));
       await this.ecDemoGateway.injectInfraFault();
       // 注文を伴わないので orderId は空。Cloud Monitoring 経由で Alert 化されるため即時の orderId 相関は無い。
       return { scenarioId: resolvedId, label: "インフラ障害", orderId: "" };
@@ -255,7 +261,7 @@ export class TriggerDemoScenarioUseCase {
     if (resolvedId === INFRA_FAULT_SYNTHETIC_SCENARIO_ID) {
       // 3 と同じ根本原因証跡（直前の Cloud SQL apply）を記録してから、実 CM が送るのと同型の
       // CRITICAL ログ発報 webhook を合成入力で流す。GCP 側にインシデントを残さず即・新鮮に再現する。
-      await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent());
+      await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent(this.infraApplyPrUrl));
       const event = CloudMonitoringAlertTranslator.toMonitoringEvent(
         buildInfraFaultSyntheticWebhook(),
       );
@@ -267,7 +273,7 @@ export class TriggerDemoScenarioUseCase {
     if (resolvedId === INFRA_CONFIG_CHANGE_SCENARIO_ID) {
       // ① 直前の IaC 変更（apply 差分）を記録 → ② その変更が原因の INFRASTRUCTURE 障害を合成入力で発火。
       // 入口だけ合成し、変換→分類→AI 調査（terraform 差分を root cause として収集）は実経路を辿る。
-      await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent());
+      await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent(this.infraApplyPrUrl));
       const event = CloudMonitoringAlertTranslator.toMonitoringEvent(
         buildInfraConfigChangeWebhook(),
       );

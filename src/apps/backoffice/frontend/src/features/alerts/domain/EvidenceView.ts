@@ -1,4 +1,5 @@
 import type { InfraEvidencePrimitives } from "@monitoring/AIInvestigation/domain/contracts/InfraEvidenceContract";
+import type { SecurityFindingView } from "./SecurityFindingView";
 
 /**
  * インフラ証拠（Cloud Logging / Terraform / GitHub）の表示用型と、
@@ -37,6 +38,8 @@ export type EvidenceTerraformView = {
   /** 適用時刻（ISO 文字列・表示側で整形）。 */
   readonly appliedAt: string;
   readonly commitSha: string | null;
+  /** 由来変更の Web リンク（GitHub の PR/コミット）。あれば「変更 PR を開く」を出す。 */
+  readonly url: string | null;
   readonly changedResources: string[];
   readonly summary: string;
 };
@@ -90,6 +93,7 @@ export function toEvidenceView(dto: InfraEvidencePrimitives): EvidenceView {
           })),
           appliedAt: dto.terraformDiff.appliedAt,
           commitSha: dto.terraformDiff.commitSha ?? null,
+          url: dto.terraformDiff.url ?? null,
           changedResources: dto.terraformDiff.changedResources,
           summary: dto.terraformDiff.summary,
         }
@@ -115,21 +119,36 @@ export function toEvidenceView(dto: InfraEvidencePrimitives): EvidenceView {
 }
 
 /** 証拠ソースの種別。積み上げ演出のアイコン／ラベル出し分けに使う。 */
-export type EvidenceSourceKind = "logs" | "metrics" | "terraform" | "commits";
+export type EvidenceSourceKind =
+  | "security"
+  | "logs"
+  | "metrics"
+  | "terraform"
+  | "commits";
 
 export type EvidenceSection =
+  | { readonly kind: "security"; readonly findings: SecurityFindingView[] }
   | { readonly kind: "logs"; readonly logs: EvidenceLogView[] }
   | { readonly kind: "metrics"; readonly metrics: EvidenceMetricView[] }
   | { readonly kind: "terraform"; readonly diff: EvidenceTerraformView }
   | { readonly kind: "commits"; readonly commits: EvidenceCommitView[] };
 
 /**
- * 存在する証拠ソースのみを Cloud Logging→Cloud Monitoring→Terraform→GitHub の順で返す純関数。
+ * 存在する証拠ソースのみを Trivy→Cloud Logging→Cloud Monitoring→Terraform→GitHub の順で返す純関数。
  * 「到着ごとに積み上がる」演出の単位（＝stagger フェードインする1ブロック）になる。
  * 中身が空のソースは畳んで出さない（空セクションを並べない）。
+ *
+ * securityFindings は InfraEvidence（調査時の収集）ではなく検知イベント payload 由来（Alert が運ぶ）
+ * なので引数を分ける。SECURITY 検知の根拠＝CVE を先頭に置く（この種別では最重要の証拠）。
  */
-export function evidenceSections(view: EvidenceView): EvidenceSection[] {
+export function evidenceSections(
+  view: EvidenceView,
+  securityFindings: SecurityFindingView[] = [],
+): EvidenceSection[] {
   const sections: EvidenceSection[] = [];
+  if (securityFindings.length > 0) {
+    sections.push({ kind: "security", findings: securityFindings });
+  }
   if (view.appLogs.length > 0) {
     sections.push({ kind: "logs", logs: view.appLogs });
   }

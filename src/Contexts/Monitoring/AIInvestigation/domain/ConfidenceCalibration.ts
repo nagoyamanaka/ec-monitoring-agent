@@ -25,7 +25,7 @@ export type { ConfidenceGroundingSignal };
 
 /** 裏付けゼロ時の上限＝「推測の域」。 */
 const BASE_CAP = 0.4;
-/** 決定的事実そのもの（既知パターン・引用コミット・Terraform 差分）。 */
+/** 決定的事実そのもの（既知パターン・引用コミット・Terraform 差分・引用された実在 CVE）。 */
 const STRONG_WEIGHT = 0.35;
 /** 状況証拠（相関アラート・類似事例・人間の指摘）。 */
 const MEDIUM_WEIGHT = 0.15;
@@ -45,6 +45,24 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** CVE 識別子の正規形（例: CVE-2021-3807）。スキャナ payload の作り損ないを裏付けに数えない。 */
+const CVE_ID_PATTERN = /^CVE-\d{4}-\d{4,}$/i;
+
+/**
+ * 検知イベントの payload から CI スキャナ（Trivy 等）由来の CVE id を取り出す。
+ * payload は ingest 境界を通ったシステム事実（LLM の作文ではない）だが、形は外部入力なので
+ * 正規形に合う id だけを認める（防御的パース）。
+ */
+function scannerCveIds(payload: Record<string, unknown>): string[] {
+  const vulnerabilities = payload["vulnerabilities"];
+  if (!Array.isArray(vulnerabilities)) return [];
+  return vulnerabilities.flatMap((v) => {
+    if (typeof v !== "object" || v === null) return [];
+    const cveId = (v as Record<string, unknown>)["cveId"];
+    return typeof cveId === "string" && CVE_ID_PATTERN.test(cveId) ? [cveId] : [];
+  });
+}
+
 function detectSignals(
   report: InvestigationReport,
   context: InvestigationContext,
@@ -53,9 +71,10 @@ function detectSignals(
 
   if (context.knownPatterns.length > 0) signals.push("known_pattern");
 
+  const citedText = collectCitedEvidenceText(report).toLowerCase();
+
   const commits = context.infraEvidence?.recentCommits ?? [];
   if (commits.length > 0) {
-    const citedText = collectCitedEvidenceText(report).toLowerCase();
     if (commits.some((c) => citedText.includes(c.sha.toLowerCase()))) {
       signals.push("cited_commit");
     }
@@ -63,6 +82,13 @@ function detectSignals(
 
   if ((context.infraEvidence?.terraformDiff?.resourceChanges.length ?? 0) > 0) {
     signals.push("terraform_diff");
+  }
+
+  // CI スキャナが検出した実在 CVE を報告書が実際に引用していれば強い裏付け（cited_commit と同型:
+  // 「システム事実の存在」×「報告書がそれを根拠にした」の両方を要求する）。
+  const cveIds = scannerCveIds(context.errorEvent.payload);
+  if (cveIds.some((id) => citedText.includes(id.toLowerCase()))) {
+    signals.push("verifiable_cve");
   }
 
   const candidateIds = new Set(
@@ -92,6 +118,7 @@ const STRONG_SIGNALS: ReadonlySet<ConfidenceGroundingSignal> = new Set([
   "known_pattern",
   "cited_commit",
   "terraform_diff",
+  "verifiable_cve",
 ]);
 
 export function calibrateConfidence(

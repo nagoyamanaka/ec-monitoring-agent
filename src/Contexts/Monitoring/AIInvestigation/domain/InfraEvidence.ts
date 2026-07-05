@@ -30,6 +30,9 @@ export type TerraformDiff = {
   readonly appliedAt: string;
   // 由来コミット。join キーではなく apply イベントの一属性として保持する。
   readonly commitSha?: string;
+  // 由来変更の Web リンク（GitHub の PR/コミット）。GitCommit.url と同じ思想で、証拠として
+  // フロントでクリック可能にする。ソースが提供しない場合もあるので任意（無ければ非リンク表示）。
+  readonly url?: string;
   // 変更されたリソースアドレス一覧（resourceChanges から導出する表示/空判定用の便宜フィールド）。
   readonly changedResources: string[];
   readonly summary: string;

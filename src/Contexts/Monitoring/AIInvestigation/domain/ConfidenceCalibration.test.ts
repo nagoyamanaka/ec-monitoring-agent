@@ -162,6 +162,61 @@ describe("calibrateConfidence", () => {
     expect(notCited.calibrated).toBe(0.4);
   });
 
+  it("CI スキャナ由来の実在 CVE を報告書が引用していれば強い裏付け（上限 0.75）", () => {
+    const context: InvestigationContext = {
+      ...baseContext,
+      errorEvent: {
+        ...baseContext.errorEvent,
+        eventName: "security.vulnerability_detected",
+        payload: {
+          vulnerabilities: [
+            { cveId: "CVE-2021-3807", severity: "CRITICAL", package: "ansi-regex" },
+            { cveId: "CVE-2022-25883", severity: "HIGH", package: "semver" },
+          ],
+        },
+        severity: "CRITICAL",
+      },
+    };
+    const cited = calibrateConfidence(
+      makeReport({
+        confidence: 0.95,
+        summary:
+          "依存パッケージ ansi-regex に既知の脆弱性（cve-2021-3807）が検出された（小文字でも一致する）。",
+      }),
+      context,
+    );
+    const notCited = calibrateConfidence(
+      makeReport({ confidence: 0.95, summary: "依存に脆弱性が検出された。" }),
+      context,
+    );
+
+    expect(cited.signals).toEqual(["verifiable_cve"]);
+    expect(cited.cap).toBe(0.75);
+    expect(cited.calibrated).toBe(0.75);
+    // CVE が payload にあっても報告書が引用していなければ数えない（cited_commit と同型）。
+    expect(notCited.signals).toEqual([]);
+    expect(notCited.calibrated).toBe(0.4);
+  });
+
+  it("正規形でない cveId は payload にあっても裏付けに数えない（防御的パース）", () => {
+    const context: InvestigationContext = {
+      ...baseContext,
+      errorEvent: {
+        ...baseContext.errorEvent,
+        payload: {
+          vulnerabilities: [{ cveId: "GHSA-93q8-gq69-wqmw", severity: "HIGH" }],
+        },
+      },
+    };
+    const result = calibrateConfidence(
+      makeReport({ confidence: 0.9, summary: "GHSA-93q8-gq69-wqmw が原因。" }),
+      context,
+    );
+
+    expect(result.signals).toEqual([]);
+    expect(result.calibrated).toBe(0.4);
+  });
+
   it("既知パターン一致・Terraform 差分も強い裏付けとして数える", () => {
     const context: InvestigationContext = {
       ...baseContext,

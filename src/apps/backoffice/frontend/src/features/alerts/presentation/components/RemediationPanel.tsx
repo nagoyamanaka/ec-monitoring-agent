@@ -162,7 +162,7 @@ function RemediationBody({
             </span>
             {remediation.vulnerabilityCount > 0 && (
               <span className="text-[11px] text-emerald-200/80">
-                検出 {remediation.vulnerabilityCount} 件
+                対象脆弱性 {remediation.vulnerabilityCount} 件
               </span>
             )}
           </div>
