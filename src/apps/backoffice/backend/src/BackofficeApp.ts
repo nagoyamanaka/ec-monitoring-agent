@@ -15,9 +15,7 @@ import { PromoteAlertCommandHandler } from "../../../../Contexts/Monitoring/Aler
 import { PromoteAlertUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromoteAlert/PromoteAlertUseCase.js";
 import { SubmitFeedbackCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommandHandler.js";
 import { SubmitFeedbackUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackUseCase.js";
-import { ApplicationClassificationPolicy } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/policies/ApplicationClassificationPolicy.js";
-import { PolicyBasedAlertClassifier } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/PolicyBasedAlertClassifier.js";
-import { ClassificationRuleSorter } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/ClassificationRuleSorter.js";
+import { buildAlertClassifier } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/buildAlertClassifier.js";
 import { KnownPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/rules/KnownPatternRule.js";
 import { SimilarPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/rules/SimilarPatternRule.js";
 import { ClassificationRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/ClassificationRule.js";
@@ -190,9 +188,12 @@ export class BackofficeApp {
     const similarIncidentRepository =
       await this.buildSimilarIncidentRepository(rules);
 
-    const classifier = new PolicyBasedAlertClassifier([
-      new ApplicationClassificationPolicy(rules, new ClassificationRuleSorter()),
-    ]);
+    // 専任 Policy（APPLICATION）＋全 category 共通の完全一致フォールバック。
+    // 組み立ての順序契約は buildAlertClassifier に集約（同構成を UT が検証）。
+    const classifier = buildAlertClassifier({
+      knownErrorPatternRepository,
+      applicationRules: rules,
+    });
 
     // read-only 証拠ゲートウェイは単一Gemini版（InfraInvestigationPort 経由の事前収集）と
     // ADK版（エージェントの狙い撃ちツール）で共有する。

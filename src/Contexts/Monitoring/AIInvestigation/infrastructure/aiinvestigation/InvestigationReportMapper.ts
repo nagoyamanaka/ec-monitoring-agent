@@ -9,6 +9,10 @@ import type {
   RelatedAlertPrimitives,
 } from "../../../AlertAnalysis/domain/contracts/AlertContract.js";
 import { collectCitedEvidenceText } from "../../domain/CitedEvidence.js";
+import {
+  resolveCitations,
+  type CitationCatalogEntry,
+} from "../../domain/CitationResolution.js";
 import { LLMInvestigationOutput } from "./LLMOutputParser.js";
 
 /**
@@ -30,6 +34,30 @@ function guardImpact(
 ): ImpactAssessmentPrimitives | undefined {
   if (!impact || impact.citations.length === 0) return undefined;
   return impact;
+}
+
+/**
+ * 影響評価の citations を証拠カタログと突合し、照合結果（citationRefs）を添付する（表示用射影）。
+ * 未照合の引用も落とさず kind 未設定で残す＝ゲート（guardImpact）とは役割が別。
+ */
+function attachImpactCitationRefs(
+  impact: ImpactAssessmentPrimitives | undefined,
+  catalog: readonly CitationCatalogEntry[],
+): ImpactAssessmentPrimitives | undefined {
+  if (!impact) return undefined;
+  return { ...impact, citationRefs: resolveCitations(impact.citations, catalog) };
+}
+
+/** エスカレーション草案の evidenceBundle にも同じ照合結果を添付する。 */
+function attachEscalationEvidenceRefs(
+  escalation: EscalationDraftPrimitives | undefined,
+  catalog: readonly CitationCatalogEntry[],
+): EscalationDraftPrimitives | undefined {
+  if (!escalation) return undefined;
+  return {
+    ...escalation,
+    evidenceBundleRefs: resolveCitations(escalation.evidenceBundle, catalog),
+  };
 }
 
 /**
@@ -124,11 +152,17 @@ export function toInvestigationReport(
   // 相関ガードの照合語彙（collectCitableEvidenceIds で context から決定的に導出・小文字化済み）。
   // 既定は空＝citation が解決できず relatedAlerts は全て落ちる（安全側。アダプタは必ず渡す）。
   citableEvidenceIds: readonly string[] = [],
+  // 引用の表示用照合カタログ（buildCitationCatalog で context から決定的に導出）。ゲート語彙より
+  // 広い（event/pattern/incident 含む）。既定は空＝全引用が未照合として残る（表示は落ちない）。
+  citationCatalog: readonly CitationCatalogEntry[] = [],
 ): InvestigationReport {
   // ハルシネーションガード適用後の値を引用源にする（証拠パネルの CitedCommitFilter は
   // 永続化後＝ガード済みの報告書を読むため、同じ土台で判定しないと両者がずれる）。
-  const impact = guardImpact(output.impact);
-  const escalation = guardEscalation(output.escalation);
+  const impact = attachImpactCitationRefs(guardImpact(output.impact), citationCatalog);
+  const escalation = attachEscalationEvidenceRefs(
+    guardEscalation(output.escalation),
+    citationCatalog,
+  );
   const remediationReview = guardRemediationReview(output.remediationReview);
   const citedLinks = restrictCommitLinksToCited(
     evidenceLinks,

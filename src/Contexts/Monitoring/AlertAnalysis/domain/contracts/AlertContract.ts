@@ -88,6 +88,36 @@ export type RelatedAlertPrimitives = {
   readonly citations?: string[];
 };
 
+/**
+ * 引用の解決先種別。引用文字列を「収集済み証拠カタログのどのフィールドに解決したか」を表す。
+ * event=受信イベント名（ingest 境界の正典 ID・検出層のカラムではない） / pattern=既知パターンID /
+ * commit=GitHub コミット / terraform=Terraform 差分 / metric=Cloud Monitoring メトリクス /
+ * incident=過去の類似インシデント / log=アプリログ。
+ */
+export type CitationSourceKind =
+  | "event"
+  | "pattern"
+  | "commit"
+  | "terraform"
+  | "metric"
+  | "incident"
+  | "log";
+
+/**
+ * 引用の実在照合結果（表示用射影）。LLM が出した引用文字列（value）を、収集済み証拠カタログと
+ * 決定論で突合した結果を持つ。`kind` 未設定＝カタログに解決しなかった（未照合）で、隠さず
+ * そのまま表示する（正直さの担保）。J1 の相関ゲート（boolean で落とす）と同じ照合を
+ * 「何に解決したか」まで残す形に昇格させたもの＝ハルシネーション否定の可視化。
+ */
+export type CitationRefPrimitives = {
+  // LLM 出力の引用原文（citations 配列の要素と同値・順序も同じ）。
+  readonly value: string;
+  // 解決先の種別。未設定＝収集済み証拠カタログに解決しなかった（未照合）。
+  readonly kind?: CitationSourceKind;
+  // 解決先の deep link（commit の html_url / terraform 差分の PR 等）。解決できた場合のみ。
+  readonly href?: string;
+};
+
 /** 自責他責ラベル。own=自社コード/IaC 起因 / external=外部API・ベンダー起因 / unknown=証拠不足で断定不能。 */
 export type ImpactFault = "own" | "external" | "unknown";
 
@@ -107,6 +137,9 @@ export type ImpactAssessmentPrimitives = {
   readonly affectedSubjects: string[];
   // 算定根拠の引用（証拠ログ／類似インシデント／commit/terraform 差分の id）。
   readonly citations: string[];
+  // citations の実在照合結果（1:1 対応・マッパが決定論で添付）。optional は後方互換＝
+  // refs 無しの旧 Alert はフロントが従来の生文字列表示にフォールバックする。
+  readonly citationRefs?: CitationRefPrimitives[];
 };
 
 /**
@@ -131,6 +164,8 @@ export type EscalationDraftPrimitives = {
   readonly severityRationale: string;
   // 引き継ぎに添付すべき証拠/引用の id（証拠ログ・類似事例・commit/terraform 差分の id）。
   readonly evidenceBundle: string[];
+  // evidenceBundle の実在照合結果（1:1 対応・マッパが決定論で添付）。optional は後方互換。
+  readonly evidenceBundleRefs?: CitationRefPrimitives[];
 };
 
 /** 修正PR自動レビューの判定（タスク36）。pass=引用根本原因に対応し整合 / concerns=要確認の懸念あり / reject=根本原因に無関係・誤修正。 */

@@ -109,7 +109,7 @@ describe("InvestigationReportMapper", () => {
       expect(toInvestigationReport(output()).impact).toBeUndefined();
     });
 
-    it("citations 付き impact はそのまま伝播する", () => {
+    it("citations 付き impact は照合結果（citationRefs）を添付して伝播する", () => {
       const impact = {
         fault: "own" as const,
         scope: "決済の一部",
@@ -117,7 +117,36 @@ describe("InvestigationReportMapper", () => {
         affectedSubjects: ["payment"],
         citations: ["commit:abc"],
       };
-      expect(toInvestigationReport(output({ impact })).impact).toEqual(impact);
+      // カタログ未指定（既定空）＝全引用が未照合（kind 無し）のまま残る。
+      expect(toInvestigationReport(output({ impact })).impact).toEqual({
+        ...impact,
+        citationRefs: [{ value: "commit:abc" }],
+      });
+    });
+
+    it("impact.citations は証拠カタログと突合され、解決した引用に kind/href が付く", () => {
+      const impact = {
+        fault: "own" as const,
+        scope: "決済の一部",
+        scale: "5分で120件",
+        affectedSubjects: ["payment"],
+        citations: ["e12b655", "appLogs: 謎のログ"],
+      };
+      const report = toInvestigationReport(output({ impact }), [], [], [
+        {
+          id: "e12b655abc",
+          kind: "commit",
+          href: "https://github.com/acme/ec/commit/e12b655abc",
+        },
+      ]);
+      expect(report.impact?.citationRefs).toEqual([
+        {
+          value: "e12b655",
+          kind: "commit",
+          href: "https://github.com/acme/ec/commit/e12b655abc",
+        },
+        { value: "appLogs: 謎のログ" },
+      ]);
     });
 
     it("citations 空の impact は落とす（ハルシネーションガード）", () => {
@@ -149,7 +178,11 @@ describe("InvestigationReportMapper", () => {
         severityRationale: "決済3%失敗・P1",
         evidenceBundle: ["log:abc"],
       };
-      expect(toInvestigationReport(output({ escalation })).escalation).toEqual(escalation);
+      // evidenceBundle にも照合結果（evidenceBundleRefs）が添付される（カタログ空＝未照合）。
+      expect(toInvestigationReport(output({ escalation })).escalation).toEqual({
+        ...escalation,
+        evidenceBundleRefs: [{ value: "log:abc" }],
+      });
     });
 
     it("team 空の escalation は落とす（宛先捏造ガード）", () => {
