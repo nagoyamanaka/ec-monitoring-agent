@@ -48,6 +48,7 @@ const context: CitationCatalogContext = {
   knownPatterns: [{ name: "PROMOTED_EC.DB.CONNECTION_POOL_EXHAUSTED" }],
   similarIncidents: [{ eventName: "ec.payment.timeout" }],
   infraEvidence: evidence,
+  candidateAlerts: [{ alertId: "75d9bdf5-3571-4be9-91ff-ff6daece74d3" }],
 };
 
 describe("buildCitationCatalog", () => {
@@ -70,6 +71,14 @@ describe("buildCitationCatalog", () => {
       "5xx リクエスト数",
     ]);
     expect(byKind("incident").map((e) => e.id)).toEqual(["ec.payment.timeout"]);
+    // 相関候補アラートは SPA 内部ルートの相対リンク付き。
+    expect(byKind("alert")).toEqual([
+      {
+        id: "75d9bdf5-3571-4be9-91ff-ff6daece74d3",
+        kind: "alert",
+        href: "/alerts/75d9bdf5-3571-4be9-91ff-ff6daece74d3",
+      },
+    ]);
   });
 
   it("証拠なしでもイベント名だけのカタログになる（空クラッシュしない）", () => {
@@ -123,5 +132,11 @@ describe("resolveCitations", () => {
   it("照合は case-insensitive（引用が大文字でも解決する）", () => {
     const [ref] = resolveCitations(["RUN.GOOGLEAPIS.COM/REQUEST_COUNT_5XX"], catalog);
     expect(ref?.kind).toBe("metric");
+  });
+
+  it("相関候補アラートの id 引用は alert に解決し、内部ルートのリンクが付く", () => {
+    const [ref] = resolveCitations(["75d9bdf5-3571-4be9-91ff-ff6daece74d3"], catalog);
+    expect(ref?.kind).toBe("alert");
+    expect(ref?.href).toBe("/alerts/75d9bdf5-3571-4be9-91ff-ff6daece74d3");
   });
 });

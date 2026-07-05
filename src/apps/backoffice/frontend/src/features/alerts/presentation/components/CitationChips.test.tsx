@@ -41,6 +41,36 @@ describe("CitationChips", () => {
     );
   });
 
+  it("相対 href（相関アラート等の内部ルート）は同タブ遷移、外部 URL は別タブ", async () => {
+    const withAlert: CitationRefView[] = [
+      ...refs,
+      {
+        value: "75d9bdf5-3571-4be9-91ff-ff6daece74d3",
+        kind: "alert",
+        href: "/alerts/75d9bdf5-3571-4be9-91ff-ff6daece74d3",
+      },
+    ];
+    render(
+      <CitationChips
+        heading="算定根拠（引用）"
+        citations={withAlert.map((r) => r.value)}
+        refs={withAlert}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /算定根拠/ }));
+
+    expect(screen.getByText("相関アラート")).toBeInTheDocument();
+    const internal = screen.getByRole("link", {
+      name: "75d9bdf5-3571-4be9-91ff-ff6daece74d3",
+    });
+    expect(internal).toHaveAttribute("href", "/alerts/75d9bdf5-3571-4be9-91ff-ff6daece74d3");
+    expect(internal).not.toHaveAttribute("target");
+    expect(screen.getByRole("link", { name: "e12b655" })).toHaveAttribute(
+      "target",
+      "_blank",
+    );
+  });
+
   it("refs なし（旧データ）は従来のプレフィックス推測表示にフォールバックし、照合バッジは出さない", async () => {
     render(<CitationChips heading="算定根拠（引用）" citations={["commit: abc1234"]} />);
     expect(screen.queryByText(/実在照合済み/)).not.toBeInTheDocument();

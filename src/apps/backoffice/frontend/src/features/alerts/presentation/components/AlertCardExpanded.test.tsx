@@ -128,6 +128,45 @@ describe("AlertCardExpanded", () => {
     expect(screen.getByText("eventName")).toBeInTheDocument();
   });
 
+  it("類似既知は similarity をテーブルに混ぜず確定条件ゲートとして出し、一致値は1つに畳む", () => {
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({
+          report: null,
+          classification: {
+            type: "known",
+            source: "SIMILARITY",
+            patternId: "similar:ri-1",
+            patternName: "類似既知: ec.db.connection_pool_exhausted",
+            confidence: 0.67,
+            matchedConditions: [
+              {
+                field: "eventName",
+                expectedValue: "ec.db.connection_pool_exhausted",
+                actualValue: "ec.db.connection_pool_exhausted",
+              },
+              {
+                field: "similarity",
+                expectedValue: ">=0.6",
+                actualValue: 0.67,
+              },
+            ],
+          },
+        })}
+      />,
+    );
+    // 期待値=実値の一致は1つの値に畳む（重複表示なら getByText が複数一致で落ちる）
+    expect(
+      screen.getByText("ec.db.connection_pool_exhausted"),
+    ).toBeInTheDocument();
+    // similarity は「一致した根拠」の行ではなく、しきい値の確定条件として表示
+    expect(screen.queryByText("類似度スコア")).not.toBeInTheDocument();
+    expect(screen.getByText(/確定条件/)).toBeInTheDocument();
+    expect(screen.getByText("67%")).toBeInTheDocument();
+    expect(screen.getByText(/しきい値 60%/)).toBeInTheDocument();
+    expect(screen.getByText(/AI 調査へフォールバック/)).toBeInTheDocument();
+  });
+
   it("既知パターンには「1秒未満・AI コストゼロ」の経済性対比 1 行を出す（タスク G1）", () => {
     render(
       <AlertCardExpanded
