@@ -8,15 +8,15 @@ resource "google_sql_database_instance" "main" {
   database_version = "POSTGRES_15"
 
   settings {
-    # 本番相当の tier。ワークロードに見合う容量（縮小の before 値）。
-    tier              = "db-custom-2-7680"
+    # コスト最適化で最小 tier に縮小。ワークロードに対して過小（＝障害の起点）。
+    tier              = "db-f1-micro"
     availability_type = "ZONAL"
     disk_size         = 10
 
     database_flags {
       name = "max_connections"
-      # アプリの接続プールを賄える上限（縮小の before 値）。
-      value = "100"
+      # あわせて接続上限も縮小（＝接続枯渇の直接要因）。
+      value = "20"
     }
   }
 
