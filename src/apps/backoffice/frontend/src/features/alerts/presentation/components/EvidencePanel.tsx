@@ -364,24 +364,6 @@ function EvidenceSectionView({
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-100">{c.message}</p>
-            {/* このコミットに紐づく PR（原因＝マージ済 / 修正＝revert）。terraform の
-                「変更 PR を開く →」と同じクリック語彙で、原因コミットから次アクションへ橋渡しする。 */}
-            {c.relatedPullRequests && c.relatedPullRequests.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {c.relatedPullRequests.map((pr) => (
-                  <a
-                    key={pr.url}
-                    href={pr.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={`GitHub で ${pr.label} を開く`}
-                    className="rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
-                  >
-                    {pr.label} →
-                  </a>
-                ))}
-              </div>
-            )}
           </Rise>
         ))}
       </ul>

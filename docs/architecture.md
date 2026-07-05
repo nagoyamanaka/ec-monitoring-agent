@@ -116,7 +116,7 @@ flowchart TD
 
 - 調査=read / 修正=write を構造分離。自動マージは一切しない。
 - 2モード（`REMEDIATION_MODE`）: **advisory**（in-process で方針テキスト→`SECURITY_REMEDIATION.md` 草案PR）／**dispatch**（`repository_dispatch` → `ai-remediation.yml` でランナー上の AI が実コード修正→Trivy 再スキャン＋テスト緑→draft PR→`POST /ingest/remediation-result` で結果確定）。
-- 自己修正ループは `REMEDIATION_MAX_ATTEMPTS`（既定2）で打ち切り（課金暴走の安全弁）。対象はシナリオ4（脆弱性）のみ（5/6 は調査まで。[決定記録](decisions/decision-scenario67-remediation-dropped.md)）。
+- 自己修正ループは `REMEDIATION_MAX_ATTEMPTS`（既定2）で打ち切り（課金暴走の安全弁）。対象はシナリオ4（脆弱性）のみ（旧5/6=構成変更・アプリコード退行は自動修正見送りの[決定記録](decisions/decision-scenario67-remediation-dropped.md)を経て、2026-07-06 にシナリオ自体もデモ卓から撤退）。
 
 ## 6. デプロイ構成
 
@@ -182,7 +182,7 @@ flowchart TB
 
 - **① 自己デプロイ**（`app.yml`）: `main` push で typecheck/UT/E2E → image build&push → Cloud Run（frontend/edge）更新＋GCE backbone 再起動。エージェント本体の CD がプロダクトの CD そのもの。
 - **② 自己 IaC**（`terraform.yml`）: `plan` は PR・`apply` は `main`（`environment: prod` 承認ゲート）。PR とマージの plan/apply が同一 tfstate ロックを奪い合うレースを `concurrency` で直列化済み（1回目失敗→rerun 成功の既知事象を解消）。
-- **③ 自己検知（ループの閉じ）**（`app.yml` の `security-scan` job）: Trivy が**自リポジトリの依存**を fs スキャン→HIGH/CRITICAL を代表 CVE に昇格し全件同梱→本番 `/ingest/security-scan` に POST。**検知入力が外部イベントではなく自分自身の CI から来る**＝ドッグフーディングの核。これが[シナリオ4](#9-デモシナリオ7ボタンリアルさバッジ付き)の実経路。
+- **③ 自己検知（ループの閉じ）**（`app.yml` の `security-scan` job）: Trivy が**自リポジトリの依存**を fs スキャン→HIGH/CRITICAL を代表 CVE に昇格し全件同梱→本番 `/ingest/security-scan` に POST。**検知入力が外部イベントではなく自分自身の CI から来る**＝ドッグフーディングの核。これが[シナリオ4](#9-デモシナリオ5ボタンリアルさバッジ付き)の実経路。
 - **④ 自己修復**（`ai-remediation.yml`）: SECURITY 調査が `repository_dispatch` を発火→ランナー上で AI が実コードを修正→Trivy 再スキャン＋テスト緑になるまで自己修正（`REMEDIATION_MAX_ATTEMPTS` で打ち切り＝課金暴走の安全弁）→**自リポジトリに draft PR**（自動マージなし・人間承認）。マージされれば ① に戻り再デプロイ＝**完全な自己参照 DevOps ループ**。
 
 > **正直さの境界**: ①②③④は実ワークフロー。ただしデモ卓のシナリオ4は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
@@ -205,7 +205,7 @@ src/
 ```
 
 - ポート実装は `...Adapter`、ドメインサービスは `...DomainService`。driven ポートと wire DTO は infrastructure 配下。ワイヤ型は contracts に単一ソース化。
-- テスト: Vitest（BDD）unit 964件・140ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E（Playwright は `e2e/`）。
+- テスト: Vitest（BDD）unit 959件・139ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E（Playwright は `e2e/`）。
 
 ## 8. 主要 API（backoffice）
 
@@ -224,23 +224,22 @@ src/
 | `GET /forecast`                   | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）                               |
 | `POST /forecast`                  | 予報の生成（`FORECAST_ENABLED` かつ `DEMO_ENABLED` 配下・Gemini 呼び出し・horizon は `FORECAST_HORIZON` 固定）                                           |
 
-## 9. デモシナリオ（7ボタン・リアルさバッジ付き）
+## 9. デモシナリオ（5ボタン・リアルさバッジ付き）
 
 > 旧「在庫競合（未知）」は廃止（実コードに楽観ロック＋指数バックオフのリトライが実装済みで、AI 生成の「楽観ロックを導入せよ」推奨と矛盾するため。詳細は [step6 §J](steps/step6-final-sprint-todo.md)）。以降を -1 繰り上げ済み。
+> 旧5「構成変更障害」・旧6「アプリコード退行」は 2026-07-06 にデモ卓から撤退（検知の入口の説得力が弱く、確度スペクトルと realness 3階級は 1/2/3/3b/4 で過不足なく揃うため。実装は git 履歴に残置）。
 
 | #   | シナリオ                             | 分類スペクトル               | 入力のリアルさ                                                 | 証拠に添える実リンク |
 | --- | ------------------------------------ | ---------------------------- | -------------------------------------------------------------- | -------------------- |
 | 1   | 決済タイムアウト                     | 完全一致（既知・1秒）        | 実トリガ（実注文投入）                                         | —                    |
 | 2   | DBコネクションプール枯渇             | 類似（準・既知・confidence） | 実トリガ                                                       | —                    |
-| 3   | インフラ障害                         | 未知                         | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ）           | 着弾約1分を「検知待ち」バナーで可視化 |
-| 3b  | インフラ障害（反復用）               | 未知                         | 合成入力（入口のみ合成・パイプラインは実経路）                 | —                    |
+| 3   | インフラ障害                         | 未知                         | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ）           | **terraform 証拠 → 変更 PR**（着弾約1分は「検知待ち」バナーで可視化） |
+| 3b  | インフラ障害（反復用）               | 未知                         | 合成入力（入口のみ合成・パイプラインは実経路）                 | **terraform 証拠 → 変更 PR** |
 | 4   | 脆弱性検知 → 修正 draft PR           | SECURITY                     | 合成入力（実 CI と同一経路）                                   | **CVE → NVD 実在リンク**（正規形のみ解決） |
-| 5   | 構成変更障害（terraform apply 起因） | 未知                         | 合成入力（構造化差分は実機構）                                 | **terraform 証拠 → 変更 PR** |
-| 6   | アプリコード退行                     | 未知                         | 合成入力（**コミット・diff・修正PRは実物**・demo隔離ブランチ） | **原因コミット → 原因PR（マージ済）/revert PR** |
 
 **正直さの原則**: 合成入力は UI に amber バッジで明示。エンドポイントの無い偽ボタンは作らない。
 
-- **証拠の実リンク化（本物度の底上げ・K1）**: デモの入口（Alert 発火）は合成でも、証拠に添える外部リンクは**実在・決定論導出**。脆弱性は `cveId`（`CVE_ID_PATTERN` 正規形）から NVD 詳細ページ URL を導出（`SecurityFindingView`・確信度に `verifiable_cve` 強シグナル）、terraform 証拠は `TerraformDiff.url`（`config.demo.infraApplyPrUrl`）、原因コミットは `GitCommit.relatedPullRequests`（GitHub 一覧 API はコミット→PR を返さないので `BackofficeApp` が短縮 sha→PR URL の map を `GitHubGatewayImpl` に config 注入）。`EvidencePanel` が terraform「変更 PR を開く →」と同じクリック語彙で表示し、原因から次アクション（revert PR）へ橋渡しする。**config 未設定（本番）は素の証拠のまま＝挙動非侵食**。
+- **証拠の実リンク化（本物度の底上げ・K1）**: デモの入口（Alert 発火）は合成でも、証拠に添える外部リンクは**実在・決定論導出**。脆弱性は `cveId`（`CVE_ID_PATTERN` 正規形）から NVD 詳細ページ URL を導出（`SecurityFindingView`・確信度に `verifiable_cve` 強シグナル）、terraform 証拠は `TerraformDiff.url`（`config.demo.infraApplyPrUrl`・シナリオ3/3b の apply 差分に同梱）。`EvidencePanel` が「変更 PR を開く →」のクリック語彙で表示する。**config 未設定（本番）は素の証拠のまま＝挙動非侵食**。
 - **実検知の「検知待ち」可視化（K2）**: 実検知経路（シナリオ3/3b）は POST が 202 で即返るのに着弾が約1分遅れる。`DetectionPendingBanner` が経過タイマー＋通過中の実ホップ（HTTP 500→Cloud Logging→Cloud Monitoring 発報→キュー→アラート生成）を不定進捗で示し（per-hop テレメトリを持たないので完了は偽点灯させない）、超過時は反復用（合成・即時）へ誘導。着弾 SSE で親 `DemoDrawer` が畳む。
 
 ## 10. 未実装（設計のみ）

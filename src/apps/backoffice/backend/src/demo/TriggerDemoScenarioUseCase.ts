@@ -13,6 +13,11 @@ import { MonitoringEvent } from "../../../../../Contexts/Monitoring/Shared/domai
 import { MonitoringEventCategory } from "../../../../../Contexts/Monitoring/Shared/domain/MonitoringEventCategory.js";
 import { AlertSeverity } from "../../../../../Contexts/Monitoring/Shared/domain/AlertSeverity.js";
 
+// 2026-07-06 シナリオ絞り込み: 旧5（構成変更障害）・旧6（アプリコード退行）はデモ卓から撤退した。
+// 検知の入口の説得力（「実際はどう検知するのか」）が弱く、発表の尺でも 1/2/3/3b/4 に絞る方が
+// 確度スペクトル（既知→類似→未知）と realness 3階級（実トリガ/クラウド実検知/合成）を過不足なく語れるため。
+// 実装は git 履歴（f9f432c 以前）に残っており、必要になれば復活できる。
+
 export class UnsupportedScenarioError extends Error {
   constructor(scenarioId: string) {
     super(`Unsupported demo scenario: ${scenarioId}`);
@@ -40,8 +45,6 @@ const ALIASES: Record<string, string> = {
   "3": "infra-fault",
   "3b": "infra-fault-synthetic",
   "4": "security-vuln",
-  "5": "infra-config-change",
-  "6": "appcode-regression",
 };
 
 // infra-fault は他シナリオと違い「注文の業務失敗」ではなくインフラ級異常の注入なので、
@@ -51,7 +54,7 @@ const INFRA_FAULT_SCENARIO_ID = "infra-fault";
 // infra-fault-synthetic は 3（infra-fault）の「デモ反復用」合成版。
 // 3 は実 CRITICAL ログ→実 Cloud Monitoring 発報（経路B）で真正だが、インシデントが GCP 側に開いたまま
 // 残り（閉じる公開 API が無い）、開いている間は再発火しても新規 webhook が飛ばず started_at も古いまま。
-// そこで scenario 5/4 と同じ「入口だけ合成」で、実 CM が送るのと同型の webhook を
+// そこで scenario 4 と同じ「入口だけ合成」で、実 CM が送るのと同型の webhook を
 // CloudMonitoringAlertTranslator→CollectMonitoringEventUseCase に直接通す。
 // → started_at=now の新鮮な Alert が即・確実に立ち、GCP 側にインシデントを残さないのでデモ reset で完全に消える。
 //   eventName/category/severity は 3 と同一（condition_name を実ポリシーと合わせる）ため下流は完全に同じ経路。
@@ -117,13 +120,6 @@ function buildSecurityScanBody(): SecurityScanBody {
   };
 }
 
-// infra-config-change は「IaC 変更（terraform apply）そのものが原因の障害」を、検知の入口だけ
-// 合成して実 ingest 経路に通すシナリオ。infra-fault（経路B＝GCP の Cloud Monitoring 依存で
-// ローカルでは Alert が出ない）と違い、合成 INFRASTRUCTURE イベントを直接
-// CloudMonitoringAlertTranslator→CollectMonitoringEventUseCase に通すので**ローカルでも**
-// 実 Alert→AI 調査が走り、AI が記録済みの apply 差分を root cause として収集・提示できる。
-const INFRA_CONFIG_CHANGE_SCENARIO_ID = "infra-config-change";
-
 // 障害の「直前の IaC 変更」を AI が原因として突き止められるよう、注入と同時に記録する代表的な apply。
 // 実機では CI の terraform apply がこの構造化差分を ingest する想定で、デモはそれを合成する。
 // Cloud SQL の接続上限縮小＝接続枯渇 → CRITICAL/500（注入される障害）の決定打になる因果。
@@ -150,56 +146,6 @@ function buildInfraFaultApplyEvent(prUrl: string): AppliedInfraChange {
       },
     ],
   };
-}
-
-// IaC 変更（インスタンスタイプ縮小）適用直後に Cloud SQL が不安定化した、という Cloud Monitoring
-// 発火アラートの最小ペイロード。condition は容量語（connection/pool/cpu…）を避けて命名し、
-// translator で **INFRASTRUCTURE** に分類させる（INFRASTRUCTURE のときだけ調査が terraform 差分を引く）。
-function buildInfraConfigChangeWebhook(): unknown {
-  return {
-    incident: {
-      incident_id: crypto.randomUUID(),
-      resource_name: "google_sql_database_instance.main",
-      policy_name: "Cloud SQL 可用性",
-      condition_name: "Cloud SQL instance unhealthy after configuration change",
-      state: "open",
-      started_at: Math.floor(Date.now() / 1000),
-      severity: "Critical",
-      summary: "IaC 変更（インスタンスタイプ縮小）適用直後に DB インスタンスが不安定化",
-      resource: { type: "cloudsql_database", labels: { instance_id: "main" } },
-    },
-  };
-}
-
-// appcode-regression は「テストは通過したアプリコード変更そのものが挙動を退行させた障害」。
-// 検知の入口だけ合成（APPLICATION の MonitoringEvent を直接 ingest 経路に通す）し、原因の実コード差分は
-// demo/regression ブランチに静的に積んだ実コミットに置く（AI が getCommitDiff で本物を引いて分析する）。
-// 3（経路B=GCP依存）と違いローカルでも実 Alert→AI 調査が走る。4/5 と同じ「正直な合成」。
-const APPCODE_REGRESSION_SCENARIO_ID = "appcode-regression";
-
-// 症状（WHAT）は Alert が運ぶ。原因（WHY）は demo ブランチの実コミット差分が運ぶ＝AI が両者を相関する。
-// source は調査の fetch_app_logs が引く対象サービス名（ec-backend）。occurredOn は now（証跡コミットは
-// ref 固定で壁時計非依存に発見されるので時刻整合は不要）。
-//
-// 【UNKNOWN に確実に倒す設計】eventName/payload は seed のインシデント（類似コーパス）と語彙を被らせない。
-//  - 唯一共有する "ec" は全 doc に出る低IDF語で BM25 寄与がほぼゼロ＝類似検索が誤って既知に寄せない。
-//  - payload に**日本語プローズを入れない**: kuromoji 無しの既定アナライザは和文を文字単位に割り、seed の
-//    和文 resolvedNote と大量に偶発一致して BM25 が飽和し confidence 100% の偽 KNOWN を生む（実害バグ）。
-//    短い英語の構造化フィールドのみにする。eventName も seed と被らない pricing 名前空間にする。
-function buildAppcodeRegressionEvent(): MonitoringEvent {
-  return new MonitoringEvent({
-    eventId: crypto.randomUUID(),
-    eventName: "ec.pricing.subtotal_mismatch",
-    aggregateId: crypto.randomUUID(),
-    occurredOn: new Date(),
-    category: MonitoringEventCategory.application(),
-    severity: AlertSeverity.critical(),
-    source: "ec-backend",
-    payload: {
-      symptom: "subtotal rounding mismatch on fractional-priced items",
-      httpStatus: 500,
-    },
-  });
 }
 
 // similar-known は「既知パターンには完全一致しないが、過去の解決済み事例に高類似（準・既知）」を
@@ -270,32 +216,12 @@ export class TriggerDemoScenarioUseCase {
       return { scenarioId: resolvedId, label: "インフラ障害（合成・反復用）", orderId: "" };
     }
 
-    if (resolvedId === INFRA_CONFIG_CHANGE_SCENARIO_ID) {
-      // ① 直前の IaC 変更（apply 差分）を記録 → ② その変更が原因の INFRASTRUCTURE 障害を合成入力で発火。
-      // 入口だけ合成し、変換→分類→AI 調査（terraform 差分を root cause として収集）は実経路を辿る。
-      await this.appliedInfraChangeStore.record(buildInfraFaultApplyEvent(this.infraApplyPrUrl));
-      const event = CloudMonitoringAlertTranslator.toMonitoringEvent(
-        buildInfraConfigChangeWebhook(),
-      );
-      await this.collectMonitoringEventUseCase.run(event);
-      // 注文を伴わない検知なので orderId は空。
-      return { scenarioId: resolvedId, label: "構成変更障害", orderId: "" };
-    }
-
     if (resolvedId === SIMILAR_KNOWN_SCENARIO_ID) {
       // 入口だけ合成: APPLICATION の障害を実 ingest 経路に通す。既知パターンには一致せず、
       // reset が seed した解決済み事例と字句類似で一致 → SimilarPatternRule が準・既知に分類。
       await this.collectMonitoringEventUseCase.run(buildSimilarKnownEvent());
       // 注文を伴わない検知なので orderId は空。
       return { scenarioId: resolvedId, label: "DBコネクションプール枯渇", orderId: "" };
-    }
-
-    if (resolvedId === APPCODE_REGRESSION_SCENARIO_ID) {
-      // 入口だけ合成: APPLICATION の障害を直接 ingest 経路に通す。原因の実コード差分は
-      // demo/regression ブランチ（GITHUB_TARGET_REF）の実コミットにあり、AI が調査時に引く。
-      await this.collectMonitoringEventUseCase.run(buildAppcodeRegressionEvent());
-      // 注文を伴わない検知なので orderId は空。
-      return { scenarioId: resolvedId, label: "アプリコード退行", orderId: "" };
     }
 
     const recipe = RECIPES[resolvedId];

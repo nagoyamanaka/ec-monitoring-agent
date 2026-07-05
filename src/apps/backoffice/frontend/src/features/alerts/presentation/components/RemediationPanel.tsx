@@ -23,7 +23,7 @@ export interface RemediationPanelProps {
 }
 
 /**
- * リメディエーション（修正 PR 起票）パネル＝シナリオ5の見せ場（タスク9）。
+ * リメディエーション（修正 PR 起票）パネル＝シナリオ4（脆弱性検知）の見せ場（タスク9）。
  * 調査(read)と修正(write)は分離され、起票は人間の承認アクション。よって
  * AI が「コードで直せる」と判定した（report.remediable）ときだけ起票ボタンを活性にする。
  * 起票後は status を表示し、dispatched の間はポーリングで drafted/failed の確定を反映する。

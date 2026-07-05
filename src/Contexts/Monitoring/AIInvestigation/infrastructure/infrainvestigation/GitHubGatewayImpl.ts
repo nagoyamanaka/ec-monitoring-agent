@@ -16,28 +16,16 @@ export class GitHubGatewayImpl implements GitHubGateway {
   private readonly token: string;
   private readonly repo: string;
   private readonly ref: string;
-  // 短縮 sha（先頭7桁）→ そのコミットに添える PR 参照リンク群。デモで原因コミットに
-  // 「原因PR（マージ済）」「revert PR」を決定論的に付与するために config から注入する。
-  // 空（本番/未設定）なら素の証拠のまま＝挙動非侵食。
-  private readonly commitPrLinks: Record<
-    string,
-    ReadonlyArray<{ url: string; label: string }>
-  >;
 
   constructor(
     token: string = process.env.GITHUB_TOKEN ?? "",
     repo: string = process.env.GITHUB_REPO ?? "",
     // 調査対象の ref（ブランチ/タグ/sha）。空＝既定ブランチ。デモは demo/regression を固定する。
     ref: string = process.env.GITHUB_TARGET_REF ?? "",
-    commitPrLinks: Record<
-      string,
-      ReadonlyArray<{ url: string; label: string }>
-    > = {},
   ) {
     this.token = token;
     this.repo = repo;
     this.ref = ref;
-    this.commitPrLinks = commitPrLinks;
   }
 
   private headers(): Record<string, string> {
@@ -79,20 +67,13 @@ export class GitHubGatewayImpl implements GitHubGateway {
       commit: { message: string; author: { name: string; date: string } };
     }>;
 
-    return data.map((c) => {
-      const shortSha = c.sha.slice(0, 7);
-      const related = this.commitPrLinks[shortSha];
-      return {
-        sha: shortSha,
-        message: c.commit.message.split("\n")[0],
-        author: c.commit.author.name,
-        committedAt: new Date(c.commit.author.date),
-        ...(c.html_url ? { url: c.html_url } : {}),
-        ...(related && related.length > 0
-          ? { relatedPullRequests: related }
-          : {}),
-      };
-    });
+    return data.map((c) => ({
+      sha: c.sha.slice(0, 7),
+      message: c.commit.message.split("\n")[0],
+      author: c.commit.author.name,
+      committedAt: new Date(c.commit.author.date),
+      ...(c.html_url ? { url: c.html_url } : {}),
+    }));
   }
 
   async listOpenPullRequests(params?: {

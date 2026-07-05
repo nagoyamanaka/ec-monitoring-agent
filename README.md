@@ -12,7 +12,7 @@ Findy **DevOps × AI Agent Hackathon 2026** 出展作品。
 - **学習ループ**。人間の正解フィードバックが類似分類の母集団になり、頻出は既知パターンへ昇格 → 次回は1秒で分類（AI 呼び出し不要）。
 - **調査=read / 修正=write の構造分離**。脆弱性は GitHub Actions 上で AI が実コードを修正し、Trivy 再スキャン＋テスト緑を通って **draft PR**（自動マージなし・人間承認ゲート）。
 - **ドッグフーディング（自己運用ループ）**: このリポジトリ自身の CI（Trivy）の検出が本番の `/ingest/security-scan` に流れ、SECURITY 調査が AI 実修正 → 自リポジトリへの draft PR を起こす＝**監視対象の EC も、監視するエージェント自身も、同じ DevOps ループの中にいる**（`.github/workflows/` の実ワークフローが運用系そのもの。図解 → [architecture.md §6.5](docs/architecture.md#65-devops-ドッグフーディング自己運用ループ)）。
-- **正直な合成 ＋ 証拠は本物**: デモの合成入力は UI 上で amber バッジ明示（入口のみ合成・変換→分類→AI 調査は実経路）。エンドポイントの無い偽ボタンは作らない。さらに証拠に添える**外部リンクは実在・決定論導出**——脆弱性は CVE→NVD 実在リンク（正規形の CVE のみ解決＝404 を作らない）、構成変更は terraform 証拠→変更 PR、アプリコード退行は原因コミット→「原因PR（マージ済）/revert PR」。config 未設定（本番）は素の証拠のまま＝挙動非侵食。
+- **正直な合成 ＋ 証拠は本物**: デモの合成入力は UI 上で amber バッジ明示（入口のみ合成・変換→分類→AI 調査は実経路）。エンドポイントの無い偽ボタンは作らない。さらに証拠に添える**外部リンクは実在・決定論導出**——脆弱性は CVE→NVD 実在リンク（正規形の CVE のみ解決＝404 を作らない）、terraform 証拠→変更 PR。config 未設定（本番）は素の証拠のまま＝挙動非侵食。
 
 ## 全体像
 
@@ -49,7 +49,7 @@ flowchart LR
 | フロントエンド | React（ダーク観測コンソール・SSE ライブ・**AI調査ライブタイムライン**・証拠パネル・**働きの明細＝実測メトリクスの証拠フローダイアグラム（流入源→AI 調査→結論の収束図）**・fallback からのワンクリック再調査・承認 UI・着弾/更新/dedup のライブ演出） |
 | インフラ | **Cloud Run**（frontend / edge）＋ **Compute Engine**（EDA 常駐系）・Terraform・Cloud Monitoring / Cloud Logging（OTel 直送） |
 | CI/CD | GitHub Actions（typecheck/UT/E2E → build → deploy／Trivy → 実 ingest／AI リメディ workflow／terraform plan・apply） |
-| テスト | Vitest（BDD）**964件・140ファイル**＋ Playwright E2E |
+| テスト | Vitest（BDD）**959件・139ファイル**＋ Playwright E2E |
 
 ## クイックスタート（ローカル）
 
@@ -61,11 +61,11 @@ make test        # ユニットテスト
 make e2e         # E2E
 ```
 
-バックオフィス UI の **DEMO CONSOLE** から障害シナリオを注入できる（[シナリオ一覧](docs/architecture.md#9-デモシナリオ7ボタンリアルさバッジ付き)）。AI 調査を動かすには Gemini 認証（`GOOGLE_GENAI_USE_VERTEXAI=true`＋ADC、または `GEMINI_API_KEY`）が必要。決定的スタブは `AI_INVESTIGATION_STUB=true`。環境変数は [.env.example](.env.example) を参照。
+バックオフィス UI の **DEMO CONSOLE** から障害シナリオを注入できる（[シナリオ一覧](docs/architecture.md#9-デモシナリオ5ボタンリアルさバッジ付き)）。AI 調査を動かすには Gemini 認証（`GOOGLE_GENAI_USE_VERTEXAI=true`＋ADC、または `GEMINI_API_KEY`）が必要。決定的スタブは `AI_INVESTIGATION_STUB=true`。環境変数は [.env.example](.env.example) を参照。
 
-## デモシナリオ（7本）
+## デモシナリオ（5本）
 
-決済タイムアウト（既知・1秒）／DB プール枯渇（類似・confidence）／インフラ障害（実 Cloud Monitoring 経路＝着弾約1分を「検知待ち」バナーで可視化＋合成反復用 3b）／脆弱性検知→AI 実修正 draft PR（CVE は NVD 実在リンク）／terraform apply 起因の構成変更障害（証拠に変更 PR リンク）／アプリコード退行（**実コミットの実 diff を AI が読んで原因特定**＋原因/revert PR リンク）。各シナリオの分類スペクトルと入力のリアルさは [docs/architecture.md §9](docs/architecture.md) に一覧。
+決済タイムアウト（既知・1秒）／DB プール枯渇（類似・confidence）／インフラ障害（実 Cloud Monitoring 経路＝着弾約1分を「検知待ち」バナーで可視化＋合成反復用 3b・証拠に terraform 差分と変更 PR リンク）／脆弱性検知→AI 実修正 draft PR（CVE は NVD 実在リンク）。**確度スペクトル（既知→類似→未知）と入力のリアルさ3階級（実トリガ/クラウド実検知/合成）を過不足なく1本ずつ**に絞った構成。各シナリオの一覧は [docs/architecture.md §9](docs/architecture.md) を参照。
 
 ## ドキュメント
 
@@ -78,6 +78,6 @@ make e2e         # E2E
 
 ## ステータス（2026-07-05）
 
-- 実装済み: 検知境界＋3系統 ingest／分類3層（既知・類似・未知）／ADK 8エージェント調査（**実行イベントの SSE ライブ中継＝調査タイムライン可視化**・相関の citation 実在照合＋批判役 CorrelationVerifier）／学習ループ・昇格／リメディエーション（advisory・dispatch）／証拠の実リンク化（CVE→NVD・terraform/コミット→PR・config 駆動で非侵食）／実検知シナリオの「検知待ち」バナー／SSE UI／Cloud Run + GCE デプロイ／CI/CD 一式
+- 実装済み: 検知境界＋3系統 ingest／分類3層（既知・類似・未知）／ADK 8エージェント調査（**実行イベントの SSE ライブ中継＝調査タイムライン可視化**・相関の citation 実在照合＋批判役 CorrelationVerifier）／学習ループ・昇格／リメディエーション（advisory・dispatch）／証拠の実リンク化（CVE→NVD・terraform→変更 PR・config 駆動で非侵食）／実検知シナリオの「検知待ち」バナー／SSE UI／Cloud Run + GCE デプロイ／CI/CD 一式
 - 開発中: **予兆ブリーフィング**（未来シグナル×記憶→引用検証付きリスク予報。backend F1〜F6＋UI F7（`/forecast` ページ・引用チップ＝実在シグナルへのリンクのみ表示）＋F8 フラッグシップ seed（DB接続枯渇: pending plan／schedule／過去解決事例。ローカルE2E は stub の偽引用混入で引用検証を決定論実演）＋F10/F11 予防ファースト（各リスクに **AI が「今打てる先手」を1行提示**＝引用の実リンクが実行先・実行主体は人間で write-zero 維持。発火後の受け皿への橋渡しCTAは保険トーンに降格）＋F12 予兆デモコンソール（アラート一覧と同型の DEMO CONSOLE＝投入シグナルの本物度台帳・生成/リセット操作。予報リセットは一覧の /demo/reset と独立）まで着地・残りは実PRステージング/録画。[todo](docs/steps/step6-final-sprint-todo.md)）
 - 設計のみ（ハッカソン後）: イベントソーシング基盤（[step4-1 §7.10](docs/steps/step4-1-strategy.md)）

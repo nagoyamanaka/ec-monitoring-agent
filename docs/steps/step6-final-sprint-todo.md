@@ -412,7 +412,9 @@ todo実施後に
 
 > **背景**: 合成デモでも「証拠が本物」であることを一段引き上げる。デモの入口（Alert 発火）は合成でも、証拠に添える**外部リンク（NVD/PR）は実在・決定論導出**にして「クリックできる本物」にする（シナリオ7＝アプリコード退行で確立した「証跡を代表値から本物へ」の思想を 4/5/6 横断で徹底）。config 未設定（本番）は素の証拠のまま＝**挙動非侵食**が共通不変条件。
 
-### タスク K1: 証拠に実在の外部リンクを決定論的に添える（3シナリオ横断）〔✅〕
+> **2026-07-06 追記（シナリオ絞り込み）**: デモ卓を 1/2/3/3b/4 に絞り、シナリオ5（構成変更）・6（アプリコード退行）は撤退（検知入口の説得力が弱く発表尺でも絞る方が伝わる）。K1 のうち**シナリオ6 の PR リンク注入（`relatedPullRequests`/`appcodeCommitPrLinks`/config `appcode*`）はコードごと撤去**（git 履歴 f9f432c に残置）。CVE→NVD はシナリオ4で、terraform 証拠→変更 PR（`infraApplyPrUrl`）はシナリオ3/3b（同一コードパス `buildInfraFaultApplyEvent`）で継続。人間タスクの残りは scenario5 分の Merged PR のみ（3/3b の terraform 証拠リンク先として使う）。
+
+### タスク K1: 証拠に実在の外部リンクを決定論的に添える（3シナリオ横断）〔✅→シナリオ6分は撤去〕
 
 - [x] **シナリオ4（脆弱性）: CVE → NVD 実在リンク**（`SecurityFindingView`）。`cveId` が正規形（`CVE_ID_PATTERN=/^CVE-\d{4}-\d{4,}$/i`）のときだけ NVD 詳細ページ URL（`nvdUrl`）を決定論導出＝**404 リンクを作らない**。合成注入でも CVE 識別子自体は公的 DB に実在＝嘘にならない。確信度に `verifiable_cve`（「実在 CVE 引用」）を強シグナルとして追加（`confidenceCalibration`）。wire は `AlertContract` に SecurityFinding を追加、`EvidencePanel` が脆弱性証拠に NVD リンクを表示
 - [x] **シナリオ5（構成変更＝terraform apply 起因）: terraform 証拠 → 変更PRリンク**（`TerraformDiff.url`）。`config.demo.infraApplyPrUrl`（`DEMO_INFRA_APPLY_PR_URL` 既定 `…/pull/60`）を `buildInfraFaultApplyEvent()` 経由で apply イベントに載せ、`TerraformGatewayImpl` が `change.url` を証拠へ通す。`EvidencePanel` が「変更 PR を開く →」のクリック語彙で表示。空なら非リンク

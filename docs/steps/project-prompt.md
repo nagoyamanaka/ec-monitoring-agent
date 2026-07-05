@@ -1,4 +1,4 @@
-# 設計エージェント向けプロンプト v19.2
+# 設計エージェント向けプロンプト v19.3
 
 > **変更履歴（v18→v19）**
 > 検知境界（detection boundary）を明文化。検知基盤に Cloud Monitoring を採用（Datadog 不採用＝有料・物語矛盾／Cloud Monitoring は無料枠・GCP 要件加点）。
@@ -443,6 +443,8 @@ interface InfraEvidence {
 
 ### シナリオ6: 構成変更障害（IaC apply 起因・v14追加）
 
+> **2026-07-06 デモ卓から撤退（v19.3）**: 検知の入口の説得力（「実際はどう検知するのか」への答え）が弱く、デモ・発表は 1/2/3/3b/4（既知/類似/未知×実検知/未知×CI）に絞る判断。`TriggerDemoScenarioUseCase` の `infra-config-change` トリガーは撤去済み（git 履歴に残置）。**ただし本節の「terraform 証拠→変更 PR リンク」（K1）と apply 差分の記録機構（`buildInfraFaultApplyEvent`）は、現行のインフラ障害シナリオ（3/3b）が同一コードパスで使用継続**。以下は設計記録。
+
 **「terraform apply（IaC 変更）そのものが原因の障害」を、AI が apply 適用差分を root cause として特定する**フロー。シナリオ4（インフラ障害）が GCP の Cloud Monitoring 経路B 依存で**ローカルでは Alert が出ない**のに対し、本シナリオは検知の入口だけ合成して実 ingest 経路に通すので**ローカルでも実 Alert→AI 調査が走る**（シナリオ5＝脆弱性検知と同方式）。
 
 > **設計のキモ（2026-06-29）**: メトリクス/ログ/コミットは事後に時間窓でライブ照会できるが、**terraform apply の差分だけは後から再構成できない**（apply は CI 上の一回限りのイベント）。よって git join ではなく**適用の瞬間にイベントとして捕捉して保存**し、調査は既存の `since` 時間窓で引く（検知ソースの peer ingest と同じ思想）。git sha は join キーでなく apply イベントの一属性。証拠 `TerraformDiff` は「変更ファイル名の羅列」ではなく**リソース単位の構造化差分**（address / action / `attributeDeltas: {key, before, after}`）に格上げ済み＝AI 原因分析の決定打になる（タスク33）。
@@ -469,6 +471,8 @@ interface InfraEvidence {
 > **証拠の実リンク（2026-07-05・K1）**: terraform 証拠には変更 PR リンクを添える（`TerraformDiff.url` ← `config.demo.infraApplyPrUrl`＝`DEMO_INFRA_APPLY_PR_URL`・`buildInfraFaultApplyEvent()` 経由）。`EvidencePanel` が「変更 PR を開く →」で表示。**config 未設定なら非リンク＝挙動非侵食**。同内容の PR は demo ブランチ base で人間が実起票する（main はワークフロー発火のため使わない）。
 
 ### シナリオ7：アプリコード退行（CIは通ったが挙動デグレ・v20追加）
+
+> **2026-07-06 デモ卓から撤退（v19.3）**: シナリオ6と同じ理由（検知入口の説得力・発表尺の絞り込み）で撤退。`TriggerDemoScenarioUseCase` の `appcode-regression` トリガーと、原因コミットへの PR リンク注入機構（`GitCommit.relatedPullRequests`／`appcodeCommitPrLinks`／config の `appcode*` 3項目・下記 K1 段落）は**コードごと撤去済み**（git 履歴 f9f432c に残置・復活可能）。以下は設計記録。
 
 **「テストは緑のまま通ったアプリコード変更そのものが挙動を退行させた障害」を、AI が実コミット差分を読んで root cause として特定する**フロー。シナリオ4/6（インフラ・IaC 起因）・5（CVE）がカバーしない**アプリコード起因**の根本原因カテゴリを埋め、既述の「修正ターゲット・ルーティング（アプリのコード→PR+UT / 自前IaC→Terraform PR / 外部→runbook）」を実証する。`GitHubGateway.getCommitDiff()`（コミット単位の実 unified diff 取得・タスク35）の見せ場。
 
@@ -965,6 +969,13 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(
 ---
 
 ## 変更履歴
+
+### v19.3（2026-07-06 デモシナリオ絞り込み）
+
+デモ卓を 1/2/3/3b/4 の5ボタンに絞り込み（既知→類似→未知の確度スペクトル×realness 3階級を過不足なく1本ずつ）。
+
+- シナリオ6（構成変更障害）・シナリオ7（アプリコード退行）をデモ卓から撤退。検知入口の説得力（「実際はどう検知するのか」）が弱く、発表尺でも絞る方が伝わる判断。トリガー（`infra-config-change`/`appcode-regression`）は撤去・git 履歴に残置。
+- シナリオ7 の PR リンク注入機構（`GitCommit.relatedPullRequests`・`appcodeCommitPrLinks`・config `appcode*`）もコードごと撤去。**terraform 証拠→変更 PR リンク（K1）はインフラ障害シナリオ 3/3b が同一コードパス（`buildInfraFaultApplyEvent`＋`infraApplyPrUrl`）で継続**・CVE→NVD リンク（シナリオ5＝脆弱性検知）も継続。
 
 ### v19.2（2026-07-05 実コード照合・step6 実装反映）
 

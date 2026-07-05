@@ -214,32 +214,10 @@ export class BackofficeApp {
       appliedInfraChangeStore,
       pendingInfraPlanStore,
     );
-    // デモ: 原因コミット（例 e12b655）に「原因PR（マージ済）」「revert PR」の実在リンクを添える。
-    // GitHub の一覧 API はコミット→PR を返さないので、config の実 PR URL を短縮 sha にひも付けて注入する。
-    // どちらの URL も空なら map は空＝素の証拠のまま（本番/未設定時は非侵食）。
-    const appcodeCommitPrLinks =
-      config.demo.appcodeCausePrUrl || config.demo.appcodeFixPrUrl
-        ? {
-            [config.demo.appcodeCauseCommitSha]: [
-              ...(config.demo.appcodeCausePrUrl
-                ? [
-                    {
-                      url: config.demo.appcodeCausePrUrl,
-                      label: "原因PR（マージ済）",
-                    },
-                  ]
-                : []),
-              ...(config.demo.appcodeFixPrUrl
-                ? [{ url: config.demo.appcodeFixPrUrl, label: "revert PR" }]
-                : []),
-            ],
-          }
-        : {};
     const githubGateway = new GitHubGatewayImpl(
       config.github.token,
       config.github.targetRepo,
       config.github.targetRef,
-      appcodeCommitPrLinks,
     );
 
     // 単一 LLMTextClient（stub 時は決定論）。AI調査の既定経路＋リメディ起案(planner)で共有する。
@@ -395,7 +373,7 @@ export class BackofficeApp {
     );
     const getInfraEvidenceQueryHandler = new GetInfraEvidenceQueryHandler(getInfraEvidenceUseCase);
 
-    // リメディエーション（シナリオ5の出口）。実行戦略は config.remediation.mode で差し替える:
+    // リメディエーション（シナリオ4＝脆弱性検知の出口）。実行戦略は config.remediation.mode で差し替える:
     //   dispatch = CI(GitHub Actions)のAIエージェントへ投げ、実コード修正+UT/E2E をランナーで回す（精度はテストゲートで担保）
     //   advisory = in-process で SECURITY_REMEDIATION.md の方針PRを起票（CI/GitHub 不在でも動く既定）
     // どちらも RemediationExecutor の裏に隠れ、DraftRemediationUseCase はノータッチ。

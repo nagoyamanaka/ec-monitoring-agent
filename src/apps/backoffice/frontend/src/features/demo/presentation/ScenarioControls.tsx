@@ -144,20 +144,6 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
           "CI(Trivy) の HIGH/CRITICAL を合成 → AI 調査 → 修正 PR 起票（DevOps ループ）",
         realness: "synthetic",
       },
-      {
-        id: "5",
-        label: "構成変更障害",
-        description:
-          "Cloud SQL 設定縮小（IaC apply）が原因 → AI が terraform 差分を特定",
-        realness: "synthetic",
-      },
-      {
-        id: "6",
-        label: "アプリコード退行",
-        description:
-          "テスト通過のコード変更が挙動退行 → AI が実コミット差分を読んで原因特定",
-        realness: "synthetic",
-      },
     ],
   },
 ];

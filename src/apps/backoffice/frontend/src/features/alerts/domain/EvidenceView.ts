@@ -53,11 +53,6 @@ export type EvidenceCommitView = {
   readonly committedAt: string;
   /** コミットの Web リンク（GitHub）。あれば sha をクリック可能にする。無ければ非リンク表示。 */
   readonly url?: string;
-  /** このコミットに紐づく PR リンク（原因＝マージ済 PR / 修正＝revert PR）。あれば行末にリンクを出す。 */
-  readonly relatedPullRequests?: ReadonlyArray<{
-    readonly url: string;
-    readonly label: string;
-  }>;
 };
 
 export type EvidenceMetricView = {
@@ -110,9 +105,6 @@ export function toEvidenceView(dto: InfraEvidencePrimitives): EvidenceView {
       author: c.author,
       committedAt: c.committedAt,
       ...(c.url ? { url: c.url } : {}),
-      ...(c.relatedPullRequests && c.relatedPullRequests.length > 0
-        ? { relatedPullRequests: c.relatedPullRequests }
-        : {}),
     })),
     metrics: (dto.metrics ?? []).map((m) => ({
       metricType: m.metricType,
