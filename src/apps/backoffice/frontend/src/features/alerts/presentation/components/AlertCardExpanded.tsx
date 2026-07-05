@@ -7,7 +7,7 @@ import { EscalationPanel } from "./EscalationPanel";
 import { EvidenceFlowDiagram } from "./EvidenceFlowDiagram";
 import { RemediationReviewPanel } from "./RemediationReviewPanel";
 import { alertReason } from "../../domain/alertReason";
-import { describeConditionField } from "../../domain/conditionFieldLabel";
+import { classificationEvidence } from "../../domain/classificationEvidence";
 import { workloadSummary } from "../../domain/investigationWorkload";
 import { evidenceFlowModel } from "../../domain/evidenceFlow";
 
@@ -35,15 +35,6 @@ export interface AlertCardExpandedProps {
   className?: string;
 }
 
-/** 一致条件の値を表示用に整形（文字列はそのまま、非整数は2桁に丸め、それ以外は JSON 表記）。 */
-function formatValue(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" && !Number.isInteger(value)) {
-    return value.toFixed(2);
-  }
-  return JSON.stringify(value);
-}
-
 /**
  * Alert の展開ビュー（詳細ドロワー本体／詳細ページで共用）。
  * 既知パターン（classification の根拠）と AI 調査（summary/steps/actions）の両方を扱い、
@@ -59,6 +50,10 @@ export function AlertCardExpanded({
   const report = alert.report;
   const reason = alertReason(alert);
   const known = alert.classification.type === "known";
+  // 分類根拠の表示射影: 等価一致は1つの値に畳み、similarity の条件式はゲートとして分離する。
+  const evidence = known
+    ? classificationEvidence(alert.classification.matchedConditions)
+    : null;
   // 働きの明細（タスク G1）: 実測メトリクスがあれば冒頭 1 行に数字で出す（fallback は対象外）。
   const workload = report && !report.isFallback ? workloadSummary(report.metrics) : null;
   // 証拠フローダイアグラム（タスク E8-A・full のみ）。図が描けるときは ⏱ 1行を図に吸収する
@@ -152,51 +147,70 @@ export function AlertCardExpanded({
         </section>
       )}
 
-      {/* 既知パターンの一致根拠（なぜそう判断したか） */}
-      {alert.classification.type === "known" &&
-        alert.classification.matchedConditions.length > 0 && (
-          <section className="space-y-1">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-              一致した根拠
-            </h4>
+      {/* 既知パターンの一致根拠（なぜそう判断したか）。
+          一致済みの条件は期待値=実値なので同じ値を2カラムに重複させず1つに畳む（E系: 認知負荷）。
+          similarity のしきい値は「一致」でなく確定の条件式＝テーブルに混ぜずゲート行で見せる。 */}
+      {evidence && (evidence.rows.length > 0 || evidence.similarityGate) && (
+        <section className="space-y-1.5">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+            一致した根拠
+          </h4>
+          {evidence.rows.length > 0 && (
             <div className="inline-block max-w-full overflow-x-auto rounded-md ring-1 ring-inset ring-slate-700/60">
               <table className="text-left text-xs">
                 <thead>
                   <tr className="bg-slate-800/50 text-slate-300">
                     <th className="px-3 py-1.5 font-medium">項目</th>
-                    <th className="px-3 py-1.5 font-medium">期待値</th>
-                    <th className="px-3 py-1.5 font-medium">実値</th>
+                    <th className="px-3 py-1.5 font-medium">一致した値</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {alert.classification.matchedConditions.map((c, i) => {
-                    // 項目は人間語ラベルを主表示に（「eventName とは？」を考えさせない）。
-                    // 生フィールド名は副表示で残す＝照合対象のスキーマも読める。
-                    const field = describeConditionField(c.field);
-                    return (
+                  {evidence.rows.map((row, i) => (
                     <tr key={i} className="border-t border-slate-700/50">
-                      <td className="px-3 py-1.5">
-                        <span className="text-slate-100">{field.label}</span>
-                        {field.raw && (
-                          <code className="block text-[10px] leading-tight text-cyan-300/80">
-                            {field.raw}
+                      {/* 項目は人間語ラベル＋生フィールド名を1行に（縦積みの2段表示にしない）。 */}
+                      <td className="whitespace-nowrap px-3 py-1.5">
+                        <span className="text-slate-100">{row.label}</span>
+                        {row.raw && (
+                          <code className="ml-1.5 text-[10px] text-cyan-300/80">
+                            {row.raw}
                           </code>
                         )}
                       </td>
-                      <td className="px-3 py-1.5 text-slate-300">
-                        {formatValue(c.expectedValue)}
-                      </td>
-                      <td className="px-3 py-1.5 text-slate-100">
-                        {formatValue(c.actualValue)}
+                      <td className="whitespace-nowrap px-3 py-1.5">
+                        <span aria-hidden className="text-emerald-300">
+                          ✓{" "}
+                        </span>
+                        <span className="text-slate-100">{row.value}</span>
+                        {row.expected && (
+                          <span className="block pl-4 text-[10px] text-slate-400">
+                            照合相手（期待値）: {row.expected}
+                          </span>
+                        )}
                       </td>
                     </tr>
-                    );
-                  })}
+                  ))}
                 </tbody>
               </table>
             </div>
-          </section>
-        )}
+          )}
+          {/* 確定の判断ルール（決定論のしきい値ゲート）を条件式のまま可視化する。
+              値は上部 donut と同じ百分率語彙。下回った場合の行き先（AI 調査）も明示。 */}
+          {evidence.similarityGate && (
+            <p className="text-xs leading-relaxed text-slate-300">
+              <span aria-hidden>⚖ </span>
+              確定条件: 類似度
+              <code className="mx-1 text-[10px] text-cyan-300/80">
+                {evidence.similarityGate.raw}
+              </code>
+              <span className="font-semibold text-emerald-300">
+                {evidence.similarityGate.actualLabel}
+              </span>{" "}
+              ≧ しきい値 {evidence.similarityGate.thresholdLabel}{" "}
+              を満たしたため準・既知に自動分類（下回る場合は AI 調査へフォールバック）
+            </p>
+          )}
+        </section>
+      )}
 
       {/* AI 調査レポート（未知パターン）。summary は要約（原因候補＋障害規模）のみ、
           full は報告用フル（調査ステップ・推奨アクション・影響評価・escalation・review）。 */}
