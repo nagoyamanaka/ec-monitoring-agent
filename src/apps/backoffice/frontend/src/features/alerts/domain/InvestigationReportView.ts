@@ -4,6 +4,8 @@ import type {
   InvestigationLinkKind,
   InvestigationMetricsPrimitives,
   ConfidenceCalibrationPrimitives,
+  CitationRefPrimitives,
+  CitationSourceKind,
   ImpactFault,
   RemediationVerdict,
 } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
@@ -16,7 +18,13 @@ import type { AlertSeverity } from "./AlertView";
 
 export type ReviewStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";
 
-export type { InvestigationLinkKind, ImpactFault, RemediationVerdict };
+export type { InvestigationLinkKind, ImpactFault, RemediationVerdict, CitationSourceKind };
+
+/**
+ * 引用の実在照合結果の表示用型。ワイヤ契約と同形（backend が証拠カタログとの突合を記録した事実）。
+ * `kind` 未設定＝収集済み証拠に解決しなかった（未照合）で、隠さずそのまま表示する。
+ */
+export type CitationRefView = CitationRefPrimitives;
 
 /**
  * 調査の実測メトリクス（経過時間・証拠件数内訳＝タスク G1「働きの明細」）の表示用型。
@@ -41,6 +49,8 @@ export type ImpactView = {
   readonly scale: string;
   readonly affectedSubjects: string[];
   readonly citations: string[];
+  // citations の実在照合結果（1:1 対応）。refs 無しの旧 Alert は生文字列表示にフォールバック。
+  readonly citationRefs?: CitationRefView[];
 };
 
 /** 他責/運用案件のエスカレーション草案の表示用型（タスク35）。詳細のみで全表示する。 */
@@ -52,6 +62,8 @@ export type EscalationView = {
   readonly interimWorkaround: string;
   readonly severityRationale: string;
   readonly evidenceBundle: string[];
+  // evidenceBundle の実在照合結果（1:1 対応）。refs 無しの旧 Alert はフォールバック。
+  readonly evidenceBundleRefs?: CitationRefView[];
 };
 
 /** 修正PR自動レビューの判定の表示用型（タスク36）。詳細のみで全表示する。 */
@@ -144,6 +156,9 @@ export function toInvestigationReportView(
             scale: dto.impact.scale,
             affectedSubjects: [...dto.impact.affectedSubjects],
             citations: [...dto.impact.citations],
+            ...(dto.impact.citationRefs
+              ? { citationRefs: [...dto.impact.citationRefs] }
+              : {}),
           },
         }
       : {}),
@@ -157,6 +172,9 @@ export function toInvestigationReportView(
             interimWorkaround: dto.escalation.interimWorkaround,
             severityRationale: dto.escalation.severityRationale,
             evidenceBundle: [...dto.escalation.evidenceBundle],
+            ...(dto.escalation.evidenceBundleRefs
+              ? { evidenceBundleRefs: [...dto.escalation.evidenceBundleRefs] }
+              : {}),
           },
         }
       : {}),

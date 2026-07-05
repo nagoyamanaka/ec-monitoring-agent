@@ -9,6 +9,7 @@ import {
   buildFallbackReport,
 } from "../aiinvestigation/InvestigationReportMapper.js";
 import { collectCitableEvidenceIds } from "../../domain/CitedEvidence.js";
+import { buildCitationCatalog } from "../../domain/CitationResolution.js";
 import {
   buildEvidenceLinks,
   evidenceLinkConfigFromEnv,
@@ -43,6 +44,8 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
     const evidenceLinks = buildEvidenceLinks(context.infraEvidence, this.linkConfig);
     // 相関ガード（relatedAlerts の citation 実在照合）の語彙。収集済み証拠から決定的に導出する。
     const citableEvidenceIds = collectCitableEvidenceIds(context.infraEvidence);
+    // 引用の表示用照合カタログ（impact/escalation の citationRefs）。同じく決定的に導出する。
+    const citationCatalog = buildCitationCatalog(context);
 
     let raw: string;
     try {
@@ -72,7 +75,7 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
           action: "ai_investigation_salvaged",
           message: `AI調査(ADK)の最終出力が途中切断されていたため部分レポートを回収しました: eventName=${context.errorEvent.eventName}, rawLen=${raw.length}, rawSnippet=${rawSnippet(raw)}`,
         });
-        return toInvestigationReport(salvaged, evidenceLinks, citableEvidenceIds);
+        return toInvestigationReport(salvaged, evidenceLinks, citableEvidenceIds, citationCatalog);
       }
       await this.logger?.warn({
         service: "backoffice-backend",
@@ -84,6 +87,6 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
       return buildFallbackReport(evidenceLinks);
     }
 
-    return toInvestigationReport(output, evidenceLinks, citableEvidenceIds);
+    return toInvestigationReport(output, evidenceLinks, citableEvidenceIds, citationCatalog);
   }
 }

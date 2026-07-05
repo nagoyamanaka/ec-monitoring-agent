@@ -59,7 +59,11 @@ export function EscalationPanel({ escalation }: EscalationPanelProps) {
       </div>
 
       {/* 生ログ引用は既定折りたたみ＋種別レーン（タスク E8-D・ImpactPanel と同じ畳み方）。 */}
-      <CitationChips heading="添付証拠" citations={escalation.evidenceBundle} />
+      <CitationChips
+        heading="添付証拠"
+        citations={escalation.evidenceBundle}
+        refs={escalation.evidenceBundleRefs}
+      />
     </section>
   );
 }

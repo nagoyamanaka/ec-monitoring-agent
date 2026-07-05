@@ -81,8 +81,13 @@ export function ImpactPanel({ impact }: ImpactPanelProps) {
         </div>
       )}
 
-      {/* 生ログ引用は既定折りたたみ＋種別レーン（タスク E8-D）。件数は常時見える＝根拠の存在は一目。 */}
-      <CitationChips heading="算定根拠（引用）" citations={impact.citations} />
+      {/* 生ログ引用は既定折りたたみ＋種別レーン（タスク E8-D）。件数は常時見える＝根拠の存在は一目。
+          citationRefs（実在照合結果）があれば出所ラベル＋✓照合済みバッジ付きで出す。 */}
+      <CitationChips
+        heading="算定根拠（引用）"
+        citations={impact.citations}
+        refs={impact.citationRefs}
+      />
     </section>
   );
 }
