@@ -71,10 +71,13 @@ export class AnalyticsResponse implements Response {
 
 function toApprovedSummary(alert: Alert): ApprovedAlertSummary {
   const classification = alert.classification;
+  // suggestedPatternName は LLM 出力の途中切断→salvage で空文字になり得る（isFallback=false のまま
+  // 到達しなかったフィールドが "" に丸められる）。空文字は「推定パターン名なし」なので null に畳んで
+  // DTO 契約（無ければ null）と一致させ、表示側の placeholder 分岐を素通りさせない。
   const patternName =
     classification.type === "known"
       ? classification.patternName
-      : alert.investigationReport?.suggestedPatternName ?? null;
+      : alert.investigationReport?.suggestedPatternName?.trim() || null;
   return {
     id: alert.id.value,
     eventName: alert.monitoringEvent.eventName,
