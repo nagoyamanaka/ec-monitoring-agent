@@ -9,10 +9,22 @@ import {
   fetchAlertById,
   submitFeedback,
   promoteAlert,
+  clearSimilarIncidentsByNote,
   BACKOFFICE_BASE_URL,
   KNOWN_ERROR_PATTERNS_COLLECTION,
   AlertPrimitives,
 } from "./support.js";
+
+// 類似シナリオ（デモ 2 / similar-known）の合成 APPLICATION イベントの eventName。
+// buildSimilarKnownEvent が発火する。既知パターンには完全一致せず、過去の解決済み事例が
+// コーパスにあれば SimilarPatternRule が graded confidence（類似・準既知）で拾う経路。
+const SIMILAR_EVENT_NAME = "ec.db.connection_pool_exhausted";
+
+// 承認時に添える「訂正＝確定した原因/症状」。次回の類似判定の根拠テキスト（resolvedNote）になる。
+// SimilarPatternRule のクエリ文（eventName＋payload の symptom）とトークン集合が一致するよう語彙を
+// 意図的に被らせ、字句類似（Jaccard）を 1.0 に寄せている。これで reset シードの事例（0.667）より
+// 確実に上位で選ばれ、「最良一致＝この承認で焼いた訂正事例」を決定的にできる（sourceAlertId で突合）。
+const OPERATOR_CORRECTION = "symptom: database connection pool exhausted";
 
 // デモシナリオ 3b（インフラ障害・合成注入）の eventName。
 // CloudMonitoringAlertTranslator が condition_name="CRITICAL log entries" を slugify した値で、
@@ -161,5 +173,83 @@ describe("backoffice E2E: feedback lifecycle journey (stub AI)", () => {
     // （Alert.reopenForReinvestigation の仕様。却下＝二値学習の feedback とは別概念）。
     expect(reinvestigated.feedback).toBeNull();
     expect(reinvestigated.investigationReport?.isFallback).toBe(false);
+  });
+});
+
+/**
+ * 【類似学習ループ E2E】「オペレーターの訂正が、次回の分類の正になる」一周を HTTP API だけで通す。
+ *
+ *   ① 類似シナリオ（similar-known）を発火 → 承認できる Alert を1件得る
+ *   ② 訂正メモつきで承認 → その訂正が解決済み事例（resolvedNote）としてコーパスに index される
+ *   ③ 同型が再発 → 承認済みは畳み込まれず新規 Alert が立ち、①②で学習した訂正事例に
+ *      SIMILARITY で即分類される（AI 調査は走らない）。sourceAlertId が②で承認した Alert を指す
+ *      ＝「この訂正がこの分類の根拠になった」ことを決定的に突合する。
+ *
+ * SubmitFeedbackUseCase の UT が「承認で operatorNote→resolvedNote を index する」ドメイン挙動を
+ * 担保済み。ここで検証するのは「PATCH /feedback → InMemory コーパス → 次回 ingest の分類器
+ * （SimilarPatternRule / source=SIMILARITY）」の配線が一本につながっていること。
+ *
+ * 汚染対策: InMemory コーパスはサーバプロセス内で永続し、reset シードや過去実行の事例が
+ * 同 eventName に残りうる。②の訂正メモは Jaccard=1.0 に寄せてあり、コーパスの他事例（≦0.667）より
+ * 必ず上位、かつ最新挿入が同点タイでも先に選ばれるため、③の最良一致は常に「直前に承認した Alert」になる。
+ */
+describe("backoffice E2E: similarity learning loop (feedback → corpus → SIMILARITY)", () => {
+  let correctedAlert: AlertPrimitives;
+  let recurredSimilar: AlertPrimitives;
+
+  beforeAll(async () => {
+    // ES は永続するため、過去実行が残した同署名の学習事例を先に掃除する（タイ回避＝突合を決定的に）。
+    await clearSimilarIncidentsByNote(OPERATOR_CORRECTION);
+    // 既存 Alert を消して、①の発火が畳み込まれず新規 Alert として立つようにする
+    // （コーパスの解決済み事例は Alert ではないので消えない＝学習は保持される）。
+    await clearAlerts();
+  });
+
+  afterAll(async () => {
+    // 焼いた学習事例を残さない（次回実行・後続テストの類似判定を汚さない）。
+    await clearSimilarIncidentsByNote(OPERATOR_CORRECTION);
+  });
+
+  it("① 類似シナリオを発火し、承認できる Alert を1件得る", async () => {
+    await triggerScenario("similar-known");
+
+    correctedAlert = await pollAlert(
+      (a) => a.monitoringEvent.eventName === SIMILAR_EVENT_NAME,
+    );
+    expect(correctedAlert.id).toBeTruthy();
+  });
+
+  it("② 訂正メモつきで承認すると、訂正が解決済み事例としてコーパスに学習される", async () => {
+    await submitFeedback(correctedAlert.id, {
+      isCorrect: true,
+      operatorNote: OPERATOR_CORRECTION,
+    });
+
+    const approved = await fetchAlertById(correctedAlert.id);
+    expect(approved.feedback?.isCorrect).toBe(true);
+    expect(approved.feedback?.operatorNote).toBe(OPERATOR_CORRECTION);
+    // 単一承認の加重スコアは 0.4（<1.0）で自動昇格しない＝完全一致パターンは作られない。
+    // よって③の再発は EXACT_MATCH ではなく SIMILARITY 経路で分類される（承認は OPEN 据置）。
+    expect(approved.status).toBe("OPEN");
+  });
+
+  it("③ 同型が再発すると、新規 Alert が承認済みの訂正事例に SIMILARITY で即分類される", async () => {
+    await triggerScenario("similar-known");
+
+    // 承認済みの correctedAlert へは畳み込まれない（dedup 窓から除外）＝新規 Alert が立つ。
+    recurredSimilar = await pollAlert(
+      (a) =>
+        a.monitoringEvent.eventName === SIMILAR_EVENT_NAME &&
+        a.id !== correctedAlert.id &&
+        a.classification.type === "known",
+    );
+
+    expect(recurredSimilar.classification.source).toBe("SIMILARITY");
+    expect(recurredSimilar.classification.patternName).toMatch(/^類似既知:/);
+    // 学習根拠の突合: 最良一致は②で承認した訂正事例＝この分類の根拠は correctedAlert 由来。
+    // 「オペレーターの訂正が、次回の分類の正になった」ことの決定的な証拠。
+    expect(recurredSimilar.classification.sourceAlertId).toBe(correctedAlert.id);
+    // 類似一致は AI 調査を自動起動しない（即・無料・決定論）。
+    expect(recurredSimilar.investigationReport).toBeNull();
   });
 });

@@ -127,4 +127,6 @@ services:
       # backoffice E2E 用（別プロセス・別DB）
       BACKOFFICE_BASE_URL: ${BACKOFFICE_BASE_URL:-http://backoffice-backend:3001}
       MONITORING_MONGO_URL: ${MONITORING_MONGO_URL:-mongodb://mongo:27017/monitoring}
+      # 類似コーパス（ES）掃除用。backoffice-backend と同じ ES を指す（テスト署名の学習事例のみ削除）。
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-http://elasticsearch:9200}
       E2E_SEED: ${E2E_SEED:-true}

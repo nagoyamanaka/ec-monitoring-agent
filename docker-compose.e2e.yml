@@ -7,3 +7,11 @@ services:
       # 予兆E2E（forecast.e2e.test.ts）用: /forecast ルートを有効化。
       # POST /forecast は stub LLM の固定予報（偽引用入り）で決定論＝課金なし。
       FORECAST_ENABLED: "true"
+      # CI には ADC（GCP 認証情報）が無い。GCP_PROJECT_ID=local が local overlay で入るため
+      # INFRASTRUCTURE 調査（シナリオ3b）の証拠収集だけが実 Cloud Logging/Monitoring クライアント
+      # を初回生成し、gax(gRPC) createStub の認証失敗が await 先に届かず unhandledRejection 化
+      # ＝調査が永久ハング（レポート未添付で feedback-lifecycle E2E ①がタイムアウト）。
+      # ローカルは ~/.config/gcloud の ADC マウントで即エラー→catch→空証拠となり顕在化しない。
+      # 実装済みの明示無効化スイッチで GCP クライアント生成自体を止める（証拠は空＝決定論）。
+      CLOUD_LOGGING_ENABLED: "false"
+      CLOUD_MONITORING_ENABLED: "false"
