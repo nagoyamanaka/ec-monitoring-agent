@@ -64,6 +64,53 @@ describe("useDemoControls", () => {
     await waitFor(() => expect(result.current.status?.totalAlerts).toBe(3));
   });
 
+  it("awaitDetection 付き注入は pendingDetection を立てる（実検知の待機）", async () => {
+    const api = fakeApi();
+    const { result } = renderHook(() => useDemoControls(api));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.triggerScenario("3", {
+        awaitDetection: true,
+        label: "インフラ障害",
+      });
+    });
+
+    expect(result.current.pendingDetection?.scenarioId).toBe("3");
+    expect(result.current.pendingDetection?.label).toBe("インフラ障害");
+
+    act(() => result.current.clearPendingDetection());
+    expect(result.current.pendingDetection).toBeNull();
+  });
+
+  it("awaitDetection 無しの注入は pendingDetection を立てない", async () => {
+    const api = fakeApi();
+    const { result } = renderHook(() => useDemoControls(api));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.triggerScenario("1");
+    });
+
+    expect(result.current.pendingDetection).toBeNull();
+  });
+
+  it("次の操作を始めると前回の検知待ちは畳まれる", async () => {
+    const api = fakeApi();
+    const { result } = renderHook(() => useDemoControls(api));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.triggerScenario("3", { awaitDetection: true });
+    });
+    expect(result.current.pendingDetection).not.toBeNull();
+
+    await act(async () => {
+      await result.current.triggerScenario("1");
+    });
+    expect(result.current.pendingDetection).toBeNull();
+  });
+
   it("操作失敗は error に載せる", async () => {
     const api = fakeApi({
       reset: vi.fn().mockRejectedValue(new Error("boom")),

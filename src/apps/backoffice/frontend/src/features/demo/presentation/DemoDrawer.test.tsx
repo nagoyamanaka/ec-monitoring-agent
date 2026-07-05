@@ -90,6 +90,81 @@ describe("DemoDrawer", () => {
     await waitFor(() => expect(api.getStatus).toHaveBeenCalledTimes(3));
   });
 
+  it("実検知シナリオ注入で検知待ちバナーを出し、INFRASTRUCTURE 着弾で畳む", async () => {
+    const api = fakeApi();
+    const { rerender } = render(
+      <DemoDrawer api={api} refreshKey={1000} lastIncomingAlert={null} />,
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText("インフラ障害（実 Cloud Monitoring）"),
+      ).toBeInTheDocument(),
+    );
+
+    // 実 Cloud Monitoring 行を開いて注入する。
+    await userEvent.click(
+      screen.getByRole("button", { name: /インフラ障害（実 Cloud Monitoring）/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "インフラ障害（実 Cloud Monitoring） を実行",
+      }),
+    );
+
+    // クラウド実検知は awaitDetection を渡す → 待機ナレーションが出る。
+    await waitFor(() =>
+      expect(screen.getByText("実パイプラインが検知中…")).toBeInTheDocument(),
+    );
+    expect(api.triggerScenario).toHaveBeenCalledWith("3");
+
+    // 別 category の受信（例 remediation でなく APPLICATION アラート）では畳まない。
+    rerender(
+      <DemoDrawer
+        api={api}
+        refreshKey={2000}
+        lastIncomingAlert={{ category: "APPLICATION" }}
+      />,
+    );
+    expect(screen.getByText("実パイプラインが検知中…")).toBeInTheDocument();
+
+    // 当の INFRASTRUCTURE アラート着弾 → バナーは消える。
+    rerender(
+      <DemoDrawer
+        api={api}
+        refreshKey={3000}
+        lastIncomingAlert={{ category: "INFRASTRUCTURE" }}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.queryByText("実パイプラインが検知中…")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("検知待ちバナーは手動 dismiss で閉じられる", async () => {
+    const api = fakeApi();
+    render(<DemoDrawer api={api} refreshKey={1000} />);
+    await waitFor(() =>
+      expect(
+        screen.getByText("インフラ障害（実 Cloud Monitoring）"),
+      ).toBeInTheDocument(),
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /インフラ障害（実 Cloud Monitoring）/ }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "インフラ障害（実 Cloud Monitoring） を実行",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("実パイプラインが検知中…")).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "待機表示を閉じる" }));
+    expect(screen.queryByText("実パイプラインが検知中…")).not.toBeInTheDocument();
+  });
+
   it("リセット押下で reset を呼ぶ", async () => {
     const api = fakeApi();
     render(<DemoDrawer api={api} />);

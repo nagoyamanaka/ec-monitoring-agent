@@ -1,4 +1,9 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
+import type {
+  PendingDetection,
+  TriggerOptions,
+} from "./hooks/useDemoControls";
+import { DetectionPendingBanner } from "./DetectionPendingBanner";
 
 /**
  * 障害シナリオ注入ボタン群。backend が実際に注入できるレシピに対応する。
@@ -31,7 +36,14 @@ import { useState } from "react";
 export interface ScenarioControlsProps {
   /** 実行中アクション識別子（"scenario:1" 等）。対象ボタンを送信中表示にする。 */
   busy: string | null;
-  onTrigger: (id: string) => void;
+  onTrigger: (id: string, opts?: TriggerOptions) => void;
+  /**
+   * 実検知経路の「検知待ち」状態。該当シナリオ行の直下にバナーを出す（近接性＝
+   * 押した場所のすぐ下に反応を出し、原因と結果を空間的にくっつける）。null なら出さない。
+   */
+  pendingDetection?: PendingDetection | null;
+  /** 検知待ちバナーを手動で閉じる。 */
+  onDismissPending?: () => void;
 }
 
 type Realness = "live" | "cloud" | "synthetic";
@@ -163,7 +175,7 @@ function ScenarioRow({
   open: boolean;
   busy: string | null;
   onToggle: () => void;
-  onTrigger: (id: string) => void;
+  onTrigger: (id: string, opts?: TriggerOptions) => void;
 }) {
   const realness = REALNESS_META[scenario.realness];
   const panelId = `demo-scenario-${scenario.id}`;
@@ -223,7 +235,22 @@ function ScenarioRow({
             type="button"
             aria-label={`${scenario.label} を実行`}
             disabled={anyBusy}
-            onClick={() => onTrigger(scenario.id)}
+            onClick={() =>
+              // 実検知経路（クラウド実検知）は Alert 着弾まで数十秒かかるので、
+              // 注入後に「検知待ち」ナレーションを出すよう awaitDetection を渡す。
+              onTrigger(
+                scenario.id,
+                scenario.realness === "cloud"
+                  ? {
+                      awaitDetection: true,
+                      label: scenario.label,
+                      // 実 Cloud Monitoring 発報は INFRASTRUCTURE で着弾する。
+                      // この category の新規アラートが来たときだけバナーを畳む。
+                      matchCategory: "INFRASTRUCTURE",
+                    }
+                  : undefined,
+              )
+            }
             className="w-full rounded-md bg-cyan-500/15 px-3 py-2 text-sm font-semibold text-cyan-100 ring-1 ring-inset ring-cyan-500/40 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
           >
             {running ? "注入中…" : "▶ この障害を注入する"}
@@ -234,7 +261,12 @@ function ScenarioRow({
   );
 }
 
-export function ScenarioControls({ busy, onTrigger }: ScenarioControlsProps) {
+export function ScenarioControls({
+  busy,
+  onTrigger,
+  pendingDetection,
+  onDismissPending,
+}: ScenarioControlsProps) {
   // シナリオ単位の段階開示（アコーディオン・同時に1つだけ開く）。
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -250,17 +282,27 @@ export function ScenarioControls({ busy, onTrigger }: ScenarioControlsProps) {
             </h4>
             <ul className="space-y-1.5">
               {group.scenarios.map((s) => (
-                <ScenarioRow
-                  key={s.id}
-                  scenario={s}
-                  aiRole={group.aiRole}
-                  open={openId === s.id}
-                  busy={busy}
-                  onToggle={() =>
-                    setOpenId((cur) => (cur === s.id ? null : s.id))
-                  }
-                  onTrigger={onTrigger}
-                />
+                <Fragment key={s.id}>
+                  <ScenarioRow
+                    scenario={s}
+                    aiRole={group.aiRole}
+                    open={openId === s.id}
+                    busy={busy}
+                    onToggle={() =>
+                      setOpenId((cur) => (cur === s.id ? null : s.id))
+                    }
+                    onTrigger={onTrigger}
+                  />
+                  {/* 押した行の直下に検知待ちバナーを出す（近接性）。 */}
+                  {pendingDetection?.scenarioId === s.id && onDismissPending && (
+                    <li className="list-none">
+                      <DetectionPendingBanner
+                        pending={pendingDetection}
+                        onDismiss={onDismissPending}
+                      />
+                    </li>
+                  )}
+                </Fragment>
               ))}
             </ul>
           </div>
