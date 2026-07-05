@@ -12,6 +12,13 @@ export const BACKOFFICE_BASE_URL =
 const MONITORING_MONGO_URL =
   process.env.MONITORING_MONGO_URL ?? "mongodb://localhost:27017/monitoring";
 
+// 類似コーパス（Elasticsearch）の URL とインデックス。ES 未設定（InMemory 構成）なら掃除は no-op。
+// compose の e2e ランナーからは elasticsearch:9200、ローカル直実行では localhost:9200 が既定。
+export const ELASTICSEARCH_URL =
+  process.env.ELASTICSEARCH_URL ?? "http://localhost:9200";
+const SIMILAR_INCIDENTS_INDEX =
+  process.env.ELASTICSEARCH_SIMILAR_INCIDENTS_INDEX ?? "similar-incidents";
+
 export const KNOWN_ERROR_PATTERNS_COLLECTION = "known_error_patterns";
 export const ALERTS_COLLECTION = "alerts";
 
@@ -29,7 +36,14 @@ export type AlertPrimitives = {
   id: string;
   monitoringEvent: { eventName: string; payload: Record<string, unknown> };
   status: string;
-  classification: { type: "known" | "unknown"; source?: string; patternName?: string };
+  classification: {
+    type: "known" | "unknown";
+    source?: string;
+    patternName?: string;
+    // 類似一致（SIMILARITY）の根拠になった解決済みインシデントの元 Alert への back-link。
+    // 承認で焼いた訂正事例を突合し「訂正が次回の分類根拠になった」ことを検証するのに使う。
+    sourceAlertId?: string;
+  };
   investigationReport: {
     isFallback: boolean;
     summary: string;
@@ -180,6 +194,25 @@ export async function promoteAlert(id: string): Promise<void> {
     method: "POST",
   });
   if (!res.ok) throw new Error(`promote failed: ${res.status} ${await res.text()}`);
+}
+
+// 指定 resolvedNote（テスト固有の署名）に一致する解決済みインシデントを類似コーパスから削除する。
+// ES は永続するため、承認で焼いた学習事例が過去実行から蓄積すると類似一致がタイになり
+// sourceAlertId 突合が非決定的になる。テスト固有の文言だけを狙って掃除し、reset シード（別文言）は残す。
+// ベストエフォート: ES 未起動/InMemory 構成では失敗を握りつぶして継続する（掃除不要のため）。
+export async function clearSimilarIncidentsByNote(note: string): Promise<void> {
+  try {
+    await fetch(
+      `${ELASTICSEARCH_URL}/${SIMILAR_INCIDENTS_INDEX}/_delete_by_query?refresh=true`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: { match_phrase: { resolvedNote: note } } }),
+      },
+    );
+  } catch {
+    // ES 未設定（InMemory 構成）・未到達時は掃除不要 = 無視して継続。
+  }
 }
 
 // GET /alerts をポーリングし、述語を満たす Alert が現れるまで待つ。
