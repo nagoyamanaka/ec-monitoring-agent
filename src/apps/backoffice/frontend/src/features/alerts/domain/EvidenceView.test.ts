@@ -82,6 +82,32 @@ describe("toEvidenceView", () => {
     expect(view.terraformDiff?.url).toBe("https://github.com/o/r/pull/30");
   });
 
+  it("コミットの関連 PR リンク（原因/修正）は View に透過する（次アクションへ橋渡し）", () => {
+    const base = makePrimitives();
+    const view = toEvidenceView(
+      makePrimitives({
+        recentCommits: [
+          {
+            ...base.recentCommits![0],
+            relatedPullRequests: [
+              { url: "https://github.com/o/r/pull/62", label: "原因PR（マージ済）" },
+              { url: "https://github.com/o/r/pull/63", label: "revert PR" },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(view.recentCommits[0].relatedPullRequests).toEqual([
+      { url: "https://github.com/o/r/pull/62", label: "原因PR（マージ済）" },
+      { url: "https://github.com/o/r/pull/63", label: "revert PR" },
+    ]);
+  });
+
+  it("関連 PR リンク未提供のコミットは relatedPullRequests を持たない", () => {
+    const view = toEvidenceView(makePrimitives());
+    expect(view.recentCommits[0].relatedPullRequests).toBeUndefined();
+  });
+
   it("optional な terraformDiff / recentCommits / metrics 欠落を null / [] に正規化する", () => {
     const view = toEvidenceView(
       makePrimitives({

@@ -46,6 +46,13 @@ export type GitCommit = {
   // コミットの Web リンク（GitHub html_url）。証拠としてフロントで sha をクリック可能にする。
   // ソースが提供しない場合もあるので任意。
   readonly url?: string;
+  // このコミットに紐づく PR の参照リンク（原因＝マージ済 PR / 修正＝revert PR など）。
+  // GitHub の一覧 API はコミット→PR の対応を返さないので、デモでは config 駆動で決定論的に付与し、
+  // 証拠パネルに「原因PR を開く →」「revert PR を開く →」のクリック語彙で出す（terraformDiff.url と同思想）。
+  readonly relatedPullRequests?: ReadonlyArray<{
+    readonly url: string;
+    readonly label: string;
+  }>;
 };
 
 // あるコミットが変更した1ファイルのコード差分（unified diff）。

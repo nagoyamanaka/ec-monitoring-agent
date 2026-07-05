@@ -1,4 +1,4 @@
-# アーキテクチャ（コード準拠・2026-07-02 時点）
+# アーキテクチャ（コード準拠・2026-07-05 時点）
 
 > **本書はコードを正とした現状スナップショット**。設計の経緯・理由は [docs/steps/](steps/)（step 系設計書）と [docs/decisions/](decisions/) を参照。ここに書かれていることはすべて実装済み（未実装は明示）。
 
@@ -205,7 +205,7 @@ src/
 ```
 
 - ポート実装は `...Adapter`、ドメインサービスは `...DomainService`。driven ポートと wire DTO は infrastructure 配下。ワイヤ型は contracts に単一ソース化。
-- テスト: Vitest（BDD）unit 846件（backend 600・frontend〔jsdom/RTL 別プロジェクト〕246）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E（Playwright は `e2e/`）。
+- テスト: Vitest（BDD）unit 964件・140ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E（Playwright は `e2e/`）。
 
 ## 8. 主要 API（backoffice）
 
@@ -228,17 +228,20 @@ src/
 
 > 旧「在庫競合（未知）」は廃止（実コードに楽観ロック＋指数バックオフのリトライが実装済みで、AI 生成の「楽観ロックを導入せよ」推奨と矛盾するため。詳細は [step6 §J](steps/step6-final-sprint-todo.md)）。以降を -1 繰り上げ済み。
 
-| #   | シナリオ                             | 分類スペクトル               | 入力のリアルさ                                                 |
-| --- | ------------------------------------ | ---------------------------- | -------------------------------------------------------------- |
-| 1   | 決済タイムアウト                     | 完全一致（既知・1秒）        | 実トリガ（実注文投入）                                         |
-| 2   | DBコネクションプール枯渇             | 類似（準・既知・confidence） | 実トリガ                                                       |
-| 3   | インフラ障害                         | 未知                         | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ）           |
-| 3b  | インフラ障害（反復用）               | 未知                         | 合成入力（入口のみ合成・パイプラインは実経路）                 |
-| 4   | 脆弱性検知 → 修正 draft PR           | SECURITY                     | 合成入力（実 CI と同一経路）                                   |
-| 5   | 構成変更障害（terraform apply 起因） | 未知                         | 合成入力（構造化差分は実機構）                                 |
-| 6   | アプリコード退行                     | 未知                         | 合成入力（**コミット・diff・修正PRは実物**・demo隔離ブランチ） |
+| #   | シナリオ                             | 分類スペクトル               | 入力のリアルさ                                                 | 証拠に添える実リンク |
+| --- | ------------------------------------ | ---------------------------- | -------------------------------------------------------------- | -------------------- |
+| 1   | 決済タイムアウト                     | 完全一致（既知・1秒）        | 実トリガ（実注文投入）                                         | —                    |
+| 2   | DBコネクションプール枯渇             | 類似（準・既知・confidence） | 実トリガ                                                       | —                    |
+| 3   | インフラ障害                         | 未知                         | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ）           | 着弾約1分を「検知待ち」バナーで可視化 |
+| 3b  | インフラ障害（反復用）               | 未知                         | 合成入力（入口のみ合成・パイプラインは実経路）                 | —                    |
+| 4   | 脆弱性検知 → 修正 draft PR           | SECURITY                     | 合成入力（実 CI と同一経路）                                   | **CVE → NVD 実在リンク**（正規形のみ解決） |
+| 5   | 構成変更障害（terraform apply 起因） | 未知                         | 合成入力（構造化差分は実機構）                                 | **terraform 証拠 → 変更 PR** |
+| 6   | アプリコード退行                     | 未知                         | 合成入力（**コミット・diff・修正PRは実物**・demo隔離ブランチ） | **原因コミット → 原因PR（マージ済）/revert PR** |
 
 **正直さの原則**: 合成入力は UI に amber バッジで明示。エンドポイントの無い偽ボタンは作らない。
+
+- **証拠の実リンク化（本物度の底上げ・K1）**: デモの入口（Alert 発火）は合成でも、証拠に添える外部リンクは**実在・決定論導出**。脆弱性は `cveId`（`CVE_ID_PATTERN` 正規形）から NVD 詳細ページ URL を導出（`SecurityFindingView`・確信度に `verifiable_cve` 強シグナル）、terraform 証拠は `TerraformDiff.url`（`config.demo.infraApplyPrUrl`）、原因コミットは `GitCommit.relatedPullRequests`（GitHub 一覧 API はコミット→PR を返さないので `BackofficeApp` が短縮 sha→PR URL の map を `GitHubGatewayImpl` に config 注入）。`EvidencePanel` が terraform「変更 PR を開く →」と同じクリック語彙で表示し、原因から次アクション（revert PR）へ橋渡しする。**config 未設定（本番）は素の証拠のまま＝挙動非侵食**。
+- **実検知の「検知待ち」可視化（K2）**: 実検知経路（シナリオ3/3b）は POST が 202 で即返るのに着弾が約1分遅れる。`DetectionPendingBanner` が経過タイマー＋通過中の実ホップ（HTTP 500→Cloud Logging→Cloud Monitoring 発報→キュー→アラート生成）を不定進捗で示し（per-hop テレメトリを持たないので完了は偽点灯させない）、超過時は反復用（合成・即時）へ誘導。着弾 SSE で親 `DemoDrawer` が畳む。
 
 ## 10. 未実装（設計のみ）
 

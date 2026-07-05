@@ -84,6 +84,18 @@ export const config = {
     infraApplyPrUrl:
       process.env.DEMO_INFRA_APPLY_PR_URL ??
       "https://github.com/nagoyamanaka/ec-monitoring-agent/pull/60",
+    // アプリコード退行シナリオ（appcode-regression）の原因コミットに添える実在 PR リンク。
+    //   - causeCommitSha: 退行を入れた実コミットの短縮 sha（demo/regression の証跡コミット）。
+    //   - causePrUrl: その変更を取り込んだ「マージ済 PR」（＝テスト通過してマージされた退行の物語）。
+    //   - fixPrUrl: 上記を revert する「修正 PR」（＝AI が提示する次アクション・open のまま）。
+    // いずれも空なら該当リンクを出さない（本番/未設定時は素のコミット証拠のまま＝挙動非侵食）。
+    appcodeCauseCommitSha: process.env.DEMO_APPCODE_CAUSE_COMMIT_SHA ?? "e12b655",
+    appcodeCausePrUrl:
+      process.env.DEMO_APPCODE_CAUSE_PR_URL ??
+      "https://github.com/nagoyamanaka/ec-monitoring-agent/pull/62",
+    appcodeFixPrUrl:
+      process.env.DEMO_APPCODE_FIX_PR_URL ??
+      "https://github.com/nagoyamanaka/ec-monitoring-agent/pull/63",
   },
   github: {
     token: process.env.GITHUB_TOKEN ?? "",
