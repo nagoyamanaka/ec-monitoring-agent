@@ -12,6 +12,9 @@ import { SYSTEM_INSTRUCTION } from "../../aiinvestigation/InvestigationPromptBui
  */
 export function createInvestigationCoordinator(params: {
   model: string;
+  // コーディネーターの思考トークン予算（fallback 第6原因の防御レバー・env 由来 config.ai.adkCoordinatorThinkingBudget）。
+  // gemini-2.5-pro の有効域は 128〜32768、-1 で動的。増やすほど推論は深いが wall-clock（D3 リスク）が伸びる。
+  thinkingBudget: number;
   evidenceCollector: LlmAgent;
   rootCauseAnalyst: LlmAgent;
   remediationPlanner: LlmAgent;
@@ -76,7 +79,15 @@ export function createInvestigationCoordinator(params: {
     // fallback 第4原因（最終出力 JSON の途中切断・タスク I1）への防御: gemini-2.5 系は思考トークンも
     // maxOutputTokens を消費するため、既定値頼みにせずモデル上限まで明示確保する（最終 JSON は高々2KB弱）。
     // 切断が残った場合の受け皿はサルベージパース（salvageLLMOutput）側。
-    generateContentConfig: { maxOutputTokens: 65535 },
+    //
+    // fallback 第6原因（思考トークンによる出力予算の食い潰し）への防御: 上の 65535 確保だけだと
+    // 高推論シナリオ（3b インフラ因果連鎖・6 コード退行分析）で最終JSON合成ターンの思考が予算を
+    // 食い切り、finishReason=MAX_TOKENS で回答テキストが 0 文字（finalTextLen=0・切断ですらない）に
+    // なる実害が出た。思考を頭打ちにして回答用トークンを必ず残す（budget は env で運用チューニング可能）。
+    generateContentConfig: {
+      maxOutputTokens: 65535,
+      thinkingConfig: { thinkingBudget: params.thinkingBudget },
+    },
     instruction: SYSTEM_INSTRUCTION + orchestration,
     tools: [
       new AgentTool({ agent: params.evidenceCollector }),

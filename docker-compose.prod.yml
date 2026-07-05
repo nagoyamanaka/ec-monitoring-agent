@@ -55,6 +55,10 @@ services:
       AI_INVESTIGATION_ADK: ${AI_INVESTIGATION_ADK:-true}
       # ADK 自律ループの LLM 呼び出し上限（トークン暴走の安全弁）。config.ts 既定と同値だが明示。
       AI_INVESTIGATION_ADK_MAX_LLM_CALLS: ${AI_INVESTIGATION_ADK_MAX_LLM_CALLS:-16}
+      # コーディネーターの思考トークン予算（fallback 第6原因＝思考が出力予算を食い潰し空応答=confidence0 の防御）。
+      # gemini-2.5-pro は思考も maxOutputTokens を消費するため上限にキャップして最終JSON用トークンを残す。
+      # 有効域 128〜32768・-1 で動的。増やすほど推論は深いが wall-clock が伸びて D3 タイムアウト risk 増。
+      AI_INVESTIGATION_COORDINATOR_THINKING_BUDGET: ${AI_INVESTIGATION_COORDINATOR_THINKING_BUDGET:-16384}
       # 単一Gemini経路(GeminiLLMClient)の1呼び出しタイムアウト(ms)。旧ハードコード30秒だと
       # gemini-2.5-pro が超過して毎回 fallback(confidence=0) に落ちていたため 90秒へ。
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-90000}

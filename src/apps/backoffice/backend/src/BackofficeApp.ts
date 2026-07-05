@@ -253,6 +253,12 @@ export class BackofficeApp {
           model: config.gemini.model,
           // 相関検証（批判役）だけ軽量モデル＝D3 の wall-clock 逼迫に配慮（タスク J2）。
           verifierModel: config.ai.adkVerifierModel,
+          // ロール別の静的モデル割当（D3 対策①）。推論の薄いロールを flash 化して wall-clock を削る。
+          collectorModel: config.ai.adkCollectorModel,
+          escalationModel: config.ai.adkEscalationModel,
+          triageModel: config.ai.adkTriageModel,
+          // コーディネーターの思考予算（fallback 第6原因の防御・env で運用チューニング可能）。
+          coordinatorThinkingBudget: config.ai.adkCoordinatorThinkingBudget,
           maxLlmCalls: config.ai.adkMaxLlmCalls,
           timeoutMs: config.ai.investigationTimeoutMs,
           logger,
