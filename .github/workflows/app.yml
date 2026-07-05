@@ -69,6 +69,23 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.local.yml -f docker-compose.e2e.yml \
             run --rm e2e
 
+      # E2E が落ちたとき、vitest の出力だけでは backend コンテナが「なぜ」消えたか（exit code・
+      # 最後のログ）が分からず ENOTFOUND の原因を追えない。`run --rm e2e` は e2e コンテナのみ
+      # 削除し依存サービスは残すため、ここで各コンテナの状態（Exited(137)=OOM / (1)=クラッシュ 等）と
+      # backend の直近ログを必ず吐き出す。
+      - name: Dump service state & logs on failure
+        if: failure()
+        run: |
+          FILES="-f docker-compose.yml -f docker-compose.local.yml -f docker-compose.e2e.yml"
+          echo "::group::compose ps -a"
+          docker compose $FILES ps -a
+          echo "::endgroup::"
+          for svc in backoffice-backend ec-backend rabbitmq; do
+            echo "::group::logs $svc"
+            docker compose $FILES logs --no-color --tail=300 "$svc" || true
+            echo "::endgroup::"
+          done
+
   # ── Job 3: frontend イメージ build & push → Cloud Run deploy ────────────────
   # check + e2e が通った後、main への push 時のみ実行。
   # WIF キーレス認証（terraform.yml と同じパターン）。
