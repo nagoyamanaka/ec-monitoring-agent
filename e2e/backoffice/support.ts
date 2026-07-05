@@ -29,8 +29,13 @@ export type AlertPrimitives = {
   id: string;
   monitoringEvent: { eventName: string; payload: Record<string, unknown> };
   status: string;
-  classification: { type: "known" | "unknown"; source?: string };
-  investigationReport: { isFallback: boolean; summary: string } | null;
+  classification: { type: "known" | "unknown"; source?: string; patternName?: string };
+  investigationReport: {
+    isFallback: boolean;
+    summary: string;
+    investigatedAt: string;
+  } | null;
+  feedback: { isCorrect: boolean; operatorNote?: string } | null;
 };
 
 export function connectMonitoringDb(): MongoClient {
@@ -129,6 +134,52 @@ export async function triggerScenario(
     );
   }
   return (await res.json()) as { scenarioId: string; label: string; orderId: string };
+}
+
+// GET /alerts/:id で単一 Alert を取得する（現役一覧に載っている Alert 用）。
+export async function fetchAlertById(id: string): Promise<AlertPrimitives> {
+  const res = await fetch(`${BACKOFFICE_BASE_URL}/alerts/${id}`);
+  if (!res.ok) throw new Error(`get alert ${id} failed: ${res.status}`);
+  return (await res.json()) as AlertPrimitives;
+}
+
+// GET /alerts/:id をポーリングし、その Alert が述語を満たす状態になるまで待つ。
+// 非同期アクション（POST /report・POST /reinvestigate は 202 即応答→SSE push）の
+// 完了をポーリングで観測するために使う。
+export async function pollAlertById(
+  id: string,
+  predicate: (alert: AlertPrimitives) => boolean,
+  { maxAttempts = 25, intervalMs = 1_000 } = {},
+): Promise<AlertPrimitives> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const alert = await fetchAlertById(id).catch(() => null);
+    if (alert && predicate(alert)) return alert;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(
+    `Alert ${id} did not satisfy predicate within ${maxAttempts * intervalMs}ms`,
+  );
+}
+
+// PATCH /alerts/:id/feedback（承認/却下）。承認は dedup 窓から外れる＝再発火は新規 Alert になる。
+export async function submitFeedback(
+  id: string,
+  params: { isCorrect: boolean; operatorNote?: string },
+): Promise<void> {
+  const res = await fetch(`${BACKOFFICE_BASE_URL}/alerts/${id}/feedback`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error(`feedback failed: ${res.status} ${await res.text()}`);
+}
+
+// POST /alerts/:id/promote（手動即時昇格＝既知パターンへの結晶化）。
+export async function promoteAlert(id: string): Promise<void> {
+  const res = await fetch(`${BACKOFFICE_BASE_URL}/alerts/${id}/promote`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(`promote failed: ${res.status} ${await res.text()}`);
 }
 
 // GET /alerts をポーリングし、述語を満たす Alert が現れるまで待つ。
