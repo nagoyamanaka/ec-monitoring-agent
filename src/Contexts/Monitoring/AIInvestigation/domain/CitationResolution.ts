@@ -28,6 +28,7 @@ export type CitationCatalogContext = {
   readonly knownPatterns?: ReadonlyArray<{ readonly name: string }>;
   readonly similarIncidents?: ReadonlyArray<{ readonly eventName: string }>;
   readonly infraEvidence?: InfraEvidence;
+  readonly candidateAlerts?: ReadonlyArray<{ readonly alertId: string }>;
 };
 
 /**
@@ -69,6 +70,17 @@ export function buildCitationCatalog(
   for (const incident of context.similarIncidents ?? []) {
     if (incident.eventName.trim() !== "")
       entries.push({ id: incident.eventName, kind: "incident" });
+  }
+  // 相関候補（同時期に開いている他アラート）。AI はこの id を影響評価の根拠に引くことがある
+  // （例: 決済タイムアウト×DB枯渇）。リンクは backoffice SPA の内部ルート＝同一オリジンの
+  // 相対パスのみを組む（外部 URL は組まない・フロントは相対 href を同タブ遷移で出す）。
+  for (const candidate of context.candidateAlerts ?? []) {
+    if (candidate.alertId.trim() !== "")
+      entries.push({
+        id: candidate.alertId,
+        kind: "alert",
+        href: `/alerts/${candidate.alertId}`,
+      });
   }
   return entries;
 }

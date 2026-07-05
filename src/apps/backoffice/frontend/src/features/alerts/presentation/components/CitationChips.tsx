@@ -123,10 +123,12 @@ function CitationRefChip({ citation }: { citation: CitationRefView }) {
         </span>
       )}
       {citation.href ? (
+        // 相対 href＝backoffice SPA の内部ルート（相関アラート等）は同タブ遷移、外部 URL は別タブ。
         <a
           href={citation.href}
-          target="_blank"
-          rel="noreferrer"
+          {...(citation.href.startsWith("http")
+            ? { target: "_blank", rel: "noreferrer" }
+            : {})}
           className="break-all font-mono text-[11px] leading-relaxed text-cyan-300 underline decoration-dotted underline-offset-2 hover:text-cyan-200"
         >
           {citation.value}

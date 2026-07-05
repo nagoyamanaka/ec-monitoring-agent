@@ -7,6 +7,7 @@ import { EscalationPanel } from "./EscalationPanel";
 import { EvidenceFlowDiagram } from "./EvidenceFlowDiagram";
 import { RemediationReviewPanel } from "./RemediationReviewPanel";
 import { alertReason } from "../../domain/alertReason";
+import { describeConditionField } from "../../domain/conditionFieldLabel";
 import { workloadSummary } from "../../domain/investigationWorkload";
 import { evidenceFlowModel } from "../../domain/evidenceFlow";
 
@@ -168,10 +169,19 @@ export function AlertCardExpanded({
                   </tr>
                 </thead>
                 <tbody>
-                  {alert.classification.matchedConditions.map((c, i) => (
+                  {alert.classification.matchedConditions.map((c, i) => {
+                    // 項目は人間語ラベルを主表示に（「eventName とは？」を考えさせない）。
+                    // 生フィールド名は副表示で残す＝照合対象のスキーマも読める。
+                    const field = describeConditionField(c.field);
+                    return (
                     <tr key={i} className="border-t border-slate-700/50">
                       <td className="px-3 py-1.5">
-                        <code className="text-cyan-300">{c.field}</code>
+                        <span className="text-slate-100">{field.label}</span>
+                        {field.raw && (
+                          <code className="block text-[10px] leading-tight text-cyan-300/80">
+                            {field.raw}
+                          </code>
+                        )}
                       </td>
                       <td className="px-3 py-1.5 text-slate-300">
                         {formatValue(c.expectedValue)}
@@ -180,7 +190,8 @@ export function AlertCardExpanded({
                         {formatValue(c.actualValue)}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

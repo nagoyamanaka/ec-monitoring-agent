@@ -82,6 +82,7 @@ export const CITATION_KIND_LABEL: Record<CitationSourceKind, string> = {
   terraform: "Terraformリソース",
   metric: "メトリクス",
   incident: "類似事例",
+  alert: "相関アラート",
   log: "アプリログ",
 };
 
@@ -90,6 +91,8 @@ const KIND_TO_GROUP: Record<CitationSourceKind, CitationGroupKey> = {
   event: "observation",
   metric: "observation",
   log: "observation",
+  // 相関アラート＝同時期の別観測（変更でも記憶でもない）。
+  alert: "observation",
   commit: "change",
   terraform: "change",
   pattern: "memory",

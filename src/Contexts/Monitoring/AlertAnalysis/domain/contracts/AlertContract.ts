@@ -92,7 +92,7 @@ export type RelatedAlertPrimitives = {
  * 引用の解決先種別。引用文字列を「収集済み証拠カタログのどのフィールドに解決したか」を表す。
  * event=受信イベント名（ingest 境界の正典 ID・検出層のカラムではない） / pattern=既知パターンID /
  * commit=GitHub コミット / terraform=Terraform 差分 / metric=Cloud Monitoring メトリクス /
- * incident=過去の類似インシデント / log=アプリログ。
+ * incident=過去の類似インシデント / alert=同時期に開いている相関アラート / log=アプリログ。
  */
 export type CitationSourceKind =
   | "event"
@@ -101,6 +101,7 @@ export type CitationSourceKind =
   | "terraform"
   | "metric"
   | "incident"
+  | "alert"
   | "log";
 
 /**
