@@ -49,7 +49,7 @@ export interface AlertDetailDrawerProps {
   ) => void | Promise<void>;
   /** 既知一致 Alert のオンデマンド AI レポート生成。 */
   onGenerateReport?: (alertId: string) => void | Promise<void>;
-  /** 未知 Alert の手動即時昇格（結晶化）。 */
+  /** 未知/類似既知（SIMILARITY）Alert の手動即時昇格（結晶化）。 */
   onPromote?: (alertId: string) => void | Promise<void>;
   /** 渡された場合のみ証拠パネルを表示する（composition root で注入）。 */
   evidenceApi?: EvidenceApi;

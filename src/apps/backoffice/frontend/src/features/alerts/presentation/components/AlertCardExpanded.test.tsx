@@ -167,6 +167,48 @@ describe("AlertCardExpanded", () => {
     expect(screen.getByText(/AI 調査へフォールバック/)).toBeInTheDocument();
   });
 
+  it("類似既知に resolvedNote があれば「当時の対応メモ」を出す", () => {
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({
+          report: null,
+          classification: {
+            type: "known",
+            source: "SIMILARITY",
+            patternId: "similar:ri-1",
+            patternName: "類似既知: ec.db.connection_pool_exhausted",
+            confidence: 0.67,
+            matchedConditions: [],
+            resolvedNote: "接続プール上限を拡張して復旧",
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/当時の対応メモ/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/接続プール上限を拡張して復旧/),
+    ).toBeInTheDocument();
+  });
+
+  it("resolvedNote が無い既知分類では「当時の対応メモ」を出さない", () => {
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({
+          report: null,
+          classification: {
+            type: "known",
+            source: "SIMILARITY",
+            patternId: "similar:ri-1",
+            patternName: "類似既知",
+            confidence: 0.67,
+            matchedConditions: [],
+          },
+        })}
+      />,
+    );
+    expect(screen.queryByText(/当時の対応メモ/)).not.toBeInTheDocument();
+  });
+
   it("既知パターンには「1秒未満・AI コストゼロ」の経済性対比 1 行を出す（タスク G1）", () => {
     render(
       <AlertCardExpanded

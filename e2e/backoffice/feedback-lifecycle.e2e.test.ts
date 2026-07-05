@@ -228,7 +228,8 @@ describe("backoffice E2E: similarity learning loop (feedback → corpus → SIMI
     const approved = await fetchAlertById(correctedAlert.id);
     expect(approved.feedback?.isCorrect).toBe(true);
     expect(approved.feedback?.operatorNote).toBe(OPERATOR_CORRECTION);
-    // 単一承認の加重スコアは 0.4（<1.0）で自動昇格しない＝完全一致パターンは作られない。
+    // 類似既知はレポート無し（既知は AI を自動起動しない）＝結晶化の材料が無く自動昇格しない。
+    // レポートがあっても単一承認の加重スコアは 1.0 未満で昇格しない（即昇格は手動 /promote の領分）。
     // よって③の再発は EXACT_MATCH ではなく SIMILARITY 経路で分類される（承認は OPEN 据置）。
     expect(approved.status).toBe("OPEN");
   });

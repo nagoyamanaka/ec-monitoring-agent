@@ -40,9 +40,11 @@ const makeReport = (params: { confidence?: number; isFallback?: boolean } = {}) 
     isFallback: params.isFallback ?? false,
   });
 
-const makeKnownClassification = (): KnownAlertClassification => ({
+const makeKnownClassification = (
+  source: ClassificationRuleKind = ClassificationRuleKind.EXACT_MATCH,
+): KnownAlertClassification => ({
   type: "known",
-  source: ClassificationRuleKind.EXACT_MATCH,
+  source,
   patternId: "pattern-1",
   patternName: "PAYMENT_TIMEOUT",
   severity: AlertSeverity.critical(),
@@ -122,13 +124,45 @@ describe("EvidenceWeightedPromotionPolicy", () => {
       expect(policy.shouldPromote(alert)).toBe(false);
     });
 
-    it("既知分類は昇格しない", () => {
+    it("完全一致（EXACT_MATCH）既知分類は昇格しない", () => {
       const base = Alert.createFromKnownPattern({
         id: new AlertId(ALERT_ID),
         monitoringEvent: makeEvent(),
         classification: makeKnownClassification(),
       }).attachInvestigationReport(makeReport({ confidence: 1.0 }));
       const alert = withCorrectFeedback(base, 5);
+      expect(policy.shouldPromote(alert)).toBe(false);
+    });
+  });
+
+  describe("類似既知（SIMILARITY）＝準・既知の昇格（完全一致へ登る学習ループ）", () => {
+    const similarityAlertWith = (
+      report: InvestigationReport | null,
+      feedbackCount: number,
+    ): Alert => {
+      const base = Alert.createFromKnownPattern({
+        id: new AlertId(ALERT_ID),
+        monitoringEvent: makeEvent(),
+        classification: makeKnownClassification(
+          ClassificationRuleKind.SIMILARITY,
+        ),
+      });
+      const withReport = report ? base.attachInvestigationReport(report) : base;
+      return withCorrectFeedback(withReport, feedbackCount);
+    };
+
+    it("レポート有なら未知と同じ加重で昇格する（低確度+3回）", () => {
+      const alert = similarityAlertWith(makeReport({ confidence: 0.5 }), 3);
+      expect(policy.shouldPromote(alert)).toBe(true);
+    });
+
+    it("承認1回では昇格しない（0.4+高確度0.3=0.7<1.0＝手動昇格の領分）", () => {
+      const alert = similarityAlertWith(makeReport({ confidence: 0.85 }), 1);
+      expect(policy.shouldPromote(alert)).toBe(false);
+    });
+
+    it("レポート無は昇格しない（結晶化の材料が無い）", () => {
+      const alert = similarityAlertWith(null, 5);
       expect(policy.shouldPromote(alert)).toBe(false);
     });
   });

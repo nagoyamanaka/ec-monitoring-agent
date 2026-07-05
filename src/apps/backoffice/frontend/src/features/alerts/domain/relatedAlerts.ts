@@ -95,8 +95,11 @@ const PAST_EXACT_LIMIT = 3;
 /**
  * 「過去の同型事例」を集約する。出所は3つ:
  *  - SIMILARITY 分類の back-link（sourceAlertId）＝類似検索が引いた解決済み事例（類似度付き）。
+ *    一致事例の対応メモ（resolvedNote）があれば「当時どう直したか」をそのまま根拠に出す。
  *  - AI 相関のうち relation=similar ＝ AI が候補から見つけた過去の同型。
- *  - EXACT_MATCH 分類のとき、一覧（corpus）にある同 eventName の対処済み過去アラート＝完全一致の再発元。
+ *  - 既知分類（EXACT_MATCH / SIMILARITY）のとき、一覧（corpus）にある同 eventName の
+ *    対処済み過去アラート＝同型の再発元。類似分類でも同 eventName は事実上の完全一致なので
+ *    「一致」チップで出す（直前に承認した同型がここに現れる＝学習の可視化）。
  * 自分自身・重複 alertId は除外する（先勝ち＝確度の明示された back-link を優先）。
  */
 export function collectPastIncidentRefs(
@@ -114,7 +117,9 @@ export function collectPastIncidentRefs(
       alertId: alert.classification.sourceAlertId,
       match: "similar",
       confidence: alert.classification.confidence,
-      rationale: "過去に解決済みの同型障害。当時の対応が参考になります。",
+      rationale: alert.classification.resolvedNote
+        ? `当時の対応: ${alert.classification.resolvedNote}`
+        : "過去に解決済みの同型障害。当時の対応が参考になります。",
     });
   }
 
@@ -128,10 +133,7 @@ export function collectPastIncidentRefs(
     }
   }
 
-  if (
-    alert.classification.type === "known" &&
-    alert.classification.source === "EXACT_MATCH"
-  ) {
+  if (alert.classification.type === "known") {
     const exactPast = corpus
       .filter(
         (a) =>
@@ -146,7 +148,8 @@ export function collectPastIncidentRefs(
       refs.push({
         alertId: past.id,
         match: "exact",
-        rationale: "同一パターンとして過去に対処済みの事例。当時の対応が参考になります。",
+        rationale:
+          "同じイベントとして過去に対処済みの事例。当時の対応が参考になります。",
       });
     }
   }

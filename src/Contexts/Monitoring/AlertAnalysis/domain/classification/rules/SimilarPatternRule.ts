@@ -79,6 +79,11 @@ export class SimilarPatternRule implements ClassificationRule {
       ...(best.incident.sourceAlertId !== undefined
         ? { sourceAlertId: best.incident.sourceAlertId }
         : {}),
+      // 一致した事例の対応メモ（当時どう直したか）。「なぜ準・既知か」の根拠と併せて
+      // 「前回の対応」をその場で見せる表示面に使う（空文字は載せない）。
+      ...(best.incident.resolvedNote !== ""
+        ? { resolvedNote: best.incident.resolvedNote }
+        : {}),
     };
   }
 

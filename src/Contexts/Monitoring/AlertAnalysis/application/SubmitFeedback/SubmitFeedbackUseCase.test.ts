@@ -201,7 +201,7 @@ describe("SubmitFeedbackUseCase", () => {
     expect(patterns[0].payloadConditions).toHaveLength(0);
   });
 
-  it("しきい値到達でも既知分類なら昇格しない", async () => {
+  it("しきい値到達でも完全一致（EXACT_MATCH）既知分類なら昇格しない", async () => {
     const base = Alert.createFromKnownPattern({
       id: new AlertId(ALERT_ID),
       monitoringEvent: makeEvent(),
@@ -212,6 +212,25 @@ describe("SubmitFeedbackUseCase", () => {
     await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
 
     expect(await patternRepo.findAll()).toHaveLength(0);
+  });
+
+  it("類似既知（SIMILARITY）はレポート有＋しきい値到達で自動昇格する（準・既知→完全一致へ）", async () => {
+    const base = Alert.createFromKnownPattern({
+      id: new AlertId(ALERT_ID),
+      monitoringEvent: makeEvent(),
+      classification: {
+        ...makeKnownClassification(),
+        source: ClassificationRuleKind.SIMILARITY,
+      },
+    }).attachInvestigationReport(makeReport());
+    await alertRepo.save(withCorrectFeedback(base, AUTO_PROMOTE_THRESHOLD - 1));
+
+    await useCase.run({ alertId: new AlertId(ALERT_ID), isCorrect: true });
+
+    const patterns = await patternRepo.findAll();
+    expect(patterns).toHaveLength(1);
+    expect(patterns[0].name).toBe("AUTO_PROMOTED_EC.SOME.UNKNOWN_EVENT");
+    expect(patterns[0].eventNamePattern).toBe("ec.some.unknown_event");
   });
 
   it("しきい値到達でも調査レポートが無ければ昇格しない", async () => {

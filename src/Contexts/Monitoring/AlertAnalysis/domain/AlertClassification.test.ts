@@ -75,7 +75,7 @@ describe("alertClassificationToPrimitives / alertClassificationFromPrimitives", 
     expect(restored).toEqual(original);
   });
 
-  it("sourceAlertId（類似既知の back-link）もラウンドトリップで保持される", () => {
+  it("sourceAlertId / resolvedNote（類似既知の back-link と対応メモ）もラウンドトリップで保持される", () => {
     const original: AlertClassificationPrimitives = {
       type: "known",
       source: "SIMILARITY",
@@ -86,6 +86,7 @@ describe("alertClassificationToPrimitives / alertClassificationFromPrimitives", 
       matchedConditions: [],
       unmatchedConditions: [],
       sourceAlertId: "alert-past-1",
+      resolvedNote: "在庫引当リトライで復旧",
     };
 
     const restored = alertClassificationToPrimitives(
@@ -95,7 +96,7 @@ describe("alertClassificationToPrimitives / alertClassificationFromPrimitives", 
     expect(restored).toEqual(original);
   });
 
-  it("sourceAlertId 未設定なら primitives に現れない（exactOptional 互換）", () => {
+  it("sourceAlertId / resolvedNote 未設定なら primitives に現れない（exactOptional 互換）", () => {
     const original: AlertClassificationPrimitives = {
       type: "known",
       source: "EXACT_MATCH",
@@ -112,6 +113,7 @@ describe("alertClassificationToPrimitives / alertClassificationFromPrimitives", 
     );
 
     expect("sourceAlertId" in restored).toBe(false);
+    expect("resolvedNote" in restored).toBe(false);
   });
 
   it("unknownのラウンドトリップで同じ値が復元される", () => {

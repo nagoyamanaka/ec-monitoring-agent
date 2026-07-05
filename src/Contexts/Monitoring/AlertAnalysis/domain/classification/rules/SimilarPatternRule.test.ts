@@ -172,6 +172,33 @@ describe("SimilarPatternRule", () => {
     expect(result?.sourceAlertId).toBeUndefined();
   });
 
+  it("マッチしたインシデントの resolvedNote（当時の対応メモ）を分類結果へ載せる", async () => {
+    const rule = new SimilarPatternRule(
+      new FakeSearchPort([
+        {
+          incident: makeIncident({ resolvedNote: "接続プール上限を拡張して復旧" }),
+          score: 0.9,
+        },
+      ]),
+    );
+
+    const result = await rule.classify(makeEvent());
+
+    expect(result?.resolvedNote).toBe("接続プール上限を拡張して復旧");
+  });
+
+  it("resolvedNote が空文字のインシデントはメモを載せない", async () => {
+    const rule = new SimilarPatternRule(
+      new FakeSearchPort([
+        { incident: makeIncident({ resolvedNote: "" }), score: 0.9 },
+      ]),
+    );
+
+    const result = await rule.classify(makeEvent());
+
+    expect(result?.resolvedNote).toBeUndefined();
+  });
+
   it("クエリは eventName と payload から組み立てる", async () => {
     const port = new FakeSearchPort([]);
     const rule = new SimilarPatternRule(port);

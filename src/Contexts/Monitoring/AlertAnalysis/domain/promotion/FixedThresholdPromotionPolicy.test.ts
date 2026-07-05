@@ -41,9 +41,11 @@ const makeReport = (isFallback = false) =>
     isFallback,
   });
 
-const makeKnownClassification = (): KnownAlertClassification => ({
+const makeKnownClassification = (
+  source: ClassificationRuleKind = ClassificationRuleKind.EXACT_MATCH,
+): KnownAlertClassification => ({
   type: "known",
-  source: ClassificationRuleKind.EXACT_MATCH,
+  source,
   patternId: "pattern-1",
   patternName: "PAYMENT_TIMEOUT",
   severity: AlertSeverity.critical(),
@@ -88,12 +90,32 @@ describe("FixedThresholdPromotionPolicy", () => {
     expect(policy.shouldPromote(alert)).toBe(true);
   });
 
-  it("しきい値到達でも既知分類なら昇格しない", () => {
+  it("しきい値到達でも完全一致（EXACT_MATCH）既知分類なら昇格しない", () => {
     const base = Alert.createFromKnownPattern({
       id: new AlertId(ALERT_ID),
       monitoringEvent: makeEvent(),
       classification: makeKnownClassification(),
     }).attachInvestigationReport(makeReport());
+    const alert = withCorrectFeedback(base, THRESHOLD);
+    expect(policy.shouldPromote(alert)).toBe(false);
+  });
+
+  it("類似既知（SIMILARITY）はレポート有＋しきい値到達で昇格する（準・既知→完全一致へ登る）", () => {
+    const base = Alert.createFromKnownPattern({
+      id: new AlertId(ALERT_ID),
+      monitoringEvent: makeEvent(),
+      classification: makeKnownClassification(ClassificationRuleKind.SIMILARITY),
+    }).attachInvestigationReport(makeReport());
+    const alert = withCorrectFeedback(base, THRESHOLD);
+    expect(policy.shouldPromote(alert)).toBe(true);
+  });
+
+  it("類似既知でもレポート無なら昇格しない（結晶化の材料が無い）", () => {
+    const base = Alert.createFromKnownPattern({
+      id: new AlertId(ALERT_ID),
+      monitoringEvent: makeEvent(),
+      classification: makeKnownClassification(ClassificationRuleKind.SIMILARITY),
+    });
     const alert = withCorrectFeedback(base, THRESHOLD);
     expect(policy.shouldPromote(alert)).toBe(false);
   });

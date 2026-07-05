@@ -65,6 +65,8 @@ export type KnownAlertClassification = {
   // 類似既知（SIMILARITY）分類のとき、元になった解決済み Alert への back-link（任意）。
   // 「過去の同型障害をどう直したか」へ内部遷移する動線に使う。他ルールでは未設定。
   readonly sourceAlertId?: string;
+  // 類似既知（SIMILARITY）分類のとき、一致した解決済み事例の対応メモ（当時どう直したか・任意）。
+  readonly resolvedNote?: string;
 };
 
 export type UnknownAlertClassification = {
@@ -92,6 +94,9 @@ export function alertClassificationToPrimitives(
       ...(classification.sourceAlertId !== undefined
         ? { sourceAlertId: classification.sourceAlertId }
         : {}),
+      ...(classification.resolvedNote !== undefined
+        ? { resolvedNote: classification.resolvedNote }
+        : {}),
     };
   }
   return { type: "unknown", confidence: null };
@@ -112,6 +117,9 @@ export function alertClassificationFromPrimitives(
       unmatchedConditions: primitives.unmatchedConditions,
       ...(primitives.sourceAlertId !== undefined
         ? { sourceAlertId: primitives.sourceAlertId }
+        : {}),
+      ...(primitives.resolvedNote !== undefined
+        ? { resolvedNote: primitives.resolvedNote }
         : {}),
     };
   }

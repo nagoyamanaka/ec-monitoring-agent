@@ -106,7 +106,7 @@ export class SubmitFeedbackUseCase {
     await this.logger.info({
       service: "backoffice-backend",
       action: "pattern_auto_promoted",
-      message: `未知パターン自動昇格：${alert.id.value}, pattern=${pattern.name}`,
+      message: `パターン自動昇格（結晶化）：${alert.id.value}, pattern=${pattern.name}`,
     });
   }
 }

@@ -96,6 +96,60 @@ describe("collectPastIncidentRefs", () => {
     });
   });
 
+  it("back-link に resolvedNote があれば「当時の対応」を根拠に出す", () => {
+    const alert = makeAlert({
+      report: null,
+      classification: {
+        type: "known",
+        source: "SIMILARITY",
+        patternId: "p",
+        patternName: "類似既知",
+        confidence: 0.67,
+        matchedConditions: [],
+        sourceAlertId: "past-1",
+        resolvedNote: "接続プール上限を拡張して復旧",
+      },
+    });
+    const refs = collectPastIncidentRefs(alert);
+    expect(refs[0].rationale).toBe("当時の対応: 接続プール上限を拡張して復旧");
+  });
+
+  it("SIMILARITY 分類でも一覧から同 eventName の対処済み過去アラートを「一致」で引く", () => {
+    const alert = makeAlert({
+      id: "self",
+      eventName: "ec.db.connection_pool_exhausted",
+      report: null,
+      classification: {
+        type: "known",
+        source: "SIMILARITY",
+        patternId: "p",
+        patternName: "類似既知",
+        confidence: 0.67,
+        matchedConditions: [],
+        sourceAlertId: "seed-past",
+      },
+    });
+    const corpus = [
+      alert,
+      // 直前に承認した同型（学習の可視化＝1回目の承認済みアラートがここに出る）。
+      makeAlert({
+        id: "approved-run1",
+        eventName: "ec.db.connection_pool_exhausted",
+        feedback: { isCorrect: true },
+        occurredOn: "2026-07-06T07:46:59.000Z",
+      }),
+      // 未対処は含めない。
+      makeAlert({ id: "open-1", eventName: "ec.db.connection_pool_exhausted" }),
+    ];
+
+    const refs = collectPastIncidentRefs(alert, corpus);
+    // back-link（seed）が先勝ち、corpus の承認済み同型が「一致」で続く。
+    expect(refs.map((r) => [r.alertId, r.match])).toEqual([
+      ["seed-past", "similar"],
+      ["approved-run1", "exact"],
+    ]);
+  });
+
   it("AI 相関の relation=similar を過去事例として加える", () => {
     const alert = makeAlert({
       report: makeReport({

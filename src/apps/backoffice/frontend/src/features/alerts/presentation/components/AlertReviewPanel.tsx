@@ -31,7 +31,7 @@ export interface AlertReviewPanelProps {
    */
   onGenerateReport?: (alertId: string) => void | Promise<void>;
   /**
-   * 未知 Alert を「回数不問で既知パターンへ手動即時昇格（結晶化）」する。
+   * 未知/類似既知（SIMILARITY）Alert を「回数不問で既知パターンへ手動即時昇格（結晶化）」する。
    * 渡されない、または結晶化材料（非 fallback レポート）が無い場合はボタンを出さない。
    */
   onPromote?: (alertId: string) => void | Promise<void>;
@@ -88,13 +88,19 @@ export function AlertReviewPanel({
     !!onGenerateReport &&
     alert.classification.type === "known" &&
     alert.report === null;
-  // 未知で有効な調査レポートがあり、かつ「承認済み」のときだけ「既知へ昇格（結晶化）」を出す。
+  // 有効な調査レポートがあり、かつ「承認済み」のときだけ「既知へ昇格（結晶化）」を出す。
   // 承認＝分類が正しいと確定＝この障害を既知パターンへ焼き付けてよい、という導線ゲート。
   // 未承認の障害を先に既知化してしまう事故を防ぎ、「承認→昇格」の順序を UI で強制する。
+  // 対象は未知に加え類似既知（SIMILARITY）＝承認を重ねた準・既知が永遠に類似止まり（確度 <100%）に
+  // ならず、完全一致の既知（即・確度100%）へ登れるようにする。完全一致（EXACT_MATCH）は既に
+  // 高速パスに乗っているため対象外（backend の isPromotableClassification と同条件）。
+  const promotableClassification =
+    alert.classification.type === "unknown" ||
+    alert.classification.source === "SIMILARITY";
   const canPromote =
     !!onPromote &&
     reviewState === "APPROVED" &&
-    alert.classification.type === "unknown" &&
+    promotableClassification &&
     alert.report !== null &&
     !alert.report.isFallback;
 

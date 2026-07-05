@@ -231,4 +231,54 @@ describe("AlertReviewPanel", () => {
     );
     expect(onPromote).toHaveBeenCalledWith("a-9");
   });
+
+  it("承認済みの類似既知（SIMILARITY）＋有効レポートにも『既知パターンへ昇格』を出す", async () => {
+    const onPromote = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AlertReviewPanel
+        alert={makeAlert({
+          id: "a-9",
+          feedback: { isCorrect: true },
+          classification: {
+            type: "known",
+            source: "SIMILARITY",
+            patternId: "similar:inc-1",
+            patternName: "類似既知: ec.db.connection_pool_exhausted",
+            confidence: 0.67,
+            matchedConditions: [],
+          },
+        })}
+        onDecision={vi.fn()}
+        onPromote={onPromote}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /既知パターンへ昇格/ }),
+    );
+    expect(onPromote).toHaveBeenCalledWith("a-9");
+  });
+
+  it("完全一致（EXACT_MATCH）既知は承認済みでも昇格ボタンを出さない（既に高速パス）", () => {
+    render(
+      <AlertReviewPanel
+        alert={makeAlert({
+          id: "a-9",
+          feedback: { isCorrect: true },
+          classification: {
+            type: "known",
+            source: "EXACT_MATCH",
+            patternId: "p-1",
+            patternName: "決済タイムアウト",
+            confidence: 1,
+            matchedConditions: [],
+          },
+        })}
+        onDecision={vi.fn()}
+        onPromote={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /既知パターンへ昇格/ }),
+    ).not.toBeInTheDocument();
+  });
 });
