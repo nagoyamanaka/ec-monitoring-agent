@@ -408,6 +408,26 @@ todo実施後に
 
 ---
 
+## K. 証拠の本物度の底上げ（実リンク化）＋実検知UX〔2026-07-05・実装✅〕
+
+> **背景**: 合成デモでも「証拠が本物」であることを一段引き上げる。デモの入口（Alert 発火）は合成でも、証拠に添える**外部リンク（NVD/PR）は実在・決定論導出**にして「クリックできる本物」にする（シナリオ7＝アプリコード退行で確立した「証跡を代表値から本物へ」の思想を 4/5/6 横断で徹底）。config 未設定（本番）は素の証拠のまま＝**挙動非侵食**が共通不変条件。
+
+> **2026-07-06 追記（シナリオ絞り込み）**: デモ卓を 1/2/3/3b/4 に絞り、シナリオ5（構成変更）・6（アプリコード退行）は撤退（検知入口の説得力が弱く発表尺でも絞る方が伝わる）。K1 のうち**シナリオ6 の PR リンク注入（`relatedPullRequests`/`appcodeCommitPrLinks`/config `appcode*`）はコードごと撤去**（git 履歴 f9f432c に残置）。CVE→NVD はシナリオ4で、terraform 証拠→変更 PR（`infraApplyPrUrl`）はシナリオ3/3b（同一コードパス `buildInfraFaultApplyEvent`）で継続。人間タスクの残りは scenario5 分の Merged PR のみ（3/3b の terraform 証拠リンク先として使う）。
+
+### タスク K1: 証拠に実在の外部リンクを決定論的に添える（3シナリオ横断）〔✅→シナリオ6分は撤去〕
+
+- [x] **シナリオ4（脆弱性）: CVE → NVD 実在リンク**（`SecurityFindingView`）。`cveId` が正規形（`CVE_ID_PATTERN=/^CVE-\d{4}-\d{4,}$/i`）のときだけ NVD 詳細ページ URL（`nvdUrl`）を決定論導出＝**404 リンクを作らない**。合成注入でも CVE 識別子自体は公的 DB に実在＝嘘にならない。確信度に `verifiable_cve`（「実在 CVE 引用」）を強シグナルとして追加（`confidenceCalibration`）。wire は `AlertContract` に SecurityFinding を追加、`EvidencePanel` が脆弱性証拠に NVD リンクを表示
+- [x] **シナリオ5（構成変更＝terraform apply 起因）: terraform 証拠 → 変更PRリンク**（`TerraformDiff.url`）。`config.demo.infraApplyPrUrl`（`DEMO_INFRA_APPLY_PR_URL` 既定 `…/pull/60`）を `buildInfraFaultApplyEvent()` 経由で apply イベントに載せ、`TerraformGatewayImpl` が `change.url` を証拠へ通す。`EvidencePanel` が「変更 PR を開く →」のクリック語彙で表示。空なら非リンク
+- [x] **シナリオ6（アプリコード退行）: 原因コミット → 「原因PR（マージ済）/revert PR」**（`GitCommit.relatedPullRequests`）。GitHub 一覧 API はコミット→PR を返さないので、`BackofficeApp` が config の実 PR URL を短縮 sha にひも付けた map（`appcodeCommitPrLinks`）を `GitHubGatewayImpl` に注入し、`listRecentCommits` が該当 sha のコミットに PR 群を添える。config: `appcodeCauseCommitSha`（`DEMO_APPCODE_CAUSE_COMMIT_SHA` 既定 `e12b655`）/ `appcodeCausePrUrl`（既定 `…/pull/62`＝テスト通過してマージされた退行の物語）/ `appcodeFixPrUrl`（既定 `…/pull/63`＝AI が提示する次アクションの revert・open のまま）。どちらの URL も空なら map は空＝素の証拠。`EvidencePanel` が terraform「変更 PR を開く →」と同じクリック語彙で原因コミットから次アクションへ橋渡し（`EvidenceView.relatedPullRequests`）
+- 【共通思想】「入口は合成・外部リンクは本物」。決定論導出（NVD）または config 駆動（PR URL）で、**本番/未設定時は素の証拠のまま**＝挙動非侵食。`terraformDiff.url` と `relatedPullRequests` は同思想の別ソース
+- **人間タスク（実 PR ステージング）**: 各リンク先を demo ブランチ base で実起票する（scenario5＝同内容の Merged PR／scenario6 の原因 PR＝Merged・fix PR＝open の revert）。**main はワークフロー発火のため PR base に使わない**（[[project_scenario5_tf_pr_link_and_cve_links]]・[[project_demo_scenario7_appcode_regression]]）
+
+### タスク K2: 実検知シナリオ（3/3b）の「検知待ち」バナー〔✅〕
+
+- [x] **`DetectionPendingBanner`**（`features/demo/presentation`）: 実検知経路（Cloud Monitoring 発報）シナリオは POST が 202 で即返るのにアラート着弾が約1分遅れる＝押下直後にボタンが通常表示へ戻ると「押しても何も起きない」死んだ待ち時間になる（Lisa/UX）。待ち時間を「**実パイプラインが検知している最中**」として可視化: 押下受領を即座に示す＋経過タイマー＋期待値（約1分）で不確実性を消す／通過中の実ホップ（HTTP 500→Cloud Logging→Cloud Monitoring 発報→キュー→アラート生成）を明示＝合成注入でない本物の検知経路の証拠として語れる（David・公式観点「実運用 DevOps」）。per-hop テレメトリは持たないので**完了を偽点灯させず**不定進捗（パルス）＋「通過中」表現に留める（正直さ）。想定超過（`SLOW_HINT_AFTER_SEC=90`）時は反復用（合成・即時＝3b）へ誘導し行き止まりを作らない。着弾（SSE）で親 `DemoDrawer` が畳む純表示。`useAlerts`/`useDemoControls` に pending 状態を配線（RTL: DemoDrawer 4件・useDemoControls 追加）
+
+---
+
 ## C. ハッカソン後（設計/ADRのみ・実装しない）
 
 > stretchⅢ（event-log 基盤・予知ビュー）は `step4-1` §7.10 ＋ 各 step4 todo の stretchⅢ 節が正。本スプリントでは着手しない。継ぎ目 `ForecastSignalSource[]`（F1）を守るのが唯一の前提作業。予兆 ADR 種は `step4-1` タスク8（step4-1-strategy-todo.md）に残置。

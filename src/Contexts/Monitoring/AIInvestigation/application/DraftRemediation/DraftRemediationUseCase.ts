@@ -11,7 +11,7 @@ import { remediationRecordToPrimitives } from "../../domain/contracts/Remediatio
 
 /**
  * security-scan アラートの payload.vulnerabilities[] を入力に修正を実行する。
- * シナリオ5（DevOpsループ）の出口。write 操作はここに集約する。
+ * シナリオ4（脆弱性検知・DevOpsループ）の出口。write 操作はここに集約する。
  *
  * 実行戦略（その場で草案PR＝advisory / CI へAIエージェントをディスパッチ＝agentic）は
  * RemediationExecutor の実装差し替えで決まり、本 UseCase は outcome を記録に写すだけ。

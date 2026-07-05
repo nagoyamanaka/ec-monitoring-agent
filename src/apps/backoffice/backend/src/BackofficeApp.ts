@@ -373,7 +373,7 @@ export class BackofficeApp {
     );
     const getInfraEvidenceQueryHandler = new GetInfraEvidenceQueryHandler(getInfraEvidenceUseCase);
 
-    // リメディエーション（シナリオ5の出口）。実行戦略は config.remediation.mode で差し替える:
+    // リメディエーション（シナリオ4＝脆弱性検知の出口）。実行戦略は config.remediation.mode で差し替える:
     //   dispatch = CI(GitHub Actions)のAIエージェントへ投げ、実コード修正+UT/E2E をランナーで回す（精度はテストゲートで担保）
     //   advisory = in-process で SECURITY_REMEDIATION.md の方針PRを起票（CI/GitHub 不在でも動く既定）
     // どちらも RemediationExecutor の裏に隠れ、DraftRemediationUseCase はノータッチ。

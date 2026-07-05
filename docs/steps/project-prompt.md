@@ -1,4 +1,4 @@
-# 設計エージェント向けプロンプト v19.1
+# 設計エージェント向けプロンプト v19.3
 
 > **変更履歴（v18→v19）**
 > 検知境界（detection boundary）を明文化。検知基盤に Cloud Monitoring を採用（Datadog 不採用＝有料・物語矛盾／Cloud Monitoring は無料枠・GCP 要件加点）。
@@ -147,7 +147,7 @@ src/Contexts/
 │   │   ├── infrastructure/infrainvestigation/ ← インフラ横断調査（read-only Gateway群）【実装済み】
 │   │   ├── infrastructure/remediation/        ← 自律リメディエーション（PR起票のwrite隔離）【実装済み】
 │   │   └── infrastructure/adk/        ← ADKマルチエージェント（a2a不使用）【実装済み】
-│   ├── Forecast/                      ← 予兆（stretchⅡ）【未実装・設計のみ】
+│   ├── Forecast/                      ← 予兆ブリーフィング（stretchⅡ→step6で実装）【実装済み: F1〜F12（domain/application/infrastructure・GET/POST/DELETE /forecast・GeminiForecastAdapter・引用検証）】
 │   ├── EventLog/                      ← イベントソーシング基盤（stretchⅢ）【未実装・設計のみ】
 │   └── ReportGeneration/             ← 【未実装・設計のみ。レポート生成は AlertAnalysis/GetAlertReport が担当】
 └── Shared/
@@ -415,6 +415,7 @@ interface InfraEvidence {
 >
 > - **デモ卓 合成シナリオ5（脆弱性検知）**: DEMO CONSOLE のボタン押下で `TriggerDemoScenarioUseCase` が `SecurityScanTranslator`→`CollectMonitoringEventUseCase`（= 実 `/ingest/security-scan` と同一の変換・分類・調査経路）に合成ペイロードを直接通す。即時・確実で INITIALIZE DEMO で戻る。シナリオ1〜4と同じ「backend 経路を持つ合成注入」（偽ボタンではない）。ライブ実演はこちらを使う。
 > - **本物のCI証明（別役割）**: 実在依存を既知CVE版に pin した PR → 実 Trivy → 実 ingest。最も忠実だが、`app.yml` は現状 `on: push: branches:[main]` のみで **PR では発火せず main merge の push でのみ走る**（PR時点で出すなら `pull_request:` トリガ追加が必要）。さらに `INGEST_URL`/`INGEST_TOKEN` + デプロイ済み到達可能 backend + 実在 HIGH/CRITICAL が揃って初めて検知が成立。レポート/PR の実リンクはライブでは出せない割り切り（実演コスパ優先）で、ナレーションで明示する。
+> - **CVE は合成デモでも本物（2026-07-05 実装・K1）**: 合成注入でも `cveId` は公的 DB に実在する検証可能な識別子なので、`SecurityFindingView` が正規形（`CVE_ID_PATTERN=/^CVE-\d{4}-\d{4,}$/i`）のときだけ **NVD 詳細ページ URL を決定論導出**して証拠パネルにクリック可能リンクとして出す（404 リンクは作らない）。確信度に `verifiable_cve`（「実在 CVE 引用」）を強シグナルとして追加。「証拠が本物でクリックできる」を、修正PRの本物度（`app.yml` 発火制約で出せない）とは独立に成立させる一手。
 
 ```
 1. GitHub Actions（CI）が Trivy / npm audit を実行
@@ -442,6 +443,8 @@ interface InfraEvidence {
 
 ### シナリオ6: 構成変更障害（IaC apply 起因・v14追加）
 
+> **2026-07-06 デモ卓から撤退（v19.3）**: 検知の入口の説得力（「実際はどう検知するのか」への答え）が弱く、デモ・発表は 1/2/3/3b/4（既知/類似/未知×実検知/未知×CI）に絞る判断。`TriggerDemoScenarioUseCase` の `infra-config-change` トリガーは撤去済み（git 履歴に残置）。**ただし本節の「terraform 証拠→変更 PR リンク」（K1）と apply 差分の記録機構（`buildInfraFaultApplyEvent`）は、現行のインフラ障害シナリオ（3/3b）が同一コードパスで使用継続**。以下は設計記録。
+
 **「terraform apply（IaC 変更）そのものが原因の障害」を、AI が apply 適用差分を root cause として特定する**フロー。シナリオ4（インフラ障害）が GCP の Cloud Monitoring 経路B 依存で**ローカルでは Alert が出ない**のに対し、本シナリオは検知の入口だけ合成して実 ingest 経路に通すので**ローカルでも実 Alert→AI 調査が走る**（シナリオ5＝脆弱性検知と同方式）。
 
 > **設計のキモ（2026-06-29）**: メトリクス/ログ/コミットは事後に時間窓でライブ照会できるが、**terraform apply の差分だけは後から再構成できない**（apply は CI 上の一回限りのイベント）。よって git join ではなく**適用の瞬間にイベントとして捕捉して保存**し、調査は既存の `since` 時間窓で引く（検知ソースの peer ingest と同じ思想）。git sha は join キーでなく apply イベントの一属性。証拠 `TerraformDiff` は「変更ファイル名の羅列」ではなく**リソース単位の構造化差分**（address / action / `attributeDeltas: {key, before, after}`）に格上げ済み＝AI 原因分析の決定打になる（タスク33）。
@@ -464,9 +467,12 @@ interface InfraEvidence {
 
 > **デモ卓 合成シナリオ6（構成変更障害）**: DEMO CONSOLE のボタン押下で `TriggerDemoScenarioUseCase` が ① 代表 apply 差分を `AppliedInfraChangeStore.record()` → ② 合成 Cloud Monitoring webhook を `CloudMonitoringAlertTranslator`→`CollectMonitoringEventUseCase`（= 実 `/ingest/cloud-monitoring` と同一の変換・分類・調査経路）に通す。**検知の入口のみ合成**で、変換→分類→AI 調査（terraform 差分の収集）は実経路。INITIALIZE DEMO で戻る。
 > 分類の罠: 調査が terraform 差分を引くのは category===**INFRASTRUCTURE** のときだけ（`DefaultInfraInvestigationAdapter`）。translator の `CAPACITY_HINTS`（connection/pool/cpu…）に当たると CAPACITY になり差分を引かないので、condition 名は容量語を避けて INFRASTRUCTURE に倒す（UTで固定）。
-> **「合成入力」の明示**: シナリオ5/6 は FAULT INJECTION 上で amber バッジ＋凡例を出す＝「検知の入口のみ合成。変換→AI調査→PR起票は実経路。本番は実 CI/apply から同経路。外部リンク（PR/コンソール）はデモ環境では代表値」。パイプラインは実際に動くため「動かない偽物」とは括らず、軸は「入口が合成か実外部ソースか」「外部リンクが代表値か実リンクか」で正確に示す（タスク34）。
+> **「合成入力」の明示**: シナリオ5/6 は FAULT INJECTION 上で amber バッジ＋凡例を出す＝「検知の入口のみ合成。変換→AI調査→PR起票は実経路。本番は実 CI/apply から同経路」。パイプラインは実際に動くため「動かない偽物」とは括らず、軸は「入口が合成か実外部ソースか」で正確に示す（タスク34）。
+> **証拠の実リンク（2026-07-05・K1）**: terraform 証拠には変更 PR リンクを添える（`TerraformDiff.url` ← `config.demo.infraApplyPrUrl`＝`DEMO_INFRA_APPLY_PR_URL`・`buildInfraFaultApplyEvent()` 経由）。`EvidencePanel` が「変更 PR を開く →」で表示。**config 未設定なら非リンク＝挙動非侵食**。同内容の PR は demo ブランチ base で人間が実起票する（main はワークフロー発火のため使わない）。
 
 ### シナリオ7：アプリコード退行（CIは通ったが挙動デグレ・v20追加）
+
+> **2026-07-06 デモ卓から撤退（v19.3）**: シナリオ6と同じ理由（検知入口の説得力・発表尺の絞り込み）で撤退。`TriggerDemoScenarioUseCase` の `appcode-regression` トリガーと、原因コミットへの PR リンク注入機構（`GitCommit.relatedPullRequests`／`appcodeCommitPrLinks`／config の `appcode*` 3項目・下記 K1 段落）は**コードごと撤去済み**（git 履歴 f9f432c に残置・復活可能）。以下は設計記録。
 
 **「テストは緑のまま通ったアプリコード変更そのものが挙動を退行させた障害」を、AI が実コミット差分を読んで root cause として特定する**フロー。シナリオ4/6（インフラ・IaC 起因）・5（CVE）がカバーしない**アプリコード起因**の根本原因カテゴリを埋め、既述の「修正ターゲット・ルーティング（アプリのコード→PR+UT / 自前IaC→Terraform PR / 外部→runbook）」を実証する。`GitHubGateway.getCommitDiff()`（コミット単位の実 unified diff 取得・タスク35）の見せ場。
 
@@ -494,12 +500,13 @@ interface InfraEvidence {
 6. バックオフィスに「実差分 before→after + AI原因特定 + 実PRリンク」を SSE 表示
 ```
 
-> **「合成入力」の明示**: シナリオ5/6 と同じ amber バッジ＋凡例に1行足す＝「検知の入口のみ合成。**調査対象 ref はデモ隔離ブランチ**（本番は deployed ref）。コミット差分・AI分析・修正PR は実物」。軸は「入口が合成か実外部ソースか」「調査 ref がデモ隔離か本番 ref か」「PR/外部リンクが実 draft か代表値か」で正確に示す。
+> **「合成入力」の明示**: シナリオ5/6 と同じ amber バッジ＋凡例に1行足す＝「検知の入口のみ合成。**調査対象 ref はデモ隔離ブランチ**（本番は deployed ref）。コミット差分・AI分析・修正PR は実物」。軸は「入口が合成か実外部ソースか」「調査 ref がデモ隔離か本番 ref か」で正確に示す。
+> **証拠の実リンク（2026-07-05・K1）**: 原因コミットに「原因PR（マージ済）/revert PR」を添える（`GitCommit.relatedPullRequests`）。GitHub 一覧 API はコミット→PR を返さないので、`BackofficeApp` が短縮 sha→PR URL の map（`appcodeCommitPrLinks`）を `GitHubGatewayImpl` に config 注入する。config: `appcodeCauseCommitSha`（既定 `e12b655`）/ `appcodeCausePrUrl`（既定 `…/pull/62`＝マージ済の退行）/ `appcodeFixPrUrl`（既定 `…/pull/63`＝AI が提示する次アクションの revert・open）。どちらの URL も空なら素の証拠＝挙動非侵食。`EvidencePanel` が terraform「変更 PR を開く →」と同じクリック語彙で原因コミットから次アクションへ橋渡しする。
 
 ### シナリオXX：予兆ブリーフィング（stretchⅡ・v15追加）
 
-> **2026-06-29 実コード照合: 未実装**（設計案のみ。`Monitoring/Forecast/` 配下のコードは現状存在しない）。
-> 以下は構想記述として残す。着手時は step1 の Forecast ツリーごと新規作成する。
+> **2026-07-05 実コード照合: 実装済み**（step6 ファイナルスプリント F1〜F12）。`Monitoring/Forecast/` に domain/application/infrastructure が実在し、`GET/POST/DELETE /forecast` と `GeminiForecastAdapter`＋引用検証（偽引用ドロップ）まで稼働。UI は `/forecast` ページ（RiskCard・CitationList・「🛡 今打てる先手」・予兆デモコンソール）。詳細は `docs/steps/step6-final-sprint-todo.md` §A・`docs/architecture.md` §10。
+> 以下の構想記述は当初設計として残す（実装は上記 todo が正）。
 
 reactive（事後対応）から **proactive（事前予防）** へのシフトレフト。統計MLではなく **既知の未来シグナル × 蓄積記憶 の LLM推論＋引用検証** で根拠付き予報を出す。録画前提（ライブ安定化コスト不要）。
 
@@ -962,6 +969,22 @@ const port: AIInvestigationPort = new LLMInvestigationAdapter(
 ---
 
 ## 変更履歴
+
+### v19.3（2026-07-06 デモシナリオ絞り込み）
+
+デモ卓を 1/2/3/3b/4 の5ボタンに絞り込み（既知→類似→未知の確度スペクトル×realness 3階級を過不足なく1本ずつ）。
+
+- シナリオ6（構成変更障害）・シナリオ7（アプリコード退行）をデモ卓から撤退。検知入口の説得力（「実際はどう検知するのか」）が弱く、発表尺でも絞る方が伝わる判断。トリガー（`infra-config-change`/`appcode-regression`）は撤去・git 履歴に残置。
+- シナリオ7 の PR リンク注入機構（`GitCommit.relatedPullRequests`・`appcodeCommitPrLinks`・config `appcode*`）もコードごと撤去。**terraform 証拠→変更 PR リンク（K1）はインフラ障害シナリオ 3/3b が同一コードパス（`buildInfraFaultApplyEvent`＋`infraApplyPrUrl`）で継続**・CVE→NVD リンク（シナリオ5＝脆弱性検知）も継続。
+
+### v19.2（2026-07-05 実コード照合・step6 実装反映）
+
+現在のコードを正に、step6 ファイナルスプリントで着地した内容へ寄せた（詳細は `docs/steps/step6-final-sprint-todo.md`・`docs/architecture.md`）。
+
+- 予兆/Forecast: **未実装 → 実装済み**（F1〜F12）。`Monitoring/Forecast/` 実在・`GET/POST/DELETE /forecast`・`GeminiForecastAdapter`＋引用検証・`/forecast` UI（RiskCard/CitationList/「🛡 今打てる先手」/予兆デモコンソール）。旧「未実装」記述（構造ツリー・シナリオXX）を実体へ更新。
+- 相関の健全化: relatedAlerts の citation 実在照合＋確信度ゲート（案B）＋批判役 `CorrelationVerifier`（案A）で **ADK 7→8エージェント**。
+- 証拠の実リンク化（K1）: シナリオ5=CVE→NVD 決定論リンク＋`verifiable_cve` 強シグナル／シナリオ6=terraform 証拠→変更 PR（`infraApplyPrUrl`）／シナリオ7=原因コミット→原因/revert PR（`relatedPullRequests`）。config 未設定は素の証拠＝非侵食。旧「外部リンクは代表値」記述を更新。
+- 実検知 UX（K2）: シナリオ3/3b の着弾約1分を `DetectionPendingBanner`（実ホップ通過の可視化）で埋める。
 
 ### v19.1（2026-06-29 実コード照合・ドキュメント最新化）
 

@@ -79,8 +79,8 @@ export const config = {
     // demo シナリオ facade が EC backend を叩くための接続先と、注文投入に使う商品
     ecBackendUrl: process.env.EC_BACKEND_URL ?? "http://localhost:3000",
     productId: process.env.DEMO_PRODUCT_ID ?? "demo-product-1",
-    // 構成変更シナリオの apply 差分に添える「由来変更の実 PR」URL（REMEDIATION_DEMO_PR_URL と同じ
-    // 割り切り＝事前に手動起票した本物を毎回指す）。空なら Terraform 証拠は従来通り非リンク表示。
+    // インフラ障害シナリオ（3/3b）の apply 差分に添える「由来変更の実 PR」URL（REMEDIATION_DEMO_PR_URL
+    // と同じ割り切り＝事前に手動起票した本物を毎回指す）。空なら Terraform 証拠は従来通り非リンク表示。
     infraApplyPrUrl:
       process.env.DEMO_INFRA_APPLY_PR_URL ??
       "https://github.com/nagoyamanaka/ec-monitoring-agent/pull/60",
@@ -111,7 +111,7 @@ export const config = {
       | "dispatch"
       | "advisory"
       | "demo",
-    // demo モードで返す、事前に手動起票した本物の草案PRのURL（シナリオ5用）。
+    // demo モードで返す、事前に手動起票した本物の草案PRのURL（シナリオ4＝脆弱性検知用）。
     demoPullRequestUrl:
       process.env.REMEDIATION_DEMO_PR_URL ??
       "https://github.com/nagoyamanaka/ec-monitoring-agent/pull/29",
