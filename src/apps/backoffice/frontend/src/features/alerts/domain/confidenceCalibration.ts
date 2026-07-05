@@ -11,6 +11,7 @@ const SIGNAL_LABELS: Record<ConfidenceGroundingSignal, string> = {
   known_pattern: "既知パターン一致",
   cited_commit: "原因コミット引用",
   terraform_diff: "Terraform 変更",
+  verifiable_cve: "実在 CVE 引用",
   related_alert: "相関アラート",
   similar_incident: "類似事例",
   operator_note: "人間の指摘",

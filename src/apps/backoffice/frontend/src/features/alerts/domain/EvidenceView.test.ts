@@ -65,6 +65,21 @@ describe("toEvidenceView", () => {
       action: "update",
       attributeDeltas: [{ key: "max_connections", before: "100", after: "20" }],
     });
+    // 由来 PR リンク未提供は null（非リンク表示）。
+    expect(view.terraformDiff?.url).toBeNull();
+  });
+
+  it("terraformDiff の由来 PR リンクは View に透過する（証拠の原典をクリック可能にする）", () => {
+    const base = makePrimitives();
+    const view = toEvidenceView(
+      makePrimitives({
+        terraformDiff: {
+          ...base.terraformDiff!,
+          url: "https://github.com/o/r/pull/30",
+        },
+      }),
+    );
+    expect(view.terraformDiff?.url).toBe("https://github.com/o/r/pull/30");
   });
 
   it("optional な terraformDiff / recentCommits / metrics 欠落を null / [] に正規化する", () => {
@@ -129,6 +144,25 @@ describe("evidenceSections", () => {
       "terraform",
       "commits",
     ]);
+  });
+
+  it("securityFindings があれば先頭に security セクションを積む（SECURITY 検知の主証拠）", () => {
+    const finding = {
+      cveId: "CVE-2021-3807",
+      severity: "CRITICAL",
+      package: "ansi-regex",
+      version: "3.0.0",
+      fixedVersion: "5.0.1",
+      nvdUrl: "https://nvd.nist.gov/vuln/detail/CVE-2021-3807",
+    };
+    const sections = evidenceSections(toEvidenceView(makePrimitives()), [finding]);
+    expect(sections.map((s) => s.kind)).toEqual([
+      "security",
+      "logs",
+      "terraform",
+      "commits",
+    ]);
+    expect(sections[0]).toEqual({ kind: "security", findings: [finding] });
   });
 
   it("空のソースは畳む（変更リソース 0 の terraform は出さない）", () => {

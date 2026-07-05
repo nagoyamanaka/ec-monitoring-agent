@@ -9,6 +9,8 @@ export type AppliedInfraChange = {
   readonly resourceChanges: TerraformResourceChange[];
   // 由来コミット（任意）。join キーではなくイベントの一属性。
   readonly commitSha?: string;
+  // 由来変更の Web リンク（GitHub の PR/コミット・任意）。証拠のクリック可能な原典になる。
+  readonly url?: string;
   readonly summary: string;
 };
 

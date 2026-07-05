@@ -22,6 +22,7 @@ const SOURCE_META: Record<
   EvidenceSection["kind"],
   { label: string; icon: string }
 > = {
+  security: { label: "Trivy (CI スキャン)", icon: "🛡" },
   logs: { label: "Cloud Logging", icon: "▤" },
   metrics: { label: "Cloud Monitoring", icon: "📈" },
   terraform: { label: "Terraform", icon: "⬡" },
@@ -86,6 +87,7 @@ function SectionHeader({ kind }: { kind: EvidenceSection["kind"] }) {
 
 /** 1 セクションが占める stagger スロット数（ヘッダ 1 ＋ 行数）。次セクションの基点計算に使う。 */
 function sectionSlotCount(section: EvidenceSection): number {
+  if (section.kind === "security") return 1 + section.findings.length;
   if (section.kind === "logs") return 1 + section.logs.length;
   if (section.kind === "metrics") return 1 + section.metrics.length;
   // summary 行 ＋ 変更リソース 1 行/件（無ければ chips の 1 行）。
@@ -98,6 +100,12 @@ function sectionSlotCount(section: EvidenceSection): number {
  * 1 ソースの証拠ブロック。ヘッダ・各行を baseIndex からの連番で stagger フェードインさせ、
  * パネル全体で「証拠が 1 行ずつ積み上がる」連続演出にする（タスク12・本命）。
  */
+/** CVE 深刻度バッジの色。スキャナ語彙（CRITICAL/HIGH/…）に無い値は控えめ表示に落とす。 */
+const CVE_SEVERITY_CLASS: Record<string, string> = {
+  CRITICAL: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+  HIGH: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
+};
+
 function EvidenceSectionView({
   section,
   baseIndex,
@@ -105,6 +113,57 @@ function EvidenceSectionView({
   section: EvidenceSection;
   baseIndex: number;
 }) {
+  if (section.kind === "security") {
+    return (
+      <div className="space-y-2">
+        <Rise index={baseIndex}>
+          <SectionHeader kind="security" />
+        </Rise>
+        <ul className="space-y-1.5">
+          {section.findings.map((f, i) => (
+            <Rise
+              key={f.cveId}
+              index={baseIndex + 1 + i}
+              className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                    CVE_SEVERITY_CLASS[f.severity] ??
+                      "bg-slate-600/20 text-slate-300 ring-slate-500/30",
+                  )}
+                >
+                  {f.severity}
+                </span>
+                {/* CVE は公的 DB（NVD）に実在する識別子＝合成デモでも本物のリンク先を持つ証拠。 */}
+                <a
+                  href={f.nvdUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="NVD で脆弱性詳細を開く"
+                  className="rounded bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
+                >
+                  {f.cveId}
+                </a>
+              </div>
+              <p className="mt-1.5 font-mono text-[11px] text-slate-300">
+                {f.package}:{" "}
+                <span className="text-rose-300">{f.version}</span>
+                {f.fixedVersion && (
+                  <>
+                    <span className="text-slate-400"> → </span>
+                    <span className="text-emerald-300">{f.fixedVersion}</span>
+                  </>
+                )}
+              </p>
+            </Rise>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   if (section.kind === "logs") {
     return (
       <div className="space-y-2">
@@ -197,9 +256,23 @@ function EvidenceSectionView({
           className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
         >
           <p className="text-xs text-slate-100">{diff.summary}</p>
-          <p className="mt-1 text-[11px] text-slate-400">
-            適用 {formatDateTimeJa(diff.appliedAt)}
-            {diff.commitSha ? ` · ${diff.commitSha.slice(0, 7)}` : ""}
+          <p className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
+            <span>
+              適用 {formatDateTimeJa(diff.appliedAt)}
+              {diff.commitSha ? ` · ${diff.commitSha.slice(0, 7)}` : ""}
+            </span>
+            {/* 由来変更の原典（実在 PR）。コミット証拠の sha リンクと同じクリック語彙で出す。 */}
+            {diff.url && (
+              <a
+                href={diff.url}
+                target="_blank"
+                rel="noreferrer"
+                title="GitHub で由来変更の PR を開く"
+                className="ml-auto rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
+              >
+                変更 PR を開く →
+              </a>
+            )}
           </p>
         </Rise>
         {diff.resourceChanges.length > 0
@@ -307,7 +380,10 @@ function EvidenceSectionView({
 export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
   const { phase, evidence, error } = useEvidence(api, alert);
 
-  const sections = evidence ? evidenceSections(evidence) : [];
+  // SECURITY 検知の CVE（検知イベント payload 由来）は調査収集の証拠と並べて1枚のパネルにする。
+  const sections = evidence
+    ? evidenceSections(evidence, alert.securityFindings)
+    : [];
 
   return (
     <section className={cn("space-y-3", className)} aria-label="収集した証拠">

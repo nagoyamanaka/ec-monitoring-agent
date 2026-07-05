@@ -6,6 +6,10 @@ import {
   type InvestigationReportView,
   toInvestigationReportView,
 } from "./InvestigationReportView";
+import {
+  type SecurityFindingView,
+  securityFindingsFromPayload,
+} from "./SecurityFindingView";
 
 /**
  * Alert の表示用型と、ワイヤ契約（共有 contracts の AlertPrimitives）→ View の純関数。
@@ -67,6 +71,11 @@ export type AlertView = {
   readonly correctFeedbackCount: number;
   /** 同一インシデントの重複観測をまとめた発生回数。2以上なら「×N」をカードに出す。 */
   readonly occurrenceCount: number;
+  /**
+   * SECURITY 検知（Trivy）が payload に運ぶ脆弱性一覧の射影。CVE ごとに NVD への
+   * 実在リンクを持ち、証拠パネルの security セクションになる。非 SECURITY は空配列。
+   */
+  readonly securityFindings: SecurityFindingView[];
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -111,6 +120,7 @@ export function toAlertView(dto: AlertPrimitives): AlertView {
     correctFeedbackCount: dto.correctFeedbackCount,
     // 旧データ・契約 optional 互換: 未設定は 1 件として扱う。
     occurrenceCount: dto.occurrenceCount ?? 1,
+    securityFindings: securityFindingsFromPayload(dto.monitoringEvent.payload),
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
   };

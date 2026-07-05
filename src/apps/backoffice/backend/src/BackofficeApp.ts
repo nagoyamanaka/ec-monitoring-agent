@@ -520,6 +520,7 @@ export class BackofficeApp {
       config.demo.productId,
       appliedInfraChangeStore,
       collectMonitoringEventUseCase,
+      config.demo.infraApplyPrUrl,
     );
     const demoResetUseCase = new DemoResetUseCase(
       new MongoDemoDataAdapter(mongoClient, alertReadModelStore),

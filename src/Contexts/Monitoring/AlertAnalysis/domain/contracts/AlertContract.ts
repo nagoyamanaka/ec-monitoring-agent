@@ -185,13 +185,14 @@ export type InvestigationMetricsPrimitives = {
 
 /**
  * 確信度キャリブレーションの裏付けシグナル。LLM の作文ではなく、システムが検証できる事実のみ
- * （既知パターン一致／報告書が引用した原因コミット／適用済み Terraform 差分／実在候補と突合済みの
- * 相関アラート／類似事例／再調査時の人間の指摘）。
+ * （既知パターン一致／報告書が引用した原因コミット／適用済み Terraform 差分／CI スキャナ由来の
+ * 実在 CVE を報告書が引用／実在候補と突合済みの相関アラート／類似事例／再調査時の人間の指摘）。
  */
 export type ConfidenceGroundingSignal =
   | "known_pattern"
   | "cited_commit"
   | "terraform_diff"
+  | "verifiable_cve"
   | "related_alert"
   | "similar_incident"
   | "operator_note";

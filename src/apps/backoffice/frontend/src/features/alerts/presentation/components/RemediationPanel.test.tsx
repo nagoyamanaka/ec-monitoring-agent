@@ -80,7 +80,7 @@ describe("RemediationPanel", () => {
     await waitFor(() =>
       expect(screen.getByText("修正 PR 作成済み")).toBeInTheDocument(),
     );
-    expect(screen.getByText("検出 2 件")).toBeInTheDocument();
+    expect(screen.getByText("対象脆弱性 2 件")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /修正 PR を開く/ }),
     ).toHaveAttribute("href", "https://github.com/x/y/pull/3");

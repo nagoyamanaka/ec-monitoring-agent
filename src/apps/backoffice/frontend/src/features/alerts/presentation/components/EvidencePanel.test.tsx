@@ -24,6 +24,7 @@ const FULL_EVIDENCE: EvidenceView = {
     ],
     appliedAt: "2026-01-01T00:00:00.000Z",
     commitSha: "deadbeefcafe1234",
+    url: null,
     changedResources: ["aws_db_instance.main"],
     summary: "max_connections を縮小",
   },
@@ -117,6 +118,87 @@ describe("EvidencePanel", () => {
         ),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("SECURITY 検知の CVE を先頭セクションで出し、NVD への実在リンクを張る", async () => {
+    const empty: EvidenceView = {
+      appLogs: [],
+      terraformDiff: null,
+      recentCommits: [],
+      metrics: [],
+      collectedAt: "2026-01-01T00:00:01.000Z",
+    };
+    render(
+      <EvidencePanel
+        api={fakeApi(empty)}
+        alert={makeAlert({
+          id: "a-1",
+          status: "OPEN",
+          category: "SECURITY",
+          securityFindings: [
+            {
+              cveId: "CVE-2021-3807",
+              severity: "CRITICAL",
+              package: "ansi-regex",
+              version: "3.0.0",
+              fixedVersion: "5.0.1",
+              nvdUrl: "https://nvd.nist.gov/vuln/detail/CVE-2021-3807",
+            },
+          ],
+        })}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Trivy (CI スキャン)")).toBeInTheDocument(),
+    );
+    const link = screen.getByRole("link", { name: "CVE-2021-3807" });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://nvd.nist.gov/vuln/detail/CVE-2021-3807",
+    );
+    // インフラ証拠ゼロでも CVE があれば空表示にしない。
+    expect(
+      screen.queryByText(/引用されたインフラ証拠/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("terraform 証拠に由来 PR リンクがあれば「変更 PR を開く」を出す", async () => {
+    const withUrl: EvidenceView = {
+      ...FULL_EVIDENCE,
+      terraformDiff: {
+        ...FULL_EVIDENCE.terraformDiff!,
+        url: "https://github.com/o/r/pull/30",
+      },
+    };
+    render(
+      <EvidencePanel
+        api={fakeApi(withUrl)}
+        alert={makeAlert({ id: "a-1", status: "OPEN" })}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Terraform")).toBeInTheDocument(),
+    );
+    const link = screen.getByRole("link", { name: "変更 PR を開く →" });
+    expect(link).toHaveAttribute("href", "https://github.com/o/r/pull/30");
+  });
+
+  it("由来 PR リンクが無い terraform 証拠は従来通り非リンク表示", async () => {
+    render(
+      <EvidencePanel
+        api={fakeApi()}
+        alert={makeAlert({ id: "a-1", status: "OPEN" })}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Terraform")).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByRole("link", { name: "変更 PR を開く →" }),
+    ).not.toBeInTheDocument();
   });
 
   it("取得失敗時はエラー表示する", async () => {
