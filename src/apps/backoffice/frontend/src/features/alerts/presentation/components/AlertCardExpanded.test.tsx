@@ -14,6 +14,58 @@ describe("AlertCardExpanded", () => {
     expect(screen.getByText("ロールバック")).toBeInTheDocument();
   });
 
+  describe("発報内容（検知ソースの生情報）", () => {
+    const detectionDetail = {
+      summary: "ec-backend が severity=CRITICAL のログを記録",
+      documentation: "対象サービス: ec-backend（action: demo_infra_fault）",
+      policyName: "アプリ CRITICAL ログ検知",
+      resourceName: "ec-monitoring-backbone",
+      resourceType: "gce_instance",
+      metricType: null,
+      incidentUrl: null,
+    };
+
+    it("ドロワー（summary）・詳細ページ（full）の両 variant で表示する", () => {
+      for (const variant of ["summary", "full"] as const) {
+        const { unmount } = render(
+          <AlertCardExpanded variant={variant} alert={makeAlert({ detectionDetail })} />,
+        );
+        expect(screen.getByText("発報内容")).toBeInTheDocument();
+        expect(
+          screen.getByText("対象サービス: ec-backend（action: demo_infra_fault）"),
+        ).toBeInTheDocument();
+        expect(screen.getByText("ec-monitoring-backbone")).toBeInTheDocument();
+        unmount();
+      }
+    });
+
+    it("incidentUrl があれば CM インシデントへの外部リンクを出す（実発報のみ持つ）", () => {
+      render(
+        <AlertCardExpanded
+          alert={makeAlert({
+            detectionDetail: {
+              ...detectionDetail,
+              incidentUrl: "https://console.cloud.google.com/monitoring/alerting/incidents/0.abc",
+            },
+          })}
+        />,
+      );
+      const link = screen.getByRole("link", {
+        name: /Cloud Monitoring インシデントを開く/,
+      });
+      expect(link).toHaveAttribute(
+        "href",
+        "https://console.cloud.google.com/monitoring/alerting/incidents/0.abc",
+      );
+      expect(link).toHaveAttribute("target", "_blank");
+    });
+
+    it("detectionDetail の無い Alert（EC 業務イベント等）ではセクションを出さない", () => {
+      render(<AlertCardExpanded alert={makeAlert()} variant="full" />);
+      expect(screen.queryByText("発報内容")).not.toBeInTheDocument();
+    });
+  });
+
   it("href 付き調査ステップは新規タブの外部リンクになる", () => {
     render(
       <AlertCardExpanded

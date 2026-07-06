@@ -84,6 +84,14 @@ describe("TriggerDemoScenarioUseCase", () => {
     const event = (collect.run as ReturnType<typeof vi.fn>).mock.calls[0][0] as MonitoringEvent;
     expect(event.category.value).toBe("INFRASTRUCTURE");
     expect(event.isAlertable()).toBe(true);
+
+    // ③ 発報の生情報（何が・どこで起きたか）を実発報(3)と同水準で運ぶ＝UI の「発報内容」に出る。
+    //    documentation は実ポリシーの label_extractors が抜く実ログ（service/action/message）と同文。
+    expect(event.payload.summary).toContain("ec-backend");
+    expect(event.payload.documentation).toContain("対象サービス: ec-backend（action: demo_infra_fault）");
+    expect(event.payload.documentation).toContain("検知ログ: デモ用インフラ障害を注入");
+    // 偽の CM インシデントリンクは作らない（url は実発報にしか存在しない）。
+    expect(event.payload.url).toBeNull();
   });
 
   it("infra-fault-synthetic は設定された実在 PR URL を apply 差分に添える（証拠の原典リンク）", async () => {

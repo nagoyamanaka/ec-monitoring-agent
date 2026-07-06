@@ -21,6 +21,8 @@ type CloudMonitoringWebhookPayload = {
     readonly severity?: string; // "Critical" | "Warning" 等（新しめのペイロードのみ）
     readonly resource?: { readonly type?: string; readonly labels?: Record<string, unknown> };
     readonly metric?: { readonly type?: string; readonly displayName?: string };
+    // ポリシーの documentation（label_extractors の展開済み）。「何が・どこで起きたか」の本文。
+    readonly documentation?: { readonly content?: string; readonly mime_type?: string };
   };
 };
 
@@ -82,9 +84,15 @@ export class CloudMonitoringAlertTranslator {
         resourceType: incident.resource?.type ?? null,
         resourceName: incident.resource_name ?? null,
         metricType: incident.metric?.type ?? null,
+        // documentation 未設定のポリシーは content:"" で届くため、空は「無情報」として null に畳む。
+        documentation: orNull(incident.documentation?.content),
       },
     });
   }
+}
+
+function orNull(value: string | undefined): string | null {
+  return value !== undefined && value.trim() !== "" ? value : null;
 }
 
 function slugify(value: string): string {
