@@ -94,6 +94,79 @@ export function AlertCardExpanded({
         </div>
       )}
 
+      {/* 発報内容（検知ソースの生情報）。eventName は dedup/分類キーで「何が・どこで起きたか」を
+          運べないため、ingest が payload に格納した summary・検知ログ（documentation）・対象リソースを
+          分類より先に出す＝「何が起きたか」→「どう分類したか」の読み順。EC 業務イベント等
+          該当フィールドを持たない Alert では出ない。 */}
+      {alert.detectionDetail && (
+        <section className="space-y-1.5">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+            発報内容
+          </h4>
+          {alert.detectionDetail.summary && (
+            <p className="text-sm leading-relaxed text-slate-100">
+              {alert.detectionDetail.summary}
+            </p>
+          )}
+          {/* ポリシー documentation ＝ label_extractors が抜いた検知ログの中身（改行を保持）。 */}
+          {alert.detectionDetail.documentation && (
+            <p className="whitespace-pre-line rounded-md bg-slate-800/60 px-3 py-2 text-xs leading-relaxed text-slate-200 ring-1 ring-inset ring-slate-700/60">
+              {alert.detectionDetail.documentation}
+            </p>
+          )}
+          {(alert.detectionDetail.resourceName ||
+            alert.detectionDetail.policyName ||
+            alert.detectionDetail.metricType) && (
+            <p className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-400">
+              {alert.detectionDetail.resourceName && (
+                <span>
+                  対象リソース:{" "}
+                  <code className="text-slate-200">
+                    {alert.detectionDetail.resourceName}
+                  </code>
+                  {alert.detectionDetail.resourceType && (
+                    <span className="ml-1 text-slate-500">
+                      ({alert.detectionDetail.resourceType})
+                    </span>
+                  )}
+                </span>
+              )}
+              {alert.detectionDetail.policyName && (
+                <span>
+                  発報ポリシー:{" "}
+                  <span className="text-slate-200">
+                    {alert.detectionDetail.policyName}
+                  </span>
+                </span>
+              )}
+              {alert.detectionDetail.metricType && (
+                <span>
+                  メトリクス:{" "}
+                  <code className="text-slate-200">
+                    {alert.detectionDetail.metricType}
+                  </code>
+                </span>
+              )}
+            </p>
+          )}
+          {/* CM インシデントのコンソールリンクは実発報にしか無い（合成は偽リンクを作らない）。 */}
+          {alert.detectionDetail.incidentUrl && (
+            <a
+              href={alert.detectionDetail.incidentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-cyan-300 underline decoration-cyan-500/40 underline-offset-2 transition hover:text-cyan-200 hover:decoration-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            >
+              <span aria-hidden>🖥️</span>
+              <span>Cloud Monitoring インシデントを開く</span>
+              <span aria-hidden className="text-cyan-500/70">
+                ↗
+              </span>
+            </a>
+          )}
+        </section>
+      )}
+
       {/* 推定原因（該当パターン / AI 推定パターン）。
           結晶化パターンは人間語＋◈で出し、生ID（PROMOTED_...）は詳細の従属行へ降格。 */}
       {reason.kind !== "analyzing" && (

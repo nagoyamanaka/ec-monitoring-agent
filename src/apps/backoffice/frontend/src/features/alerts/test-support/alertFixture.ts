@@ -37,6 +37,7 @@ export function makeAlert(overrides: Partial<AlertView> = {}): AlertView {
     correctFeedbackCount: 0,
     occurrenceCount: 1,
     securityFindings: [],
+    detectionDetail: null,
     createdAt: "2026-06-21T00:00:00.000Z",
     updatedAt: "2026-06-21T00:00:00.000Z",
     ...overrides,

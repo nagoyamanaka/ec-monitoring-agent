@@ -75,6 +75,27 @@ describe("CloudMonitoringAlertTranslator", () => {
     expect(event.eventName).toBe("gcp.monitoring.unknown");
     expect(event.aggregateId).toBe("unknown");
   });
+
+  it("documentation.content（発報の本文）を payload に取り込む", () => {
+    const event = CloudMonitoringAlertTranslator.toMonitoringEvent(
+      openIncident({
+        documentation: {
+          content: "対象サービス: ec-backend\n検知ログ: CRITICAL を記録",
+          mime_type: "text/markdown",
+        },
+      }),
+    );
+    expect(event.payload["documentation"]).toBe(
+      "対象サービス: ec-backend\n検知ログ: CRITICAL を記録",
+    );
+  });
+
+  it("documentation 未設定（content 空文字）は無情報として null に畳む", () => {
+    const event = CloudMonitoringAlertTranslator.toMonitoringEvent(
+      openIncident({ documentation: { content: "", mime_type: "text/markdown" } }),
+    );
+    expect(event.payload["documentation"]).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

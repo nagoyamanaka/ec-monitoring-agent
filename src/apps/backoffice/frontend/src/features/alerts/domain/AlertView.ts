@@ -10,6 +10,10 @@ import {
   type SecurityFindingView,
   securityFindingsFromPayload,
 } from "./SecurityFindingView";
+import {
+  type DetectionDetailView,
+  detectionDetailFromPayload,
+} from "./DetectionDetailView";
 
 /**
  * Alert の表示用型と、ワイヤ契約（共有 contracts の AlertPrimitives）→ View の純関数。
@@ -78,6 +82,11 @@ export type AlertView = {
    * 実在リンクを持ち、証拠パネルの security セクションになる。非 SECURITY は空配列。
    */
   readonly securityFindings: SecurityFindingView[];
+  /**
+   * 検知ソースが payload に運ぶ発報の生情報（summary・検知ログ・対象リソース）。
+   * eventName（dedup キー）が運べない「何が・どこで起きたか」の表示面。無ければ null。
+   */
+  readonly detectionDetail: DetectionDetailView | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 };
@@ -126,6 +135,7 @@ export function toAlertView(dto: AlertPrimitives): AlertView {
     // 旧データ・契約 optional 互換: 未設定は 1 件として扱う。
     occurrenceCount: dto.occurrenceCount ?? 1,
     securityFindings: securityFindingsFromPayload(dto.monitoringEvent.payload),
+    detectionDetail: detectionDetailFromPayload(dto.monitoringEvent.payload),
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
   };

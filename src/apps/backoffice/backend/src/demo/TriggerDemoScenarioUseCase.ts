@@ -60,9 +60,22 @@ const INFRA_FAULT_SCENARIO_ID = "infra-fault";
 //   eventName/category/severity は 3 と同一（condition_name を実ポリシーと合わせる）ため下流は完全に同じ経路。
 const INFRA_FAULT_SYNTHETIC_SCENARIO_ID = "infra-fault-synthetic";
 
+// 実経路（scenario 3）で EC の InfraFaultPostController が吐く CRITICAL ログと同一の内容。
+// 実ポリシーの label_extractors（terraform modules/monitoring）はこの service/action/message を
+// 抜いて documentation に展開する＝合成(3b)もこの実値を運ぶことで 3 と情報量・文面を一致させる。
+// EC 側のログ文言を変えるときはここも追随させること（片方だけ変えると 3/3b の見え方が乖離する）。
+const INFRA_FAULT_LOG = {
+  service: "ec-backend",
+  action: "demo_infra_fault",
+  message:
+    "デモ用インフラ障害を注入：意図的に CRITICAL ログと HTTP 500 を発生させ、Cloud Monitoring 経由の自動発報（経路B）を確認する",
+} as const;
+
 // 実ポリシー「アプリ CRITICAL ログ検知」の condition（display_name="CRITICAL log entries"）が発火した体の
-// 最小 webhook。translator は eventName=gcp.monitoring.critical_log_entries（slugify 一致）・
+// webhook。translator は eventName=gcp.monitoring.critical_log_entries（slugify 一致）・
 // INFRASTRUCTURE・Critical を導く＝実 CM 発報（scenario 3）と同一の dedupKey/分類になる。
+// summary/documentation は実発報が運ぶのと同型・同水準の内容にする（合成だけ情報が薄い/濃い逆転を作らない）。
+// url（CM インシデントへのコンソールリンク）は実発報にしか存在しない＝偽リンクは作らず載せない。
 function buildInfraFaultSyntheticWebhook(): unknown {
   return {
     incident: {
@@ -74,7 +87,16 @@ function buildInfraFaultSyntheticWebhook(): unknown {
       started_at: Math.floor(Date.now() / 1000),
       severity: "Critical",
       summary:
-        "デモ用インフラ障害（合成注入・実 Cloud Monitoring 経路と同一変換）: CRITICAL ログ + HTTP 500 相当",
+        "GCE backbone (ec-monitoring-backbone) 上の ec-backend が severity=CRITICAL のログを記録（HTTP 500 併発）【デモ合成注入・実発報と同型 webhook】",
+      // terraform 側 documentation（$${log.extracted_label.*} 展開後）と同じ行構成。
+      documentation: {
+        mime_type: "text/markdown",
+        content: [
+          `対象サービス: ${INFRA_FAULT_LOG.service}（action: ${INFRA_FAULT_LOG.action}）`,
+          `検知ログ: ${INFRA_FAULT_LOG.message}`,
+          "発火条件: Cloud Run（edge）/ GCE backbone（worker）の severity>=CRITICAL ログ",
+        ].join("\n"),
+      },
       resource: { type: "gce_instance", labels: { instance_id: "ec-monitoring-backbone" } },
     },
   };

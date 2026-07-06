@@ -65,7 +65,27 @@ resource "google_monitoring_alert_policy" "critical_log" {
     display_name = "CRITICAL log entries"
     condition_matched_log {
       filter = "(resource.type=\"cloud_run_revision\" OR resource.type=\"gce_instance\") AND severity>=\"CRITICAL\""
+      # マッチした CRITICAL ログの中身（StructuredLog の service/action/message）を発報に運ぶ。
+      # 抜いた値は下の documentation の $${log.extracted_label.*} に展開され、webhook の
+      # incident.documentation.content として ingest → UI の「発報内容」に表示される。
+      label_extractors = {
+        service     = "EXTRACT(jsonPayload.service)"
+        action      = "EXTRACT(jsonPayload.action)"
+        log_message = "EXTRACT(jsonPayload.message)"
+      }
     }
+  }
+
+  # eventName（condition 名の slug）は dedup/分類キーで情報を運べないため、
+  # 「何が・どこで起きたか」はここが運ぶ。行構成は合成注入版（scenario 3b の
+  # buildInfraFaultSyntheticWebhook）と揃えている＝片方だけ変えると 3/3b の見え方が乖離する。
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      対象サービス: $${log.extracted_label.service}（action: $${log.extracted_label.action}）
+      検知ログ: $${log.extracted_label.log_message}
+      発火条件: Cloud Run（edge）/ GCE backbone（worker）の severity>=CRITICAL ログ
+    EOT
   }
 
   # 注意: condition_matched_log（ログ一致）ポリシーは alert_strategy.auto_close を受け付けない
