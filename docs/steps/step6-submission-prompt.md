@@ -31,7 +31,7 @@
 【想定ユーザー】
 EC等のWebサービスを運用する SRE・オンコールエンジニア・バックオフィス運用者。
 
-【アーキテクチャ（すべて実装済み・テスト694件緑）】
+【アーキテクチャ（すべて実装済み・テスト1017件緑）】
 - EC ドメイン（注文・在庫・決済）: TypeScript/Express、DDD+Clean Architecture+CQRS+EDA
   （CodelyTV パターン準拠）。RabbitMQ で DomainEvent 配信。MongoDB。
 - 検知境界: 検知（閾値発火・dedup）は Cloud Monitoring 等の上流の責務。本体は
@@ -41,14 +41,19 @@ EC等のWebサービスを運用する SRE・オンコールエンジニア・�
   類似（Elasticsearch or InMemory Jaccard・confidence付き「準・既知」）→ 未知。
 - AI調査（未知のみ起動）: Google ADK による 8エージェント hub-and-spoke
   マルチエージェント（Coordinator / EvidenceCollector / RootCauseAnalyst /
-  ImpactTriage / RemediationPlanner / RunbookEscalation / RemediationReviewer）。
+  ImpactTriage / CorrelationVerifier〔相関の共有証拠と因果の向きを検証する批判役〕/
+  RemediationPlanner / RunbookEscalation / RemediationReviewer）。
   EvidenceCollector は read-only ツールで Cloud Logging・Terraform適用差分・
   GitHub実コミット&unified diff・過去類似インシデントDBを自律的に引く。
   自責/他責を判定して出口を「修正PR起案」と「運用エスカレーション草案」に振り分ける。
 - モデル: Gemini 2.5 Pro（Vertex AI 経由・ADC認証）。単一Gemini経路とADK経路を
   ポート（AIInvestigationPort）の DI 差し替えで切替可能。
-- 学習ループ: 人間の正解フィードバック → SimilarIncident 蓄積（類似分類の母集団）→
-  閾値到達 or 手動で KnownErrorPattern に昇格 → 次回は1秒で既知分類（AI呼び出し不要）。
+- 学習ループ（人間レビューが要）: 承認（訂正メモ可）→ SimilarIncident 蓄積（類似分類の
+  母集団・訂正が次回 SIMILARITY 分類の根拠になる）→ 閾値到達 or 手動昇格で
+  KnownErrorPattern に結晶化 → 次回は1秒で既知分類（AI呼び出し不要）。
+  却下は AI 訂正の指摘つきで再調査（オペレーターノートが次の調査プロンプトに載る）。
+  承認済みは dedup 窓から除外＝同型の再発が即・既知として新規表示される。
+  この一生（未知→承認→昇格→再発1秒→却下→再調査）は E2E で担保済み。
 - リメディエーション: 調査=read / 修正=write を構造分離。脆弱性はGitHub Actions上で
   AIエージェントが実コード修正→Trivy再スキャン+テスト緑→draft PR（自動マージなし・人間承認ゲート）。
 - 予兆ブリーフィング（今スプリントで実装）: 未来シグナル（未マージPR・未適用Terraform plan・
@@ -69,18 +74,18 @@ EC等のWebサービスを運用する SRE・オンコールエンジニア・�
 - terraform.yml: plan/apply パイプライン
 「監視対象のECも、監視するエージェント自身も、同じ DevOps ループの中にいる」
 
-【デモシナリオ（7本+予兆）と正直さの原則】
-1 決済タイムアウト（既知・実注文投入→1秒分類） 2 DBコネクション枯渇（未知→AI調査）
-3 フィードバック学習→昇格（次回1秒） 4 インフラ障害（Cloud Monitoring実経路）
-5 CVE脆弱性→AI調査→実修正draft PR（CI実経路と同一） 6 terraform apply起因障害（構造化差分が決定打）
-7 アプリコード退行（実gitコミットの実diffをAIが読んで原因特定）
+【デモシナリオ（5本+予兆）と正直さの原則】
+1 決済タイムアウト（既知・実注文投入→1秒分類） 2 DBコネクションプール枯渇（類似・confidence付き準既知）
+3 インフラ障害（Cloud Monitoring実経路・terraform証拠→変更PRリンク） 3b 同・反復用（入口のみ合成）
+4 CVE脆弱性→AI調査→実修正draft PR（CI実経路と同一・CVE→NVD実在リンク）
+※未知→承認→昇格→再発1秒の学習ループは 3b の再トリガーで実演できる
 予兆: DB接続枯渇の予報（PR pool縮小×Terraform plan×週末セール負荷×過去同型N件、引用付き）
 - 正直さ: 合成入力は UI 上で amber バッジ表示（「検知の入口のみ合成。変換→分類→AI調査は実経路」）。
   エンドポイントの無い偽ボタンは作らない。デモ卓に「実トリガ/クラウド実検知/合成入力」の
   リアルさバッジを常設。
 
 【数字（事実）】
-- テスト694件・110ファイル全緑 / 本番コード約2万行 / ADKエージェント7体
+- ユニットテスト1017件・146ファイル全緑＋HTTP API E2E 22件 / 本番コード約2万行 / ADKエージェント8体
 - 既知分類は約1秒・AI調査は数十秒〜（未知のみ起動＝コスト最適化）
 - 検知dedup: dedupKey+occurrenceCount で同型アラート嵐を1件×Nに畳む
 
@@ -109,9 +114,10 @@ ProtoPedia のストーリー欄を書いてください。構成は指定の3�
 
 ```
 ProtoPedia の概要欄を200〜300字で。1文目は「起きる前に引用付きで予報し、
-起きた後は7体のAIエージェントが実ログ・実コミットdiffを横断して原因を特定する
-AI-SRE エージェント」の趣旨で掴む。検知はしない（既存観測基盤の上に乗る）ことを
-1文で明示。
+起きた後は8体のAIエージェントが実ログ・実コミットdiffを横断して原因を特定する
+AI 運用エージェント」の趣旨で掴む。検知はしない（既存観測基盤の上に乗る）ことを
+1文で明示。トーンは事実ベース（「深夜のオンコール」等の情緒的な演出は使わず、
+保守・運用の負担を下げるという実利で語る）。
 ```
 
 ### B-3 動画台本（3分・冒頭60秒が勝負）
@@ -184,4 +190,4 @@ ProtoPedia 紹介画像（最大5枚）の構成案を作ってください。
 
 - ブラウザ Claude の出力は**必ず §A と照合**して事実誤認を直してから使う（特に「実装済み/設計のみ」の混同と数字）。
 - 動画台本 B-3 は録画テイク（todo F8）が撮れてから微修正する前提で、先に骨組みだけ作っておいてよい。
-- ProtoPedia の「開発素材」欄は事実列挙で足りるため AI 不要: TypeScript / Express / React / MongoDB / RabbitMQ / Elasticsearch / Google ADK / Gemini 2.5 Pro (Vertex AI) / Cloud Run / Compute Engine / Cloud Monitoring / Cloud Logging / Terraform / GitHub Actions / Trivy / Vitest / Playwright。
+- ProtoPedia の「開発素材」欄は事実列挙で足りるため AI 不要: TypeScript / Express / React / MongoDB / RabbitMQ / Elasticsearch / Google ADK / Gemini 2.5 Pro (Vertex AI) / Cloud Run / Compute Engine / Cloud Monitoring / Cloud Logging / Terraform / GitHub Actions / Trivy / Vitest（Playwright は不使用・E2E も Vitest の HTTP API テスト）。

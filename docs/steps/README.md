@@ -23,7 +23,8 @@
 - **Gemini SDK/モデル**: docs は `@google/generative-ai`・`gemini-2.0-flash` と書くが、実装は **`@google/genai`・既定 `gemini-2.5-pro`・Vertex AI 経路（`GOOGLE_GENAI_USE_VERTEXAI=true`・ADC）が本番既定**。`VertexLLMClient` は別クラスとしては作らず env 切替で実現。
 - **フェーズ0〜3 は全て実装済み**（単一 Gemini／ADK 8エージェント／SimilarPatternRule 類似分類／学習ループ・昇格）。docs の「未実装・次フェーズ」表記の多くは古い。
 - **既知/類似は AI 自動起動しない**（即確定・オンデマンドで `POST /alerts/:id/report`）。「既知でも毎回 AI」と読める古い記述は無効。
-- **シナリオ6/7 の自動修正は見送り**（調査まで）。[決定記録](../decisions/decision-scenario67-remediation-dropped.md) が正。
-- **デモ操作卓は 8 ボタン**（1/2/3/4/4b/5/6/7）。4b（合成・反復用インフラ障害）は docs 執筆後に追加。
-- **承認済みアラートは dedup 窓から除外**され、Analytics ページに承認済み一覧がある（2026-07 追加）。
-- **予兆（Forecast）は未実装**のまま（設計どおり）。実装タスクは step6 todo の F 系に集約。
+- **シナリオ6/7 の自動修正は見送り**（調査まで）。[決定記録](../decisions/decision-scenario67-remediation-dropped.md) が正。その後 2026-07-06 に旧5（構成変更）・旧6（アプリコード退行）はシナリオ自体もデモ卓から撤退（実装は git 履歴に残置）。
+- **デモ操作卓は 5 ボタン**（1/2/3/3b/4）。旧「在庫競合」廃止で -1 繰り上げ済み・旧5/6 は撤退済み。「8 ボタン」等の古い記述は無効（現行一覧は [architecture.md §9](../architecture.md#9-デモシナリオ5ボタンリアルさバッジ付き)）。
+- **承認済みアラートは dedup 窓から除外**され、Analytics ページに承認済み一覧がある（2026-07 追加）。承認→昇格→再発1秒既知→却下→再調査の一生と、訂正が次回 SIMILARITY 分類の正になる学習一周は `e2e/backoffice/feedback-lifecycle.e2e.test.ts` が担保。
+- **予兆（Forecast）は実装済み**（F1〜F12 着地・`GET/POST/DELETE /forecast`・E2E あり）。残りは実 PR ステージングと録画の人間タスクのみ。「未実装」と読める古い記述は無効。
+- **テスト実測は 2026-07-06 時点で unit 1017件/146ファイル＋ HTTP API E2E 22件/7ファイル**。step 系に散在する「694件」等はその時点のスナップショット。
