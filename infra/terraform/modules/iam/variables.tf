@@ -29,7 +29,7 @@ variable "provider_allowed_audiences" {
   type = list(string)
   default = [
     "https://github.com/nagoyamanaka",
-    "https://iam.googleapis.com/projects/442787395252/locations/global/workloadIdentityPools/github-actions-pool2/providers/github-provider",
+    "https://iam.googleapis.com/projects/510288040594/locations/global/workloadIdentityPools/github-actions-pool2/providers/github-provider",
   ]
 }
 
