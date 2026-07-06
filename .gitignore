@@ -6,6 +6,10 @@ dist/
 *.log
 .claude
 out/
+GCP_MIGRATION_RUNBOOK.md
+
+# 動画撮影の生成物（生テイク webm・全量スクショ。採用分のみ docs/protopedia/assets/ へコミット）
+scripts/video-capture/output/
 
 
 # ==========================================

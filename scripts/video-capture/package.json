@@ -1,0 +1,13 @@
+{
+  "name": "video-capture",
+  "private": true,
+  "type": "module",
+  "description": "提出動画（docs/protopedia/video/script.md）の素材テイク webm とスクショを Playwright で自動採取する撮影ツール。本体 pnpm workspace には属さない（pnpm install --ignore-workspace で独立インストール）。",
+  "scripts": {
+    "setup": "pnpm install --ignore-workspace && playwright install chromium",
+    "capture": "node capture.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.45.0"
+  }
+}
