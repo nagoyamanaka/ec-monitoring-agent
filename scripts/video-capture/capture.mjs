@@ -9,6 +9,7 @@
 import {
   FRONT_URL,
   openStage,
+  takeDir,
   dwell,
   resetDemo,
   triggerScenario,
@@ -81,15 +82,24 @@ async function gotoAlertDetail(stage, alertId) {
 // シーン（1シーン=1テイク=1webm）
 // ---------------------------------------------------------------------------
 
-/** カット1〜3: 予報カード → 引用チップ解決 → 先手 → ブリッジCTA → /alerts 遷移 */
+/** part1（カット1〜3前半）: 予報カード → 引用チップ解決 → 先手 → ブリッジCTA → /alerts 遷移 */
 async function sceneForecast() {
-  const stage = await openStage("forecast");
+  // 予報はインメモリ保持で backend 再起動で揮発する。未生成のまま録画すると
+  // 空ページのテイクを量産するので、録画開始前に落とす。
+  const probe = await fetch(`${process.env.API_URL ?? "http://localhost:3001"}/forecast`);
+  if (!probe.ok) {
+    throw new Error(
+      `GET /forecast -> ${probe.status}: 予報が未生成です。リハなら POST /forecast（ローカルは stub・課金なし）、` +
+        "本番テイクなら F8 seed で再生成してから撮り直してください。",
+    );
+  }
+  const stage = await openStage("part1-forecast");
   const { page } = stage;
   try {
     await page.goto(`${FRONT_URL}/forecast`);
     const card = page.locator("article").first(); // RiskCard（aria-label="<レベル>: <subject>"）
     await card.waitFor({ timeout: 20_000 });
-    await dwell(8_000); // カット1: カード全景の静止尺
+    await dwell(8_000); // カット1: カード全景の静止尺（フック）
     await stage.shot("forecast-card"); // ProtoPedia 画像1
 
     // カット2: 引用チップを順にクリック。外部（PR/plan）は新規タブ、過去Alertはアプリ内遷移。
@@ -130,13 +140,13 @@ async function sceneForecast() {
   }
 }
 
-/** カット4〜6: 3b発火 → 着弾/未知分類 → ADKライブ調査（実時間・編集で倍速）→ レポート/証拠 → 承認直前まで */
+/** part2（カット3後半〜5）: 3b発火 → 着弾/未知分類 → ADKライブ調査（実時間・編集で倍速）→ レポート/証拠 → 承認直前まで */
 async function sceneInvestigation() {
   if (process.env.RESET === "1") {
     console.log("  ↺ demo reset");
     await resetDemo();
   }
-  const stage = await openStage("investigation");
+  const stage = await openStage("part2-investigation");
   const { page } = stage;
   try {
     await page.goto(`${FRONT_URL}/alerts`);
@@ -168,7 +178,7 @@ async function sceneInvestigation() {
     }
     await stage.shot("evidence-panel"); // ProtoPedia 画像4
 
-    // カット6は「承認を押す直前」で止める（承認はカット7=learning シーン）
+    // part2 は「承認を押す直前」で止める（承認は part3=learning シーン）
     const approve = page.getByRole("button", { name: "承認", exact: true }).first();
     if (await approve.count()) {
       await approve.scrollIntoViewIfNeeded();
@@ -181,9 +191,9 @@ async function sceneInvestigation() {
   }
 }
 
-/** カット7: 承認 → 既知へ昇格 → 3b再発火 → 即・既知判定の対比 */
+/** part3（カット5承認〜6）: 承認 → 既知へ昇格 → 3b再発火 → 即・既知判定の対比 */
 async function sceneLearning() {
-  const stage = await openStage("learning");
+  const stage = await openStage("part3-learning");
   const { page } = stage;
   try {
     // investigation シーンで調査済み・未レビューの 3b Alert を対象にする
@@ -230,9 +240,9 @@ async function sceneLearning() {
   }
 }
 
-/** カット8: 脆弱性検知（シナリオ4）→ 事前起票済みの実 draft PR（DRAFT_PR_URL） */
+/** part4（カット7素材）: 脆弱性検知（シナリオ4）→ 事前起票済みの実 draft PR（DRAFT_PR_URL） */
 async function sceneDogfooding() {
-  const stage = await openStage("dogfooding");
+  const stage = await openStage("part4-dogfooding");
   const { page } = stage;
   try {
     await page.goto(`${FRONT_URL}/alerts`);
@@ -266,10 +276,10 @@ async function sceneDogfooding() {
 // ---------------------------------------------------------------------------
 
 const SCENES = {
-  forecast: sceneForecast, // カット1〜3
-  investigation: sceneInvestigation, // カット4〜6（実 Gemini 約2分を含む）
-  learning: sceneLearning, // カット7（investigation の直後に実行する前提）
-  dogfooding: sceneDogfooding, // カット8
+  forecast: sceneForecast, // part1 = カット1〜3前半（予報→引用→先手→ブリッジ遷移）
+  investigation: sceneInvestigation, // part2 = カット3後半〜5（着弾→調査→レポート。実 Gemini 約2分を含む）
+  learning: sceneLearning, // part3 = カット5承認〜6（investigation の直後に実行する前提）
+  dogfooding: sceneDogfooding, // part4 = カット7素材（CVE + draft PR）
 };
 
 const args = process.argv.slice(2);
@@ -288,4 +298,4 @@ for (const name of names) {
   console.log(`\n▶ scene: ${name}`);
   await SCENES[name]();
 }
-console.log("\n✅ 完了。output/video/*.webm と output/screens/ を確認してください。");
+console.log(`\n✅ 完了。テイク: ${await takeDir()}`);

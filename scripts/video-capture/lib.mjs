@@ -2,15 +2,36 @@
 // - ブラウザ/コンテキスト生成（recordVideo・偽カーソル注入・尺の間合い）
 // - backoffice API 駆動（e2e/backoffice/support.ts と同じ作法。ここは録画専用なので依存させず再実装）
 import { chromium } from "playwright";
-import { mkdir, rename } from "node:fs/promises";
+import { mkdir, rename, readdir } from "node:fs/promises";
 import path from "node:path";
 
 export const FRONT_URL = process.env.FRONT_URL ?? "http://localhost:5173";
 export const API_URL = process.env.API_URL ?? "http://localhost:3001";
 
 const OUTPUT_DIR = new URL("./output/", import.meta.url).pathname;
-const VIDEO_DIR = path.join(OUTPUT_DIR, "video");
-const SCREEN_DIR = path.join(OUTPUT_DIR, "screens");
+
+// テイク管理: 実行（プロセス）ごとに output/takeNNN/ を1つ切り、パート webm とスクショを
+// その下にまとめる。番号は既存の最大+1 を自動採番。特定シーンだけ撮り直して既存テイクに
+// 追記したいときは TAKE=take003 のように明示する（同名パートは上書き）。
+let takeDirCache;
+export async function takeDir() {
+  takeDirCache ??= (async () => {
+    await mkdir(OUTPUT_DIR, { recursive: true });
+    let name = process.env.TAKE;
+    if (!name) {
+      const entries = await readdir(OUTPUT_DIR).catch(() => []);
+      const nums = entries
+        .map((n) => /^take(\d{3})$/.exec(n)?.[1])
+        .filter(Boolean)
+        .map(Number);
+      name = `take${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, "0")}`;
+    }
+    const dir = path.join(OUTPUT_DIR, name);
+    await mkdir(dir, { recursive: true });
+    return dir;
+  })();
+  return takeDirCache;
+}
 
 // 間合いのグローバル倍率（1=台本想定・リハで長めに撮るなら DWELL_SCALE=1.5 など）
 const DWELL_SCALE = Number(process.env.DWELL_SCALE ?? "1");
@@ -42,12 +63,16 @@ const FAKE_CURSOR_INIT = `
 `;
 
 /**
- * 1シーン=1コンテキスト=1テイク（webm）。close 時に output/video/<scene>.webm へリネームする。
+ * 1シーン=1コンテキスト=1パート（webm）。close 時に output/takeNNN/<part>.webm へリネームする。
  * 外部リンク（GitHub 等）の popup ページも同コンテキストで録画される（別 webm）。
+ * @param partName 例 "part1-forecast"（テイク内のファイル/スクショディレクトリ名になる）
  */
-export async function openStage(sceneName) {
-  await mkdir(VIDEO_DIR, { recursive: true });
-  await mkdir(path.join(SCREEN_DIR, sceneName), { recursive: true });
+export async function openStage(partName) {
+  const take = await takeDir();
+  const rawVideoDir = path.join(take, ".raw");
+  const screenDir = path.join(take, "screens", partName);
+  await mkdir(rawVideoDir, { recursive: true });
+  await mkdir(screenDir, { recursive: true });
 
   const browser = await chromium.launch({
     headless: process.env.HEADED !== "1",
@@ -56,7 +81,7 @@ export async function openStage(sceneName) {
   });
   const context = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
-    recordVideo: { dir: VIDEO_DIR, size: { width: 1920, height: 1080 } },
+    recordVideo: { dir: rawVideoDir, size: { width: 1920, height: 1080 } },
     // GitHub 側もダーク統一（カット6/8 の映り込み対策）
     colorScheme: "dark",
     locale: "ja-JP",
@@ -69,18 +94,17 @@ export async function openStage(sceneName) {
   return {
     context,
     page,
-    /** 現在表示中のページのスクショを output/screens/<scene>/NN-<label>.png に保存 */
+    /** 現在表示中のページのスクショを output/takeNNN/screens/<part>/NN-<label>.png に保存 */
     async shot(label, target = page) {
       shotIndex += 1;
       const file = path.join(
-        SCREEN_DIR,
-        sceneName,
+        screenDir,
         `${String(shotIndex).padStart(2, "0")}-${label}.png`,
       );
       await target.screenshot({ path: file });
       console.log(`  📸 ${path.relative(OUTPUT_DIR, file)}`);
     },
-    /** テイク終了。webm をシーン名にリネームして保存先を返す */
+    /** パート終了。webm をパート名にリネームして保存先を返す */
     async close() {
       const videos = context.pages().map((p) => p.video()).filter(Boolean);
       await context.close();
@@ -88,8 +112,8 @@ export async function openStage(sceneName) {
       for (const [i, video] of videos.entries()) {
         const raw = await video.path();
         const dest = path.join(
-          VIDEO_DIR,
-          i === 0 ? `${sceneName}.webm` : `${sceneName}-popup${i}.webm`,
+          take,
+          i === 0 ? `${partName}.webm` : `${partName}-popup${i}.webm`,
         );
         await rename(raw, dest);
         saved.push(dest);
