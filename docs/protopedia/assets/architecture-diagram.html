@@ -1,0 +1,190 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; }
+  svg { display: block; font-family: "Noto Sans CJK JP", sans-serif; }
+  .mono { font-family: "Noto Sans Mono CJK JP", monospace; }
+</style>
+<svg width="1760" height="1030" viewBox="0 0 1760 1030" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="m-main" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="m-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#10b981"/>
+    </marker>
+    <marker id="m-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#059669"/>
+    </marker>
+    <marker id="m-sky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0284c7"/>
+    </marker>
+    <marker id="m-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="m-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f43f5e"/>
+    </marker>
+    <marker id="m-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="m-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#06b6d4"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1760" height="1030" fill="#ffffff"/>
+
+  <!-- ===== タイトル ===== -->
+  <text x="40" y="46" font-size="24" font-weight="700" fill="#0f172a">Kizashi（兆し）システムアーキテクチャ</text>
+  <text x="40" y="74" font-size="14" fill="#64748b">既存監視の「上」に乗るアラート後工程の自動化 ＋ 起きる前の予兆予報</text>
+
+  <!-- ===== 凡例 ===== -->
+  <g font-size="13" fill="#475569">
+    <line x1="1050" y1="38" x2="1088" y2="38" stroke="#475569" stroke-width="2.5"/>
+    <text x="1094" y="43">主フロー</text>
+    <line x1="1180" y1="38" x2="1218" y2="38" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="1224" y="43">read-only 参照</text>
+    <line x1="1340" y1="38" x2="1378" y2="38" stroke="#10b981" stroke-width="2.5"/>
+    <text x="1384" y="43">学習ループ</text>
+    <line x1="1480" y1="38" x2="1518" y2="38" stroke="#f43f5e" stroke-width="2.5"/>
+    <text x="1524" y="43">write（修正）</text>
+    <rect x="1630" y="30" width="14" height="14" fill="#fffbeb" stroke="#f59e0b"/>
+    <text x="1650" y="43">人の判断</text>
+  </g>
+
+  <!-- ===== A: 検知（境界の外） ===== -->
+  <rect x="40" y="110" width="270" height="370" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <text x="56" y="140" font-size="14" font-weight="700" fill="#64748b">検知（既存基盤のまま・作らない）</text>
+
+  <rect x="60" y="158" width="230" height="74" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="175" y="188" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">監視対象サービス</text>
+  <text x="175" y="212" font-size="12.5" fill="#64748b" text-anchor="middle">業務イベント（デモは EC）</text>
+
+  <rect x="60" y="252" width="230" height="74" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="175" y="282" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">Cloud Monitoring</text>
+  <text x="175" y="306" font-size="12.5" fill="#64748b" text-anchor="middle">Alerting Policy → webhook</text>
+
+  <rect x="60" y="346" width="230" height="74" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="175" y="376" font-size="15" font-weight="700" fill="#334155" text-anchor="middle">GitHub Actions CI</text>
+  <text x="175" y="400" font-size="12.5" fill="#64748b" text-anchor="middle">Trivy 脆弱性スキャン</text>
+
+  <!-- ===== B: ingest ===== -->
+  <rect x="350" y="110" width="230" height="370" rx="10" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="366" y="140" font-size="14" font-weight="700" fill="#475569">① ingest（3系統）</text>
+
+  <rect x="366" y="158" width="198" height="74" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="465" y="190" font-size="14" font-weight="700" fill="#334155" text-anchor="middle">RabbitMQ 購読</text>
+  <text x="465" y="212" font-size="12" fill="#64748b" text-anchor="middle">業務イベント</text>
+
+  <rect x="366" y="252" width="198" height="74" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="465" y="284" font-size="14" font-weight="700" fill="#334155" text-anchor="middle">webhook 受信</text>
+  <text x="465" y="306" font-size="10.5" fill="#64748b" text-anchor="middle" class="mono">/ingest/cloud-monitoring</text>
+
+  <rect x="366" y="346" width="198" height="74" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="465" y="378" font-size="14" font-weight="700" fill="#334155" text-anchor="middle">CI 結果 POST</text>
+  <text x="465" y="400" font-size="10.5" fill="#64748b" text-anchor="middle" class="mono">/ingest/security-scan</text>
+
+  <text x="465" y="452" font-size="12" fill="#64748b" text-anchor="middle">同型アラートの嵐は 1件×N に集約</text>
+
+  <!-- A→B 矢印 -->
+  <line x1="290" y1="195" x2="362" y2="195" stroke="#475569" stroke-width="2" marker-end="url(#m-main)"/>
+  <line x1="290" y1="289" x2="362" y2="289" stroke="#475569" stroke-width="2" marker-end="url(#m-main)"/>
+  <line x1="290" y1="383" x2="362" y2="383" stroke="#475569" stroke-width="2" marker-end="url(#m-main)"/>
+
+  <!-- B→C 合流 -->
+  <line x1="564" y1="195" x2="600" y2="195" stroke="#475569" stroke-width="2"/>
+  <line x1="564" y1="289" x2="600" y2="289" stroke="#475569" stroke-width="2"/>
+  <line x1="564" y1="383" x2="600" y2="383" stroke="#475569" stroke-width="2"/>
+  <line x1="600" y1="195" x2="600" y2="383" stroke="#475569" stroke-width="2"/>
+  <line x1="600" y1="315" x2="626" y2="315" stroke="#475569" stroke-width="2" marker-end="url(#m-main)"/>
+
+  <!-- ===== C: 分類 ===== -->
+  <rect x="630" y="240" width="220" height="150" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+  <text x="740" y="278" font-size="17" font-weight="700" fill="#3730a3" text-anchor="middle">② 分類</text>
+  <text x="740" y="304" font-size="12.5" fill="#4f46e5" text-anchor="middle">確度スペクトルで振り分け</text>
+  <text x="740" y="328" font-size="12.5" fill="#4f46e5" text-anchor="middle">既知 ／ 類似 ／ 未知</text>
+
+  <!-- C→E 既知・類似 -->
+  <line x1="850" y1="265" x2="1334" y2="265" stroke="#059669" stroke-width="2.2" marker-end="url(#m-emerald)"/>
+  <text x="1090" y="256" font-size="13" font-weight="700" fill="#059669" text-anchor="middle">既知 → 1秒・AIコストゼロで即確定</text>
+  <line x1="850" y1="315" x2="1334" y2="315" stroke="#0284c7" stroke-width="2.2" marker-end="url(#m-sky)"/>
+  <text x="1090" y="306" font-size="13" fill="#0284c7" text-anchor="middle">類似 → confidence 付きで確定</text>
+
+  <!-- C→D 未知 -->
+  <polyline points="700,390 700,520 894,520" fill="none" stroke="#7c3aed" stroke-width="2.2" marker-end="url(#m-violet)"/>
+  <text x="714" y="470" font-size="13" font-weight="700" fill="#7c3aed">未知のみ</text>
+
+  <!-- ===== D: AI 調査 ===== -->
+  <rect x="900" y="430" width="400" height="190" rx="10" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="1100" y="462" font-size="16" font-weight="700" fill="#5b21b6" text-anchor="middle">③ AI 調査（未知のみ）</text>
+  <text x="1100" y="488" font-size="14" fill="#6d28d9" text-anchor="middle">Google ADK の 8 エージェント（hub-and-spoke）</text>
+  <text x="1100" y="511" font-size="12.5" fill="#7c7f93" text-anchor="middle">Gemini 2.5 Pro（Vertex AI）</text>
+  <text x="1100" y="540" font-size="12" fill="#4c1d95" text-anchor="middle">証拠収集・原因分析・影響評価・相関検証（批判役）</text>
+  <text x="1100" y="562" font-size="12" fill="#4c1d95" text-anchor="middle">修正方針・エスカレーション・PR レビュー</text>
+  <text x="1100" y="594" font-size="12" fill="#7c3aed" text-anchor="middle">実行過程は SSE でライブ中継／失敗しても証拠リンクは温存</text>
+
+  <!-- D→E -->
+  <polyline points="1300,520 1420,520 1420,446" fill="none" stroke="#475569" stroke-width="2.2" marker-end="url(#m-main)"/>
+  <text x="1434" y="490" font-size="12" fill="#475569">根拠リンク付き</text>
+  <text x="1434" y="508" font-size="12" fill="#475569">調査レポート</text>
+
+  <!-- ===== E: 人間レビュー ===== -->
+  <rect x="1340" y="200" width="380" height="240" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+  <text x="1530" y="234" font-size="16" font-weight="700" fill="#92400e" text-anchor="middle">④ 人間レビュー</text>
+  <text x="1530" y="260" font-size="13" fill="#b45309" text-anchor="middle">React 観測コンソール（SSE ライブ表示）</text>
+  <text x="1362" y="296" font-size="13.5" fill="#78350f">・承認（訂正メモつき）→ 事例として蓄積</text>
+  <text x="1362" y="324" font-size="13.5" fill="#78350f">・却下 → 訂正の指摘つきで再調査</text>
+  <text x="1362" y="352" font-size="13.5" fill="#78350f">・頻出パターンは既知へ昇格（ワンクリック）</text>
+  <text x="1362" y="388" font-size="12" fill="#b45309">証拠パネル＝実ログ・実 diff への根拠リンク</text>
+
+  <!-- 学習ループ E→C -->
+  <polyline points="1340,415 780,415 780,396" fill="none" stroke="#10b981" stroke-width="2.5" marker-end="url(#m-green)"/>
+  <text x="1058" y="404" font-size="13" font-weight="700" fill="#059669" text-anchor="middle">学習ループ: 承認・昇格 → 同じ障害は次から「既知＝1秒」</text>
+
+  <!-- ===== F: 予兆 ===== -->
+  <rect x="880" y="84" width="840" height="96" rx="10" fill="#ecfeff" stroke="#06b6d4" stroke-width="2"/>
+  <text x="904" y="114" font-size="16" font-weight="700" fill="#155e75">⑤ 予兆ブリーフィング — 起きる“前”に予報</text>
+  <text x="904" y="140" font-size="13" fill="#0e7490">未来シグナル（未マージ PR・未適用 Terraform plan・負荷予定）× 過去の障害の記憶 → Gemini が突合</text>
+  <text x="904" y="163" font-size="13" fill="#0e7490">予報の引用は実在シグナルと照合し、偽引用は自動破棄（ハルシネーション対策）</text>
+  <line x1="1530" y1="180" x2="1530" y2="196" stroke="#06b6d4" stroke-width="2.2" marker-end="url(#m-cyan)"/>
+  <text x="1520" y="194" font-size="12" fill="#0e7490" text-anchor="end">予報カードを配信</text>
+
+  <!-- ===== 証拠ソース（read-only） ===== -->
+  <rect x="940" y="650" width="90" height="70" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="985" y="679" font-size="12" font-weight="700" fill="#1d4ed8" text-anchor="middle">Cloud</text>
+  <text x="985" y="697" font-size="12" font-weight="700" fill="#1d4ed8" text-anchor="middle">Logging</text>
+  <rect x="1040" y="650" width="90" height="70" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="1085" y="679" font-size="12" font-weight="700" fill="#1d4ed8" text-anchor="middle">Terraform</text>
+  <text x="1085" y="697" font-size="11" fill="#3b82f6" text-anchor="middle">適用差分</text>
+  <rect x="1140" y="650" width="90" height="70" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="1185" y="679" font-size="12" font-weight="700" fill="#1d4ed8" text-anchor="middle">GitHub</text>
+  <text x="1185" y="697" font-size="11" fill="#3b82f6" text-anchor="middle">コミット diff</text>
+  <rect x="1240" y="650" width="90" height="70" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="1285" y="679" font-size="12" font-weight="700" fill="#1d4ed8" text-anchor="middle">過去事例 DB</text>
+  <text x="1285" y="697" font-size="11" fill="#3b82f6" text-anchor="middle">類似検索</text>
+
+  <line x1="985" y1="646" x2="985" y2="626" stroke="#2563eb" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#m-blue)"/>
+  <line x1="1085" y1="646" x2="1085" y2="626" stroke="#2563eb" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#m-blue)"/>
+  <line x1="1185" y1="646" x2="1185" y2="626" stroke="#2563eb" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#m-blue)"/>
+  <line x1="1285" y1="646" x2="1285" y2="626" stroke="#2563eb" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#m-blue)"/>
+  <text x="1135" y="748" font-size="12" fill="#2563eb" text-anchor="middle">証拠ソースはすべて read-only（読み取り専用ツール）</text>
+
+  <!-- ===== G: 修正（write 隔離） ===== -->
+  <rect x="1000" y="780" width="660" height="120" rx="10" fill="#fff1f2" stroke="#f43f5e" stroke-width="2"/>
+  <text x="1330" y="812" font-size="15" font-weight="700" fill="#9f1239" text-anchor="middle">⑥ 修正は write 隔離（GitHub Actions 上）</text>
+  <text x="1330" y="840" font-size="13" fill="#be123c" text-anchor="middle">AI が実コードを修正 → Trivy 再スキャン＋テスト緑 → draft PR</text>
+  <text x="1330" y="866" font-size="12" fill="#e11d48" text-anchor="middle">自動マージなし・人間の承認ゲート・試行回数上限（暴走防止）</text>
+
+  <!-- D→G -->
+  <polyline points="1300,590 1520,590 1520,776" fill="none" stroke="#f43f5e" stroke-width="2.2" marker-end="url(#m-rose)"/>
+  <text x="1330" y="580" font-size="12" fill="#e11d48">SECURITY 調査が修正を起動</text>
+
+  <!-- G→CI（ドッグフーディング） -->
+  <polyline points="1000,840 170,840 170,486" fill="none" stroke="#f43f5e" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#m-rose)"/>
+  <text x="585" y="830" font-size="12" fill="#e11d48" text-anchor="middle">draft PR は自リポジトリへ ＝ ドッグフーディング（自分自身も同じループで運用）</text>
+
+  <!-- ===== フッター ===== -->
+  <line x1="40" y1="950" x2="1720" y2="950" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="40" y="985" font-size="13.5" fill="#475569">稼働基盤: Cloud Run（フロント / エッジ）＋ Compute Engine（EDA 常駐系）　｜　データ: MongoDB・RabbitMQ・Elasticsearch・Valkey　｜　IaC: Terraform（plan / apply は CI から）　｜　AI: Gemini 2.5 Pro（Vertex AI）＋ Google ADK</text>
+</svg>

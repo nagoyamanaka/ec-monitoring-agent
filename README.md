@@ -12,7 +12,7 @@ Findy **DevOps × AI Agent Hackathon 2026** 出展作品。
 - **学習ループ**。人間の正解フィードバックが類似分類の母集団になり、頻出は既知パターンへ昇格 → 次回は1秒で分類（AI 呼び出し不要）。
 - **調査=read / 修正=write の構造分離**。脆弱性は GitHub Actions 上で AI が実コードを修正し、Trivy 再スキャン＋テスト緑を通って **draft PR**（自動マージなし・人間承認ゲート）。
 - **ドッグフーディング（自己運用ループ）**: このリポジトリ自身の CI（Trivy）の検出が本番の `/ingest/security-scan` に流れ、SECURITY 調査が AI 実修正 → 自リポジトリへの draft PR を起こす＝**監視対象の EC も、監視するエージェント自身も、同じ DevOps ループの中にいる**（`.github/workflows/` の実ワークフローが運用系そのもの。図解 → [architecture.md §6.5](docs/architecture.md#65-devops-ドッグフーディング自己運用ループ)）。
-- **正直な合成 ＋ 証拠は本物**: デモの合成入力は UI 上で amber バッジ明示（入口のみ合成・変換→分類→AI 調査は実経路）。エンドポイントの無い偽ボタンは作らない。さらに証拠に添える**外部リンクは実在・決定論導出**——脆弱性は CVE→NVD 実在リンク（正規形の CVE のみ解決＝404 を作らない）、terraform 証拠→変更 PR。config 未設定（本番）は素の証拠のまま＝挙動非侵食。
+- **正直な合成 ＋ 証拠は本物**: デモの合成入力は UI 上で amber バッジ明示（入口のみ合成・変換→分類→AI 調査は実経路）。エンドポイントの無い偽ボタンは作らない（修正の起票も既定 `REMEDIATION_MODE=demo` では、同じ AI 修正パイプラインが事前起票した**実 draft PR** を提示＝リンク先は本物・何度押しても PR は増やさない。その場でのライブ起票は `REMEDIATION_MODE=dispatch/advisory` で有効）。さらに証拠に添える**外部リンクは実在・決定論導出**——脆弱性は CVE→NVD 実在リンク（正規形の CVE のみ解決＝404 を作らない）、terraform 証拠→変更 PR。config 未設定（本番）は素の証拠のまま＝挙動非侵食。
 
 ## 全体像
 
@@ -42,14 +42,13 @@ flowchart LR
 
 ## 技術スタック
 
-| | |
-| --- | --- |
-| AI | **Gemini 2.5 Pro**（Vertex AI・ADC）＋ **Google ADK**（in-process マルチエージェント）。ポート DI で単一 Gemini ⇄ ADK を差し替え |
-| バックエンド | TypeScript / Express・**DDD + Clean Architecture + CQRS + EDA**（CodelyTV パターン準拠）・RabbitMQ・MongoDB・Elasticsearch・Valkey |
-| フロントエンド | React（ダーク観測コンソール・SSE ライブ・**AI調査ライブタイムライン**・証拠パネル・**働きの明細＝実測メトリクスの証拠フローダイアグラム（流入源→AI 調査→結論の収束図）**・fallback からのワンクリック再調査・承認 UI・着弾/更新/dedup のライブ演出） |
-| インフラ | **Cloud Run**（frontend / edge）＋ **Compute Engine**（EDA 常駐系）・Terraform・Cloud Monitoring / Cloud Logging（OTel 直送） |
-| CI/CD | GitHub Actions（typecheck/UT/E2E → build → deploy／Trivy → 実 ingest／AI リメディ workflow／terraform plan・apply） |
-| テスト | Vitest（BDD）**1017件・146ファイル**＋ HTTP API E2E（Vitest・実スタック・22件） |
+|                |                                                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| AI             | **Gemini 2.5 Pro**（Vertex AI・ADC）＋ **Google ADK**（in-process マルチエージェント）。ポート DI で単一 Gemini ⇄ ADK を差し替え |
+| バックエンド   | TypeScript / Express・**DDD + Clean Architecture + CQRS + EDA**・RabbitMQ・MongoDB・Elasticsearch・Valkey                        |
+| フロントエンド | React・SSE                                                                                                                       |
+| インフラ       | **Cloud Run**（frontend / edge）＋ **Compute Engine**（EDA 常駐系）・Terraform・Cloud Monitoring / Cloud Logging（OTel 直送）    |
+| CI/CD          | GitHub Actions                                                                                                                   |
 
 ## クイックスタート（ローカル）
 
@@ -69,12 +68,12 @@ make e2e         # E2E
 
 ## ドキュメント
 
-| | |
-| --- | --- |
-| [docs/architecture.md](docs/architecture.md) | **アーキテクチャ（コード準拠・現状の正）**。全体図・分類/調査/学習フロー・ADK グラフ・デプロイ・API・シナリオ |
-| [docs/steps/](docs/steps/README.md) | 設計書（step 系・経緯と理由）。索引に実装とのドリフト注記あり |
-| [docs/decisions/](docs/decisions/) | 決定記録（例: 構成変更/アプリコード退行シナリオの自動修正見送り） |
-| [docs/steps/step6-final-sprint-strategy.md](docs/steps/step6-final-sprint-strategy.md) | 現役スプリント戦略（予兆ブリーフィング×デモ防御） |
+|                                                                                        |                                                                                                               |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [docs/architecture.md](docs/architecture.md)                                           | **アーキテクチャ（コード準拠・現状の正）**。全体図・分類/調査/学習フロー・ADK グラフ・デプロイ・API・シナリオ |
+| [docs/steps/](docs/steps/README.md)                                                    | 設計書（step 系・経緯と理由）。索引に実装とのドリフト注記あり                                                 |
+| [docs/decisions/](docs/decisions/)                                                     | 決定記録（例: 構成変更/アプリコード退行シナリオの自動修正見送り）                                             |
+| [docs/steps/step6-final-sprint-strategy.md](docs/steps/step6-final-sprint-strategy.md) | 現役スプリント戦略（予兆ブリーフィング×デモ防御）                                                             |
 
 ## ステータス（2026-07-05）
 
