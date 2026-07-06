@@ -56,12 +56,15 @@
 
 ```bash
 cd scripts/video-capture
-pnpm run setup                      # 初回のみ
+pnpm run setup                      # 初回のみ（chromium + ffmpeg-static を取得）
 RESET=1 DRAFT_PR_URL=<URL> node capture.mjs all
 ```
 
-出力は `output/takeNNN/`（自動採番）。パート単位の撮り直しは
+出力は `output/takeNNN/`（自動採番）。パート本体は**編集用 H.264 mp4**（`partN-*.mp4`）で、
+ロスレスな webm 源は `.raw/` に温存される。パート単位の撮り直しは
 `TAKE=takeNNN node capture.mjs <scene>` で同テイクに追記できる。
+ログに「mp4 変換 skip（ffmpeg 未検出）」が出たら `pnpm run setup` をやり直すか
+`FFMPEG_PATH` を渡す（変換されないと webm のまま出て編集ソフトで読めない）。
 
 ## Step 5 — QA(スクショと API で目視・機械両面)
 
@@ -77,7 +80,7 @@ RESET=1 DRAFT_PR_URL=<URL> node capture.mjs all
 
 ## Step 7 — 報告（ユーザーへ）
 
-- テイクディレクトリのパスと、パート→カット対応・各 webm の長さ
+- テイクディレクトリのパスと、パート→カット対応・各 mp4 の長さ
 - ProtoPedia 画像5枚の採用候補ファイル（台本の対応表に沿って）
 - 台本を変更した場合はその差分要点
 - 残る人間タスク: 採用スクショの `docs/protopedia/assets/` へのコピー＆コミット・
