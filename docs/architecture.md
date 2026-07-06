@@ -127,26 +127,50 @@ flowchart TD
 ```mermaid
 flowchart LR
   subgraph cloudrun["Cloud Run"]
-    FE["backoffice-frontend（React 配信）"]
-    EDGE["backoffice-edge（公開エッジ/プロキシ）"]
+    FE["backoffice-frontend<br/>(React 配信)"]
+    EDGE["backoffice-edge<br/>(公開エッジ / プロキシ)"]
   end
-  subgraph gce["Compute Engine（GCE backbone・docker compose）"]
-    ECB["ec-backend"] & BOB["backoffice-backend"]
-    MQ["RabbitMQ"] & DB["MongoDB"] & ES["Elasticsearch"] & VK["Valkey"]
-  end
-  subgraph gcp["GCP マネージド"]
-    CMON["Cloud Monitoring（Alerting Policy→webhook）"]
-    CLOG["Cloud Logging（OTel 直送）"]
-    VAI["Vertex AI（Gemini 2.5 Pro・ADC）"]
-  end
-  GHA["GitHub Actions<br/>app.yml / terraform.yml / ai-remediation.yml"]
 
+  subgraph gce["Compute Engine"]
+    ECB["ec-backend"]
+    BOB["backoffice-backend"]
+
+    MQ["RabbitMQ"]
+    DB["MongoDB"]
+    ES["Elasticsearch"]
+    VK["Valkey"]
+  end
+
+  subgraph gcp["GCP Managed"]
+    CMON["Cloud Monitoring"]
+    CLOG["Cloud Logging"]
+    VAI["Vertex AI<br/>Gemini 2.5 Pro"]
+  end
+
+  GHA["GitHub Actions"]
+
+  %% 通信
+  %% EC アプリイベントの検知経路（peer ingest / RabbitMQ 購読）
+  ECB -->|DomainEvent| MQ
+  MQ -->|Subscribe| BOB
+
+  %% Cloud Monitoring の閾値発火（webhook ingest）
+  CMON -->|Webhook| EDGE
   EDGE --> BOB
-  ECB & BOB --> CLOG
-  CMON -->|webhook| EDGE
+
+  %% ログは検知ではなく AI 調査の read-only 証拠ソース
+  ECB -->|ログ出力| CLOG
+  BOB -->|ログ出力| CLOG
+  BOB -.読み取り（証拠）.-> CLOG
+
   BOB --> VAI
-  GHA -->|"build&push→Cloud Run更新 / GCE再起動"| cloudrun & gce
-  GHA -->|"Trivy 検出→/ingest/security-scan"| EDGE
+
+  GHA -->|Deploy| FE
+  GHA -->|Deploy| EDGE
+  GHA -->|Restart| ECB
+  GHA -->|Restart| BOB
+
+  GHA -->|Security Scan| EDGE
 ```
 
 - EDA 常駐 Subscriber（RabbitMQ）はステートレスな Cloud Run と相性が悪いため GCE に置く折衷。IaC は Terraform（`infra/terraform/`・WIF で CI から plan/apply）。
@@ -227,20 +251,20 @@ src/
 | `POST /demo/scenario` ほか        | デモ操作卓（`DEMO_ENABLED` 配下）                                                                                                                        |
 | `GET /forecast`                   | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）                               |
 | `POST /forecast`                  | 予報の生成（`FORECAST_ENABLED` かつ `DEMO_ENABLED` 配下・Gemini 呼び出し・horizon は `FORECAST_HORIZON` 固定）                                           |
-| `DELETE /forecast`                | 予報キャッシュのリセット（`DEMO_ENABLED` 配下・アラート側 `/demo/reset` とは独立＝一覧リセットが予報を巻き込まない）                                    |
+| `DELETE /forecast`                | 予報キャッシュのリセット（`DEMO_ENABLED` 配下・アラート側 `/demo/reset` とは独立＝一覧リセットが予報を巻き込まない）                                     |
 
 ## 9. デモシナリオ（5ボタン・リアルさバッジ付き）
 
 > 旧「在庫競合（未知）」は廃止（実コードに楽観ロック＋指数バックオフのリトライが実装済みで、AI 生成の「楽観ロックを導入せよ」推奨と矛盾するため。詳細は [step6 §J](steps/step6-final-sprint-todo.md)）。以降を -1 繰り上げ済み。
 > 旧5「構成変更障害」・旧6「アプリコード退行」は 2026-07-06 にデモ卓から撤退（検知の入口の説得力が弱く、確度スペクトルと realness 3階級は 1/2/3/3b/4 で過不足なく揃うため。実装は git 履歴に残置）。
 
-| #   | シナリオ                             | 分類スペクトル               | 入力のリアルさ                                                 | 証拠に添える実リンク |
-| --- | ------------------------------------ | ---------------------------- | -------------------------------------------------------------- | -------------------- |
-| 1   | 決済タイムアウト                     | 完全一致（既知・1秒）        | 実トリガ（実注文投入）                                         | —                    |
-| 2   | DBコネクションプール枯渇             | 類似（準・既知・confidence） | 実トリガ                                                       | —                    |
-| 3   | インフラ障害                         | 未知                         | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ）           | **terraform 証拠 → 変更 PR**（着弾約1分は「検知待ち」バナーで可視化） |
-| 3b  | インフラ障害（反復用）               | 未知                         | 合成入力（入口のみ合成・パイプラインは実経路）                 | **terraform 証拠 → 変更 PR** |
-| 4   | 脆弱性検知 → 修正 draft PR           | SECURITY                     | 合成入力（実 CI と同一経路）                                   | **CVE → NVD 実在リンク**（正規形のみ解決） |
+| #   | シナリオ                   | 分類スペクトル               | 入力のリアルさ                                       | 証拠に添える実リンク                                                  |
+| --- | -------------------------- | ---------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
+| 1   | 決済タイムアウト           | 完全一致（既知・1秒）        | 実トリガ（実注文投入）                               | —                                                                     |
+| 2   | DBコネクションプール枯渇   | 類似（準・既知・confidence） | 実トリガ                                             | —                                                                     |
+| 3   | インフラ障害               | 未知                         | クラウド実検知（Cloud Monitoring 経由・GCP環境のみ） | **terraform 証拠 → 変更 PR**（着弾約1分は「検知待ち」バナーで可視化） |
+| 3b  | インフラ障害（反復用）     | 未知                         | 合成入力（入口のみ合成・パイプラインは実経路）       | **terraform 証拠 → 変更 PR**                                          |
+| 4   | 脆弱性検知 → 修正 draft PR | SECURITY                     | 合成入力（実 CI と同一経路）                         | **CVE → NVD 実在リンク**（正規形のみ解決）                            |
 
 **正直さの原則**: 合成入力は UI に amber バッジで明示。エンドポイントの無い偽ボタンは作らない。
 
