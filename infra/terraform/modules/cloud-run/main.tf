@@ -56,6 +56,12 @@ resource "google_cloud_run_v2_service" "edge" {
   ingress             = "INGRESS_TRAFFIC_ALL"
   deletion_protection = false
 
+  # CD（manual_deploy.sh / gcloud run services update）が SHA タグで image を更新するため、
+  # terraform 側の :latest 宣言との差分で apply のたびに巻き戻さないようにする。
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
+  }
+
   template {
     service_account = google_service_account.run.email
 
