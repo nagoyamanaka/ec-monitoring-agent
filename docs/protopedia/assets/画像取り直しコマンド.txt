@@ -1,0 +1,11 @@
+export LD_LIBRARY_PATH=<scratchpad>/alsa/usr/lib/x86_64-linux-gnu  # libasound2 が無い環境のみ
+~/.cache/puppeteer/chrome-headless-shell/*/chrome-headless-shell-linux64/chrome-headless-shell \
+  --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=1760,1030 \
+  --screenshot=docs/protopedia/assets/architecture.png \
+  "file://$(pwd)/docs/protopedia/assets/architecture-diagram.html"
+
+
+
+
+システムにlibasound2が無くChromeが起動しなかったため、debを展開してLD_LIBRARY_PATHで渡す回避をしています
+(sudo apt install libasound2 を一度入れれば不要になります)。
