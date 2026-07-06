@@ -1,6 +1,7 @@
 import { EventBus } from "../../../../Shared/domain/EventBus.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { RepositoryError } from "../../../../Shared/infrastructure/errors/RepositoryError.js";
+import { PaymentDeclinedDomainEvent } from "../../../Payment/domain/PaymentDeclinedDomainEvent.js";
 import { PaymentTimeoutDomainEvent } from "../../../Payment/domain/PaymentTimeoutDomainEvent.js";
 import { CustomerId } from "../../domain/CustomerId.js";
 import { Order } from "../../domain/Order.js";
@@ -57,13 +58,21 @@ export class PlaceOrderUseCase {
     });
 
     if (!paymentResult.success) {
+      // 失敗モード別に別イベントを発火する（無応答=timeout / 与信拒否=declined は
+      // 原因も対処も異なる別障害。単一イベントに畳むと監視側で区別できない）。
+      const common = {
+        paymentAttemptId: crypto.randomUUID(),
+        orderId: id.value,
+        customerId: customerId.value,
+        amount,
+      };
       await this.eventBus.publish([
-        new PaymentTimeoutDomainEvent({
-          paymentAttemptId: crypto.randomUUID(),
-          orderId: id.value,
-          customerId: customerId.value,
-          amount,
-        }),
+        paymentResult.reason === "DECLINED"
+          ? new PaymentDeclinedDomainEvent({
+              ...common,
+              reason: paymentResult.declineCode ?? "DECLINED",
+            })
+          : new PaymentTimeoutDomainEvent(common),
       ]);
       await this.logger.warn({
         service: "ec-backend",

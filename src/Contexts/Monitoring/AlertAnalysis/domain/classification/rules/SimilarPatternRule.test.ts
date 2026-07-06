@@ -199,20 +199,47 @@ describe("SimilarPatternRule", () => {
     expect(result?.resolvedNote).toBeUndefined();
   });
 
-  it("クエリは eventName と payload から組み立てる", async () => {
+  it("クエリは eventName と payload の文字列フィールドから組み立てる", async () => {
     const port = new FakeSearchPort([]);
     const rule = new SimilarPatternRule(port);
 
     await rule.classify(
       makeEvent({
-        eventName: "ec.payment.timeout",
-        payload: { orderId: "o-1", amount: 5000 },
+        eventName: "ec.payment.declined",
+        payload: { reason: "PROVIDER_UNAVAILABLE", note: "auth declined" },
       }),
     );
 
-    expect(port.lastQuery?.eventName).toBe("ec.payment.timeout");
-    expect(port.lastQuery?.text).toContain("ec.payment.timeout");
-    expect(port.lastQuery?.text).toContain("orderId=o-1");
-    expect(port.lastQuery?.text).toContain("amount=5000");
+    expect(port.lastQuery?.eventName).toBe("ec.payment.declined");
+    expect(port.lastQuery?.text).toContain("ec.payment.declined");
+    expect(port.lastQuery?.text).toContain("reason=PROVIDER_UNAVAILABLE");
+    expect(port.lastQuery?.text).toContain("note=auth declined");
+  });
+
+  it("発生毎に変わる高カーディナリティ値（UUID・数値・配列）はクエリに載せない", async () => {
+    const port = new FakeSearchPort([]);
+    const rule = new SimilarPatternRule(port);
+
+    await rule.classify(
+      makeEvent({
+        eventName: "ec.payment.declined",
+        payload: {
+          // UUID（毎回ユニーク）は和集合を膨らませるだけのノイズ＝除外。
+          orderId: "550e8400-e29b-41d4-a716-446655440000",
+          customerId: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8", // 大文字も除外
+          // 数値（金額・数量）は発生毎の測定値＝除外。
+          amount: 5000,
+          // 非文字列（配列・オブジェクト・null）も除外。
+          reservedProductIds: ["p-1", "p-2"],
+          detail: null,
+          // 障害の語彙を運ぶ文字列だけが残る。
+          reason: "PROVIDER_UNAVAILABLE",
+        },
+      }),
+    );
+
+    expect(port.lastQuery?.text).toBe(
+      "ec.payment.declined reason=PROVIDER_UNAVAILABLE",
+    );
   });
 });

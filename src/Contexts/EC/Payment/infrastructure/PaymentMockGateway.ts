@@ -1,4 +1,4 @@
-export type PaymentMode = "SUCCESS" | "RANDOM" | "TIMEOUT";
+export type PaymentMode = "SUCCESS" | "RANDOM" | "TIMEOUT" | "DECLINED";
 
 export class PaymentMockGateway {
   protected mode: PaymentMode;

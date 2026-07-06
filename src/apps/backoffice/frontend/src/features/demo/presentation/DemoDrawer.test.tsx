@@ -50,7 +50,7 @@ describe("DemoDrawer", () => {
     await waitFor(() => expect(screen.getByText("5")).toBeInTheDocument());
     expect(screen.getByText("決済タイムアウト")).toBeInTheDocument();
     // app 枠は 完全一致/類似/未知 の3段。類似（準・既知）シナリオが出る（障害名で表示）。
-    expect(screen.getByText("DBコネクションプール枯渇")).toBeInTheDocument();
+    expect(screen.getByText("決済プロバイダ拒否")).toBeInTheDocument();
     // 未知（AI 調査）群のシナリオも出る。
     expect(screen.getByText("脆弱性検知")).toBeInTheDocument();
   });

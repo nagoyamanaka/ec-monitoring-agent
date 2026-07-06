@@ -9,9 +9,6 @@ import {
   SecurityScanTranslator,
 } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/SecurityScanTranslator.js";
 import { CloudMonitoringAlertTranslator } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CloudMonitoringAlertTranslator.js";
-import { MonitoringEvent } from "../../../../../Contexts/Monitoring/Shared/domain/MonitoringEvent.js";
-import { MonitoringEventCategory } from "../../../../../Contexts/Monitoring/Shared/domain/MonitoringEventCategory.js";
-import { AlertSeverity } from "../../../../../Contexts/Monitoring/Shared/domain/AlertSeverity.js";
 
 // 2026-07-06 シナリオ絞り込み: 旧5（構成変更障害）・旧6（アプリコード退行）はデモ卓から撤退した。
 // 検知の入口の説得力（「実際はどう検知するのか」）が弱く、発表の尺でも 1/2/3/3b/4 に絞る方が
@@ -31,8 +28,12 @@ type ScenarioRecipe = {
 };
 
 // 各シナリオが payment/inventory の両モードを明示設定するので、直前の状態に依存せず独立に再現できる。
+// payment-declined（シナリオ2）は実注文→PSP mock が PROVIDER_UNAVAILABLE で与信拒否→
+// PaymentDeclinedDomainEvent という実トリガ。既知パターン（ec.payment.timeout）に完全一致せず、
+// reset が seed した過去の解決済みプロバイダ障害事例と字句類似（0.714）で「準・既知」になる。
 const RECIPES: Record<string, ScenarioRecipe> = {
   "payment-timeout": { label: "決済タイムアウト", paymentMode: "TIMEOUT", inventoryMode: "SUCCESS" },
+  "payment-declined": { label: "決済プロバイダ拒否", paymentMode: "DECLINED", inventoryMode: "SUCCESS" },
   "inventory-insufficient": { label: "在庫不足", paymentMode: "SUCCESS", inventoryMode: "INSUFFICIENT_STOCK" },
 };
 
@@ -41,7 +42,7 @@ const RECIPES: Record<string, ScenarioRecipe> = {
 // 3b は 3（実 Cloud Monitoring 経路）の合成注入版＝デモ反復用（後述）。
 const ALIASES: Record<string, string> = {
   "1": "payment-timeout",
-  "2": "similar-known",
+  "2": "payment-declined",
   "3": "infra-fault",
   "3b": "infra-fault-synthetic",
   "4": "security-vuln",
@@ -170,30 +171,11 @@ function buildInfraFaultApplyEvent(prUrl: string): AppliedInfraChange {
   };
 }
 
-// similar-known は「既知パターンには完全一致しないが、過去の解決済み事例に高類似（準・既知）」を
-// 見せるシナリオ。DB コネクションプール枯渇の合成 APPLICATION イベントを実 ingest 経路に通す。
-// reset が seed する解決済み事例（ResolvedIncidentSeed / ec.db.connection_pool_exhausted）と
-// 字句類似 0.667 で一致するため、KnownPatternRule は棄権し SimilarPatternRule が
-// source=SIMILARITY・confidence≈0.67 の graded 分類を返す（AI 調査ではなく即・確度付き確定）。
-const SIMILAR_KNOWN_SCENARIO_ID = "similar-known";
-
-// eventName/payload は seed 事例と語彙を「意図的に被らせる」（appcode-regression の逆）。
-// 既知パターン（payment.timeout / reservation_failed）とは eventName が異なるので完全一致しない。
-// severity は類似一致では断定できないため SimilarPatternRule の既定（WARNING）に合わせる。
-function buildSimilarKnownEvent(): MonitoringEvent {
-  return new MonitoringEvent({
-    eventId: crypto.randomUUID(),
-    eventName: "ec.db.connection_pool_exhausted",
-    aggregateId: crypto.randomUUID(),
-    occurredOn: new Date(),
-    category: MonitoringEventCategory.application(),
-    severity: AlertSeverity.warning(),
-    source: "ec-backend",
-    payload: {
-      symptom: "database connection pool exhausted",
-    },
-  });
-}
+// 旧 similar-known（2026-07-07 廃止）: DB コネクションプール枯渇の MonitoringEvent を直接
+// 手組みして ingest に流す合成注入だった。どの検出層（EC ドメインイベント / Cloud Monitoring /
+// CI）の出力にも対応しない形の捏造で、かつ接続プールは CAPACITY（Cloud Monitoring 権威）の
+// 語彙なのに category=APPLICATION を直書きしておりオーナーシップ設計とも矛盾していた。
+// 現行のシナリオ2は RECIPES の payment-declined（実注文→実ドメインイベント）に移行。
 
 // 障害シナリオを EC 操作の合成で再現する facade。
 // EC の demo モードを設定 → 注文を投入 → EC が障害イベントを発火 → Monitoring が Alert 化（SSE配信）。
@@ -236,14 +218,6 @@ export class TriggerDemoScenarioUseCase {
       await this.collectMonitoringEventUseCase.run(event);
       // 注文を伴わない検知なので orderId は空。
       return { scenarioId: resolvedId, label: "インフラ障害（合成・反復用）", orderId: "" };
-    }
-
-    if (resolvedId === SIMILAR_KNOWN_SCENARIO_ID) {
-      // 入口だけ合成: APPLICATION の障害を実 ingest 経路に通す。既知パターンには一致せず、
-      // reset が seed した解決済み事例と字句類似で一致 → SimilarPatternRule が準・既知に分類。
-      await this.collectMonitoringEventUseCase.run(buildSimilarKnownEvent());
-      // 注文を伴わない検知なので orderId は空。
-      return { scenarioId: resolvedId, label: "DBコネクションプール枯渇", orderId: "" };
     }
 
     const recipe = RECIPES[resolvedId];

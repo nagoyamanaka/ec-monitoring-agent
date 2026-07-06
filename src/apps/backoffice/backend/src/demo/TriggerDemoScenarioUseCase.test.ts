@@ -110,6 +110,23 @@ describe("TriggerDemoScenarioUseCase", () => {
     expect(recorded.url).toBe("https://github.com/o/r/pull/30");
   });
 
+  it("シナリオ2（payment-declined）は実注文の実トリガ＝EC のモード設定と注文投入のみで合成注入しない", async () => {
+    const ec = fakeEcGateway();
+    const useCase = new TriggerDemoScenarioUseCase(ec, "p-1", fakeInfraStore(), collect);
+
+    const result = await useCase.run("2");
+
+    expect(result.scenarioId).toBe("payment-declined");
+    expect(result.label).toBe("決済プロバイダ拒否");
+    expect(result.orderId).not.toBe("");
+    // PSP mock を与信拒否モードにして本物の注文を流す＝障害イベントは EC ドメインが発火する。
+    expect(ec.setPaymentMode).toHaveBeenCalledWith("DECLINED");
+    expect(ec.setInventoryMode).toHaveBeenCalledWith("SUCCESS");
+    expect(ec.placeOrder).toHaveBeenCalledTimes(1);
+    // 監視イベントの直接注入はしない（旧 similar-known の合成注入は廃止）。
+    expect(collect.run).not.toHaveBeenCalled();
+  });
+
   it("未知シナリオは UnsupportedScenarioError", async () => {
     const useCase = new TriggerDemoScenarioUseCase(fakeEcGateway(), "p-1", fakeInfraStore(), collect);
     await expect(useCase.run("nope")).rejects.toBeInstanceOf(UnsupportedScenarioError);
