@@ -136,6 +136,12 @@ export function ForecastDemoConsole({
               ? "▶ 予報を再生成（AI 突合・約1分）"
               : "▶ 予報を生成（AI 突合・約1分）"}
         </button>
+        {/* 結果が出る場所を指し示す（視線誘導）。押下はここだが、進行状況と着地は本文側。 */}
+        {generating && (
+          <p className="text-[11px] text-cyan-200/80">
+            進行状況は予報本文の側に表示しています。完成すると予報カードに置き換わります。
+          </p>
+        )}
         <button
           type="button"
           disabled={busy}

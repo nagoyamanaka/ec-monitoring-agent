@@ -8,6 +8,7 @@ import type { ForecastBriefingView } from "../../domain/ForecastView";
 import { RiskCard } from "../components/RiskCard";
 import { ForecastBridgeCta } from "../components/ForecastBridgeCta";
 import { ForecastDemoConsole } from "../components/ForecastDemoConsole";
+import { ForecastGenerationPendingBanner } from "../components/ForecastGenerationPendingBanner";
 
 const PANEL = "rounded-xl border border-slate-800/80 bg-slate-900/40 p-5";
 
@@ -113,6 +114,11 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
             </div>
           </header>
 
+          {/* 生成中は結果が着地する本文側で進行状況を見せる（3b の検知待ちバナーと同型・F12改）。 */}
+          {generating && (
+            <ForecastGenerationPendingBanner regenerating={briefing !== null} />
+          )}
+
           {status === "loading" && (
             <div className="h-48 animate-pulse rounded-xl bg-slate-800/40" />
           )}
@@ -139,7 +145,8 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
             </div>
           )}
 
-          {status === "ready" && snapshot?.kind === "empty" && (
+          {/* 生成中は「生成してください」の案内が矛盾するので伏せる（バナーが代替）。 */}
+          {status === "ready" && snapshot?.kind === "empty" && !generating && (
             <div className={PANEL}>
               <p className="text-sm text-slate-300">
                 予報はまだ生成されていません。
@@ -153,7 +160,20 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
             </div>
           )}
 
-          {briefing && <BriefingBody briefing={briefing} />}
+          {briefing &&
+            (generating ? (
+              // 再生成中: 前回分を暗転して残す（空白にしない・新旧の取り違えも防ぐ）。
+              <div aria-busy className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  前回の予報（再生成が完成すると置き換わります）
+                </p>
+                <div className="pointer-events-none opacity-40">
+                  <BriefingBody briefing={briefing} />
+                </div>
+              </div>
+            ) : (
+              <BriefingBody briefing={briefing} />
+            ))}
         </div>
 
         {showConsole && (
