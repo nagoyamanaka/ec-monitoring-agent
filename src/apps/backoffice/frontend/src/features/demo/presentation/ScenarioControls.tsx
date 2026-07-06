@@ -112,9 +112,9 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
     scenarios: [
       {
         id: "2",
-        label: "DBコネクションプール枯渇",
-        description: "完全一致なし → 過去事例に約67%類似 → 確度付きで即確定",
-        realness: "synthetic",
+        label: "決済プロバイダ拒否",
+        description: "与信が全件拒否 → 完全一致なし → 過去事例に約71%類似 → 確度付きで即確定",
+        realness: "live",
       },
     ],
   },

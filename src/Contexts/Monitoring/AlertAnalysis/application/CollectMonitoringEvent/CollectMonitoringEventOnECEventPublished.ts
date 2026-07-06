@@ -1,6 +1,7 @@
 import { DomainEventClass } from "../../../../Shared/domain/DomainEvent.js";
 import { InventoryReservationFailedDomainEvent } from "../../../../EC/Inventory/domain/InventoryReservationFailedDomainEvent.js";
 import { OrderPlacedDomainEvent } from "../../../../EC/Orders/domain/OrderPlacedDomainEvent.js";
+import { PaymentDeclinedDomainEvent } from "../../../../EC/Payment/domain/PaymentDeclinedDomainEvent.js";
 import { PaymentTimeoutDomainEvent } from "../../../../EC/Payment/domain/PaymentTimeoutDomainEvent.js";
 import { AlertSeverity } from "../../../Shared/domain/AlertSeverity.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
@@ -10,7 +11,8 @@ import { CollectMonitoringEventSubscriber } from "./CollectMonitoringEventSubscr
 type SupportedECDomainEvent =
   | OrderPlacedDomainEvent
   | InventoryReservationFailedDomainEvent
-  | PaymentTimeoutDomainEvent;
+  | PaymentTimeoutDomainEvent
+  | PaymentDeclinedDomainEvent;
 
 /**
  * EC 源の ingest アダプタ。EC DomainEvent の発火を受けて MonitoringEvent へ正規化する。
@@ -22,6 +24,7 @@ export class CollectMonitoringEventOnECEventPublished extends CollectMonitoringE
       OrderPlacedDomainEvent,
       InventoryReservationFailedDomainEvent,
       PaymentTimeoutDomainEvent,
+      PaymentDeclinedDomainEvent,
     ];
   }
 
@@ -65,6 +68,27 @@ export class CollectMonitoringEventOnECEventPublished extends CollectMonitoringE
           currentStock: event.currentStock,
           reason: event.reason.value,
           reservedProductIds: event.reservedProductIds,
+        },
+      });
+    }
+
+    if (event instanceof PaymentDeclinedDomainEvent) {
+      // aggregateId = paymentAttemptId, orderId は payload
+      return new MonitoringEvent({
+        eventId: event.eventId,
+        eventName: event.eventName,
+        aggregateId: event.aggregateId,
+        occurredOn: event.occurredOn,
+        category,
+        // 与信拒否。ハンドリング済みの業務失敗で顧客はリトライ可能＝タイムアウトより一段軽い。
+        // 過去の解決済みプロバイダ障害事例との類似分類（準・既知）の入力になる。
+        severity: AlertSeverity.warning(),
+        source: "payment",
+        payload: {
+          orderId: event.orderId,
+          customerId: event.customerId,
+          amount: event.amount,
+          reason: event.reason,
         },
       });
     }

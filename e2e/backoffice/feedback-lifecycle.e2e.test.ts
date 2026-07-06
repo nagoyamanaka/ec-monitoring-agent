@@ -16,16 +16,18 @@ import {
   AlertPrimitives,
 } from "./support.js";
 
-// 類似シナリオ（デモ 2 / similar-known）の合成 APPLICATION イベントの eventName。
-// buildSimilarKnownEvent が発火する。既知パターンには完全一致せず、過去の解決済み事例が
-// コーパスにあれば SimilarPatternRule が graded confidence（類似・準既知）で拾う経路。
-const SIMILAR_EVENT_NAME = "ec.db.connection_pool_exhausted";
+// 類似シナリオ（デモ 2 / payment-declined）の実 APPLICATION イベントの eventName。
+// 実トリガ: PaymentMode=DECLINED の実注文 → EC が PaymentDeclinedDomainEvent を発火 →
+// RabbitMQ 経由で ingest。既知パターン（ec.payment.timeout）には完全一致せず、過去の
+// 解決済み事例がコーパスにあれば SimilarPatternRule が graded confidence（類似・準既知）で拾う経路。
+const SIMILAR_EVENT_NAME = "ec.payment.declined";
 
 // 承認時に添える「訂正＝確定した原因/症状」。次回の類似判定の根拠テキスト（resolvedNote）になる。
-// SimilarPatternRule のクエリ文（eventName＋payload の symptom）とトークン集合が一致するよう語彙を
-// 意図的に被らせ、字句類似（Jaccard）を 1.0 に寄せている。これで reset シードの事例（0.667）より
-// 確実に上位で選ばれ、「最良一致＝この承認で焼いた訂正事例」を決定的にできる（sourceAlertId で突合）。
-const OPERATOR_CORRECTION = "symptom: database connection pool exhausted";
+// SimilarPatternRule のクエリ文（eventName＋payload の reason。UUID/数値ノイズは除外される）と
+// トークン集合が一致するよう語彙を意図的に被らせ、字句類似（Jaccard）を 1.0 に寄せている。
+// これで reset シードの事例（0.714）より確実に上位で選ばれ、「最良一致＝この承認で焼いた
+// 訂正事例」を決定的にできる（sourceAlertId で突合）。
+const OPERATOR_CORRECTION = "reason: payment provider unavailable declined";
 
 // デモシナリオ 3b（インフラ障害・合成注入）の eventName。
 // CloudMonitoringAlertTranslator が condition_name="CRITICAL log entries" を slugify した値で、
@@ -180,7 +182,7 @@ describe("backoffice E2E: feedback lifecycle journey (stub AI)", () => {
 /**
  * 【類似学習ループ E2E】「オペレーターの訂正が、次回の分類の正になる」一周を HTTP API だけで通す。
  *
- *   ① 類似シナリオ（similar-known）を発火 → 承認できる Alert を1件得る
+ *   ① 類似シナリオ（payment-declined・実注文トリガ）を発火 → 承認できる Alert を1件得る
  *   ② 訂正メモつきで承認 → その訂正が解決済み事例（resolvedNote）としてコーパスに index される
  *   ③ 同型が再発 → 承認済みは畳み込まれず新規 Alert が立ち、①②で学習した訂正事例に
  *      SIMILARITY で即分類される（AI 調査は走らない）。sourceAlertId が②で承認した Alert を指す
@@ -191,7 +193,7 @@ describe("backoffice E2E: feedback lifecycle journey (stub AI)", () => {
  * （SimilarPatternRule / source=SIMILARITY）」の配線が一本につながっていること。
  *
  * 汚染対策: InMemory コーパスはサーバプロセス内で永続し、reset シードや過去実行の事例が
- * 同 eventName に残りうる。②の訂正メモは Jaccard=1.0 に寄せてあり、コーパスの他事例（≦0.667）より
+ * 同 eventName に残りうる。②の訂正メモは Jaccard=1.0 に寄せてあり、コーパスの他事例（≦0.714）より
  * 必ず上位、かつ最新挿入が同点タイでも先に選ばれるため、③の最良一致は常に「直前に承認した Alert」になる。
  */
 describe("backoffice E2E: similarity learning loop (feedback → corpus → SIMILARITY)", () => {
@@ -199,14 +201,14 @@ describe("backoffice E2E: similarity learning loop (feedback → corpus → SIMI
   let recurredSimilar: AlertPrimitives;
 
   beforeAll(async () => {
-    // reset で解決済み事例 seed（字句類似 0.667）をコーパスへ投入し、①が環境によらず
+    // reset で解決済み事例 seed（字句類似 0.714）をコーパスへ投入し、①が環境によらず
     // SIMILARITY 即分類（AI 調査なし）になる前提を成立させる。CI の新品 ES はコーパスが空で
     // ①が「未知」分類→非同期 AI 調査が走り、②の feedback 保存が調査完了時の全文書 save に
     // 上書きされる lost update（feedback 消失→③は dedup 畳み込みでタイムアウト）を踏む。
     // ローカル ES は過去の reset で seed 済みのため顕在化しない（make e2e は通る）差分の吸収。
     await resetDemo();
     // ES は永続するため、過去実行が残した同署名の学習事例を先に掃除する（タイ回避＝突合を決定的に）。
-    // reset シード（別文言・0.667）は残る＝上の前提は崩さない。
+    // reset シード（別文言・0.714）は残る＝上の前提は崩さない。
     await clearSimilarIncidentsByNote(OPERATOR_CORRECTION);
     // 既存 Alert を消して、①の発火が畳み込まれず新規 Alert として立つようにする
     // （コーパスの解決済み事例は Alert ではないので消えない＝学習は保持される）。
@@ -218,8 +220,8 @@ describe("backoffice E2E: similarity learning loop (feedback → corpus → SIMI
     await clearSimilarIncidentsByNote(OPERATOR_CORRECTION);
   });
 
-  it("① 類似シナリオを発火し、承認できる Alert を1件得る", async () => {
-    await triggerScenario("similar-known");
+  it("① 類似シナリオ（実注文トリガ）を発火し、承認できる Alert を1件得る", async () => {
+    await triggerScenario("payment-declined");
 
     correctedAlert = await pollAlert(
       (a) => a.monitoringEvent.eventName === SIMILAR_EVENT_NAME,
@@ -243,7 +245,7 @@ describe("backoffice E2E: similarity learning loop (feedback → corpus → SIMI
   });
 
   it("③ 同型が再発すると、新規 Alert が承認済みの訂正事例に SIMILARITY で即分類される", async () => {
-    await triggerScenario("similar-known");
+    await triggerScenario("payment-declined");
 
     // 承認済みの correctedAlert へは畳み込まれない（dedup 窓から除外）＝新規 Alert が立つ。
     recurredSimilar = await pollAlert(

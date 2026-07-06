@@ -7,15 +7,22 @@ import { MonitoringEvent } from "../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategory } from "../Shared/domain/MonitoringEventCategory.js";
 import { SIMILAR_INCIDENT_SEED_SOURCE_ALERT_ID } from "./ResolvedIncidentSeed.js";
 
-// 「類似・準既知」デモ（シナリオ2）で SIMILARITY 分類が back-link する **過去の解決済み Alert**。
+// 解決済みアーカイブ Alert（RESOLVED）の seed。役割は2系統:
 //
-// 目的: 類似分類の sourceAlertId（= ResolvedIncident.sourceAlertId）から関連アラートとして
-// クリック→詳細を開けるようにする。この Alert が無いと「詳細を開く」が空を開いてしまう。
+// 1. 「類似・準既知」デモ（シナリオ2）で SIMILARITY 分類が back-link する過去の解決済み Alert
+//    （buildResolvedPaymentDeclinedAlert）。類似分類の sourceAlertId（= ResolvedIncident.sourceAlertId）
+//    から関連アラートとしてクリック→詳細を開けるようにする。無いと「詳細を開く」が空を開く。
+// 2. 予兆フラッグシップ（F8・DB接続枯渇）の MEMORY シグナル供給元（DB プール系3本）。
 //
 // 一覧には出さない: status=RESOLVED は GET /alerts 一覧から除外する（GetAlertReportUseCase）。
 // それでも `GET /alerts/:id` では引けるので、関連アラート導線・ディープリンクからは開ける。
 // ＝「作らないと関連として見れないが、一覧には出したくない」の解（過去アラートはアーカイブ扱い）。
 const SEED_ALERT_ID = SIMILAR_INCIDENT_SEED_SOURCE_ALERT_ID;
+
+// DB プール枯渇のアーカイブ（旧シナリオ2の deep-link 先だった事例）。シナリオ2 が
+// 決済プロバイダ拒否へ移行した後も、予兆 MEMORY の材料（suggestedPatternName 由来の
+// derived subject）として残す。id は歴代 seed と衝突しない固定値。
+const DB_POOL_ARCHIVE_ALERT_ID = "5eed0000-0000-4000-8000-000000000001";
 
 // 予兆フラッグシップ（F8・DB接続枯渇）の MEMORY シグナル供給元になる過去インシシデント。
 // ForecastMemory は RESOLVED＋レポート付き Alert から投影されるため、report.subject を
@@ -61,7 +68,7 @@ function buildResolvedDbPoolAlert(): Alert {
 
   // 未知として調査→レポート添付（OPEN）まで作り、primitives 経由で RESOLVED（解決済みアーカイブ）に落とす。
   const base = Alert.createAsUnknown({
-    id: new AlertId(SEED_ALERT_ID),
+    id: new AlertId(DB_POOL_ARCHIVE_ALERT_ID),
     monitoringEvent: pastEvent,
   }).attachInvestigationReport(report);
 
@@ -69,6 +76,61 @@ function buildResolvedDbPoolAlert(): Alert {
     ...base.toPrimitives(),
     status: "RESOLVED",
     feedback: { isCorrect: true, operatorNote: "プールサイズ引き上げで解消" },
+    correctFeedbackCount: 1,
+  });
+}
+
+// シナリオ2（類似・準既知）の back-link 先: 過去の決済プロバイダ障害（与信拒否）の解決済み事例。
+// ResolvedIncidentSeed（similarity コーパス）の sourceAlertId がこの Alert を指す。
+// 実トリガ（PaymentMode=DECLINED の実注文）が発火する ec.payment.declined と同型。
+function buildResolvedPaymentDeclinedAlert(): Alert {
+  const pastEvent = new MonitoringEvent({
+    eventId: "5eed0000-0000-4000-8000-0000000000e4",
+    eventName: "ec.payment.declined",
+    aggregateId: "5eed0000-0000-4000-8000-0000000000a4",
+    occurredOn: new Date("2026-06-10T13:00:00.000Z"),
+    category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.warning(),
+    source: "payment",
+    payload: {
+      orderId: "5eed0000-0000-4000-8000-0000000000b4",
+      customerId: "5eed0000-0000-4000-8000-0000000000c4",
+      amount: 8400,
+      reason: "PROVIDER_UNAVAILABLE",
+    },
+  });
+
+  const report = new InvestigationReport({
+    summary:
+      "決済プロバイダ側の一時障害により与信リクエストが全件拒否（PROVIDER_UNAVAILABLE）。プロバイダのステータスページで障害を確認し、復旧までセカンダリプロバイダへフェイルオーバーして解消済み。",
+    confidence: 0.88,
+    severity: AlertSeverity.warning(),
+    investigationSteps: [
+      "拒否理由コードの分布を確認（全件 PROVIDER_UNAVAILABLE ＝顧客都合でない）",
+      "プロバイダのステータスページ・障害情報を確認",
+    ],
+    suggestedActions: [
+      "セカンダリ決済プロバイダへフェイルオーバーする",
+      "プロバイダ復旧後に失敗注文の再決済を案内する",
+    ],
+    suggestedPatternName: "PAYMENT_PROVIDER_OUTAGE",
+    reviewStatus: ReviewStatus.approved(),
+    investigatedAt: new Date("2026-06-10T13:25:00.000Z"),
+    isFallback: false,
+  });
+
+  const base = Alert.createAsUnknown({
+    id: new AlertId(SEED_ALERT_ID),
+    monitoringEvent: pastEvent,
+  }).attachInvestigationReport(report);
+
+  return Alert.fromPrimitives({
+    ...base.toPrimitives(),
+    status: "RESOLVED",
+    feedback: {
+      isCorrect: true,
+      operatorNote: "プロバイダ障害時間帯のみの拒否。フェイルオーバーで解消",
+    },
     correctFeedbackCount: 1,
   });
 }
@@ -175,6 +237,7 @@ function buildWeekendCheckoutPeakAlert(): Alert {
 }
 
 export const RESOLVED_ALERT_SEEDS: Alert[] = [
+  buildResolvedPaymentDeclinedAlert(),
   buildResolvedDbPoolAlert(),
   buildPoolShrinkRegressionAlert(),
   buildWeekendCheckoutPeakAlert(),

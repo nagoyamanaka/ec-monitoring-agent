@@ -5,6 +5,7 @@ import { OrderPlacedDomainEvent } from "../../../../EC/Orders/domain/OrderPlaced
 import { InventoryReservationFailedDomainEvent } from "../../../../EC/Inventory/domain/InventoryReservationFailedDomainEvent.js";
 import { InventoryFailureReason } from "../../../../EC/Inventory/domain/InventoryFailureReason.js";
 import { PaymentTimeoutDomainEvent } from "../../../../EC/Payment/domain/PaymentTimeoutDomainEvent.js";
+import { PaymentDeclinedDomainEvent } from "../../../../EC/Payment/domain/PaymentDeclinedDomainEvent.js";
 import { MonitoringEvent } from "../../../Shared/domain/MonitoringEvent.js";
 import { MonitoringEventCategories } from "../../../Shared/domain/MonitoringEventCategory.js";
 
@@ -47,6 +48,17 @@ const makePaymentTimeoutEvent = () =>
     occurredOn: OCCURRED_ON,
   });
 
+const makePaymentDeclinedEvent = () =>
+  new PaymentDeclinedDomainEvent({
+    paymentAttemptId: PAYMENT_ATTEMPT_ID,
+    orderId: ORDER_ID,
+    customerId: CUSTOMER_ID,
+    amount: 5000,
+    reason: "PROVIDER_UNAVAILABLE",
+    eventId: EVENT_ID,
+    occurredOn: OCCURRED_ON,
+  });
+
 describe("CollectMonitoringEventOnECEventPublished", () => {
   let useCase: { run: ReturnType<typeof vi.fn> };
   let subscriber: CollectMonitoringEventOnECEventPublished;
@@ -59,13 +71,14 @@ describe("CollectMonitoringEventOnECEventPublished", () => {
   });
 
   describe("subscribedTo", () => {
-    it("OrderPlaced / InventoryReservationFailed / PaymentTimeout の3イベントを購読する", () => {
+    it("OrderPlaced / InventoryReservationFailed / PaymentTimeout / PaymentDeclined の4イベントを購読する", () => {
       const subscribed = subscriber.subscribedTo();
 
       expect(subscribed).toContain(OrderPlacedDomainEvent);
       expect(subscribed).toContain(InventoryReservationFailedDomainEvent);
       expect(subscribed).toContain(PaymentTimeoutDomainEvent);
-      expect(subscribed).toHaveLength(3);
+      expect(subscribed).toContain(PaymentDeclinedDomainEvent);
+      expect(subscribed).toHaveLength(4);
     });
   });
 
@@ -139,6 +152,25 @@ describe("CollectMonitoringEventOnECEventPublished", () => {
         orderId: ORDER_ID,
         customerId: CUSTOMER_ID,
         amount: 5000,
+      });
+    });
+  });
+
+  describe("PaymentDeclinedDomainEvent 受信時", () => {
+    it("severity=WARNING・source=payment で、payload に decline reason が含まれる", async () => {
+      await subscriber.on(makePaymentDeclinedEvent());
+
+      const [event] = useCase.run.mock.calls[0] as [MonitoringEvent];
+      expect(event.eventName).toBe("ec.payment.declined");
+      expect(event.severity.value).toBe("WARNING");
+      expect(event.isAlertable()).toBe(true);
+      expect(event.source).toBe("payment");
+      expect(event.aggregateId).toBe(PAYMENT_ATTEMPT_ID);
+      expect(event.payload).toEqual({
+        orderId: ORDER_ID,
+        customerId: CUSTOMER_ID,
+        amount: 5000,
+        reason: "PROVIDER_UNAVAILABLE",
       });
     });
   });
