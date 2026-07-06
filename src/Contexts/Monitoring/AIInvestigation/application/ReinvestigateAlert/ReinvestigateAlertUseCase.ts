@@ -223,7 +223,12 @@ export class ReinvestigateAlertUseCase {
     alert: Alert,
     report: InvestigationReport,
   ): Promise<void> {
-    const updatedAlert = alert.attachInvestigationReport(report);
+    // 再調査も数十〜100秒かかり、reopen 時点の集約に添付して全文書 save すると、
+    // 再調査中に届いた feedback（承認/却下）を上書き消失させる（lost update）。
+    // attach 直前に最新状態を取り直して競合窓を調査時間から ms 級へ縮める
+    // （reopen での feedback クリアは保存済みなので取り直しても消えない）。
+    const fresh = (await this.alertRepository.findById(alert.id)) ?? alert;
+    const updatedAlert = fresh.attachInvestigationReport(report);
     await this.alertRepository.save(updatedAlert);
     this.sseNotifier.notify(updatedAlert.toPrimitives());
   }

@@ -258,7 +258,12 @@ export class InvestigateAlertUseCase {
     alert: Alert,
     report: InvestigationReport,
   ): Promise<void> {
-    const updatedAlert = alert.attachInvestigationReport(report);
+    // 調査は数十〜100秒かかり、run() 冒頭で読んだ集約に添付して全文書 save すると、
+    // 調査中に届いた feedback（承認/却下）を上書き消失させる（lost update）。
+    // attach 直前に最新状態を取り直して競合窓を調査時間から ms 級へ縮める
+    // （完全排他は部分更新/楽観ロックの領分。消えた場合は findById が null → 手元で続行）。
+    const fresh = (await this.alertRepository.findById(alert.id)) ?? alert;
+    const updatedAlert = fresh.attachInvestigationReport(report);
     await this.alertRepository.save(updatedAlert);
     this.sseNotifier.notify(updatedAlert.toPrimitives());
   }
