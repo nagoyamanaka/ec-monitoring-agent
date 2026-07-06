@@ -4,6 +4,7 @@ import {
   connectMonitoringDb,
   clearAlerts,
   triggerScenario,
+  resetDemo,
   pollAlert,
   pollAlertById,
   fetchAlertById,
@@ -198,7 +199,14 @@ describe("backoffice E2E: similarity learning loop (feedback → corpus → SIMI
   let recurredSimilar: AlertPrimitives;
 
   beforeAll(async () => {
+    // reset で解決済み事例 seed（字句類似 0.667）をコーパスへ投入し、①が環境によらず
+    // SIMILARITY 即分類（AI 調査なし）になる前提を成立させる。CI の新品 ES はコーパスが空で
+    // ①が「未知」分類→非同期 AI 調査が走り、②の feedback 保存が調査完了時の全文書 save に
+    // 上書きされる lost update（feedback 消失→③は dedup 畳み込みでタイムアウト）を踏む。
+    // ローカル ES は過去の reset で seed 済みのため顕在化しない（make e2e は通る）差分の吸収。
+    await resetDemo();
     // ES は永続するため、過去実行が残した同署名の学習事例を先に掃除する（タイ回避＝突合を決定的に）。
+    // reset シード（別文言・0.667）は残る＝上の前提は崩さない。
     await clearSimilarIncidentsByNote(OPERATOR_CORRECTION);
     // 既存 Alert を消して、①の発火が畳み込まれず新規 Alert として立つようにする
     // （コーパスの解決済み事例は Alert ではないので消えない＝学習は保持される）。
@@ -228,7 +236,8 @@ describe("backoffice E2E: similarity learning loop (feedback → corpus → SIMI
     const approved = await fetchAlertById(correctedAlert.id);
     expect(approved.feedback?.isCorrect).toBe(true);
     expect(approved.feedback?.operatorNote).toBe(OPERATOR_CORRECTION);
-    // 単一承認の加重スコアは 0.4（<1.0）で自動昇格しない＝完全一致パターンは作られない。
+    // 類似既知はレポート無し（既知は AI を自動起動しない）＝結晶化の材料が無く自動昇格しない。
+    // レポートがあっても単一承認の加重スコアは 1.0 未満で昇格しない（即昇格は手動 /promote の領分）。
     // よって③の再発は EXACT_MATCH ではなく SIMILARITY 経路で分類される（承認は OPEN 据置）。
     expect(approved.status).toBe("OPEN");
   });

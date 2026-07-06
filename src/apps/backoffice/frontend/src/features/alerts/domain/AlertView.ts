@@ -48,6 +48,8 @@ export type AlertClassificationView =
       readonly matchedConditions: MatchedConditionView[];
       /** 類似既知（SIMILARITY）のとき、元の解決済み Alert への内部リンク先 id（任意）。 */
       readonly sourceAlertId?: string;
+      /** 類似既知（SIMILARITY）のとき、一致した解決済み事例の対応メモ（当時どう直したか・任意）。 */
+      readonly resolvedNote?: string;
     }
   | { readonly type: "unknown"; readonly confidence: null };
 
@@ -97,6 +99,9 @@ function toClassificationView(
       })),
       ...(dto.sourceAlertId !== undefined
         ? { sourceAlertId: dto.sourceAlertId }
+        : {}),
+      ...(dto.resolvedNote !== undefined
+        ? { resolvedNote: dto.resolvedNote }
         : {}),
     };
   }

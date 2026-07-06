@@ -130,6 +130,17 @@ export function AlertCardExpanded({
               {reason.crystallized && "（初回 AI 調査の結晶化を再利用）"}
             </p>
           )}
+          {/* 類似既知（SIMILARITY）が引いた解決済み事例の対応メモ＝「前回どう直したか」。
+              deep link（過去の同型事例）を開かずその場で想起できる学習の表示面。 */}
+          {alert.classification.type === "known" &&
+            alert.classification.resolvedNote && (
+              <p className="rounded-md bg-slate-800/60 px-3 py-2 text-xs leading-relaxed text-slate-200 ring-1 ring-inset ring-slate-700/60">
+                <span className="font-semibold text-slate-400">
+                  当時の対応メモ:{" "}
+                </span>
+                {alert.classification.resolvedNote}
+              </p>
+            )}
           {/* 判断材料のヒーロー行（タスク E8-C）: 自責/他責と障害規模を報告書の冒頭へ昇格
               ＝開いて5秒で「誰の責任で・どの規模か」が揃う。詳細（影響範囲・主体・引用）は
               下の影響評価パネルが担う（重複を許すのは fault/scale の2項目のみ）。 */}

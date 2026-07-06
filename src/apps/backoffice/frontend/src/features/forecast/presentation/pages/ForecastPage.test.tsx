@@ -146,6 +146,78 @@ describe("ForecastPage", () => {
     expect(api.generate).toHaveBeenCalledTimes(1);
   });
 
+  it("生成中は進行バナーを本文側に出し、empty 案内を伏せ、完了で予報カードへ置き換える", async () => {
+    let resolveGenerate!: (b: ForecastBriefingView) => void;
+    const api = apiMock({
+      getLatest: vi.fn().mockResolvedValue({ kind: "empty" as const }),
+      generate: vi.fn().mockImplementation(
+        () =>
+          new Promise<ForecastBriefingView>((resolve) => {
+            resolveGenerate = resolve;
+          }),
+      ),
+    });
+    renderPage(api);
+
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: "▶ 予報を生成（AI 突合・約1分）",
+      }),
+    );
+
+    // 進行バナー（経過タイマー・処理ステップ・引用検証の説明）が本文側に出る
+    expect(screen.getByText("AI が突合中…")).toBeInTheDocument();
+    expect(screen.getByText("引用検証（実在照合）")).toBeInTheDocument();
+    // 「生成してください」の empty 案内は生成中は矛盾するので伏せる
+    expect(
+      screen.queryByText(/予報はまだ生成されていません/),
+    ).not.toBeInTheDocument();
+    // コンソール側にも視線誘導の1行
+    expect(
+      screen.getByText(/進行状況は予報本文の側に表示しています/),
+    ).toBeInTheDocument();
+
+    resolveGenerate(BRIEFING);
+    expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
+    expect(screen.queryByText("AI が突合中…")).not.toBeInTheDocument();
+  });
+
+  it("再生成中は前回の予報を暗転ラベルつきで残し、完了で置き換える", async () => {
+    let resolveGenerate!: (b: ForecastBriefingView) => void;
+    const api = apiMock({
+      generate: vi.fn().mockImplementation(
+        () =>
+          new Promise<ForecastBriefingView>((resolve) => {
+            resolveGenerate = resolve;
+          }),
+      ),
+    });
+    renderPage(api);
+    expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "▶ 予報を再生成（AI 突合・約1分）" }),
+    );
+
+    // 前回分は空白にせず暗転して残す（新旧の取り違え防止ラベルつき）
+    expect(
+      screen.getByText("前回の予報（再生成が完成すると置き換わります）"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("DB 接続プール枯渇")).toBeInTheDocument();
+    // バナーは再生成向けの着地先文言
+    expect(
+      screen.getByText(/下の予報カードが新しい内容に置き換わります/),
+    ).toBeInTheDocument();
+
+    resolveGenerate(BRIEFING);
+    await waitFor(() =>
+      expect(
+        screen.queryByText("前回の予報（再生成が完成すると置き換わります）"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("DB 接続プール枯渇")).toBeInTheDocument();
+  });
+
   it("生成が DEMO_ENABLED off（404）ならデモ無効の文言を出す", async () => {
     const api = apiMock({
       getLatest: vi.fn().mockResolvedValue({ kind: "empty" as const }),

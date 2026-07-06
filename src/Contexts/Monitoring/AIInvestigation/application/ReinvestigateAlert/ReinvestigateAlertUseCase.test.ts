@@ -147,6 +147,35 @@ describe("ReinvestigateAlertUseCase", () => {
     expect(notified).toHaveLength(0);
   });
 
+  it("再調査中に保存された feedback を、レポート添付の save が上書きしない", async () => {
+    await alertRepo.save(
+      Alert.createAsUnknown({
+        id: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      }).attachInvestigationReport(makeReport()),
+    );
+    const { notifier } = makeSpyNotifier();
+    // 再調査（数十〜100秒）中にオペレーターが承認する状況を、port 内で repo へ
+    // feedback を保存して再現する（reopen 時点の集約はこの承認を知らない）。
+    const port: AIInvestigationPort = {
+      investigate: async () => {
+        const current = await alertRepo.findById(new AlertId(ALERT_ID));
+        await alertRepo.save(
+          current!.submitFeedback({ isCorrect: true, operatorNote: "承認" }),
+        );
+        return makeReport();
+      },
+    };
+    const useCase = makeUseCase(port, notifier);
+
+    await useCase.run({ alertId: new AlertId(ALERT_ID), operatorNote: "指摘" });
+
+    const saved = await alertRepo.findById(new AlertId(ALERT_ID));
+    expect(saved?.investigationReport).not.toBeNull();
+    expect(saved?.feedback?.isCorrect).toBe(true);
+    expect(saved?.feedback?.operatorNote).toBe("承認");
+  });
+
   it("AI再調査が例外を投げても fallback レポートで OPEN 保存する", async () => {
     await alertRepo.save(
       Alert.createAsUnknown({

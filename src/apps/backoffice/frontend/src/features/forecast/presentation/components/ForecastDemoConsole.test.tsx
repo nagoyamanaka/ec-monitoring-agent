@@ -53,6 +53,10 @@ describe("ForecastDemoConsole", () => {
     expect(
       screen.getByRole("button", { name: "予報をリセット" }),
     ).toBeDisabled();
+    // 視線誘導: 進行状況と着地は本文側であることを指し示す
+    expect(
+      screen.getByText(/進行状況は予報本文の側に表示しています/),
+    ).toBeInTheDocument();
   });
 
   it("操作エラーを alert として出す", () => {

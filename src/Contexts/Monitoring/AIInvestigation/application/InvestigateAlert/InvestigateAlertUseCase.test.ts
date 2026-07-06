@@ -351,6 +351,35 @@ describe("InvestigateAlertUseCase", () => {
     });
   });
 
+  describe("調査中に届いた feedback との競合（lost update 防止）", () => {
+    it("調査中に保存された feedback を、レポート添付の save が上書きしない", async () => {
+      await alertRepo.save(makeUnknownAlert());
+      const { notifier } = makeSpyNotifier();
+      // 調査（数十〜100秒）中にオペレーターが承認する状況を、port 内で repo へ
+      // feedback を保存して再現する（run() 冒頭で読んだ集約はこの承認を知らない）。
+      const port: AIInvestigationPort = {
+        investigate: async () => {
+          const current = await alertRepo.findById(new AlertId(ALERT_ID));
+          await alertRepo.save(
+            current!.submitFeedback({ isCorrect: true, operatorNote: "承認" }),
+          );
+          return makeReport();
+        },
+      };
+      const useCase = makeUseCase(port, notifier);
+
+      await useCase.run({
+        alertId: new AlertId(ALERT_ID),
+        monitoringEvent: makeUnknownEvent(),
+      });
+
+      const saved = await alertRepo.findById(new AlertId(ALERT_ID));
+      expect(saved?.investigationReport).not.toBeNull();
+      expect(saved?.feedback?.isCorrect).toBe(true);
+      expect(saved?.feedback?.operatorNote).toBe("承認");
+    });
+  });
+
   describe("異常系：AI調査が例外を投げる", () => {
     it("fallback レポートが添付され status は OPEN で保存される", async () => {
       await alertRepo.save(makeUnknownAlert());
