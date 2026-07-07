@@ -54,6 +54,20 @@ function toStringArray(value: unknown): string[] {
 }
 
 /**
+ * 引用として無意味な充填トークン（実機で "N/A" を観測＝タスク D6）。「citation 必須」の圧で
+ * LLM が埋める定型の空値だけを落とす。未照合の実引用は落とさない（正直さの担保は表示側のまま）。
+ * 充填だけになった impact はマッパの空 citations ガードで丸ごと落ちる＝「N/A は根拠なし」と同義。
+ */
+const FILLER_CITATIONS = new Set(["n/a", "none", "null", "-", "なし", "特になし"]);
+
+/** 引用系配列（citations / evidenceBundle）の取り込み: 文字列のみ・空白のみと充填トークンを除く。 */
+function toCitationArray(value: unknown): string[] {
+  return toStringArray(value).filter(
+    (c) => c.trim() !== "" && !FILLER_CITATIONS.has(c.trim().toLowerCase()),
+  );
+}
+
+/**
  * relatedAlerts を {alertId, relation, rationale, citations} の配列へ正規化する。
  * 3 フィールドが揃った文字列要素のみ残す（型不正・欠落・配列でない場合は空配列）。
  * citations は空白文字列を除いて配列化（欠落・非配列は空配列＝根拠なし）。
@@ -76,7 +90,7 @@ function toRelatedAlerts(value: unknown): RelatedAlertPrimitives[] {
           alertId: o["alertId"],
           relation: o["relation"],
           rationale: o["rationale"],
-          citations: toStringArray(o["citations"]).filter((c) => c.trim() !== ""),
+          citations: toCitationArray(o["citations"]),
         },
       ];
     }
@@ -103,7 +117,7 @@ function toImpact(value: unknown): ImpactAssessmentPrimitives | undefined {
     scope: o["scope"],
     scale: o["scale"],
     affectedSubjects: toStringArray(o["affectedSubjects"]),
-    citations: toStringArray(o["citations"]).filter((c) => c.trim() !== ""),
+    citations: toCitationArray(o["citations"]),
   };
 }
 
@@ -128,7 +142,7 @@ function toEscalation(value: unknown): EscalationDraftPrimitives | undefined {
     reason: toStringField(o["reason"]),
     interimWorkaround: toStringField(o["interimWorkaround"]),
     severityRationale: toStringField(o["severityRationale"]),
-    evidenceBundle: toStringArray(o["evidenceBundle"]).filter((c) => c.trim() !== ""),
+    evidenceBundle: toCitationArray(o["evidenceBundle"]),
   };
 }
 
@@ -151,7 +165,7 @@ function toRemediationReview(value: unknown): RemediationReviewPrimitives | unde
     verdict,
     concerns: toStringArray(o["concerns"]).filter((c) => c.trim() !== ""),
     pullRequestUrl: toStringField(o["pullRequestUrl"]),
-    citations: toStringArray(o["citations"]).filter((c) => c.trim() !== ""),
+    citations: toCitationArray(o["citations"]),
   };
 }
 

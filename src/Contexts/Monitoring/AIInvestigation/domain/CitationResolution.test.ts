@@ -87,6 +87,38 @@ describe("buildCitationCatalog", () => {
     });
     expect(catalog).toEqual([{ id: "ec.checkout.failed", kind: "event" }]);
   });
+
+  it("payload 中の CVE 識別子はネスト・重複込みで cve として集め、NVD リンクを組む（シナリオ4）", () => {
+    const catalog = buildCitationCatalog({
+      errorEvent: {
+        eventName: "security.vulnerability.detected",
+        payload: {
+          cveId: "CVE-2021-3807",
+          repo: "ec-monitoring-agent",
+          vulnerabilities: [
+            { cveId: "CVE-2021-3807", severity: "CRITICAL" }, // 代表と重複
+            { cveId: "cve-2022-25883", severity: "HIGH" }, // 小文字でも大文字に正規化
+          ],
+        },
+      },
+    });
+    const cves = catalog.filter((e) => e.kind === "cve");
+    expect(cves).toEqual([
+      {
+        id: "CVE-2021-3807",
+        kind: "cve",
+        href: "https://nvd.nist.gov/vuln/detail/CVE-2021-3807",
+      },
+      {
+        id: "CVE-2022-25883",
+        kind: "cve",
+        href: "https://nvd.nist.gov/vuln/detail/CVE-2022-25883",
+      },
+    ]);
+    // CVE 以外の payload 値（repo 名・severity 等）はカタログに載せない（生データはノイズ）。
+    expect(catalog.some((e) => e.id === "ec-monitoring-agent")).toBe(false);
+    expect(catalog.some((e) => e.id === "CRITICAL")).toBe(false);
+  });
 });
 
 describe("resolveCitations", () => {
@@ -138,5 +170,25 @@ describe("resolveCitations", () => {
     const [ref] = resolveCitations(["75d9bdf5-3571-4be9-91ff-ff6daece74d3"], catalog);
     expect(ref?.kind).toBe("alert");
     expect(ref?.href).toBe("/alerts/75d9bdf5-3571-4be9-91ff-ff6daece74d3");
+  });
+
+  it("CVE 引用は装飾（JSONパス接頭辞）付きでも包含一致で cve に解決し NVD リンクが付く", () => {
+    const cveCatalog = buildCitationCatalog({
+      errorEvent: {
+        eventName: "security.vulnerability.detected",
+        payload: { vulnerabilities: [{ cveId: "CVE-2021-3807" }] },
+      },
+    });
+    // 実機で観測した装飾形（2026-07-07 シナリオ4）もそのまま解決できること。
+    const [decorated, bare] = resolveCitations(
+      ["errorEvent.payload.vulnerabilities[0].cveId:CVE-2021-3807", "CVE-2021-3807"],
+      cveCatalog,
+    );
+    expect(decorated?.kind).toBe("cve");
+    expect(bare).toEqual({
+      value: "CVE-2021-3807",
+      kind: "cve",
+      href: "https://nvd.nist.gov/vuln/detail/CVE-2021-3807",
+    });
   });
 });

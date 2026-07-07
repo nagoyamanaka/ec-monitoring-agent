@@ -24,7 +24,10 @@ export type CitationCatalogEntry = {
 
 /** カタログ構築に必要な調査文脈の部分形（InvestigationContext の構造的サブセット）。 */
 export type CitationCatalogContext = {
-  readonly errorEvent: { readonly eventName: string };
+  readonly errorEvent: {
+    readonly eventName: string;
+    readonly payload?: Record<string, unknown>;
+  };
   readonly knownPatterns?: ReadonlyArray<{ readonly name: string }>;
   readonly similarIncidents?: ReadonlyArray<{ readonly eventName: string }>;
   readonly infraEvidence?: InfraEvidence;
@@ -32,9 +35,35 @@ export type CitationCatalogContext = {
 };
 
 /**
+ * payload 中の CVE 識別子（値全体が CVE-YYYY-NNNN… の文字列）。orderId 等の生データ UUID と違い、
+ * CVE は NVD へ決定論リンクが組める検証可能IDなので、照合カタログに載せる唯一の payload 由来値
+ * （確信度の verifiable_cve 強シグナル・SecurityFindingView の NVD リンクと同じ判断）。
+ */
+const CVE_ID_PATTERN = /^CVE-\d{4}-\d{4,}$/i;
+
+/** payload 走査の深さ上限（vulnerabilities[] のネスト程度を想定・暴走防止）。 */
+const MAX_PAYLOAD_SCAN_DEPTH = 4;
+
+function collectCveIds(value: unknown, depth: number, out: Set<string>): void {
+  if (depth > MAX_PAYLOAD_SCAN_DEPTH || value == null) return;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (CVE_ID_PATTERN.test(trimmed)) out.add(trimmed.toUpperCase());
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectCveIds(item, depth + 1, out);
+    return;
+  }
+  if (typeof value === "object") {
+    for (const item of Object.values(value)) collectCveIds(item, depth + 1, out);
+  }
+}
+
+/**
  * 調査文脈から引用カタログを決定論で構築する。エントリは全て「システムが収集済みの事実」のみ
- * （受信イベント名／既知パターン名／commit sha／terraform アドレス・由来 sha／メトリクス名／
- * 類似事例のイベント名）。LLM の出力は一切入らない。
+ * （受信イベント名／payload 中の CVE 識別子／既知パターン名／commit sha／terraform アドレス・
+ * 由来 sha／メトリクス名／類似事例のイベント名／相関候補 alertId）。LLM の出力は一切入らない。
  */
 export function buildCitationCatalog(
   context: CitationCatalogContext,
@@ -42,6 +71,16 @@ export function buildCitationCatalog(
   const entries: CitationCatalogEntry[] = [];
   const eventName = context.errorEvent.eventName.trim();
   if (eventName !== "") entries.push({ id: eventName, kind: "event" });
+  // payload 由来は CVE 識別子のみ（検証可能ID・シナリオ4系）。NVD リンクは決定論で組む。
+  const cveIds = new Set<string>();
+  collectCveIds(context.errorEvent.payload, 0, cveIds);
+  for (const cveId of cveIds) {
+    entries.push({
+      id: cveId,
+      kind: "cve",
+      href: `https://nvd.nist.gov/vuln/detail/${cveId}`,
+    });
+  }
   for (const pattern of context.knownPatterns ?? []) {
     if (pattern.name.trim() !== "") entries.push({ id: pattern.name, kind: "pattern" });
   }

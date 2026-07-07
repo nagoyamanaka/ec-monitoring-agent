@@ -1,9 +1,16 @@
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
+import { buildCitationCatalog } from "../../domain/CitationResolution.js";
 
 /**
  * LLMへ送るプロンプトの構築（プロバイダ非依存）。
  * systemInstruction は固定。userPrompt はトークン予算（3,500）を超えないよう
  * similarIncidents を動的に削減する。
+ *
+ * citableIds（タスク D6）: 引用可能IDを「種類の説明」で縛る方式は実機で位置ラベル発明→
+ * payload UUID 引用→プレフィックス装飾/"N/A" 充填と失敗モードが移動し続けたため、
+ * 表示照合カタログ（buildCitationCatalog）と同一の全量リストをプロンプトに明示列挙し
+ * 「この中から選ぶ」方式へ転換した（relatedAlerts が candidateAlerts の alertId 列挙で
+ * 安定しているのと同じ構造）。リストは context から決定的に導出＝捏造面ゼロ。
  */
 
 export const SYSTEM_INSTRUCTION = `あなたはECシステムの障害調査AIエージェントです。
@@ -44,6 +51,14 @@ impact は「今回の障害ぶんの判断」です。fault は own（自社コ
 citations（参照した証拠ログ・類似インシデント・commit/terraform 差分の id）を載せ、証拠に無いことは
 推測で断定せず fault を "unknown" にしてください。citations を出せない（証拠で裏付けられない）場合は
 impact を省略してください（根拠なき影響主張は出さない）。
+入力JSONの citableIds は、システムが収集済み証拠から決定的に導出した「引用可能IDの全量リスト」です。
+すべての citations / evidenceBundle には、citableIds に含まれる文字列を**一字一句そのまま**載せてください。
+1要素＝1つのID。プレフィックスや説明を付けない・リストに無い文字列を作らないこと。リスト外の引用
+（位置ラベル "infraEvidence-1"・セクション名 "past_incidents"・充填値 "N/A"・payload の注文ID/UUID・
+散文の説明）は実在照合で全て「未照合」になり根拠として無効です。
+良い例: "checkout.db.pool_exhausted"（citableIds の要素そのまま）。
+悪い例: "scope: event 'checkout.db.pool_exhausted'"（装飾付き）・"N/A"・"errorEvent-1"。
+citableIds に根拠にできるIDが無い項目は、引用を捏造せずその項目自体を省略してください。
 escalation は「他責/運用案件（impact.fault=external、またはコード/IaC で直せず運用対応が要るもの）」の
 エスカレーション草案です。自責（fault=own かつ remediable=true）でコードで直せる場合は escalation を省略し、
 suggestedActions に修正方針を書いてください。他責/運用の場合は escalation に引き継ぎ先 team/owner/contact
@@ -76,7 +91,7 @@ confidence（0〜1）は「結論をどれだけ証拠で裏付けられたか�
   "suggestedPatternName": "自動昇格候補のパターン名（例: DB_CONNECTION_EXHAUSTION）",
   "remediable": true | false,
   "relatedAlerts": [{ "alertId": "...", "relation": "same_root_cause", "rationale": "関連の根拠（1文）", "citations": ["共有証拠の id（commit sha / terraform アドレス / メトリクス名）", "..."] }],
-  "impact": { "fault": "own" | "external" | "unknown", "scope": "影響範囲（1文）", "scale": "障害規模（1文）", "affectedSubjects": ["payment", "..."], "citations": ["証拠/類似事例の id", "..."] },
+  "impact": { "fault": "own" | "external" | "unknown", "scope": "影響範囲（1文）", "scale": "障害規模（1文）", "affectedSubjects": ["payment", "..."], "citations": ["入力に実在する値の逐語コピー（eventName / commit sha / メトリクス名 等）", "..."] },
   "escalation": { "team": "...", "owner": "...", "contact": "...", "reason": "...", "interimWorkaround": "...", "severityRationale": "...", "evidenceBundle": ["証拠/引用の id", "..."] },
   "remediationReview": { "verdict": "pass" | "concerns" | "reject", "concerns": ["懸念点1", "..."], "pullRequestUrl": "...", "citations": ["diff hunk/変更ファイル/テスト名 等", "..."] }
 }`;
@@ -98,6 +113,10 @@ export function buildUserPrompt(context: InvestigationContext): string {
     ? { candidateAlerts: context.candidateAlerts }
     : {};
 
+  // 引用可能IDの全量（表示照合カタログと同一ソース＝解決可能な引用だけをモデルに提示する）。
+  // similarIncidents を予算超過で削っても、その eventName は収集済み事実なのでリストには残す。
+  const citableIds = [...new Set(buildCitationCatalog(context).map((entry) => entry.id))];
+
   const full = JSON.stringify(
     {
       errorEvent: context.errorEvent,
@@ -106,6 +125,7 @@ export function buildUserPrompt(context: InvestigationContext): string {
       ...(context.infraEvidence ? { infraEvidence: context.infraEvidence } : {}),
       ...candidateAlerts,
       ...operatorFeedback,
+      citableIds,
     },
     null,
     2,
@@ -123,6 +143,7 @@ export function buildUserPrompt(context: InvestigationContext): string {
       ...(context.infraEvidence ? { infraEvidence: context.infraEvidence } : {}),
       ...candidateAlerts,
       ...operatorFeedback,
+      citableIds,
     },
     null,
     2,

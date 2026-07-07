@@ -179,6 +179,19 @@ describe("LLMOutputParser", () => {
       expect(impact?.citations).toEqual(["c1", "c2"]);
     });
 
+    it("citations の充填トークン（N/A 等）を落とす・充填のみなら空＝マッパの根拠なしガードに乗る（タスクD6）", () => {
+      // 「citation 必須」の圧で LLM が "N/A" を埋めた実機観測（2026-07-07 シナリオ2）への防御。
+      const filler = JSON.stringify({
+        summary: "x", confidence: 0.5, severity: "INFO",
+        investigationSteps: [], suggestedActions: [], suggestedPatternName: "",
+        impact: { fault: "own", scope: "s", scale: "n", affectedSubjects: [], citations: ["N/A", "ec.db.pool", "none", "なし"] },
+        escalation: { team: "t", owner: "", contact: "", reason: "", interimWorkaround: "", severityRationale: "", evidenceBundle: ["n/a"] },
+      });
+      const parsed = parseLLMOutput(filler);
+      expect(parsed?.impact?.citations).toEqual(["ec.db.pool"]);
+      expect(parsed?.escalation?.evidenceBundle).toEqual([]);
+    });
+
     it("escalation は欠落で undefined・揃った構造はそのままパースする", () => {
       // 欠落（旧スキーマ互換）
       expect(parseLLMOutput(validJson)?.escalation).toBeUndefined();
