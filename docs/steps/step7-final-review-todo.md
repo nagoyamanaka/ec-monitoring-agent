@@ -18,6 +18,10 @@
 | A3  | 生ID露出の人間語化                            | ★★★☆☆         | エージェント             | 済（予報引用チップ=desc主／subject生IDをmonoメタ行へ・アラート詳細のAI推定パターン機械IDを人間語化＋生IDをパターンIDメタ行へ・UT+2 369緑・tsc緑） |
 | B3  | 動画サムネイル作成                            | ★★★☆☆         | エージェント             | 済（予報カードを1.92倍クローズアップ・左上Kizashi・下部Heroコピー・1280×720・豆腐0／YouTube設定は人間H3）                                          |
 | A4  | 予兆ページ導入文の圧縮＋Heroコピー            | ★★☆☆☆         | エージェント             | 未                                                                                                                                                |
+| D1  | 提出文の plan リンク主張を正確化              | ★★★★☆         | エージェント             | 済（submission 76行目を「実在の draft PR・過去事例」へ修正・planを実在リンク列挙から除外）                                                        |
+| D2  | terraform plan の永続化＋PRコメント（CIのみ） | ★★★☆☆         | エージェント＋人間(CI確認) | 未                                                                                                                                                |
+| D3  | plan の record口への自動投入                  | ★★☆☆☆（D2後） | エージェント＋人間(CI確認) | 未                                                                                                                                                |
+| D4  | plan リンク入り予報の再撮影                   | ★☆☆☆☆（余力） | エージェント             | 未（現行 take003 はリンク無し状態の撮影＝映像に虚偽なし・D3完了かつ時間が余った場合のみ）                                                          |
 | A5  | 調査中の証拠パネルの逐次表示                  | ★☆☆☆☆（余力） | エージェント             | 未                                                                                                                                                |
 
 ---
@@ -200,6 +204,45 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 - 既知: 完全一致（EXACT）・承認済み90%・総6件=既知即決1+AI調査5+学習1。
 - CVE: 「脆弱性の検知」（trivy）・draft PR #29（CVE-2021-3807／CVE-2022-25883・`ai-remediation[bot]` 2コミット）。
 - **文言修正**: カット2の引用チップ記述を実物へ（外部リンク付き＝`pr-55` の draft PR チップ／`plan-1` はTerraformプランで外部PRなし・「open PR」→「draft PR」・チップ順を明記）。
+
+---
+
+## D. terraform plan 取り込み経路（「plan済み・未適用」を実装で本物にする）
+
+**背景（2026-07-07 判明）**: 予報の引用チップ `plan-1`（`Cloud SQL max_connections 100→40 縮小・plan済み未適用`）は `ForecastPendingPlanSeed.ts` の純合成 seed。参照先の `google_sql_database_instance.ec_db` は **infra/terraform に存在しない**（本番DBはVM上のMongo）。現行 `terraform.yml` は PR で plan（検証のみ・成果物破棄）→ main merge で environment 承認後 apply であり、「保存された plan が適用待ち」という状態・その取り込みは未実装。提出文の「実在の plan へ飛べる」は過大主張だった（→D1で修正済み）。一方 seed のコメント自身が「実機では CI の plan パイプラインが同じ record 口へ積む想定」と謳っており、これを実装で本物にするのが本章。plan-on-PR のコメント投稿・plan成果物の保存は Atlantis/Terraform Cloud 等で主流の実務プラクティスであり、「自リポジトリの CI シグナルを自分で取り込む」特徴④ドッグフーディング（Trivy→検知）の予兆版として物語も強化する。
+
+**ガードレール（全タスク共通）**: flagship の `plan-1` seed・subject 語彙 `google_sql_database_instance.ec_db` は **変更禁止**（`ResolvedAlertSeed` の `report.subject` と MEMORY 突合ペア・動画/スクショ撮影済み）。実投入 plan は別シグナルとして共存させる。デモ値が合成であることは「正直さの原則」（合成入力バッジ）で開示済みのまま維持。
+
+### D1 提出文の plan リンク主張を正確化 ★★★★☆　✅
+
+**実施記録（2026-07-07）**: `protopedia-submission.md` 76行目「対処先（実在の PR・plan・過去事例）へ飛べます」→「対処先（実在の draft PR・過去事例）へ飛べます」。plan を実在リンクの列挙から除外（plan-1 チップは外部リンク無しで表示される実態と一致）。特徴①冒頭の「未適用の Terraform plan…を突合し」はシステムが受け付ける**シグナル種の説明**であり虚偽でないため据置。動画 `script.md` は撮影メモに「plan-1 はTerraformプランで外部PRなし」と明記済みで修正不要。
+
+### D2 terraform plan の永続化＋PRコメント（CIのみ・バックエンド変更なし） ★★★☆☆
+
+**内容**: `.github/workflows/terraform.yml` の plan job を主流の plan-visible 形へ:
+
+1. `terraform plan -out=tfplan -no-color -input=false -lock-timeout=5m` に変更し、続けて `terraform show -json tfplan > plan.json` と `terraform show -no-color tfplan > plan.txt` を生成。
+2. `actions/upload-artifact` で `plan.json`/`plan.txt` を保存（retention 短めで可）。
+3. PR イベント時のみ、`actions/github-script` で plan.txt の要約（`resource_changes` の address/action と行数上限つき本文を `<details>` 折りたたみ）を PR コメントに upsert（`permissions: pull-requests: write` は設定済み。既存コメントを探して更新し、コメント増殖させない）。
+4. `concurrency: terraform-prod` の直列化はそのまま（plan/apply のロック競合対策コメント参照）。apply 側は現行どおり（保存 planfile の持ち回しはしない＝main で再 plan して apply。ここまで変えると承認フロー再検証が必要で締切に合わない）。
+
+**検証**: WIF のためローカル実行不可。infra/terraform 配下を触るダミー draft PR（例: コメント1行追加）で plan コメントが付くことを人間が確認 → ダミーPRはクローズ。
+**受け入れ条件**: infra を触る PR に plan 差分コメントが自動投稿され、Actions artifact に plan.json が残る。既存の plan/apply ジョブの成否に影響なし。
+
+### D3 plan の record口への自動投入 ★★☆☆☆（D2 完了後・時間があれば）
+
+**内容**: D2 の `plan.json` から `resource_changes` を `PendingPlan` 型（`address`/`action`/`attributeDeltas`/`plannedAt`/`summary`/`url`=PR html_url）へ変換し、バックエンドの `pendingInfraPlanStore.record()`（`BackofficeApp.ts:208` 付近）に到達する ingest エンドポイントへ CI から POST する。これで「未適用 plan が予兆シグナル（FUTURE_CHANGE・url付き＝証拠を開く可）として現れる」が実配線になる。
+
+**論点（着手前に判断すること）**:
+- **認証**: 本番は IAP 背後。CI からは deployer SA の OIDC で IAP audience トークンを取るか、検知ソースの peer ingest と同型の内部認証口を使う。ここが一番の工数リスク——半日超えそうなら D3 は見送り、D2 止まりで提出してよい（D2 だけでも「plan の永続化・可視化」は本物）。
+- **揮発性**: store は InMemory のため再起動で消える。flagship は `DEMO_ENABLED` の seed 再投入で復元されるので影響なし。実投入分は「PR が開いている間に再投入され得る」程度の割り切りで可。
+- **seed との共存**: ガードレール参照。`plan-1` には触れない。実投入 plan は別 id で共存し、subject が一致しない限り flagship の物語には影響しない。
+
+**受け入れ条件**: infra を触る PR を開く→（予報再生成後）シグナルソースに url 付き FUTURE_CHANGE が現れ、引用された場合チップの「証拠を開く」が実 PR に解決する。既存 flagship 予報（plan-1/pr-55/sch-1/inc-1/inc-2）は不変。
+
+### D4 plan リンク入り予報の再撮影 ★☆☆☆☆（余力のみ）
+
+現行 take003 は plan-1 チップに外部リンクが無い状態で撮影済み＝**映像自体に虚偽なし**（ユーザー判断: このまま進める）。D3 まで完了し、かつ締切まで余裕がある場合のみ、part1（予報）だけ再撮影を検討。再撮影時は C2 の落とし穴（dedup・`POST /demo/reset` 先行）に注意。
 
 ---
 
