@@ -19,8 +19,8 @@
 | B3  | 動画サムネイル作成                            | ★★★☆☆         | エージェント             | 済（予報カードを1.92倍クローズアップ・左上Kizashi・下部Heroコピー・1280×720・豆腐0／YouTube設定は人間H3）                                          |
 | A4  | 予兆ページ導入文の圧縮＋Heroコピー            | ★★☆☆☆         | エージェント             | 未                                                                                                                                                |
 | D1  | 提出文の plan リンク主張を正確化              | ★★★★☆         | エージェント             | 済（submission 76行目を「実在の draft PR・過去事例」へ修正・planを実在リンク列挙から除外）                                                        |
-| D2  | terraform plan の永続化＋PRコメント（CIのみ） | ★★★☆☆         | エージェント＋人間(CI確認) | 未                                                                                                                                                |
-| D3  | plan の record口への自動投入                  | ★★☆☆☆（D2後） | エージェント＋人間(CI確認) | 未                                                                                                                                                |
+| D2  | terraform plan の永続化＋PRコメント（CIのみ） | ★★★☆☆         | エージェント＋人間(CI確認) | 済（plan.txt＋redacted JSONをartifact保存・PRコメントupsert・生plan.jsonはsensitive平文を含むため不保存／要人間=ダミーPRでCI確認）                |
+| D3  | plan の record口への自動投入                  | ★★☆☆☆（D2後） | エージェント＋人間(CI確認) | 済（POST /ingest/terraform-plan 新設・CIからredacted差分を自動POST・UT+9 1065緑・tsc緑／要人間=D2と同じダミーPRで疎通確認）                       |
 | D4  | plan リンク入り予報の再撮影                   | ★☆☆☆☆（余力） | エージェント             | 未（現行 take003 はリンク無し状態の撮影＝映像に虚偽なし・D3完了かつ時間が余った場合のみ）                                                          |
 | A5  | 調査中の証拠パネルの逐次表示                  | ★☆☆☆☆（余力） | エージェント             | 未                                                                                                                                                |
 
@@ -213,6 +213,12 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 
 **ガードレール（全タスク共通）**: flagship の `plan-1` seed・subject 語彙 `google_sql_database_instance.ec_db` は **変更禁止**（`ResolvedAlertSeed` の `report.subject` と MEMORY 突合ペア・動画/スクショ撮影済み）。実投入 plan は別シグナルとして共存させる。デモ値が合成であることは「正直さの原則」（合成入力バッジ）で開示済みのまま維持。
 
+**seed 撤去は不可（2026-07-07 判断）**: 「今打てる先手」＝「sch-1 完了まで plan-1 の適用を延期」であり、先手提示・過去事例突合（inc-1/inc-2 と同 subject）・確信度95%・pr-55 とのワンセット物語のすべてが plan-1 に依存。撤去＝flagship 再設計＋全面再撮影になる。整理としても嘘ではない: `ec_db` は**監視対象EC（架空環境）のインフラ**であって Kizashi 自身のインフラではなく、決済シナリオの決済システムが実在しないのと同格の合成入力（バッジ開示済み）。Kizashi 側の処理（ストア照合・偽引用破棄・Gemini突合）は実経路。
+
+**想定問答（審査で指摘された場合・H4 リハに含める）**:
+> Q: この Terraform plan は実在するのか？
+> A: デモの監視対象（EC）は合成環境で、plan もその一部——UI のバッジで明示しています。ただし Kizashi 側は本物で、plan の取り込み口（record口・URL付き引用解決）は実装済み、引用の実在照合はシグナルストアに対して実際に走ります。実在リンクへ解決する引用は pr-55（実 draft PR）と過去事例で確認できます。実運用では CI の plan パイプラインが同じ口へ構造化差分を積む設計です（D2/D3 実施済みならその旨を添える）。
+
 ### D1 提出文の plan リンク主張を正確化 ★★★★☆　✅
 
 **実施記録（2026-07-07）**: `protopedia-submission.md` 76行目「対処先（実在の PR・plan・過去事例）へ飛べます」→「対処先（実在の draft PR・過去事例）へ飛べます」。plan を実在リンクの列挙から除外（plan-1 チップは外部リンク無しで表示される実態と一致）。特徴①冒頭の「未適用の Terraform plan…を突合し」はシステムが受け付ける**シグナル種の説明**であり虚偽でないため据置。動画 `script.md` は撮影メモに「plan-1 はTerraformプランで外部PRなし」と明記済みで修正不要。
@@ -229,6 +235,15 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 **検証**: WIF のためローカル実行不可。infra/terraform 配下を触るダミー draft PR（例: コメント1行追加）で plan コメントが付くことを人間が確認 → ダミーPRはクローズ。
 **受け入れ条件**: infra を触る PR に plan 差分コメントが自動投稿され、Actions artifact に plan.json が残る。既存の plan/apply ジョブの成否に影響なし。
 
+**実施記録（2026-07-08）**: `.github/workflows/terraform.yml` の plan job を改修（apply job は不変・`needs: plan`/environment 承認ゲート維持）。
+
+- `terraform plan -out=tfplan` 化＋「Render plan」ステップで `plan.txt`（表示用）と `plan-changes.json`（構造化差分）を生成。
+- **受け入れ条件からの安全側変更**: 生 `terraform show -json`（plan.json）は Secret Manager の `secret_data`（INGEST_TOKEN 実値）等の **sensitive 値を平文で含む**（テキスト版と違いマスクされない）。公開リポジトリでは artifact を誰でも取得できるため、**生 plan.json は保存せず**（生成後即 rm）、`before_sensitive`/`after_sensitive` マスクで値を `"(sensitive)"` へ redact した `plan-changes.json` を保存する。redact は `.github/scripts/tfplan-to-pending-plan.jq` に集約（managed のみ・no-op/read 除外・`["delete","create"]`→replace 合成・値200字/deltas20件/リソース50件上限）。合成 plan.json フィクスチャで sensitive 置換・data source 除外・空出力（変更0件）を検証済み。
+- artifact: `terraform-plan-<run_id>-<run_attempt>`（plan.txt＋plan-changes.json・retention 7日）。
+- PR コメント: `actions/github-script@v7` でマーカー `<!-- terraform-plan-comment -->` を upsert（増殖なし）。本文＝リソース変更一覧（address — action）＋ `<details>` 内に plan.txt 全文（55,000字で切り詰め・sensitive は terraform がマスク済み）。`continue-on-error: true` で必須 plan job の成否に影響させない。
+- `setup-terraform` の wrapper が stdout リダイレクトを壊す既知問題があるため plan job のみ `terraform_wrapper: false`（step outputs 未使用なので安全・apply job は不変）。
+- **残（人間）**: infra を触るダミー draft PR で plan コメント・artifact・（D3の）ingest を確認 → クローズ。
+
 ### D3 plan の record口への自動投入 ★★☆☆☆（D2 完了後・時間があれば）
 
 **内容**: D2 の `plan.json` から `resource_changes` を `PendingPlan` 型（`address`/`action`/`attributeDeltas`/`plannedAt`/`summary`/`url`=PR html_url）へ変換し、バックエンドの `pendingInfraPlanStore.record()`（`BackofficeApp.ts:208` 付近）に到達する ingest エンドポイントへ CI から POST する。これで「未適用 plan が予兆シグナル（FUTURE_CHANGE・url付き＝証拠を開く可）として現れる」が実配線になる。
@@ -239,6 +254,15 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 - **seed との共存**: ガードレール参照。`plan-1` には触れない。実投入 plan は別 id で共存し、subject が一致しない限り flagship の物語には影響しない。
 
 **受け入れ条件**: infra を触る PR を開く→（予報再生成後）シグナルソースに url 付き FUTURE_CHANGE が現れ、引用された場合チップの「証拠を開く」が実 PR に解決する。既存 flagship 予報（plan-1/pr-55/sch-1/inc-1/inc-2）は不変。
+
+**実施記録（2026-07-08）**: 論点だった認証は新規機構不要で解決——既存の security-scan / remediation-result と同じ **`INGEST_URL`＋`x-ingest-token` 直 POST**（app.yml の Trivy ingest で CI→本番到達の実績あり・IAP 経由ではなく edge の ingest 境界）。
+
+- バックエンド: `POST /ingest/terraform-plan` 新設。`TerraformPlanIngestPostController`（認証・パース・HTTP 応答のみの薄い境界・SecurityScanIngest と同型）→ `TerraformPlanTranslator`（`application/RecordPendingPlan/`・源固有形を知る唯一の場所・構造検証と上限・不正は 400）→ `pendingInfraPlanStore.record()`（seed と同じ口）。`IngestDependencies` に store を追加配線。
+- `InMemoryPendingInfraPlanStore.record()` に **同一 url は置換**を追加（同じ PR への push のたびに plan シグナルが増殖しない）。seed は url なし＝常に素通しで flagship（plan-1）の挙動不変。
+- CI: terraform.yml plan job の PR イベント時のみ、D2 の redact 済み `plan-changes.json` をそのまま payload として `curl -fsS -X POST $INGEST_URL/ingest/terraform-plan`（`continue-on-error: true`・INGEST_URL 未設定/変更0件はスキップ）。summary は「terraform plan（PR #N）: X件のリソース変更（先頭address 他）・apply待ち」＝引用チップ desc にそのまま出る人間語。
+- ガードレール順守: `ForecastPendingPlanSeed`・subject 語彙 `google_sql_database_instance.ec_db` は不変。実投入 plan は url 付きの別エントリとして共存（PendingPlanSignalSource の id は listPending 順の連番なので、実投入があると seed の id は plan-2 になり得るが、突合・引用は subject/生成時点のシグナル集合で閉じるため物語に影響なし）。
+- 検証: 翻訳器 UT6件＋store UT3件を追加（全体 1065件緑・tsc 緑）。ワークフローは YAML 構造検証＋jq をフィクスチャで実行確認。**terraform.yml の `secrets.INGEST_URL/INGEST_TOKEN` は app.yml と同一 repo secrets のため追加設定不要**。
+- **残（人間）**: D2 のダミー draft PR で ①plan コメント ②artifact ③ingest 202（Actions ログの `{resourceCount,summary,url}` 出力）④本番 `POST /forecast` 再生成後に url 付き FUTURE_CHANGE が引用され得ること、を確認 → PR クローズ。store は InMemory のため edge 再起動で実投入分は消える（seed は DEMO_ENABLED で復元・割り切りは本文の論点どおり）。
 
 ### D4 plan リンク入り予報の再撮影 ★☆☆☆☆（余力のみ）
 
