@@ -29,7 +29,7 @@ const DB_POOL_ARCHIVE_ALERT_ID = "5eed0000-0000-4000-8000-000000000001";
 // 主シグナル（pending plan / schedule seed）の subject とトークン突合する語彙で明示する。
 // 引用（citations）は incident.<この id> → GET /alerts/:id の実在 Alert に解決できる。
 export const FORECAST_MEMORY_SEED_ALERT_IDS = {
-  // 過去に同じ Cloud SQL リソースの接続上限縮小で枯渇した事例（pending plan と同 subject）
+  // 過去に同じバックボーン VM（Mongo 同居）の縮小で枯渇した事例（pending plan と同 subject）
   poolShrinkRegression: "5eed0000-0000-4000-8000-000000000002",
   // 週末セールの checkout 負荷で接続待ちが急増した事例（schedule seed と同 subject）
   weekendCheckoutPeak: "5eed0000-0000-4000-8000-000000000003",
@@ -135,8 +135,8 @@ function buildResolvedPaymentDeclinedAlert(): Alert {
   });
 }
 
-// 前回の max_connections 縮小 apply がピーク帯の枯渇を招いた事例。
-// subject は terraform リソース address（pending plan seed と同一語彙）＝「同じリソースを
+// 前回のバックボーン VM 縮小 apply がピーク帯の枯渇を招いた事例。
+// subject は terraform リソース address（pending plan seed と同一語彙）＝「同じ VM を
 // また縮小しようとしている」未来シグナルと直接突合する（forecastSubject のトークン照合）。
 function buildPoolShrinkRegressionAlert(): Alert {
   const pastEvent = new MonitoringEvent({
@@ -147,27 +147,27 @@ function buildPoolShrinkRegressionAlert(): Alert {
     category: MonitoringEventCategory.application(),
     severity: AlertSeverity.critical(),
     source: "ec-backend",
-    payload: { symptom: "connection acquisition timeout after max_connections shrink" },
+    payload: { symptom: "connection acquisition timeout after backbone VM downsize" },
   });
 
   const report = new InvestigationReport({
     summary:
-      "Cloud SQL max_connections の縮小適用後、ピーク時間帯に接続プールが枯渇し新規接続の取得がタイムアウト。縮小変更をロールバックして解消済み。",
+      "バックボーン VM（Mongo 同居）の machine_type 縮小適用後、メモリ/接続を捌けずピーク時間帯に接続が枯渇し新規接続の取得がタイムアウト。machine_type を元に戻して解消済み。",
     confidence: 0.92,
     severity: AlertSeverity.critical(),
     investigationSteps: [
-      "直近の terraform 適用差分を確認（max_connections 縮小を特定）",
-      "接続数メトリクスと取得待ちタイムアウトの相関を確認",
+      "直近の terraform 適用差分を確認（VM machine_type 縮小を特定）",
+      "接続数・メモリメトリクスと取得待ちタイムアウトの相関を確認",
     ],
     suggestedActions: [
-      "max_connections の縮小をロールバックする",
-      "接続上限を変更する際はピーク帯の実測接続数を事前確認する",
+      "machine_type の縮小をロールバックする",
+      "VM を縮小する際はピーク帯の実測接続数・メモリ使用量を事前確認する",
     ],
     suggestedPatternName: "DB_CONNECTION_POOL_EXHAUSTION",
     reviewStatus: ReviewStatus.approved(),
     investigatedAt: new Date("2026-05-30T11:55:00.000Z"),
     isFallback: false,
-    subject: "google_sql_database_instance.ec_db",
+    subject: "google_compute_instance.backbone",
   });
 
   const base = Alert.createAsUnknown({
@@ -180,7 +180,7 @@ function buildPoolShrinkRegressionAlert(): Alert {
     status: "RESOLVED",
     feedback: {
       isCorrect: true,
-      operatorNote: "max_connections をロールバックして解消（接続上限の縮小が直接原因）",
+      operatorNote: "machine_type を戻して解消（VM 縮小によるメモリ/接続不足が直接原因）",
     },
     correctFeedbackCount: 1,
   });

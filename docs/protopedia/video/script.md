@@ -2,7 +2,8 @@
 
 > 構成の正: `docs/steps/step6-submission-prompt.md` B-3 の骨子を **2分に圧縮**したもの（競合作品は1分前後が多く、完走率優先で2:00上限。開幕60秒=予兆は `step6-final-sprint-strategy.md` §5 のまま）。
 > 運用: 録画テイクが撮れてから文言を微修正する骨組み確定版。**seed 実物の数値（confidence・チップ文言・件数）と食い違ったらテイク側に合わせて直す**。
-> **take003 突合済み（2026-07-07・step7 C3）**: 各カットの撮影メモに「**実測（take003）**」で on-screen 実測値を記録。ナレーションは揮発数値を言わない設計のため矛盾なし。修正はカット2の引用チップ記述（外部リンク付き＝pr-55 draft／plan-1はプランで外部PRなし）のみ。
+> **take003 突合済み（2026-07-07・step7 C3）**: 各カットの撮影メモに「**実測（take003）**」で on-screen 実測値を記録。ナレーションは揮発数値を言わない設計のため矛盾なし。
+> **⚠ Option B 変更（2026-07-08）**: flagship plan-1 を合成 Cloud SQL（`ec_db` 100→40・外部リンクなし）から**実在リソースの本物 plan**（バックボーンVM `e2-standard-2→e2-small`＝実 PR #83）へ張り替え、plan-1 チップに「証拠を開く」リンクを追加。**カット1（予報）・カット2（引用チップ）は要再撮影**（take003 は旧 Cloud SQL 表示・リンクなし）。ナレは揮発値・リソース名を言わない設計なので台本本文の音声は不変、on-screen のみ差分。
 
 > 話速想定: 約300字/分（合成音声・ゆっくりめ）＝全体約500字。
 > 撮影: `scripts/video-capture/` がパート単位の webm（`output/takeNNN/part1-forecast.webm` 等）とスクショを自動採取する。パート→カット対応は下表。
@@ -85,7 +86,8 @@
 - **画面**: 「未マージPR」の引用チップ（`pr-55`・`[draft] chore(db): cap DB connection pool`）の「証拠を開く」をクリック → 実在の draft PR に解決 → 戻って「🛡 今打てる先手」を静止。
 - **ナレーション**（79字）: 根拠は引用。プール縮小の未マージPR、週末セールの負荷予定、過去の同型障害。偽の引用は実在照合で自動で落ち、さらに、いま打てる先手まで提示します。
 - **テロップ**: 引用は実在照合済み・偽引用は自動除外
-- **撮影メモ**: PR チップの解決先は実 draft PR（branch `chore/db-connection-pool-cap`）。撮影前にリンク切れ確認。**実測（take003）**: 引用レーンは3系統6件＝未来の変更（plan-1 `100→40`／pr-55 draft）・スケジュール（sch-1 週末セール checkout x5）・過去の同型事例（inc-1／inc-2）。ナレ3列挙＝この3系統に一致。外部リンク付きは pr-55 チップ（plan-1 はTerraformプランで外部PRなし）。先手＝「高負荷スケジュール(sch-1)完了まで縮小プラン(plan-1)適用を延期」。
+- **撮影メモ**: PR チップの解決先は実 draft PR（branch `chore/db-connection-pool-cap`）。撮影前にリンク切れ確認。**⚠ Option B で要再撮影（take003 は旧内容）**: plan-1 を実在リソースの本物 plan（バックボーンVM `e2-standard-2→e2-small` 縮小＝PR #83）に張り替え、plan-1 チップにも「証拠を開く」リンクを付けた。新on-screen: 引用レーンは3系統＝未来の変更（plan-1 VM 縮小＝**実 PR #83 にリンク**／pr-55 draft）・スケジュール（sch-1 週末セール checkout x5）・過去の同型事例（inc-1／inc-2＝過去に同じ VM 縮小で枯渇）。**外部リンク付きは pr-55 と plan-1 の両方**。先手＝「高負荷スケジュール(sch-1)完了まで VM 縮小プラン(plan-1)適用を延期」。
+- **⚠ 撮影前の GitHub リタイトル（人間・VM 物語への整合）**: ①**PR #55** を「[現行] cap DB connection pool (max_connections 100→40)…」→「**chore(db): cap Mongo connection pool (maxPoolSize 100→40) to fit downsized backbone VM**」へ（diff=MongoClientFactory maxPoolSize 40 のままタイトルだけ実態に合わせ、VM 縮小に合わせたプール縮小＝flagship と同一物語に編入。チップ desc/subject は PR タイトル直写しなのでリタイトルだけで UI が直る）。②**PR #83** のタイトルから「（デモ証拠PR・DO NOT MERGE）」を外し「chore(infra): バックボーンVMをコスト最適化で e2-small に縮小」へ（pr-83 チップにも title が直写しされるため。draft 状態＋本文の DO NOT MERGE 警告は維持＝draft はマージボタンが塞がれるので安全）。リタイトル後に予報を再生成してから撮影。
 
 ### カット3｜0:36–0:48｜発火 → 未知分類
 
