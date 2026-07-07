@@ -12,9 +12,9 @@
 
 ---
 
-## 概要（100字以内・88字）
+## 概要（100字以内・84字）
 
-起きる前のリスクを根拠付きで予報し、起きた後の原因調査・報告はAIエージェントが肩代わり。人の承認で学習し、既知の障害は1秒で判定。既存監視の上に乗るAI-SREエージェント。
+障害は、起きる前に終わらせる。リスクを根拠付きで予報し、起きた後の調査・報告はAIが肩代わり。承認で学習し、既知は1秒で判定。既存監視の上に乗るAI-SREエージェント。
 
 ---
 
@@ -25,64 +25,20 @@
 
 ---
 
-### システム構成
+### システム構成（アップロード図の補足・そのまま貼る）
 
-```mermaid
-flowchart LR
-  subgraph cloudrun["Cloud Run"]
-    FE["backoffice-frontend<br/>(React 配信)"]
-    EDGE["backoffice-edge<br/>(公開エッジ / プロキシ)"]
-  end
+> ⚠ **ProtoPedia は mermaid をレンダリングしない**ため、コードブロックは貼らない。図はアップロードした `architecture.png` が正で、以下は図中の①〜⑥に対応するテキスト補足のみ。
 
-  subgraph gce["Compute Engine"]
-    ECB["ec-backend"]
-    BOB["backoffice-backend"]
+作ったのは、既存の監視基盤の**上に構築した**「アラート発生後の対応を自動化するパイプライン」と、その手前でリスクを事前に知らせる「予報」です。障害の検知そのものは実装しておらず、Cloud Monitoring など既存の監視基盤に委ねています。
 
-    MQ["RabbitMQ"]
-    DB["MongoDB"]
-    ES["Elasticsearch"]
-    VK["Valkey"]
-  end
+- **① ingest（3系統）** — 監視対象サービスの業務イベント（RabbitMQ 購読）・Cloud Monitoring の webhook・CI（Trivy）のスキャン結果 POST。同型アラートの嵐は 1件×N に集約。
+- **② 分類** — 既知は1秒未満・AIコストゼロで即確定。類似は confidence 付き。未知だけ次へ。
+- **③ AI 調査（未知のみ）** — Google ADK の 8 エージェント（Gemini 2.5 Pro / Vertex AI）が Cloud Logging・Terraform 適用差分・GitHub コミット diff・過去事例DB を read-only で横断し、根拠リンク付きレポートを生成。
+- **④ 人間レビュー** — React 観測コンソール（SSE ライブ中継）。承認で学習・却下で再調査・頻出パターンは既知へ昇格。
+- **⑤ 予兆ブリーフィング** — 未マージ PR・未適用 Terraform plan・負荷予定と過去の障害の記憶を突合し、起きる前に予報。引用は実在シグナルと照合済みのものだけ表示。
+- **⑥ 修正（write 隔離）** — GitHub Actions 上で AI が実コードを修正し draft PR。自動マージなし・人間承認ゲート。
 
-  subgraph gcp["GCP Managed"]
-    CMON["Cloud Monitoring"]
-    CLOG["Cloud Logging"]
-    VAI["Vertex AI<br/>Gemini 2.5 Pro"]
-  end
-
-  GHA["GitHub Actions"]
-
-  %% 通信
-  %% EC アプリイベントの検知経路（peer ingest / RabbitMQ 購読）
-  ECB -->|DomainEvent| MQ
-  MQ -->|Subscribe| BOB
-
-  %% Cloud Monitoring の閾値発火（webhook ingest）
-  CMON -->|Webhook| EDGE
-  EDGE --> BOB
-
-  %% ログは検知ではなく AI 調査の read-only 証拠ソース
-  ECB -->|ログ出力| CLOG
-  BOB -->|ログ出力| CLOG
-  BOB -.読み取り（証拠）.-> CLOG
-
-  BOB --> VAI
-
-  GHA -->|Deploy| FE
-  GHA -->|Deploy| EDGE
-  GHA -->|Restart| ECB
-  GHA -->|Restart| BOB
-
-  GHA -->|Security Scan| EDGE
-```
-
-※ Architecture.mdのデプロイ構成から流用
-
-### システム全体の処理フロー
-
-docs/protopedia/assets/architecture.png
-
-作ったのは、既存の監視基盤の**上に構築した**「アラート発生後の対応を自動化するパイプライン」と、その手前でリスクを事前に知らせる「予報」機能です。障害の検知そのものは実装しておらず、そこは Cloud Monitoring など既存の監視基盤に委ねています。
+稼働基盤: Cloud Run（フロント/エッジ）＋ Compute Engine（EDA 常駐系）／データ: MongoDB・RabbitMQ・Elasticsearch・Valkey／IaC: Terraform／AI: Gemini 2.5 Pro（Vertex AI）＋ Google ADK。
 
 ---
 
