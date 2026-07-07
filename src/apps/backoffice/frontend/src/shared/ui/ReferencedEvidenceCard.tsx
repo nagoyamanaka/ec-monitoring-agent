@@ -43,7 +43,9 @@ export interface ReferencedEvidenceCardProps {
   /** 解決済みタイトル（人間語）。null/未指定なら本文のみ。 */
   title?: string | null;
   /** 根拠・説明文。 */
-  description: string;
+  description?: string;
+  /** 生ID等の補足メタ行（font-mono・最小主張）。人間語の title/description の下に小さく出す。 */
+  meta?: string;
   /** リンクフッターのラベル。既定「詳細を開く」。 */
   linkLabel?: string;
   /** SPA 内リンク先（例: /alerts/:id）。onClick/href より優先度は onClick > to > href。 */
@@ -61,6 +63,7 @@ function CardBody({
   timestamp,
   title,
   description,
+  meta,
   linkLabel,
   hasLink,
 }: ReferencedEvidenceCardProps & { hasLink: boolean }) {
@@ -78,7 +81,14 @@ function CardBody({
           {title}
         </p>
       )}
-      <p className="mt-1 text-xs leading-snug text-slate-300">{description}</p>
+      {description && (
+        <p className="mt-1 text-xs leading-snug text-slate-300">{description}</p>
+      )}
+      {meta && (
+        <p className="mt-1 truncate font-mono text-[11px] text-slate-500">
+          {meta}
+        </p>
+      )}
       {hasLink && (
         <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-cyan-300">
           <LinkIcon className="shrink-0" />

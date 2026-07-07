@@ -65,8 +65,8 @@ export function CitationList({ citations }: CitationListProps) {
                 chipLabel={c.kindLabel}
                 chipTone={citationTone(c.kind)}
                 timestamp={c.when}
-                title={c.subject}
-                description={c.desc}
+                title={c.desc}
+                meta={c.subject}
                 to={
                   c.alertId
                     ? `/alerts/${encodeURIComponent(c.alertId)}`

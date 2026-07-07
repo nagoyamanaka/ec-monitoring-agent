@@ -14,6 +14,39 @@ describe("AlertCardExpanded", () => {
     expect(screen.getByText("ロールバック")).toBeInTheDocument();
   });
 
+  it("AI 推定パターン名が機械 ID（UPPER_SNAKE）なら見出しは人間語・生IDはメタ行に降格（A3）", () => {
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({
+          report: makeReport({
+            suggestedPatternName: "TERRAFORM_DB_MAX_CONNECTIONS_REDUCTION",
+          }),
+        })}
+      />,
+    );
+    // 見出し行はスペース区切り小文字の人間語（snake_case を主表示に出さない）
+    const heading = screen.getByText("terraform db max connections reduction");
+    expect(heading).toBeInTheDocument();
+    expect(heading).toHaveClass("text-slate-100");
+    // 生IDは font-mono の従属メタ行（パターンID:）へ降格（ここには生IDが残ってよい）
+    expect(screen.getByText("パターンID:")).toBeInTheDocument();
+    const rawId = screen.getByText("TERRAFORM_DB_MAX_CONNECTIONS_REDUCTION");
+    expect(rawId.tagName).toBe("CODE");
+  });
+
+  it("AI 推定パターン名が既に人間語なら変換せずそのまま出す（A3・誤変換しない）", () => {
+    render(
+      <AlertCardExpanded
+        alert={makeAlert({
+          report: makeReport({ suggestedPatternName: "決済APIタイムアウト" }),
+        })}
+      />,
+    );
+    expect(screen.getByText("決済APIタイムアウト")).toBeInTheDocument();
+    // 人間語には従属メタ行を足さない
+    expect(screen.queryByText("パターンID:")).not.toBeInTheDocument();
+  });
+
   describe("発報内容（検知ソースの生情報）", () => {
     const detectionDetail = {
       summary: "ec-backend が severity=CRITICAL のログを記録",

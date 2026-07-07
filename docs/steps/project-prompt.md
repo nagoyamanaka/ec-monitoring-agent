@@ -1,5 +1,10 @@
-# 設計エージェント向けプロンプト v19.3
+# 設計エージェント向けプロンプト v19.4
 
+> **変更履歴（v19.3→v19.4・2026-07-07 最終提出前の鮮度合わせ）**
+> サービス名を **Kizashi（兆し）** に確定（アプリヘッダー・ProtoPedia・動画と統一。リポジトリ名は ec-monitoring-agent のまま）。
+> AI 経路の「現行」を実態へ更新: **Vertex AI（Gemini 2.5 Pro）＋ ADK 8エージェント（hub-and-spoke・in-process）が本番経路**＝下記3フェーズ表のフェーズ1・2は完了済み（`AIInvestigationPort` の DI 差し替えという当初設計どおりに着地し、Application 層はノータッチのまま）。
+> 予兆ブリーフィング（シナリオXX・stretchⅡ）は **F1〜F12 実装済み**。現状の正は `docs/architecture.md` §10。
+>
 > **変更履歴（v18→v19）**
 > 検知境界（detection boundary）を明文化。検知基盤に Cloud Monitoring を採用（Datadog 不採用＝有料・物語矛盾／Cloud Monitoring は無料枠・GCP 要件加点）。
 > 検知ソースを peer な ingest アダプタ化（`CloudMonitoringAlertIngestController`・`POST /ingest/cloud-monitoring` 実装）。EC 自前イベントは Datadog 不在のデモ stand-in と位置づけ。
@@ -33,7 +38,7 @@
 
 ### 目的
 
-ECドメイン（注文・在庫）で発生する障害を、AIエージェントがリアルタイムに分析・分類し、バックオフィスダッシュボードへレポートするシステム。
+**Kizashi（兆し）**: ECドメイン（注文・在庫）で発生する障害を、AIエージェントがリアルタイムに分析・分類し、バックオフィスダッシュボードへレポートするシステム。障害が**起きる前**は、未来シグナル（未マージ PR・未適用 Terraform plan・負荷予定）×過去の記憶から引用検証付きのリスク予報を出す（予兆ブリーフィング・実装済み）。
 
 AIエージェントは「アプリログを見る」だけでなく、**Cloud Logging・Terraform差分・GitHubコミット履歴を横断して証拠を自律的に収集し、過去の障害パターンと照合して原因を推定する**DevOps AIエージェントとして機能させる。
 
@@ -49,11 +54,11 @@ AIエージェントは「アプリログを見る」だけでなく、**Cloud L
 
 **要件2（AI技術）**: 以下の3フェーズで段階強化する。
 
-| フェーズ                    | 実装                                          | 充足状況                                      | 備考                         |
-| --------------------------- | --------------------------------------------- | --------------------------------------------- | ---------------------------- |
-| ハッカソン本体              | Gemini API直接（`@google/generative-ai`）     | ✅ Gemini API                                 | 要件最低ラインを確実に満たす |
-| フェーズ1（完成後）         | Vertex AI SDK経由（`@google-cloud/vertexai`） | ✅✅ Gemini API（Vertex AI推奨経路）          | 審査員評価が上がる           |
-| フェーズ2（ポートフォリオ） | ADKエージェント構成                           | ✅✅✅ Gemini Enterprise Agent Platform + ADK | 2項目達成                    |
+| フェーズ                    | 実装                                          | 充足状況                                      | 状態（2026-07-07）                        |
+| --------------------------- | --------------------------------------------- | --------------------------------------------- | ------------------------------------------ |
+| ハッカソン本体              | Gemini API直接（`@google/generative-ai`）     | ✅ Gemini API                                 | ✅ 完了（現在は下段へ移行済み）            |
+| フェーズ1（完成後）         | Vertex AI SDK経由（`@google-cloud/vertexai`） | ✅✅ Gemini API（Vertex AI推奨経路）          | ✅ 完了（`GOOGLE_GENAI_USE_VERTEXAI=true`）|
+| フェーズ2（ポートフォリオ） | ADKエージェント構成                           | ✅✅✅ Gemini Enterprise Agent Platform + ADK | ✅ 完了（**本番経路・8エージェント**）     |
 
 > **重要**: 各フェーズの切り替えは `AIInvestigationPort` 実装クラスのDI差し替えのみ。
 > `InvestigateAlertOnAlertClassifiedUnknown`（Application層）は完全にノータッチ。
@@ -70,10 +75,9 @@ AIエージェントは「アプリログを見る」だけでなく、**Cloud L
 | Architecture         | DDD + CleanArchitecture + CQRS + EDA                                               | CodelyTVパターン準拠                                                                                                        |
 | Message Broker       | RabbitMQ                                                                           | DomainEvent配信                                                                                                             |
 | Database             | MongoDB                                                                            | 全コンテキスト統一（ハッカソンスコープ）                                                                                    |
-| AI（現行）           | Gemini API                                                                         | `@google/generative-ai`。ハッカソン本体で使用                                                                               |
-| AI（将来P1）         | Vertex AI SDK                                                                      | `@google-cloud/vertexai`。フェーズ1で差し替え                                                                               |
-| AI（将来P2）         | ADK（Agents Development Kit）                                                      | フェーズ2でマルチエージェント構成                                                                                           |
-| 検索（将来P1）       | Elasticsearch（Elastic Cloud）                                                     | `SimilarPatternRule`（kind=SIMILARITY）として `ApplicationClassificationPolicy` に追加。a2aは不使用（ADK in-processで代替） |
+| AI（現行・本番）     | Vertex AI（Gemini 2.5 Pro）＋ ADK 8エージェント                                    | `GOOGLE_GENAI_USE_VERTEXAI=true`＋`AI_INVESTIGATION_ADK=true`。単一 Gemini 直はポート DI で温存（フォールバック/検証用）    |
+| AI（初期経路・温存） | Gemini API 直接                                                                    | `@google/generative-ai`。ハッカソン初期の最低ライン充足経路（DI 差し替えで共存）                                            |
+| 検索（実装済み）     | Elasticsearch（Elastic Cloud）／InMemory                                           | `SimilarPatternRule`（kind=SIMILARITY）として `ApplicationClassificationPolicy` に追加済み。a2aは不使用（ADK in-processで代替） |
 | Observability        | Cloud Logging・Cloud Monitoring・Cloud Trace                                       | GCPネイティブ。OTel SDK（`@opentelemetry/sdk-node`）からGCPエクスポーター経由で直接送信。Collectorコンテナ不使用            |
 | Logging              | OTel Logs → Cloud Logging（`@google-cloud/opentelemetry-cloud-trace-exporter` 等） | Winston不使用。OTel一括化でtrace_id/span_idはSDKが自動付与。`StructuredLog`型には含めない                                   |
 | インフラ調査         | Cloud Logging API・Terraform CLI（読み取り専用）・GitHub REST API                  | インフラ横断調査エージェントが証拠収集に使用。apply等の書き込み操作は一切行わない                                           |
