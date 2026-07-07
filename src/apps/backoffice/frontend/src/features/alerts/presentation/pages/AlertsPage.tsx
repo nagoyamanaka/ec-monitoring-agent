@@ -201,7 +201,6 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
           <DemoDrawer
             api={demoApi}
             onAfterReset={refreshAlerts}
-            refreshKey={lastUpdatedAt?.getTime() ?? null}
             lastIncomingAlert={lastIncomingAlert}
           />
         }
