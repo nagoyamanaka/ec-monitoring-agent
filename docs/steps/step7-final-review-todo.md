@@ -14,7 +14,7 @@
 | A2  | ブランド統一（EC Monitoring→Kizashi）         | ★★★★☆         | エージェント             | 未                                                                                                                                                |
 | B1  | アーキ図ダーク版再レンダ                      | ★★★★☆         | エージェント             | 済（architecture.md と同期済みを検証の上ダーク化・Kizashiロゴ追加・3520×2060差替／ライト版退避）                                                  |
 | C2  | take003 再撮影（豆腐なし・新ブランド）        | ★★★★☆         | エージェント→人間確認    | 済（実Gemini経路で4パート撮影・主役6枚を目視＝豆腐0/ヘッダKizashi/実調査90%・fallbackなし／part4のdraft PRカットも PR #29 で撮影済み）           |
-| B2  | ProtoPedia画像5枚のポスター化                 | ★★★☆☆         | エージェント             | 未（C2後）                                                                                                                                        |
+| B2  | ProtoPedia画像5枚のポスター化                 | ★★★☆☆         | エージェント             | 済（take003素材に下辺グラデ帯＋1行コピー焼き込み・4ポスター生成＋アーキ図で5枚・目視で可読/豆腐0）                                                 |
 | A3  | 生ID露出の人間語化                            | ★★★☆☆         | エージェント             | 済（予報引用チップ=desc主／subject生IDをmonoメタ行へ・アラート詳細のAI推定パターン機械IDを人間語化＋生IDをパターンIDメタ行へ・UT+2 369緑・tsc緑） |
 | B3  | 動画サムネイル作成                            | ★★★☆☆         | エージェント             | 未                                                                                                                                                |
 | A4  | 予兆ページ導入文の圧縮＋Heroコピー            | ★★☆☆☆         | エージェント             | 未                                                                                                                                                |
@@ -138,6 +138,18 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 **手順**: HTML テンプレート（画像を `background`、下帯＋テキスト）→ headless Chrome で 1920×1080 PNG 出力。`scripts/video-capture/` の既存 Chrome 起動系を流用可。フォントは Noto Sans JP（システム導入済みのはず。無ければ `画像取り直しコマンド.txt` と同条件）。
 
 **受け入れ条件**: 5枚とも 16:9・ダーク・豆腐なし・コピーが可読（最小28px相当）。
+
+**実施記録（2026-07-07）**: 生成スクリプト `scripts/video-capture/make-posters.mjs` を新設（Playwright chromium・take003 スクショを data URI 背景＋下辺グラデ帯＋teal アクセントバー＋`KIZASHI AI-SRE` ラベル＋1行コピー・1920×1080）。`node make-posters.mjs` で `docs/protopedia/assets/` に4枚出力：
+
+| # | 出力 | 元スクショ | 焼き込みコピー |
+| --- | --- | --- | --- |
+| 1（Hero） | `poster-1-hero.png` | part1 `01-forecast-card` | 障害は、起きる前に終わらせる。 |
+| 2 | `architecture.png`（B1ダーク版・帯なし図のみ） | — | （コピーなし） |
+| 3 | `poster-3-live-agents.png` | part2 `03-live-timeline` | 8つのAIエージェントが、ライブで調査する。 |
+| 4 | `poster-4-evidence.png` | part2 `06-evidence-panel` | 結論には、実在する証拠だけ。 |
+| 5 | `poster-5-known.png` | part3 `01-known-instant` | 二度目の同じ障害は、1秒で終わる。 |
+
+目視検証: コピーは 60〜76px（最小28px要件を大きく満たす）・帯は下端の空きダーク領域に載り主要コンテンツ（予報カード/8エージェント/90%証拠/完全一致）を隠さない・全画面ヘッダ Kizashi・U+FFFD/□ なし。ポスター1/4は最下部の証跡行が帯に一部かかるが結論情報は露出。B3 動画サムネ（1280×720）も同 `make-posters.mjs` 系で流用可。
 
 ### B3 動画サムネイル ★★★☆☆
 
