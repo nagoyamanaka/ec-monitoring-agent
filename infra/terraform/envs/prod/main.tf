@@ -80,7 +80,22 @@ module "cloud_run" {
     # 認証は edge SA の ADC（roles/aiplatform.user 付与済み）。
     GOOGLE_GENAI_USE_VERTEXAI = "true"
     GOOGLE_CLOUD_LOCATION     = "asia-northeast1"
+    # 予兆の FUTURE_CHANGE シグナル源（PullRequestSignalSource）は edge プロセス内で
+    # GitHubGatewayImpl.listOpenPullRequests() を呼ぶ。token/repo が未設定だと即 [] を返し、
+    # 「未マージ PR」の引用（[draft] chore(db)… ＋証拠リンク）が本番だけ消える（worker には
+    # docker-compose.prod.yml で設定済みだが、/forecast は worker には無く edge が生成する）。
+    # REPO/REF は非シークレットなので plain_env、TOKEN は secret_env（下）で Secret Manager から供給。
+    GITHUB_TARGET_REPO = "nagoyamanaka/ec-monitoring-agent"
+    GITHUB_TARGET_REF  = "demo/regression"
   }
+
+  # INGEST_TOKEN（module 既定）に加え、GITHUB_TOKEN を Secret Manager から注入する。
+  # secret_env を明示すると module の default（INGEST_TOKEN のみ）を上書きするため両方を列挙する。
+  # GITHUB_TOKEN シークレットは bootstrap が作成済み・edge run SA は secretAccessor 付与済み。
+  secret_env = [
+    { name = "INGEST_TOKEN", secret = "INGEST_TOKEN" },
+    { name = "GITHUB_TOKEN", secret = "GITHUB_TOKEN" },
+  ]
 
   depends_on = [module.bootstrap]
 }
