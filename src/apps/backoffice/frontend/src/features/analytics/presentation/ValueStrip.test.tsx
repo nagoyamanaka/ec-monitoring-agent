@@ -36,17 +36,20 @@ function renderStrip(api: AnalyticsApi) {
 }
 
 describe("ValueStrip", () => {
-  it("Analytics の実データ（トリアージ/既知即決/AI調査/昇格）を件数で出す", async () => {
+  it("Analytics の実データを等式（総アラート＝既知即決＋AI調査｜学習パターン化）で出す", async () => {
     renderStrip(fakeApi());
     await waitFor(() =>
-      expect(screen.getByText("自動トリアージ")).toBeInTheDocument(),
+      expect(screen.getByText("総アラート")).toBeInTheDocument(),
     );
     expect(screen.getByText("7")).toBeInTheDocument();
+    // 総数と内訳の親子関係を「＝」「＋」の構造で見せる（4+3=7 が自己検証できる）
+    expect(screen.getByText("＝")).toBeInTheDocument();
+    expect(screen.getByText("＋")).toBeInTheDocument();
     expect(screen.getByText("既知即決")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("AI 調査")).toBeInTheDocument();
+    expect(screen.getByText("AI調査")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
-    expect(screen.getByText("昇格パターン")).toBeInTheDocument();
+    expect(screen.getByText("学習パターン化")).toBeInTheDocument();
   });
 
   it("累計であることの注記（過去実績含む）を出す＝リセット直後の空一覧と矛盾して見せない", async () => {
@@ -59,7 +62,7 @@ describe("ValueStrip", () => {
   it("クリックで Analytics ページへ遷移する", async () => {
     renderStrip(fakeApi());
     await waitFor(() =>
-      expect(screen.getByText("自動トリアージ")).toBeInTheDocument(),
+      expect(screen.getByText("総アラート")).toBeInTheDocument(),
     );
     await userEvent.click(screen.getByRole("button"));
     expect(screen.getByText("Analytics ページ")).toBeInTheDocument();

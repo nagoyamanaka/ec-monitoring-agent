@@ -64,12 +64,100 @@ describe("AlertCardExpanded", () => {
           <AlertCardExpanded variant={variant} alert={makeAlert({ detectionDetail })} />,
         );
         expect(screen.getByText("発報内容")).toBeInTheDocument();
+        // documentation の「ラベル: 値」行は定義リストへ構造化される
+        expect(screen.getByText("対象サービス")).toBeInTheDocument();
         expect(
-          screen.getByText("対象サービス: ec-backend（action: demo_infra_fault）"),
+          screen.getByText("ec-backend（action: demo_infra_fault）"),
         ).toBeInTheDocument();
         expect(screen.getByText("ec-monitoring-backbone")).toBeInTheDocument();
         unmount();
       }
+    });
+
+    it("documentation の「検知ログ」行はログ引用として主役表示する", () => {
+      render(
+        <AlertCardExpanded
+          alert={makeAlert({
+            detectionDetail: {
+              ...detectionDetail,
+              documentation:
+                "対象サービス: ec-backend（action: demo_infra_fault）\n検知ログ: デモ用インフラ障害を注入：意図的に CRITICAL ログを発生させる\n発火条件: severity>=CRITICAL ログ",
+            },
+          })}
+        />,
+      );
+      expect(screen.getByText("検知ログ")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "デモ用インフラ障害を注入：意図的に CRITICAL ログを発生させる",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByText("発火条件")).toBeInTheDocument();
+    });
+
+    it("行構成でない documentation は生テキストのまま表示する（フォールバック）", () => {
+      render(
+        <AlertCardExpanded
+          alert={makeAlert({
+            detectionDetail: {
+              ...detectionDetail,
+              documentation: "自由文の説明。runbook 参照。",
+            },
+          })}
+        />,
+      );
+      expect(screen.getByText("自由文の説明。runbook 参照。")).toBeInTheDocument();
+    });
+
+    it("CM 自動生成の英文 summary は documentation があれば原文 details へ降格する", () => {
+      const autoSummary =
+        "Log match condition with labels {action=demo_infra_fault,service=ec-backend} fired for VM Instance with {instance_id=1, zone=asia-northeast1-a}.";
+      render(
+        <AlertCardExpanded
+          alert={makeAlert({
+            detectionDetail: { ...detectionDetail, summary: autoSummary },
+          })}
+        />,
+      );
+      // リード文としては出さず、畳んだ原文（details）の中にだけ残る
+      expect(
+        screen.getByText("Cloud Monitoring 原文サマリ（自動生成の英文）"),
+      ).toBeInTheDocument();
+      expect(screen.getByText(autoSummary).closest("details")).not.toBeNull();
+    });
+
+    it("人間語 summary（合成 3b 等）はリード文のまま・原文 details は出さない", () => {
+      render(<AlertCardExpanded alert={makeAlert({ detectionDetail })} />);
+      const lead = screen.getByText(
+        "ec-backend が severity=CRITICAL のログを記録",
+      );
+      expect(lead.closest("details")).toBeNull();
+      expect(
+        screen.queryByText("Cloud Monitoring 原文サマリ（自動生成の英文）"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("「Type labels {…}」形の resourceName は種別＋ラベルチップへ分解する", () => {
+      render(
+        <AlertCardExpanded
+          alert={makeAlert({
+            detectionDetail: {
+              ...detectionDetail,
+              resourceName:
+                "VM Instance labels {instance_id=971418685088913937, project_id=ec-monitoring-agent-501600, zone=asia-northeast1-a}",
+            },
+          })}
+        />,
+      );
+      expect(screen.getByText("VM Instance")).toBeInTheDocument();
+      expect(
+        screen.getByText("instance_id=971418685088913937"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("zone=asia-northeast1-a")).toBeInTheDocument();
+      // 生 blob はそのままの形では出さない
+      expect(
+        screen.queryByText(/^VM Instance labels \{/),
+      ).not.toBeInTheDocument();
     });
 
     it("incidentUrl があれば CM インシデントへの外部リンクを出す（実発報のみ持つ）", () => {
