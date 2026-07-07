@@ -188,9 +188,18 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
   - ⚠ **再撮影の落とし穴**: 同一シナリオ4は既発火だと dedup で新規アラートIDが出ず `waitForAlert` が90秒タイムアウトする。part4 のみ撮り直す時は **先に `POST /demo/reset`** してから `TAKE=... node capture.mjs dogfooding`。
 - **要人間確認・残**: 採用スクショの `docs/protopedia/assets/` へのコピー＋コミット（B2 のポスター化素材確定と併せて実施）。
 
-### C3 台本の最終整合
+### C3 台本の最終整合 ✅
 
 `docs/protopedia/video/script.md` は本レビューで更新済み（カット0追加・カット2/4/5圧縮・チェックリスト増強）。take003 撮影後、**実物の数値（confidence・件数・チップ文言）と台本の食い違いを突合して台本側を直す**（従来ルール通り）。
+
+**実施記録（2026-07-07）**: take003 の12スクショを目視突合し `script.md` を更新。ナレーションは「揮発数値はナレで言わない」設計のため矛盾なし。各カット撮影メモに「**実測（take003）**」で on-screen 実測値を焼き込み、編集/テロップが実物に一致するよう整合。
+
+- 予報カード: 窓 `土 20:00-23:00`・確信度 **95%**・HIGH・根拠3系統6件・評価シグナル9件・plan `max_connections 100→40`。
+- 調査(3b): `db connection exhaustion`・**139秒**・証拠 **6件**（Terraform 1＋類似事例DB 5）・確信度 **90%**（自己申告95%→裏付け上限で補正）・算定根拠 3/3 実在照合・退行 `max_connections 100→20`。
+- 8エージェント実名（part4で確認）: Coordinator/EvidenceCollector/RootCauseAnalyst/ImpactTriage/**CorrelationVerifier=批判役**/RemediationPlanner/RunbookEscalation/RemediationReviewer。ナレの「批判役」「実ログ・コミット差分・インフラ差分」に一致。
+- 既知: 完全一致（EXACT）・承認済み90%・総6件=既知即決1+AI調査5+学習1。
+- CVE: 「脆弱性の検知」（trivy）・draft PR #29（CVE-2021-3807／CVE-2022-25883・`ai-remediation[bot]` 2コミット）。
+- **文言修正**: カット2の引用チップ記述を実物へ（外部リンク付き＝`pr-55` の draft PR チップ／`plan-1` はTerraformプランで外部PRなし・「open PR」→「draft PR」・チップ順を明記）。
 
 ---
 
