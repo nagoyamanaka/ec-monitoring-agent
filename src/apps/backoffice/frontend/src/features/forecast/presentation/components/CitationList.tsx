@@ -66,7 +66,8 @@ export function CitationList({ citations }: CitationListProps) {
                 chipTone={citationTone(c.kind)}
                 timestamp={c.when}
                 title={c.desc}
-                meta={c.subject}
+                // 先頭にシグナル id（pr-55 等）＝reasoning 本文・コンソール台帳と同一 ID で照合できる
+                meta={`${c.id} · ${c.subject}`}
                 to={
                   c.alertId
                     ? `/alerts/${encodeURIComponent(c.alertId)}`

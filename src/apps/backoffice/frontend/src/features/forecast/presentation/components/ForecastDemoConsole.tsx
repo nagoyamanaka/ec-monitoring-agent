@@ -4,8 +4,13 @@
  * 初見の審査員に (1) この予報の材料は何か＝投入シグナルの台帳と本物度、(2) ボタンが何をするか、
  * を1画面で伝える。デモ系 UI はこのパネルに閉じ込め、予報本文（プロダクション面）を侵食しない。
  *
+ * 台帳は**材料の分類**を語る（AI の評価結果ではない）: 予報カードの引用レーンと同じ3系統・
+ * 同じ色（未来の変更=cyan / スケジュール=amber / 過去の同型事例=emerald）でグルーピングし、
+ * 「材料の3系統 → 根拠 n系統チップ → 引用レーン」が同一の視覚語彙で一本につながるようにする。
+ *
  * realness はアラート側デモ卓と同じ正直さ運用: 合成 seed は「入口のみ合成・突合→AI 予報→
- * 引用検証は実経路」を明示し、実データ（GitHub の実 PR）と区別する。
+ * 引用検証は実経路」を明示し、実データ（GitHub の実 PR）と区別する。未マージ PR は実リポジトリの
+ * open PR を**全件** read するため、台帳に無い PR が予報に現れても嘘にならない文言にしている。
  */
 import { GamepadIcon } from "@shared/ui/icons";
 
@@ -33,26 +38,67 @@ type SignalRow = {
   readonly realness: SignalRealness;
 };
 
-const SIGNAL_ROWS: readonly SignalRow[] = [
+/** 材料の1系統（引用レーンと同じ分類・同じ色）。 */
+type SignalLane = {
+  /** 引用レーンと同一のラベル（CitationList の KIND_LABELS と揃える）。 */
+  readonly kindLabel: string;
+  /** この系統が予報に与える役割（初見向けの一言）。 */
+  readonly role: string;
+  /** レーン左ボーダー（CitationList の LANE_BORDERS と同色）。 */
+  readonly border: string;
+  /** 系統チップの塗り（CitationList の KIND_TONES と同色）。 */
+  readonly chipClassName: string;
+  readonly rows: readonly SignalRow[];
+};
+
+const SIGNAL_LANES: readonly SignalLane[] = [
   {
-    label: "未適用の Terraform plan",
-    description: "Cloud SQL max_connections 100→40 縮小（apply されると有効）",
-    realness: "seed",
+    kindLabel: "未来の変更",
+    role: "何が変わる予定か",
+    border: "border-cyan-500/40",
+    chipClassName:
+      "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
+    rows: [
+      {
+        label: "未適用の Terraform plan",
+        description: "Cloud SQL max_connections 100→40 縮小（apply されると有効）",
+        realness: "seed",
+      },
+      {
+        label: "未マージ PR",
+        description:
+          "実リポジトリの open PR を全件 read（DB 接続プール縮小の draft PR ほか）",
+        realness: "real",
+      },
+    ],
   },
   {
-    label: "未マージ PR",
-    description: "DB 接続プール縮小の draft PR（実リポジトリを read）",
-    realness: "real",
+    kindLabel: "スケジュール",
+    role: "いつ負荷が来るか",
+    border: "border-amber-500/40",
+    chipClassName:
+      "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+    rows: [
+      {
+        label: "負荷スケジュール",
+        description: "土 20:00 週末セール → checkout 負荷 x5",
+        realness: "seed",
+      },
+    ],
   },
   {
-    label: "負荷スケジュール",
-    description: "土 20:00 週末セール → checkout 負荷 x5",
-    realness: "seed",
-  },
-  {
-    label: "過去の解決済み事例",
-    description: "同型障害のアーカイブ（実在の Alert として開ける）",
-    realness: "seed",
+    kindLabel: "過去の同型事例",
+    role: "過去に何が起きたか",
+    border: "border-emerald-500/40",
+    chipClassName:
+      "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+    rows: [
+      {
+        label: "過去の解決済み事例",
+        description: "同型障害のアーカイブ（実在の Alert として開ける）",
+        realness: "seed",
+      },
+    ],
   },
 ];
 
@@ -88,39 +134,56 @@ export function ForecastDemoConsole({
         </span>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <h3 className="text-sm font-semibold text-slate-100">
           投入シグナル（予報の材料）
         </h3>
         <p className="text-[11px] leading-relaxed text-slate-400">
-          予報はここに並ぶシグナルだけから作られます（バッジ＝入力の本物度）。
+          予報はこの3系統の突合だけから作られます（色＝予報カードの引用レーン、バッジ＝入力の本物度）。
         </p>
-        <ul className="space-y-1.5">
-          {SIGNAL_ROWS.map((row) => {
-            const realness = REALNESS_META[row.realness];
-            return (
-              <li
-                key={row.label}
-                className="rounded-md bg-slate-800/50 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[13px] font-semibold text-slate-50">
-                    {row.label}
-                  </span>
-                  <span
-                    title={realness.note}
-                    className={`shrink-0 cursor-help rounded px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
-                  >
-                    {realness.label}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-[12px] leading-snug text-slate-400">
-                  {row.description}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="space-y-2.5">
+          {SIGNAL_LANES.map((lane) => (
+            <div
+              key={lane.kindLabel}
+              className={`space-y-1.5 border-l-2 pl-2.5 ${lane.border}`}
+            >
+              <div className="flex items-baseline gap-1.5">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${lane.chipClassName}`}
+                >
+                  {lane.kindLabel}
+                </span>
+                <span className="text-[11px] text-slate-400">{lane.role}</span>
+              </div>
+              <ul className="space-y-1.5">
+                {lane.rows.map((row) => {
+                  const realness = REALNESS_META[row.realness];
+                  return (
+                    <li
+                      key={row.label}
+                      className="rounded-md bg-slate-800/50 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[13px] font-semibold text-slate-50">
+                          {row.label}
+                        </span>
+                        <span
+                          title={realness.note}
+                          className={`shrink-0 cursor-help rounded px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
+                        >
+                          {realness.label}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[12px] leading-snug text-slate-400">
+                        {row.description}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="space-y-2 border-t border-slate-700/50 pt-3">

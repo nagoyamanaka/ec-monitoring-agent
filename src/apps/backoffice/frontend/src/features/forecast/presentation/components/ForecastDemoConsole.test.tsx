@@ -20,16 +20,26 @@ function renderConsole(
 }
 
 describe("ForecastDemoConsole", () => {
-  it("投入シグナルの台帳を本物度バッジ（実データ/合成seed）つきで出す", () => {
+  it("投入シグナルの台帳を、引用レーンと同じ3系統＋本物度バッジで出す", () => {
     renderConsole();
     expect(screen.getByText("投入シグナル（予報の材料）")).toBeInTheDocument();
+    // 材料の分類＝引用レーンと同一の3系統（同じラベル・役割の一言つき）
+    expect(screen.getByText("未来の変更")).toBeInTheDocument();
+    expect(screen.getByText("何が変わる予定か")).toBeInTheDocument();
+    expect(screen.getByText("スケジュール")).toBeInTheDocument();
+    expect(screen.getByText("いつ負荷が来るか")).toBeInTheDocument();
+    expect(screen.getByText("過去の同型事例")).toBeInTheDocument();
+    expect(screen.getByText("過去に何が起きたか")).toBeInTheDocument();
+    // 系統の中に材料行が並ぶ
     expect(screen.getByText("未適用の Terraform plan")).toBeInTheDocument();
     expect(screen.getByText("未マージ PR")).toBeInTheDocument();
     expect(screen.getByText("負荷スケジュール")).toBeInTheDocument();
     expect(screen.getByText("過去の解決済み事例")).toBeInTheDocument();
-    // 正直さ: 実 GitHub PR だけが実データ・残り3つは合成 seed
+    // 正直さ: 実 GitHub PR だけが実データ・残り3つは合成 seed。
+    // open PR は全件 read＝台帳に無い PR が予報に現れても嘘にならない文言。
     expect(screen.getAllByText("実データ")).toHaveLength(1);
     expect(screen.getAllByText("合成seed")).toHaveLength(3);
+    expect(screen.getByText(/open PR を全件 read/)).toBeInTheDocument();
   });
 
   it("生成/リセットのボタンがコールバックを呼ぶ（文言は未生成/生成済みで切替）", async () => {
