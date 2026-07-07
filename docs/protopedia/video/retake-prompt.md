@@ -50,14 +50,14 @@
    - **本番テイク** → 実 Gemini 突合が必要。ユーザーに F8 seed での再生成を確認
 3. 予報の引用チップの解決先 URL（実PR / 過去Alert）を HTTP で疎通確認
 4. `AI_INVESTIGATION_STUB=false`（実 Gemini）であること。本番テイクで stub は不可
-5. `DRAFT_PR_URL`（AI 起票済み draft PR の URL）をユーザーから取得（無ければそのカットはスキップされる）
+5. `DRAFT_PR_URL`（AI 起票済み draft PR の URL）— **既定は PR #29（`https://github.com/nagoyamanaka/ec-monitoring-agent/pull/29`）が capture.mjs にハードコード済み**。差し替える場合のみ env で上書き
 
 ## Step 4 — 撮影実行
 
 ```bash
 cd scripts/video-capture
 pnpm run setup                      # 初回のみ（chromium + ffmpeg-static を取得）
-RESET=1 DRAFT_PR_URL=<URL> node capture.mjs all
+RESET=1 node capture.mjs all       # draft PR は既定の PR #29 を使用（上書きは DRAFT_PR_URL=<URL> を前置）
 ```
 
 出力は `output/takeNNN/`（自動採番）。パート本体は**編集用 H.264 mp4**（`partN-*.mp4`）で、

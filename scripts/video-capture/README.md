@@ -37,7 +37,7 @@ node capture.mjs all             # 全パート順撮り → output/takeNNN/（�
 node capture.mjs forecast        # パート単位の撮り直し（これも新規テイクを切る）
 TAKE=take003 node capture.mjs learning   # 既存テイクに追記（同名パートは上書き）
 RESET=1 node capture.mjs investigation   # demo reset してから 3b 発火
-DRAFT_PR_URL=https://github.com/... node capture.mjs dogfooding
+node capture.mjs dogfooding      # draft PR カットは既定で PR #29 を使用（DRAFT_PR_URL=... で上書き）
 ```
 
 | シーン | 出力パート | 台本カット | 内容 | 所要 |
@@ -51,7 +51,7 @@ DRAFT_PR_URL=https://github.com/... node capture.mjs dogfooding
 承認対象にするため、**直後に続けて実行**する（`all` はこの順で回る）。
 
 環境変数: `FRONT_URL`（既定 http://localhost:5173）／`API_URL`（同 3001）／`TAKE`（既存テイクへ追記）／
-`HEADED=1` ブラウザ表示／`SLOWMO`（ms・既定150）／`DWELL_SCALE`（間合い倍率・既定1）／`RESET=1`／`DRAFT_PR_URL`
+`HEADED=1` ブラウザ表示／`SLOWMO`（ms・既定150）／`DWELL_SCALE`（間合い倍率・既定1）／`RESET=1`／`DRAFT_PR_URL`（未指定なら既定 PR #29）
 
 ## 出力
 
