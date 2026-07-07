@@ -38,7 +38,7 @@
 - **⑤ 予兆ブリーフィング** — 未マージ PR・未適用 Terraform plan・負荷予定と過去の障害の記憶を突合し、起きる前に予報。引用は実在シグナルと照合済みのものだけ表示。
 - **⑥ 修正（write 隔離）** — GitHub Actions 上で AI が実コードを修正し draft PR。自動マージなし・人間承認ゲート。
 
-稼働基盤: Cloud Run（フロント/エッジ）＋ Compute Engine（EDA 常駐系）／データ: MongoDB・RabbitMQ・Elasticsearch・Valkey／IaC: Terraform／AI: Gemini 2.5 Pro（Vertex AI）＋ Google ADK。
+稼働基盤: Cloud Run（フロント/エッジ）＋ Compute Engine（EDA 常駐系）／データ: MongoDB・RabbitMQ・Elasticsearch・Valkey／IaC: Terraform／AI: Gemini 2.5 Pro/Flash（Vertex AI）＋ Google ADK。
 
 ---
 
