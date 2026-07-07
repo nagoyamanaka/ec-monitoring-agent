@@ -9,7 +9,7 @@
 | # | タスク | 優先 | 実行者 | 状態 |
 | --- | --- | --- | --- | --- |
 | H1 | 本番デプロイURLの床（tf apply・予報403・OOM） | ★★★★★ | 人間 | 未 |
-| A1 | 絵文字の豆腐化解消（フォント＋SVG化） | ★★★★★ | 人間(sudo)＋エージェント | 未 |
+| A1 | 絵文字の豆腐化解消（フォント＋SVG化） | ★★★★★ | 人間(sudo)＋エージェント | 済（フォント導入＋主役絵文字SVG化・要C2再撮影で最終確認） |
 | C1 | 動画タイトルカード（0:00-0:05）作成 | ★★★★★ | エージェント | 未 |
 | A2 | ブランド統一（EC Monitoring→Kizashi） | ★★★★☆ | エージェント | 未 |
 | B1 | アーキ図ダーク版再レンダ | ★★★★☆ | エージェント | 未 |
@@ -42,6 +42,13 @@
 3. 検証: `pnpm --filter backoffice-frontend test` 緑 → ローカル compose で `/forecast` と `/alerts` を目視（またはスクショ採取スクリプトで1枚撮って□が無いこと）。
 
 **受け入れ条件**: 再撮影スクショ上に U+FFFD/豆腐が1つも写らない。
+
+**実施記録（2026-07-07）**: フォント導入済み（`fc-list | grep -ci emoji`=1）。恒久対策として `shared/ui/icons.tsx` を新設し、`Shield`/`Clock`/`Link`/`Gamepad` の4アイコンを inline SVG（`currentColor`・`aria-hidden`・1em）で手書き。置換対象＝動画の主役のみ:
+- `RiskCard.tsx`: 🛡（先手カード）→`ShieldIcon`、⏱（予報ウィンドウ見出し）→`ClockIcon`
+- `ReferencedEvidenceCard.tsx` / `AlertDetailPage.tsx`（リンクをコピー）: 🔗→`LinkIcon`
+- `DemoDrawer.tsx` / `ForecastDemoConsole.tsx`: 🕹️（デモコンソール）→`GamepadIcon`
+
+TODO記載の 📋（コピー）・📅（カレンダー）は**コード上に存在しなかった**ため対象外。`EvidencePanel.tsx` のソース種アイコン（🛡📈 等は文字列マップ・型変更が必要）は font 導入で描画されるため据置。`✓✗✕❮❯⚠⚖⬡` は color emoji でなく通常テキストフォントで描画される記号のため対象外。フロントUT 367件緑・`tsc --noEmit` 緑。
 
 ### A2 ブランド統一（EC Monitoring → Kizashi） ★★★★☆
 

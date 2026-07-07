@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { cn } from "./cn";
+import { LinkIcon } from "./icons";
 import { SeverityBadge, type SeverityLevel } from "./SeverityBadge";
 
 /**
@@ -80,7 +81,7 @@ function CardBody({
       <p className="mt-1 text-xs leading-snug text-slate-300">{description}</p>
       {hasLink && (
         <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-cyan-300">
-          <span aria-hidden>🔗</span>
+          <LinkIcon className="shrink-0" />
           {linkLabel ?? "詳細を開く"}
         </span>
       )}
