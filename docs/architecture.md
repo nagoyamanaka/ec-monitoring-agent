@@ -1,10 +1,10 @@
-# アーキテクチャ（コード準拠・2026-07-06 時点）
+# Kizashi（兆し）アーキテクチャ（コード準拠・2026-07-07 時点）
 
 > **本書はコードを正とした現状スナップショット**。設計の経緯・理由は [docs/steps/](steps/)（step 系設計書）と [docs/decisions/](decisions/) を参照。ここに書かれていることはすべて実装済み（未実装は明示）。
 
 ## 1. 一言
 
-既存の観測基盤（Cloud Monitoring 等）の「検知」の上に乗り、アラート発火後の「**調査 → 評価 → レビュー**」の人手ワークフローを AI エージェントが圧縮するシステム。検知（閾値発火・dedup・相関）は上流の責務＝境界の外に置き、本体は「発火済みアラート」を受けて自律調査する。
+**起きる前**は未来シグナル（未マージ PR・未適用 Terraform plan・負荷予定）×過去の記憶で引用検証付きのリスク予報を出し（§10）、**起きた後**は既存の観測基盤（Cloud Monitoring 等）の「検知」の上に乗って、アラート発火後の「**調査 → 評価 → レビュー**」の人手ワークフローを AI エージェントが圧縮するシステム。検知（閾値発火・dedup・相関）は上流の責務＝境界の外に置き、本体は「発火済みアラート」を受けて自律調査する。
 
 ## 2. システム全体図
 
@@ -35,9 +35,16 @@ flowchart LR
     SI["SimilarIncident DB<br/>(Elasticsearch / InMemory)"]
   end
 
+  subgraph forecast["予兆ブリーフィング（起きる前・§10）"]
+    FSIG["未来シグナル3系統<br/>未マージPR / 未適用plan / 負荷予定"]
+    FC["ForecastRisk<br/>Gemini 突合＋引用の実在照合<br/>（偽引用は自動破棄・🛡先手を提示）"]
+  end
+
   UI["React 観測コンソール<br/>SSE リアルタイム・証拠パネル・承認"]
   REM["リメディエーション(write隔離)<br/>GitHub Actions 上で AI が実修正<br/>→テストゲート→draft PR(人間承認)"]
 
+  FSIG --> FC --> UI
+  SI -.記憶（MEMORY）.-> FC
   EC -->|DomainEvent| SUB
   CM -->|webhook| ICM
   CI -->|"HIGH以上"| ISS
@@ -146,7 +153,7 @@ flowchart LR
   subgraph gcp["GCP Managed"]
     CMON["Cloud Monitoring"]
     CLOG["Cloud Logging"]
-    VAI["Vertex AI<br/>Gemini 2.5 Pro"]
+    VAI["Vertex AI<br/>Gemini 2.5 Pro/Flash"]
   end
 
   GHA["GitHub Actions"]
@@ -275,7 +282,60 @@ src/
 
 ## 10. 予兆ブリーフィング（Forecast・実装済み）
 
-- **予兆ブリーフィング（Forecast）**: 未来シグナル×記憶の引用付きリスク予報。**F1〜F8・F10〜F12 まで実装済み**（[docs/steps/step6-final-sprint-todo.md](steps/step6-final-sprint-todo.md)）。ローカル E2E（`e2e/backoffice/forecast.e2e.test.ts`）が引用検証（偽引用 drop・裏付けゼロ破棄）・MEMORY の実在解決・GET キャッシュ配信を決定論担保。残タスクはコードでなく人間タスク（実 PR ステージングと録画）のみ。着地の内訳: F1 ドメイン型（`Monitoring/Forecast/domain/`：`ForecastSignal`/`RiskForecast`/`Schedule`/`ScheduleSource`/`ForecastSignalSource`）、F2 ForecastMemory projection（突合キー(B)：`ForecastMemory`/`forecastSubject` 導出・照合規約/`ResolvedAlertForecastMemoryRepository`。`InvestigationReport` に optional `subject` を追記し調査時に deterministic 導出＝唯一の既存P0変更点）、F3 未来シグナル（`GitHubGateway.listOpenPullRequests`/`TerraformGateway.getPendingPlan`＋`PendingInfraPlanStore`、Source 3実装 `PullRequestSignalSource`/`PendingPlanSignalSource`/`ScheduleSignalSource`＝正規化を Source 内に閉じ Handler は配列を回すだけ・全て read-only・失敗時は源単位で空縮退）、F4 ForecastPort＋Gemini アダプタ（`ForecastPort`/`ForecastContext`＋`GeminiForecastAdapter`。**単発 Gemini 経路・ADK 非使用は意図的**＝入力は Handler が事前収集済みでツールコール型探索が不要、`responseMimeType=application/json` 強制で無人閲覧の構造化堅牢性を優先。`LLMTextClient`（GeminiLLMClient）注入のコンポジション・JSON固定＋citations必須プロンプト・safeParse・confidenceクランプ・未知levelはLOW丸め・level降順ソート・失敗時は throw せず `isFallback=true` 縮退。citations 空/偽引用を落とすのは F5 引用検証の責務）、F5 ForecastRiskCommandHandler（`Forecast/application/ForecastRisk/`。Source 配列を回して主シグナル収集→subject で ForecastMemory を引き MEMORY シグナルへ正規化→結合→Port.forecast→**引用検証＝citations を実在シグナル id に照合し偽引用は破棄・裏付けゼロのリスクは丸ごと破棄**（`forecast_fake_citation_dropped`/`forecast_uncited_risk_dropped` ログ）→`RiskForecastRepository` に最新1件保存。シグナル0件は Gemini 非呼び出しで空予報＝課金ゼロ。予報はシグナル全量同梱の `ForecastBriefing` として保存＝引用チップの解決先を配信に含める。wire 契約は `Forecast/domain/contracts/ForecastContract.ts`）、F6 ルート・DI（`GET /forecast`=事前生成済みキャッシュ配信・`POST /forecast`=生成（`DEMO_ENABLED` 配下）。`forecastGuard` が `FORECAST_ENABLED` off（既定）で 404。`BackofficeApp` が `ForecastSignalSource[]` を組み立て（★Gateway 名指しなし・`InMemoryPendingInfraPlanStore` を `TerraformGatewayImpl` に配線）、`SeedScheduleSource`（seed は `seeds/ForecastScheduleSeed.ts`・`DEMO_ENABLED` 配下で投入）、`ForecastMemoryRepository.warmUp()` は `FORECAST_ENABLED` 時のみ起動時実行。`FORECAST_HORIZON` 既定 "今週末"）、F7 UI（`frontend/features/forecast`＝domain（`ForecastView`/`RiskLevel` 純関数・wire は `ForecastContract` を `@monitoring` alias 直 import）/infrastructure（`forecastApi`＝GET の 404 を body で「機能off（guard・非JSON）/未生成（JSON）」に判別し可用性を返す＝専用 status API を増やさない）/application（`triggerForecast`）/presentation（`ForecastProvider`＝GET 1回でナビ表示可否＋最新予報を全ページ共有・`ForecastPage`＝リスク level 降順・`RiskCard`＝levelバッジ+confidenceゲージ+reasoning・**`CitationList`＝引用検証済みシグナルのみの引用チップ（PR/スケジュール/過去アラートへ実リンク・ハルシネーション否定の可視化）**）。`/forecast` SPA ルート追加（vite proxy / nginx を Accept 出し分けの SPA-aware 側へ移動）・Forecast ナビタブは `FORECAST_ENABLED` off で非表示＋HIGH n件バッジの導線1個。カード描画は `shared/ui/ReferencedEvidenceCard` へ昇格し相関パネル（`RelatedAlertsPanel`）と共有＝「参照 id を実在レコードへ解決して提示する」同型パターンの単一実装）、F8 フラッグシップ seed（§3.1 DB接続枯渇の3系統: `seeds/ForecastPendingPlanSeed.ts`＝Cloud SQL `max_connections` 100→40 の未適用 plan（`DEMO_ENABLED` 配下で `InMemoryPendingInfraPlanStore` へ投入）／`seeds/ForecastScheduleSeed.ts`＝土20:00 checkout 負荷x5／`seeds/ResolvedAlertSeed.ts` に過去解決事例2件追加（`FORECAST_MEMORY_SEED_ALERT_IDS`・`report.subject` を plan の terraform address / schedule の checkout とトークン突合する語彙で明示＝MEMORY 引用が `incident.<実在AlertId>` として `GET /alerts/:id` に解決できる）。**MEMORY は生成時に再 warmUp**（`ForecastRiskUseCase.recallMemorySignals`）＝demo reset の再seed・直前に承認/解決した事例が backend 再起動なしで記憶に載る。ローカルE2E（`e2e/backoffice/forecast.e2e.test.ts`・`AI_INVESTIGATION_STUB=true`）は `StubLLMClient` が予兆 SYSTEM_INSTRUCTION を判別して固定予報（**意図的な偽引用 ghost-\* 入り**・実在引用は plan-1/sch-1/inc-1 の3系統）を返し、引用検証＝偽引用 drop・裏付けゼロ破棄・MEMORY の実在解決・GET キャッシュ配信を課金なしで決定論検証する。UI は RiskCard が **window（いつ危ないか）を主見出し**にし、引用を種別レーン（変更予定 cyan／負荷予定 amber／過去の記憶 emerald）＋「根拠 n系統」チップで**系統の収束**として見せる（`groupCitationsByKind`・タイムチャートは window が LLM 由来の自由文字列のため不採用）。MEMORY 引用の「当時のアラートを開く」は、一覧 API が RESOLVED を除外するため詳細ページ側で `GET /alerts/:id` へフォールバックして解決する（`useAlertDetail` が現役＝共有一覧 state・アーカイブ＝単品 fetch の二源を単一インターフェースに畳む。アーカイブは共有一覧 state へ merge しない＝一覧に混入しない。類似分類の関連アラート導線も同経路））、F10/F11 予防ファースト（予兆の主目的＝**発火前にインシデントを握りつぶす**。F11a 先手: `RiskItemPrimitives.preventiveAction?`（optional・後方互換）を LLM に「citations の実在シグナルに言及する具体的な先手・**「〜することを推奨します」形・HIGH/MEDIUM は原則必須**・実行主体は人間・reasoning は診断に徹し対処を書かない」で生成させ、safeParse で trim・不正はフィールドごと drop＝出なくても先手行が消えるだけの縮退。`RiskCard` は reasoning 直下に cyan パネル「🛡 今打てる先手」を**カード内の主役**として表示し、実行先（PR/plan/過去 Alert）への動線は CitationList の実リンクが担う＝「先手を読む→引用から実行先へ飛ぶ→人間が外で防ぐ」の1クリック動線が write ゼロで閉じる。F10-②/F11b 橋渡しCTA: `ForecastBridgeCta`＝発火後の受け皿（/alerts の反応的パイプライン）への**純ナビゲーション**を「もし防ぎきれずに発火したら？」の**保険トーン**で先手ブロックに視覚従属させ、risks がある時だけ `BriefingBody` 末尾にページ単位で1個・破線ボーダー＝未発火の未来を実線 RiskCard と視覚区別・テキストリンクのみで button 不在＝**write-zero を UI 語彙でも維持**。mutate 系アクション・トリアージ状態は不採用＝予兆の防御アクションはシステム外の人間判断という設計思想）、F12 予兆デモコンソール（`DELETE /forecast`＝`RiskForecastRepository.clearLatest()`・`demoGuard` 配下。**アラート側 /demo/reset とは独立**＝一覧のリセットが提出前に温めた予報キャッシュ（無人閲覧の要）を巻き込まない。UI は `ForecastDemoConsole`＝アラート一覧の DEMO CONSOLE と同一視覚言語（fuchsia ピル・realness バッジ・cyan 実行/rose リセット）の右 aside パネルで、**投入シグナル台帳**（実データ＝実 GitHub PR は1つだけ・残りは合成 seed、と本物度を明示）＋「▶ 予報を生成（AI 突合・約1分）」「予報をリセット」を集約。可用性は GET /demo/status 404 判定＝本番ではコンソールごと非表示・予報閲覧は無傷）。**残タスクは F8 の実PRステージング（pool 100→40 の draft PR）と録画のみ**。
+未来シグナル×記憶の**引用付きリスク予報**。**F1〜F8・F10〜F12 まで実装済み**（[docs/steps/step6-final-sprint-todo.md](steps/step6-final-sprint-todo.md)）。ローカル E2E（`e2e/backoffice/forecast.e2e.test.ts`）が引用検証（偽引用 drop・裏付けゼロ破棄）・MEMORY の実在解決・GET キャッシュ配信を決定論担保。残タスクはコードでなく人間タスク（実 PR ステージングと録画）のみ。
+
+```
+未来シグナル3系統                         記憶
+ ├ 未マージ PR（GitHubGateway）            ForecastMemory
+ ├ 未適用 plan（TerraformGateway）    ×   （過去の解決済み Alert を
+ └ 負荷予定（ScheduleSource）              subject で突合・実在解決）
+        ↓ Gemini（citations 必須）
+ 引用検証 = 実在シグナル id へ機械照合
+  ├ 偽引用 → 破棄（forecast_fake_citation_dropped）
+  └ 裏付けゼロのリスク → 丸ごと破棄（forecast_uncited_risk_dropped）
+        ↓
+ 「土 20:00、DB 接続枯渇 HIGH」＋ 🛡 今打てる先手（実行主体は人間・write ゼロ）
+```
+
+### 10.1 ドメインと記憶（F1・F2）
+
+- F1 ドメイン型: `Monitoring/Forecast/domain/`＝`ForecastSignal`/`RiskForecast`/`Schedule`/`ScheduleSource`/`ForecastSignalSource`。
+- F2 ForecastMemory projection: 突合キー(B)＝`ForecastMemory`/`forecastSubject` 導出・照合規約／`ResolvedAlertForecastMemoryRepository`。`InvestigationReport` に optional `subject` を追記し調査時に deterministic 導出（**唯一の既存 P0 変更点**）。
+
+### 10.2 未来シグナル収集（F3・read-only）
+
+`GitHubGateway.listOpenPullRequests`／`TerraformGateway.getPendingPlan`＋`PendingInfraPlanStore`。Source 3実装（`PullRequestSignalSource`/`PendingPlanSignalSource`/`ScheduleSignalSource`）＝正規化を Source 内に閉じ、Handler は配列を回すだけ。全て read-only・失敗時は**源単位で空縮退**。
+
+### 10.3 生成と引用検証（F4・F5）
+
+- F4 `ForecastPort`/`ForecastContext`＋`GeminiForecastAdapter`。**単発 Gemini 経路・ADK 非使用は意図的**＝入力は Handler が事前収集済みでツールコール型探索が不要、`responseMimeType=application/json` 強制で無人閲覧の構造化堅牢性を優先。`LLMTextClient`（GeminiLLMClient）注入のコンポジション・JSON 固定＋citations 必須プロンプト・safeParse・confidence クランプ・未知 level は LOW 丸め・level 降順ソート・失敗時は throw せず `isFallback=true` 縮退。
+- F5 `ForecastRiskCommandHandler`（`Forecast/application/ForecastRisk/`）: 主シグナル収集→subject で ForecastMemory を引き MEMORY シグナルへ正規化→結合→Port.forecast→**引用検証＝citations を実在シグナル id に照合し偽引用は破棄・裏付けゼロのリスクは丸ごと破棄**→`RiskForecastRepository` に最新1件保存。**シグナル0件は Gemini 非呼び出しで空予報＝課金ゼロ**。予報はシグナル全量同梱の `ForecastBriefing` として保存＝引用チップの解決先を配信に含める。wire 契約は `Forecast/domain/contracts/ForecastContract.ts`。
+
+### 10.4 ルート・DI（F6）
+
+`GET /forecast`＝事前生成済みキャッシュ配信（Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）・`POST /forecast`＝生成（`DEMO_ENABLED` 配下）。`forecastGuard` が `FORECAST_ENABLED` off（既定）で 404。`BackofficeApp` が `ForecastSignalSource[]` を組み立て（★Gateway 名指しなし・`InMemoryPendingInfraPlanStore` を `TerraformGatewayImpl` に配線）、`SeedScheduleSource`（seed は `seeds/ForecastScheduleSeed.ts`・`DEMO_ENABLED` 配下で投入）、`ForecastMemoryRepository.warmUp()` は `FORECAST_ENABLED` 時のみ起動時実行。`FORECAST_HORIZON` 既定 "今週末"。
+
+### 10.5 UI（F7）
+
+`frontend/features/forecast`＝domain（`ForecastView`/`RiskLevel` 純関数・wire は `ForecastContract` を `@monitoring` alias 直 import）／infrastructure（`forecastApi`＝GET の 404 を body で「機能 off（guard・非JSON）/未生成（JSON）」に判別し可用性を返す＝専用 status API を増やさない）／application（`triggerForecast`）／presentation（`ForecastProvider`＝GET 1回でナビ表示可否＋最新予報を全ページ共有・`ForecastPage`＝リスク level 降順・`RiskCard`＝level バッジ+confidence ゲージ+reasoning・**`CitationList`＝引用検証済みシグナルのみの引用チップ（PR/スケジュール/過去アラートへ実リンク・ハルシネーション否定の可視化）**）。`/forecast` SPA ルート追加（vite proxy / nginx を Accept 出し分けの SPA-aware 側へ移動）・Forecast ナビタブは `FORECAST_ENABLED` off で非表示＋HIGH n件バッジの導線1個。カード描画は `shared/ui/ReferencedEvidenceCard` へ昇格し相関パネル（`RelatedAlertsPanel`）と共有＝「参照 id を実在レコードへ解決して提示する」同型パターンの単一実装。
+
+### 10.6 フラッグシップ seed と E2E（F8）
+
+- seed 3系統（DB接続枯渇）: `seeds/ForecastPendingPlanSeed.ts`＝Cloud SQL `max_connections` 100→40 の未適用 plan（`DEMO_ENABLED` 配下で `InMemoryPendingInfraPlanStore` へ投入）／`seeds/ForecastScheduleSeed.ts`＝土 20:00 checkout 負荷 x5／`seeds/ResolvedAlertSeed.ts` に過去解決事例2件（`FORECAST_MEMORY_SEED_ALERT_IDS`・`report.subject` を plan の terraform address / schedule の checkout とトークン突合する語彙で明示＝MEMORY 引用が `incident.<実在AlertId>` として `GET /alerts/:id` に解決できる）。
+- **MEMORY は生成時に再 warmUp**（`ForecastRiskUseCase.recallMemorySignals`）＝demo reset の再 seed・直前に承認/解決した事例が backend 再起動なしで記憶に載る。
+- ローカル E2E（`AI_INVESTIGATION_STUB=true`）: `StubLLMClient` が予兆 SYSTEM_INSTRUCTION を判別して固定予報（**意図的な偽引用 ghost-\* 入り**・実在引用は plan-1/sch-1/inc-1 の3系統）を返し、引用検証＝偽引用 drop・裏付けゼロ破棄・MEMORY の実在解決・GET キャッシュ配信を課金なしで決定論検証。
+- UI の見せ方: `RiskCard` は **window（いつ危ないか）を主見出し**にし、引用を種別レーン（変更予定 cyan／負荷予定 amber／過去の記憶 emerald）＋「根拠 n系統」チップで**系統の収束**として見せる（`groupCitationsByKind`・タイムチャートは window が LLM 由来の自由文字列のため不採用）。MEMORY 引用の「当時のアラートを開く」は、一覧 API が RESOLVED を除外するため詳細ページ側で `GET /alerts/:id` へフォールバックして解決（`useAlertDetail` が現役＝共有一覧 state／アーカイブ＝単品 fetch の二源を単一インターフェースに畳む。アーカイブは共有一覧 state へ merge しない＝一覧に混入しない。類似分類の関連アラート導線も同経路）。
+
+### 10.7 予防ファースト（F10・F11）
+
+予兆の主目的＝**発火前にインシデントを握りつぶす**。
+
+- F11a 先手: `RiskItemPrimitives.preventiveAction?`（optional・後方互換）を LLM に「citations の実在シグナルに言及する具体的な先手・**「〜することを推奨します」形・HIGH/MEDIUM は原則必須**・実行主体は人間・reasoning は診断に徹し対処を書かない」で生成させ、safeParse で trim・不正はフィールドごと drop＝出なくても先手行が消えるだけの縮退。`RiskCard` は reasoning 直下に cyan パネル「🛡 今打てる先手」を**カード内の主役**として表示し、実行先（PR/plan/過去 Alert）への動線は CitationList の実リンクが担う＝「先手を読む→引用から実行先へ飛ぶ→人間が外で防ぐ」の1クリック動線が write ゼロで閉じる。
+- F10-②/F11b 橋渡し CTA: `ForecastBridgeCta`＝発火後の受け皿（/alerts の反応的パイプライン）への**純ナビゲーション**を「もし防ぎきれずに発火したら？」の**保険トーン**で先手ブロックに視覚従属させ、risks がある時だけ `BriefingBody` 末尾にページ単位で1個・破線ボーダー＝未発火の未来を実線 RiskCard と視覚区別・テキストリンクのみで button 不在＝**write-zero を UI 語彙でも維持**。mutate 系アクション・トリアージ状態は不採用＝予兆の防御アクションはシステム外の人間判断という設計思想。
+
+### 10.8 予兆デモコンソール（F12）
+
+`DELETE /forecast`＝`RiskForecastRepository.clearLatest()`・`demoGuard` 配下。**アラート側 /demo/reset とは独立**＝一覧のリセットが提出前に温めた予報キャッシュ（無人閲覧の要）を巻き込まない。UI は `ForecastDemoConsole`＝アラート一覧の DEMO CONSOLE と同一視覚言語（fuchsia ピル・realness バッジ・cyan 実行/rose リセット）の右 aside パネルで、**投入シグナル台帳**（実データ＝実 GitHub PR は1つだけ・残りは合成 seed、と本物度を明示）＋「▶ 予報を生成（AI 突合・約1分）」「予報をリセット」を集約。可用性は GET /demo/status 404 判定＝本番ではコンソールごと非表示・予報閲覧は無傷。
 
 ## 11. 未実装（設計のみ）
 

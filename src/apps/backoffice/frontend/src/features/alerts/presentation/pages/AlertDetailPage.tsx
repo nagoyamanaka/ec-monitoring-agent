@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { useForecastNav } from "@features/forecast/presentation/ForecastProvider";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import { LinkIcon } from "@shared/ui/icons";
 import { hasAiInvestigation } from "../../domain/AlertView";
 import { eventTitle } from "../../domain/eventCatalog";
 import { useAlertsData } from "../AlertsDataProvider";
@@ -188,9 +189,16 @@ export function AlertDetailPage() {
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="shrink-0 rounded-md bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-200 ring-1 ring-inset ring-slate-700/60 transition hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-200 ring-1 ring-inset ring-slate-700/60 transition hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
               >
-                {copied ? "✓ コピーしました" : "🔗 リンクをコピー"}
+                {copied ? (
+                  "✓ コピーしました"
+                ) : (
+                  <>
+                    <LinkIcon className="shrink-0" />
+                    リンクをコピー
+                  </>
+                )}
               </button>
             </header>
 

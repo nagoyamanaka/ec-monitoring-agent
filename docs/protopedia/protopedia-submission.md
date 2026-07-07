@@ -33,7 +33,7 @@
 
 - **① ingest（3系統）** — 監視対象サービスの業務イベント（RabbitMQ 購読）・Cloud Monitoring の webhook・CI（Trivy）のスキャン結果 POST。同型アラートの嵐は 1件×N に集約。
 - **② 分類** — 既知は1秒未満・AIコストゼロで即確定。類似は confidence 付き。未知だけ次へ。
-- **③ AI 調査（未知のみ）** — Google ADK の 8 エージェント（Gemini 2.5 Pro / Vertex AI）が Cloud Logging・Terraform 適用差分・GitHub コミット diff・過去事例DB を read-only で横断し、根拠リンク付きレポートを生成。
+- **③ AI 調査（未知のみ）** — Google ADK の 8 エージェント（Gemini 2.5 Pro/Flash / Vertex AI）が Cloud Logging・Terraform 適用差分・GitHub コミット diff・過去事例DB を read-only で横断し、根拠リンク付きレポートを生成。
 - **④ 人間レビュー** — React 観測コンソール（SSE ライブ中継）。承認で学習・却下で再調査・頻出パターンは既知へ昇格。
 - **⑤ 予兆ブリーフィング** — 未マージ PR・未適用 Terraform plan・負荷予定と過去の障害の記憶を突合し、起きる前に予報。引用は実在シグナルと照合済みのものだけ表示。
 - **⑥ 修正（write 隔離）** — GitHub Actions 上で AI が実コードを修正し draft PR。自動マージなし・人間承認ゲート。

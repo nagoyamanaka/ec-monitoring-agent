@@ -71,6 +71,12 @@ describe("RiskCard", () => {
     expect(screen.getByText("2系統・2件")).toBeInTheDocument();
     expect(screen.getByText("未来の変更")).toBeInTheDocument();
     expect(screen.getByText("過去の同型事例")).toBeInTheDocument();
+    // A3: 見出しは人間語の desc、生ID subject は font-mono の従属メタ行へ降格
+    const desc = screen.getByText("pool 100→40 に縮小する未マージ PR");
+    expect(desc).toHaveClass("font-medium");
+    const rawSubjects = screen.getAllByText("db.connection_pool");
+    expect(rawSubjects).toHaveLength(2);
+    rawSubjects.forEach((el) => expect(el).toHaveClass("font-mono"));
 
     const external = screen.getByRole("link", { name: /証拠を開く/ });
     expect(external).toHaveAttribute("href", "https://github.com/x/y/pull/42");

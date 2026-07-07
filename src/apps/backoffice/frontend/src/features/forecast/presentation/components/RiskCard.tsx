@@ -1,4 +1,5 @@
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import { ClockIcon, ShieldIcon } from "@shared/ui/icons";
 import { ConfidenceBar } from "@shared/ui/tremor";
 import { citationKindCount } from "../../domain/ForecastView";
 import type { RiskCardView } from "../../domain/ForecastView";
@@ -23,8 +24,8 @@ export function RiskCard({ risk }: RiskCardProps) {
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <h3 className="text-lg font-semibold text-slate-50">
-            <span aria-hidden>⏱ </span>
+          <h3 className="flex items-center gap-1.5 text-lg font-semibold text-slate-50">
+            <ClockIcon className="shrink-0 text-slate-400" />
             {risk.window}
           </h3>
           <p className="text-sm font-medium text-slate-300">{risk.subject}</p>
@@ -51,8 +52,9 @@ export function RiskCard({ risk }: RiskCardProps) {
       {risk.preventiveAction && (
         <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-3">
           <p className="flex flex-wrap items-center justify-between gap-x-3 text-[11px] font-semibold tracking-wide text-cyan-300">
-            <span>
-              <span aria-hidden>🛡 </span>今打てる先手
+            <span className="inline-flex items-center gap-1">
+              <ShieldIcon className="shrink-0" />
+              今打てる先手
             </span>
             <span className="font-normal text-slate-400">
               実行先は下の引用リンクから

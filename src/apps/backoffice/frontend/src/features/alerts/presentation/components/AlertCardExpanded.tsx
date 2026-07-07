@@ -20,6 +20,17 @@ import { evidenceFlowModel } from "../../domain/evidenceFlow";
  */
 export type AlertReportVariant = "summary" | "full";
 
+/** AI 推定パターン名が機械 ID（UPPER_SNAKE_CASE）のときだけ人間語化して見出し行に出す対象と判定する。 */
+const RAW_ID_PATTERN = /^[A-Z0-9]+(?:_[A-Z0-9]+)+$/;
+
+function isRawId(patternName: string): boolean {
+  return RAW_ID_PATTERN.test(patternName);
+}
+
+function humanizeRawId(patternName: string): string {
+  return patternName.replace(/_/g, " ").toLowerCase();
+}
+
 export interface AlertCardExpandedProps {
   alert: AlertView;
   /**
@@ -187,6 +198,13 @@ export function AlertCardExpanded({
               </p>
               <p className="text-xs text-slate-400">
                 パターンID: <code>{reason.rawPatternName}</code>
+              </p>
+            </>
+          ) : isRawId(reason.patternName) ? (
+            <>
+              <p className="text-slate-100">{humanizeRawId(reason.patternName)}</p>
+              <p className="text-xs text-slate-400">
+                パターンID: <code>{reason.patternName}</code>
               </p>
             </>
           ) : (

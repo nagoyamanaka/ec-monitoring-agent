@@ -6,25 +6,25 @@
 
 ## 優先順位一覧（上から消化）
 
-| # | タスク | 優先 | 実行者 | 状態 |
-| --- | --- | --- | --- | --- |
-| H1 | 本番デプロイURLの床（tf apply・予報403・OOM） | ★★★★★ | 人間 | 未 |
-| A1 | 絵文字の豆腐化解消（フォント＋SVG化） | ★★★★★ | 人間(sudo)＋エージェント | 未 |
-| C1 | 動画タイトルカード（0:00-0:05）作成 | ★★★★★ | エージェント | 未 |
-| A2 | ブランド統一（EC Monitoring→Kizashi） | ★★★★☆ | エージェント | 未 |
-| B1 | アーキ図ダーク版再レンダ | ★★★★☆ | エージェント | 未 |
-| C2 | take003 再撮影（豆腐なし・新ブランド） | ★★★★☆ | エージェント→人間確認 | 未（A1/A2/C1後） |
-| B2 | ProtoPedia画像5枚のポスター化 | ★★★☆☆ | エージェント | 未（C2後） |
-| A3 | 生ID露出の人間語化 | ★★★☆☆ | エージェント | 未 |
-| B3 | 動画サムネイル作成 | ★★★☆☆ | エージェント | 未 |
-| A4 | 予兆ページ導入文の圧縮＋Heroコピー | ★★☆☆☆ | エージェント | 未 |
-| A5 | 調査中の証拠パネルの逐次表示 | ★☆☆☆☆（余力） | エージェント | 未 |
+| #   | タスク                                        | 優先          | 実行者                   | 状態                                                                                                                                              |
+| --- | --------------------------------------------- | ------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1  | 本番デプロイURLの床（tf apply・予報403・OOM） | ★★★★★         | 人間                     | 未                                                                                                                                                |
+| A1  | 絵文字の豆腐化解消（フォント＋SVG化）         | ★★★★★         | 人間(sudo)＋エージェント | 済（フォント導入＋主役絵文字SVG化・要C2再撮影で最終確認）                                                                                         |
+| C1  | 動画タイトルカード（0:00-0:05）作成           | ★★★★★         | エージェント             | 未                                                                                                                                                |
+| A2  | ブランド統一（EC Monitoring→Kizashi）         | ★★★★☆         | エージェント             | 未                                                                                                                                                |
+| B1  | アーキ図ダーク版再レンダ                      | ★★★★☆         | エージェント             | 未                                                                                                                                                |
+| C2  | take003 再撮影（豆腐なし・新ブランド）        | ★★★★☆         | エージェント→人間確認    | 未（A1/A2/C1後）                                                                                                                                  |
+| B2  | ProtoPedia画像5枚のポスター化                 | ★★★☆☆         | エージェント             | 未（C2後）                                                                                                                                        |
+| A3  | 生ID露出の人間語化                            | ★★★☆☆         | エージェント             | 済（予報引用チップ=desc主／subject生IDをmonoメタ行へ・アラート詳細のAI推定パターン機械IDを人間語化＋生IDをパターンIDメタ行へ・UT+2 369緑・tsc緑） |
+| B3  | 動画サムネイル作成                            | ★★★☆☆         | エージェント             | 未                                                                                                                                                |
+| A4  | 予兆ページ導入文の圧縮＋Heroコピー            | ★★☆☆☆         | エージェント             | 未                                                                                                                                                |
+| A5  | 調査中の証拠パネルの逐次表示                  | ★☆☆☆☆（余力） | エージェント             | 未                                                                                                                                                |
 
 ---
 
 ## A. アプリ改善
 
-### A1 絵文字の豆腐化解消 ★★★★★
+### A1 絵文字の豆腐化解消 ★★★★★　✅
 
 **事実**: 撮影ホスト（WSL）は `fc-list | grep -ci emoji` → **0**。フロントは絵文字16種を使用（🛡🖥🕹🔗📘📈🔧📄⚡⚖⚠ ✓❯❮✕✗）。take002 の全スクショで「🛡 今打てる先手」→「� 今打てる先手」等に化けている。動画も同一環境撮影のため同様。
 
@@ -38,12 +38,20 @@
    最低限の置換対象（動画に映る主役のみ・全部やらない）:
    - `features/forecast/presentation/components/RiskCard.tsx` の 🛡（先手カード）と🔗
    - `shared/ui/`／alerts 系の 📋（リンクをコピー）・📅（土 20:00 の頭）・🕹（デモコンソール）
-   置換方針: `lucide-react` は**依存追加せず**、16px の inline SVG コンポーネント（`shared/ui/icons.tsx` を新設）で `Shield`/`Link`/`Copy`/`Calendar`/`Gamepad` の5つだけ手書き。`currentColor` 継承・`aria-hidden`。
+     置換方針: `lucide-react` は**依存追加せず**、16px の inline SVG コンポーネント（`shared/ui/icons.tsx` を新設）で `Shield`/`Link`/`Copy`/`Calendar`/`Gamepad` の5つだけ手書き。`currentColor` 継承・`aria-hidden`。
 3. 検証: `pnpm --filter backoffice-frontend test` 緑 → ローカル compose で `/forecast` と `/alerts` を目視（またはスクショ採取スクリプトで1枚撮って□が無いこと）。
 
 **受け入れ条件**: 再撮影スクショ上に U+FFFD/豆腐が1つも写らない。
 
-### A2 ブランド統一（EC Monitoring → Kizashi） ★★★★☆
+**実施記録（2026-07-07）**: フォント導入済み（`fc-list | grep -ci emoji`=1）。恒久対策として `shared/ui/icons.tsx` を新設し、`Shield`/`Clock`/`Link`/`Gamepad` の4アイコンを inline SVG（`currentColor`・`aria-hidden`・1em）で手書き。置換対象＝動画の主役のみ:
+
+- `RiskCard.tsx`: 🛡（先手カード）→`ShieldIcon`、⏱（予報ウィンドウ見出し）→`ClockIcon`
+- `ReferencedEvidenceCard.tsx` / `AlertDetailPage.tsx`（リンクをコピー）: 🔗→`LinkIcon`
+- `DemoDrawer.tsx` / `ForecastDemoConsole.tsx`: 🕹️（デモコンソール）→`GamepadIcon`
+
+TODO記載の 📋（コピー）・📅（カレンダー）は**コード上に存在しなかった**ため対象外。`EvidencePanel.tsx` のソース種アイコン（🛡📈 等は文字列マップ・型変更が必要）は font 導入で描画されるため据置。`✓✗✕❮❯⚠⚖⬡` は color emoji でなく通常テキストフォントで描画される記号のため対象外。フロントUT 367件緑・`tsc --noEmit` 緑。
+
+### A2 ブランド統一（EC Monitoring → Kizashi） ★★★★☆　✅
 
 **事実**: `src/apps/backoffice/frontend/src/shared/ui/AppHeader.tsx:44` が「EC Monitoring」。提出名は「Kizashi」。README の H1 は「EC Monitoring Agent」。
 
@@ -60,7 +68,7 @@
 
 **受け入れ条件**: デプロイURL/ローカルの全画面ヘッダーとタブタイトルが Kizashi。テスト緑。
 
-### A3 生ID露出の人間語化 ★★★☆☆
+### A3 生ID露出の人間語化 ★★★☆☆　✅
 
 **事実**: 予報引用チップ見出しが `chore_db_cap_db_connection_pool_max_connections_100_40_for_cost_opti…`／`google_sql_database_instance_ec_db`。アラート詳細「AI 推定パターン」が `TERRAFORM_DB_MAX_CONNECTIONS_REDUCTION` の生表示。
 
@@ -72,7 +80,12 @@
 
 **受け入れ条件**: 予報カードとアラート詳細の見出し行に snake_case が現れない（メタ行は可）。
 
-### A4 予兆ページ導入文の圧縮＋Heroコピー ★★☆☆☆
+**実施記録（2026-07-07）**: 表示順の入替のみ・contracts/保存値は不変。
+- 予報引用チップ（`CitationList.tsx`）: `ReferencedEvidenceCard` に `meta?` prop を追加し、`title`=人間語 `desc`（font-medium 見出し）／`meta`=生ID `subject`（font-mono の小メタ行）へ入替。`description` は任意化。
+- アラート詳細（`AlertCardExpanded.tsx`）: AI 推定パターン名が機械 ID（`^[A-Z0-9]+(_[A-Z0-9]+)+$`）のときだけ `replace(/_/g," ").toLowerCase()` で見出しを人間語化し、生IDは既存の結晶化行と同型の「パターンID: `<code>`」メタ行へ降格。既に人間語の patternName は誤変換しない。
+- UT +2（機械ID/人間語・見出し=desc/メタ=mono subject）。フロントUT 369件緑・`tsc --noEmit` 緑。**ライブ視覚確認は生ID発生に有料 AI 経路が必要なため未実施**（表示専用のため UT で担保）。
+
+### A4 予兆ページ導入文の圧縮＋Heroコピー ★★☆☆☆　✅
 
 **現状**: 見出し「予兆ブリーフィング」＋説明3文（未マージPR・インフラ変更・スケジュール…実在シグナルと照合済み…）。
 
@@ -107,13 +120,13 @@
 
 **方針**: 「UIスクショ」でなく「1枚=1メッセージのポスター」。take003 のスクショに、下辺の帯（ダーク・半透明）＋1行コピーを焼き込む。
 
-| # | 素材（take003） | 焼き込みコピー |
-| --- | --- | --- |
-| 1（Hero） | part1 `01-forecast-card.png` | 障害は、起きる前に終わらせる。 |
-| 2 | B1 のアーキ図ダーク版 | （コピーなし・図のみ） |
-| 3 | part2 `03-live-timeline.png` | 8つのAIエージェントが、ライブで調査する。 |
-| 4 | part2 `06-evidence-panel.png` | 結論には、実在する証拠だけ。 |
-| 5 | part3 `01-known-instant.png` | 二度目の同じ障害は、1秒で終わる。 |
+| #         | 素材（take003）               | 焼き込みコピー                            |
+| --------- | ----------------------------- | ----------------------------------------- |
+| 1（Hero） | part1 `01-forecast-card.png`  | 障害は、起きる前に終わらせる。            |
+| 2         | B1 のアーキ図ダーク版         | （コピーなし・図のみ）                    |
+| 3         | part2 `03-live-timeline.png`  | 8つのAIエージェントが、ライブで調査する。 |
+| 4         | part2 `06-evidence-panel.png` | 結論には、実在する証拠だけ。              |
+| 5         | part3 `01-known-instant.png`  | 二度目の同じ障害は、1秒で終わる。         |
 
 **手順**: HTML テンプレート（画像を `background`、下帯＋テキスト）→ headless Chrome で 1920×1080 PNG 出力。`scripts/video-capture/` の既存 Chrome 起動系を流用可。フォントは Noto Sans JP（システム導入済みのはず。無ければ `画像取り直しコマンド.txt` と同条件）。
 
@@ -146,12 +159,12 @@
 
 ## H. 人間タスク（エージェント実行不可）
 
-| # | タスク | 内容 |
-| --- | --- | --- |
-| H1 | **本番URLの床（最優先）** | tf apply（予報403=GOOGLE_GENAI_USE_VERTEXAI 修正の適用）→ 本番で `GET /forecast` が事前生成キャッシュを返すこと・edge 512MiB OOM の再発監視・シナリオ3b/6 の実 Gemini fallback 率目視。一次審査は審査員が無人でURLを触るため全加点の土台 |
-| H2 | 絵文字フォント導入 | `sudo apt-get install -y fonts-noto-color-emoji && fc-cache -f`（A1手順1） |
-| H3 | 提出操作 | YouTube アップロード（サムネ=B3）・ProtoPedia 登録（原稿=`protopedia-submission.md`・画像=B2の5枚）・GitHub リポ公開状態確認 |
-| H4 | 最終リハ | デプロイURLをシークレットウィンドウで一巡（forecast→alerts→詳細→承認→既知）。所要5分 |
+| #   | タスク                    | 内容                                                                                                                                                                                                                                     |
+| --- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1  | **本番URLの床（最優先）** | tf apply（予報403=GOOGLE_GENAI_USE_VERTEXAI 修正の適用）→ 本番で `GET /forecast` が事前生成キャッシュを返すこと・edge 512MiB OOM の再発監視・シナリオ3b/6 の実 Gemini fallback 率目視。一次審査は審査員が無人でURLを触るため全加点の土台 |
+| H2  | 絵文字フォント導入        | `sudo apt-get install -y fonts-noto-color-emoji && fc-cache -f`（A1手順1）                                                                                                                                                               |
+| H3  | 提出操作                  | YouTube アップロード（サムネ=B3）・ProtoPedia 登録（原稿=`protopedia-submission.md`・画像=B2の5枚）・GitHub リポ公開状態確認                                                                                                             |
+| H4  | 最終リハ                  | デプロイURLをシークレットウィンドウで一巡（forecast→alerts→詳細→承認→既知）。所要5分                                                                                                                                                     |
 
 ---
 

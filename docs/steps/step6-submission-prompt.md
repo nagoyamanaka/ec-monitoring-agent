@@ -46,7 +46,7 @@ EC等のWebサービスを運用する SRE・オンコールエンジニア・�
   EvidenceCollector は read-only ツールで Cloud Logging・Terraform適用差分・
   GitHub実コミット&unified diff・過去類似インシデントDBを自律的に引く。
   自責/他責を判定して出口を「修正PR起案」と「運用エスカレーション草案」に振り分ける。
-- モデル: Gemini 2.5 Pro（Vertex AI 経由・ADC認証）。単一Gemini経路とADK経路を
+- モデル: Gemini 2.5 Pro/Flash（Vertex AI 経由・ADC認証）。単一Gemini経路とADK経路を
   ポート（AIInvestigationPort）の DI 差し替えで切替可能。
 - 学習ループ（人間レビューが要）: 承認（訂正メモ可）→ SimilarIncident 蓄積（類似分類の
   母集団・訂正が次回 SIMILARITY 分類の根拠になる）→ 閾値到達 or 手動昇格で
@@ -190,4 +190,4 @@ ProtoPedia 紹介画像（最大5枚）の構成案を作ってください。
 
 - ブラウザ Claude の出力は**必ず §A と照合**して事実誤認を直してから使う（特に「実装済み/設計のみ」の混同と数字）。
 - 動画台本 B-3 は録画テイク（todo F8）が撮れてから微修正する前提で、先に骨組みだけ作っておいてよい。
-- ProtoPedia の「開発素材」欄は事実列挙で足りるため AI 不要: TypeScript / Express / React / MongoDB / RabbitMQ / Elasticsearch / Google ADK / Gemini 2.5 Pro (Vertex AI) / Cloud Run / Compute Engine / Cloud Monitoring / Cloud Logging / Terraform / GitHub Actions / Trivy / Vitest（Playwright は不使用・E2E も Vitest の HTTP API テスト）。
+- ProtoPedia の「開発素材」欄は事実列挙で足りるため AI 不要: TypeScript / Express / React / MongoDB / RabbitMQ / Elasticsearch / Google ADK / Gemini 2.5 Pro/Flash (Vertex AI) / Cloud Run / Compute Engine / Cloud Monitoring / Cloud Logging / Terraform / GitHub Actions / Trivy / Vitest（Playwright は不使用・E2E も Vitest の HTTP API テスト）。

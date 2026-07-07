@@ -40,8 +40,13 @@ export function AppHeader({
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-6 py-3">
         <div className="flex shrink-0 items-center gap-2">
           <BrandMark />
-          <span className="text-sm font-semibold tracking-wide text-slate-100">
-            EC Monitoring
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-sm font-semibold tracking-wide text-slate-100">
+              Kizashi
+            </span>
+            <span className="text-[10px] font-medium tracking-wider text-teal-400">
+              AI-SRE
+            </span>
           </span>
         </div>
         <nav className="flex items-center gap-1" aria-label="主ナビゲーション">

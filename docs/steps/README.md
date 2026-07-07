@@ -13,8 +13,9 @@
 | [step4-3-backoffice-backend.md](step4-3-backoffice-backend.md) / [todo](step4-3-backoffice-backend-todo.md) | Express 配線・SSE・ingest | 実装済み（同上） |
 | [step4-4-backoffice-frontend.md](step4-4-backoffice-frontend.md) / [todo](step4-4-backoffice-frontend-todo.md) | フロントエンド | 実装済み（同上） |
 | [step4-5-backoffice-infra.md](step4-5-backoffice-infra.md) / [todo](step4-5-backoffice-infra.todo.md) | インフラ（GCP/Terraform/CI） | 実装済み |
-| [step6-final-sprint-strategy.md](step6-final-sprint-strategy.md) / [todo](step6-final-sprint-todo.md) | **現役**: 7/10 締切スプリント（予兆×デモ防御） | 進行中 |
-| [step6-submission-prompt.md](step6-submission-prompt.md) | **現役**: 提出資料作成用プロンプト（ブラウザ Claude 用） | 進行中 |
+| [step6-final-sprint-strategy.md](step6-final-sprint-strategy.md) / [todo](step6-final-sprint-todo.md) | 7/10 締切スプリント（予兆×デモ防御） | 実装着地（残作業は step7 へ） |
+| [step6-submission-prompt.md](step6-submission-prompt.md) | 提出資料作成用プロンプト（ブラウザ Claude 用） | 役目終了（提出原稿は protopedia 配下が正） |
+| [step7-final-review-strategy.md](step7-final-review-strategy.md) / [todo](step7-final-review-todo.md) | **現役**: 最終レビュー委員会の戦術（採点・ブランド戦略・Heroコピー）と提出前TODO | 進行中 |
 
 決定記録は [docs/decisions/](../decisions/) を参照。
 
