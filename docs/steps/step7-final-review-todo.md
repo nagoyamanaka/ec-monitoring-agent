@@ -13,7 +13,7 @@
 | C1  | 動画タイトルカード（0:00-0:05）作成           | ★★★★★         | エージェント             | 済（`title-card.png` 1920×1080・#0B1220・Heroコピー＋Kizashi副題・豆腐なし目視確認）                                                              |
 | A2  | ブランド統一（EC Monitoring→Kizashi）         | ★★★★☆         | エージェント             | 未                                                                                                                                                |
 | B1  | アーキ図ダーク版再レンダ                      | ★★★★☆         | エージェント             | 済（architecture.md と同期済みを検証の上ダーク化・Kizashiロゴ追加・3520×2060差替／ライト版退避）                                                  |
-| C2  | take003 再撮影（豆腐なし・新ブランド）        | ★★★★☆         | エージェント→人間確認    | 未（A1/A2/C1後）                                                                                                                                  |
+| C2  | take003 再撮影（豆腐なし・新ブランド）        | ★★★★☆         | エージェント→人間確認    | 済（実Gemini経路で4パート撮影・主役6枚を目視＝豆腐0/ヘッダKizashi/実調査90%・fallbackなし／part4のdraft PRカットも PR #29 で撮影済み）           |
 | B2  | ProtoPedia画像5枚のポスター化                 | ★★★☆☆         | エージェント             | 未（C2後）                                                                                                                                        |
 | A3  | 生ID露出の人間語化                            | ★★★☆☆         | エージェント             | 済（予報引用チップ=desc主／subject生IDをmonoメタ行へ・アラート詳細のAI推定パターン機械IDを人間語化＋生IDをパターンIDメタ行へ・UT+2 369緑・tsc緑） |
 | B3  | 動画サムネイル作成                            | ★★★☆☆         | エージェント             | 未                                                                                                                                                |
@@ -159,6 +159,17 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 2. `scripts/video-capture/README.md` の手順どおりパート4本を再撮影（mp4直接出力・take003）。
 3. 撮影後チェック（機械可能）: 各パートの代表スクショに□/U+FFFDが無い・ヘッダーがKizashi・`script.md` チェックリスト全項目。
 4. 人間へ引き渡し: fallback が出たテイクの有無を報告（出ていたら該当パートのみ再撮影）。
+
+**実施記録（2026-07-07）**: `RESET=1 node capture.mjs all` で **take003** を新規採番・4パート撮影（実Gemini経路＝`AI_INVESTIGATION_STUB=false`／`GOOGLE_GENAI_USE_VERTEXAI=true`／Vertex `asia-northeast1`・予報は事前生成キャッシュを使用しPOSTなし）。exit 0。
+
+- 出力: `part1-forecast.mp4`(1.5M)／`part2-investigation.mp4`(4.5M)／`part3-learning.mp4`(1.4M)／`part4-dogfooding.mp4`(879K)・すべて H.264/1920×1080。スクショ計12枚。
+- **fallbackなし**: part2 は実 ADK 8エージェント調査が完走（139秒・証拠6件・確信度90%・`db connection exhaustion`・実Terraform差分 `max_connections 100→20`／`3/3 実在照合済み`）。散文フォールバックや空応答は出ていない。
+- **豆腐チェック（機械＋目視）**: 主役5枚（part1/01-forecast-card・part2/04-report・part2/06-evidence-panel・part3/01-known-instant・part4/01-cve-alert）に U+FFFD/□ が **1つも無い**。絵文字アイコン（🕹デモコンソール・🛡先手・🕒予報ウィンドウ・🔗リンク）は SVG 化＋フォント導入で正常描画。
+- **ブランド**: 全画面ヘッダーが `Kizashi AI-SRE`。タブタイトルは A2 で `Kizashi — AI-SRE 観測コンソール`。
+- **A3/A4 反映確認**: 予報引用チップは人間語 desc が見出し・生 ID は mono メタ行／導入文は1文。
+- **part4 draft PR カット（追撮・2026-07-07）**: 既定 draft PR を **PR #29（`https://github.com/nagoyamanaka/ec-monitoring-agent/pull/29`）に確定**。`capture.mjs` に `DEFAULT_DRAFT_PR_URL` としてハードコード（`DRAFT_PR_URL` env で上書き可）・README/retake-prompt/script.md も PR #29 明記へ更新。`TAKE=take003 node capture.mjs dogfooding` で追記撮影 → `part4-dogfooding/02-draft-pr.png` を採取。目視: `Draft`／「AI が起票した草案（自動マージはしません）」／実CVEリンク（CVE-2021-3807・CVE-2022-25883）／`ai-remediation[bot]` の2コミット・GitHub ダークテーマ・豆腐なし。動画物語（自分自身を監視・人間承認）に合致。
+  - ⚠ **再撮影の落とし穴**: 同一シナリオ4は既発火だと dedup で新規アラートIDが出ず `waitForAlert` が90秒タイムアウトする。part4 のみ撮り直す時は **先に `POST /demo/reset`** してから `TAKE=... node capture.mjs dogfooding`。
+- **要人間確認・残**: 採用スクショの `docs/protopedia/assets/` へのコピー＋コミット（B2 のポスター化素材確定と併せて実施）。
 
 ### C3 台本の最終整合
 

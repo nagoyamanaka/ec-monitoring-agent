@@ -18,6 +18,10 @@ import {
   waitForReport,
 } from "./lib.mjs";
 
+// part4 の draft PR カットで映す、事前確認済みの実 draft PR（AI 起票）。
+// DRAFT_PR_URL 環境変数があればそちらが優先。
+const DEFAULT_DRAFT_PR_URL = "https://github.com/nagoyamanaka/ec-monitoring-agent/pull/29";
+
 // ---------------------------------------------------------------------------
 // 小道具
 // ---------------------------------------------------------------------------
@@ -275,8 +279,8 @@ async function sceneDogfooding() {
     await dwell(4_000);
     await stage.shot("cve-alert");
 
-    // AI が起票した実 draft PR（人間が事前確認した URL を env で渡す）
-    const prUrl = process.env.DRAFT_PR_URL;
+    // AI が起票した実 draft PR。既定は事前確認済みの PR #29。DRAFT_PR_URL で上書き可。
+    const prUrl = process.env.DRAFT_PR_URL || DEFAULT_DRAFT_PR_URL;
     if (prUrl) {
       await page.goto(prUrl);
       await page.waitForLoadState("load", { timeout: 20_000 }).catch(() => {});

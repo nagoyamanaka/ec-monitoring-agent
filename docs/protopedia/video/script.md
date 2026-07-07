@@ -72,7 +72,7 @@
 - **画面**: 自リポジトリ CI（Trivy）検知のアラート → AI起票の**実 draft PR**（2〜3秒）→ スライドPNG（アーキ4層＋数字パック: ユニットテスト全緑・既知1秒未満・調査約2〜3分）→ タイトル。
 - **ナレーション**（72字）: このリポジトリ自身も監視対象。CIの脆弱性検知から、AIが修正のドラフトPRまで起票します。起きる前に予報し、起きた後は自律調査する——Kizashiです。
 - **テロップ**: 自分自身も監視（自動マージなし・人間承認） ／ 数値はすべて実測
-- **撮影メモ**: draft PR は事前起票済みの実物（`DRAFT_PR_URL`）。スライドは HTML→headless Chrome→PNG。
+- **撮影メモ**: draft PR は事前起票済みの実物＝**PR #29（`https://github.com/nagoyamanaka/ec-monitoring-agent/pull/29`）を capture.mjs に既定ハードコード**（差し替えは `DRAFT_PR_URL` で上書き）。スライドは HTML→headless Chrome→PNG。
 
 ---
 
