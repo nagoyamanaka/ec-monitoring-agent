@@ -28,6 +28,82 @@ export type DetectionDetailView = {
   readonly incidentUrl: string | null;
 };
 
+/** documentation の「ラベル: 値」1行分の表示射影。 */
+export type DocumentationRow = {
+  readonly label: string;
+  readonly value: string;
+};
+
+/** 「Type labels {k=v,…}」形の resourceName を分解した表示射影。 */
+export type ParsedResourceName = {
+  /** リソース種別の人間語（例: "VM Instance"）。 */
+  readonly descriptor: string;
+  readonly labels: ReadonlyArray<{ readonly key: string; readonly value: string }>;
+};
+
+/**
+ * Cloud Monitoring がログ一致ポリシーで自動生成する英文 summary
+ * （"Log match condition with labels {…} fired for …"）かを判定する。
+ * この形の summary はポリシー documentation（label_extractors 展開済み）と情報が全重複の
+ * 機械文なので、呼び出し側は documentation がある場合リード文から原文表示へ降格してよい。
+ */
+export function isCloudMonitoringAutoSummary(summary: string): boolean {
+  return /^Log match condition\b[\s\S]*\bfired for\b/.test(summary);
+}
+
+/**
+ * documentation を「ラベル: 値」の行構成として定義リスト表示用にパースする。
+ * 1行でも形が合わなければ null（呼び出し側は生テキスト表示へフォールバック）。
+ * 値側の全角コロン（例: 「検知ログ: デモ用…を注入：意図的に…」）は最初の区切りだけで
+ * 分割するため保持される。
+ */
+export function documentationRows(
+  documentation: string,
+): ReadonlyArray<DocumentationRow> | null {
+  const lines = documentation
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  if (lines.length === 0) return null;
+  const rows: DocumentationRow[] = [];
+  for (const line of lines) {
+    const matched = line.match(/^([^:：]{1,20})[:：]\s*(.+)$/);
+    if (!matched) return null;
+    rows.push({ label: matched[1].trim(), value: matched[2].trim() });
+  }
+  return rows;
+}
+
+/**
+ * Cloud Monitoring が実発報で送る「VM Instance labels {instance_id=…, project_id=…, zone=…}」
+ * 形の resource_name を種別＋ラベルへ分解する。形が違えば null（そのまま表示）。
+ * 値に "," を含むケースは "=" を持たない断片を直前の値へ結合して守る。
+ */
+export function parseResourceName(
+  resourceName: string,
+): ParsedResourceName | null {
+  const matched = resourceName.match(/^(.{1,40}?)\s+labels\s+\{([\s\S]+)\}\.?$/);
+  if (!matched) return null;
+  const labels: Array<{ key: string; value: string }> = [];
+  for (const segment of matched[2].split(",")) {
+    const eq = segment.indexOf("=");
+    if (eq > 0) {
+      labels.push({
+        key: segment.slice(0, eq).trim(),
+        value: segment.slice(eq + 1).trim(),
+      });
+    } else if (labels.length > 0) {
+      const last = labels[labels.length - 1];
+      last.value = `${last.value},${segment.trimEnd()}`;
+    } else {
+      return null;
+    }
+  }
+  return labels.length > 0
+    ? { descriptor: matched[1].trim(), labels }
+    : null;
+}
+
 function asString(payload: Record<string, unknown>, key: string): string | null {
   const value = payload[key];
   return typeof value === "string" && value.trim() !== "" ? value : null;

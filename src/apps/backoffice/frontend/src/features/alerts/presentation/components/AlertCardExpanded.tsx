@@ -7,6 +7,11 @@ import { EscalationPanel } from "./EscalationPanel";
 import { EvidenceFlowDiagram } from "./EvidenceFlowDiagram";
 import { RemediationReviewPanel } from "./RemediationReviewPanel";
 import { alertReason } from "../../domain/alertReason";
+import {
+  documentationRows,
+  isCloudMonitoringAutoSummary,
+  parseResourceName,
+} from "../../domain/DetectionDetailView";
 import { classificationEvidence } from "../../domain/classificationEvidence";
 import { workloadSummary } from "../../domain/investigationWorkload";
 import { evidenceFlowModel } from "../../domain/evidenceFlow";
@@ -72,6 +77,23 @@ export function AlertCardExpanded({
   const flow = full ? evidenceFlowModel(report) : null;
   // 状態が ANALYZING に戻っている＝AI が（再）調査中。既存の内容を持つときは再調査の最中。
   const analyzingNow = alert.status === "ANALYZING";
+  // 発報内容の表示射影（可読性・タスク E 系）: documentation が「ラベル: 値」行構成なら
+  // 定義リストへ構造化し、CM 自動生成の英文 summary（documentation と全重複の機械文）は
+  // 原文 details へ降格、「Type labels {k=v,…}」形の resourceName はラベルチップへ分解する。
+  const detection = alert.detectionDetail;
+  const docRows = detection?.documentation
+    ? documentationRows(detection.documentation)
+    : null;
+  const logRow = docRows?.find((row) => row.label === "検知ログ") ?? null;
+  const docMetaRows = docRows?.filter((row) => row.label !== "検知ログ") ?? [];
+  const detectionResource = detection?.resourceName
+    ? parseResourceName(detection.resourceName)
+    : null;
+  // 降格は documentation が語りを担えるときだけ（自動英文しか無い Alert では唯一の説明を消さない）。
+  const rawSummaryDemoted =
+    detection?.summary != null &&
+    docRows != null &&
+    isCloudMonitoringAutoSummary(detection.summary);
 
   // 分析中（既知でもなく調査レポートも無い＝初回調査）はプレースホルダ
   // （パイプラインビューが隣にある親では出さない＝他に出せる内容も無いので null）。
@@ -109,61 +131,128 @@ export function AlertCardExpanded({
           運べないため、ingest が payload に格納した summary・検知ログ（documentation）・対象リソースを
           分類より先に出す＝「何が起きたか」→「どう分類したか」の読み順。EC 業務イベント等
           該当フィールドを持たない Alert では出ない。 */}
-      {alert.detectionDetail && (
-        <section className="space-y-1.5">
+      {detection && (
+        <section className="space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
             発報内容
           </h4>
-          {alert.detectionDetail.summary && (
+          {/* リード文（人間語 summary）。CM 自動生成の英文は下の details（原文）へ降格済み。 */}
+          {detection.summary && !rawSummaryDemoted && (
             <p className="text-sm leading-relaxed text-slate-100">
-              {alert.detectionDetail.summary}
+              {detection.summary}
             </p>
           )}
-          {/* ポリシー documentation ＝ label_extractors が抜いた検知ログの中身（改行を保持）。 */}
-          {alert.detectionDetail.documentation && (
-            <p className="whitespace-pre-line rounded-md bg-slate-800/60 px-3 py-2 text-xs leading-relaxed text-slate-200 ring-1 ring-inset ring-slate-700/60">
-              {alert.detectionDetail.documentation}
-            </p>
-          )}
-          {(alert.detectionDetail.resourceName ||
-            alert.detectionDetail.policyName ||
-            alert.detectionDetail.metricType) && (
-            <p className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-400">
-              {alert.detectionDetail.resourceName && (
-                <span>
-                  対象リソース:{" "}
-                  <code className="text-slate-200">
-                    {alert.detectionDetail.resourceName}
-                  </code>
-                  {alert.detectionDetail.resourceType && (
-                    <span className="ml-1 text-slate-500">
-                      ({alert.detectionDetail.resourceType})
-                    </span>
+          {/* ポリシー documentation ＝ label_extractors が抜いた検知ログの中身。
+              「ラベル: 値」の行構成なら検知ログを主役の引用に・残りを定義リストに構造化し、
+              形が違う documentation は従来どおり改行保持の生テキストで出す。 */}
+          {docRows ? (
+            <div className="rounded-md bg-slate-800/60 px-3.5 py-3 ring-1 ring-inset ring-slate-700/60">
+              {logRow && (
+                <div className="border-l-2 border-cyan-500/50 pl-2.5">
+                  <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    検知ログ
+                  </p>
+                  <p className="text-sm leading-relaxed text-slate-100">
+                    {logRow.value}
+                  </p>
+                </div>
+              )}
+              {docMetaRows.length > 0 && (
+                <dl
+                  className={cn(
+                    "space-y-1.5 text-xs",
+                    // 引用（何が起きたか）とメタ行（どこで・何の条件で）のグループ境界を
+                    // 細い区切り線で示す＝行間を増やさず塊の切れ目だけ作る。
+                    logRow && "mt-2.5 border-t border-slate-700/40 pt-2.5",
                   )}
-                </span>
+                >
+                  {docMetaRows.map((row) => (
+                    <div key={row.label} className="flex gap-2">
+                      <dt className="min-w-[6em] shrink-0 text-slate-400">
+                        {row.label}
+                      </dt>
+                      <dd className="leading-relaxed text-slate-200">
+                        {row.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
               )}
-              {alert.detectionDetail.policyName && (
-                <span>
-                  発報ポリシー:{" "}
-                  <span className="text-slate-200">
-                    {alert.detectionDetail.policyName}
+            </div>
+          ) : (
+            detection.documentation && (
+              <p className="whitespace-pre-line rounded-md bg-slate-800/60 px-3 py-2 text-xs leading-relaxed text-slate-200 ring-1 ring-inset ring-slate-700/60">
+                {detection.documentation}
+              </p>
+            )
+          )}
+          {(detection.resourceName ||
+            detection.policyName ||
+            detection.metricType) && (
+            <div className="space-y-1.5 pt-0.5 text-xs text-slate-400">
+              <p className="flex flex-wrap gap-x-4 gap-y-0.5">
+                {detection.resourceName && (
+                  <span>
+                    対象リソース:{" "}
+                    <code className="text-slate-200">
+                      {detectionResource
+                        ? detectionResource.descriptor
+                        : detection.resourceName}
+                    </code>
+                    {detection.resourceType && (
+                      <span className="ml-1 text-slate-500">
+                        ({detection.resourceType})
+                      </span>
+                    )}
                   </span>
-                </span>
+                )}
+                {detection.policyName && (
+                  <span>
+                    発報ポリシー:{" "}
+                    <span className="text-slate-200">
+                      {detection.policyName}
+                    </span>
+                  </span>
+                )}
+                {detection.metricType && (
+                  <span>
+                    メトリクス:{" "}
+                    <code className="text-slate-200">
+                      {detection.metricType}
+                    </code>
+                  </span>
+                )}
+              </p>
+              {/* 「Type labels {k=v,…}」の生 blob はチップに分解（実発報のみこの形で届く）。 */}
+              {detectionResource && (
+                <p className="flex flex-wrap gap-1.5">
+                  {detectionResource.labels.map((label) => (
+                    <code
+                      key={label.key}
+                      className="rounded bg-slate-800/70 px-1.5 py-0.5 text-[10px] text-slate-300 ring-1 ring-inset ring-slate-700/60"
+                    >
+                      {label.key}={label.value}
+                    </code>
+                  ))}
+                </p>
               )}
-              {alert.detectionDetail.metricType && (
-                <span>
-                  メトリクス:{" "}
-                  <code className="text-slate-200">
-                    {alert.detectionDetail.metricType}
-                  </code>
-                </span>
-              )}
-            </p>
+            </div>
+          )}
+          {/* 降格した CM 自動生成サマリの原文（透明性のため捨てずに畳んで残す）。 */}
+          {rawSummaryDemoted && detection.summary && (
+            <details className="text-xs">
+              <summary className="cursor-pointer select-none text-slate-400 transition hover:text-slate-300">
+                Cloud Monitoring 原文サマリ（自動生成の英文）
+              </summary>
+              <p className="mt-1 break-all rounded-md bg-slate-800/40 px-2.5 py-1.5 font-mono text-[10px] leading-relaxed text-slate-400">
+                {detection.summary}
+              </p>
+            </details>
           )}
           {/* CM インシデントのコンソールリンクは実発報にしか無い（合成は偽リンクを作らない）。 */}
-          {alert.detectionDetail.incidentUrl && (
+          {detection.incidentUrl && (
             <a
-              href={alert.detectionDetail.incidentUrl}
+              href={detection.incidentUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-cyan-300 underline decoration-cyan-500/40 underline-offset-2 transition hover:text-cyan-200 hover:decoration-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
