@@ -49,7 +49,18 @@ export function alertReason(alert: AlertView): AlertReason {
     if (alert.report.isFallback) {
       return { kind: "ai", patternName: "調査失敗・再調査可" };
     }
-    return { kind: "ai", patternName: alert.report.suggestedPatternName };
+    const patternName = alert.report.suggestedPatternName.trim();
+    if (patternName !== "") {
+      return { kind: "ai", patternName };
+    }
+    // 非 fallback でもパターン名が空になる経路がある（切断出力のサルベージ回収で欠落を
+    // 空文字に丸める・LLM が空文字を返す）。「AI推定: 」の後ろを空欄で描かず、
+    // 実情報である summary で語る。summary まで空なら fallback と同じ定型文（空 UI 禁止）。
+    const summary = alert.report.summary.trim();
+    return {
+      kind: "ai",
+      patternName: summary !== "" ? summary : "調査失敗・再調査可",
+    };
   }
   return { kind: "analyzing" };
 }

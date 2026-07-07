@@ -88,7 +88,7 @@ confidence（0〜1）は「結論をどれだけ証拠で裏付けられたか�
   "severity": "CRITICAL" | "WARNING" | "INFO",
   "investigationSteps": ["調べたこと1", "調べたこと2"],
   "suggestedActions": ["対応アクション1（具体的な修正方針）", "対応アクション2"],
-  "suggestedPatternName": "自動昇格候補のパターン名（例: DB_CONNECTION_EXHAUSTION）",
+  "suggestedPatternName": "自動昇格候補のパターン名（UPPER_SNAKE_CASE・必ず非空。原因を確定できない場合も最有力仮説の名前を出すこと。空文字・省略は禁止。例: DB_CONNECTION_EXHAUSTION）",
   "remediable": true | false,
   "relatedAlerts": [{ "alertId": "...", "relation": "same_root_cause", "rationale": "関連の根拠（1文）", "citations": ["共有証拠の id（commit sha / terraform アドレス / メトリクス名）", "..."] }],
   "impact": { "fault": "own" | "external" | "unknown", "scope": "影響範囲（1文）", "scale": "障害規模（1文）", "affectedSubjects": ["payment", "..."], "citations": ["入力に実在する値の逐語コピー（eventName / commit sha / メトリクス名 等）", "..."] },
