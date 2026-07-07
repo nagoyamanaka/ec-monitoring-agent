@@ -37,6 +37,30 @@ describe("alertReason", () => {
     expect(reason).toEqual({ kind: "ai", patternName: "latency-spike" });
   });
 
+  it("非 fallback でパターン名が空（サルベージ回収の欠落等）は空欄でなく summary で語る", () => {
+    const reason = alertReason(
+      makeAlert({
+        report: makeReport({
+          suggestedPatternName: "",
+          summary: "DB接続プールの枯渇が疑われる",
+        }),
+      }),
+    );
+    expect(reason).toEqual({
+      kind: "ai",
+      patternName: "DB接続プールの枯渇が疑われる",
+    });
+  });
+
+  it("非 fallback でパターン名も summary も空なら「調査失敗・再調査可」に倒す（空 UI 禁止）", () => {
+    const reason = alertReason(
+      makeAlert({
+        report: makeReport({ suggestedPatternName: "  ", summary: " " }),
+      }),
+    );
+    expect(reason).toEqual({ kind: "ai", patternName: "調査失敗・再調査可" });
+  });
+
   it("fallback レポートは空文字でなく「調査失敗・再調査可」の定型文（タスク E3）", () => {
     const reason = alertReason(
       makeAlert({

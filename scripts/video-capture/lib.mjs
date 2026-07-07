@@ -3,6 +3,7 @@
 // - backoffice API 駆動（e2e/backoffice/support.ts と同じ作法。ここは録画専用なので依存させず再実装）
 import { chromium } from "playwright";
 import { mkdir, rename, readdir } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import path from "node:path";
 
 export const FRONT_URL = process.env.FRONT_URL ?? "http://localhost:5173";
@@ -38,6 +39,47 @@ const DWELL_SCALE = Number(process.env.DWELL_SCALE ?? "1");
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const dwell = (ms) => sleep(ms * DWELL_SCALE);
+
+// ---------------------------------------------------------------------------
+// mp4 変換（編集ソフト互換のため）
+// ---------------------------------------------------------------------------
+// Playwright の録画は VP8 in webm 固定で、DaVinci / Premiere / CapCut 等の多くは
+// これを読めない（＝「壊れてる」ように見える）。撮影後に H.264 mp4 へ変換して
+// パート本体として出す。ロスレスな webm 源は .raw/ に温存（再変換用）。
+//
+// ffmpeg の解決順: FFMPEG_PATH → ffmpeg-static（pnpm run setup で入る・root不要）
+// → PATH 上の ffmpeg。いずれも無ければ変換をスキップし webm のまま出す（撮影は止めない）。
+let ffmpegPathCache;
+async function resolveFfmpeg() {
+  if (ffmpegPathCache !== undefined) return ffmpegPathCache;
+  if (process.env.FFMPEG_PATH) return (ffmpegPathCache = process.env.FFMPEG_PATH);
+  try {
+    const mod = await import("ffmpeg-static");
+    if (mod?.default) return (ffmpegPathCache = mod.default);
+  } catch {
+    /* 未インストール → 次の候補へ */
+  }
+  return (ffmpegPathCache = "ffmpeg"); // PATH 上を期待
+}
+
+/**
+ * webm → H.264 mp4。画面録画なのでテキストが潰れないよう CRF は低め、
+ * yuv420p + faststart + CFR30 で編集・配信の互換を最優先。成否を boolean で返す。
+ */
+async function transcodeToMp4(src, dest) {
+  const ffmpeg = await resolveFfmpeg();
+  const args = [
+    "-y", "-i", src,
+    "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+    "-pix_fmt", "yuv420p", "-r", "30", "-movflags", "+faststart",
+    dest,
+  ];
+  return await new Promise((resolve) => {
+    const p = spawn(ffmpeg, args, { stdio: "ignore" });
+    p.on("error", () => resolve(false)); // バイナリ無し等
+    p.on("close", (code) => resolve(code === 0));
+  });
+}
 
 // ---------------------------------------------------------------------------
 // ブラウザ側
@@ -104,20 +146,28 @@ export async function openStage(partName) {
       await target.screenshot({ path: file });
       console.log(`  📸 ${path.relative(OUTPUT_DIR, file)}`);
     },
-    /** パート終了。webm をパート名にリネームして保存先を返す */
+    /**
+     * パート終了。各録画（本体＋外部タブ popup）を H.264 mp4 に変換して保存先を返す。
+     * ロスレス源の webm は .raw/ に残す（再変換用）。ffmpeg が無い環境では変換を
+     * スキップし、従来どおり webm をパート名にリネームして出す（撮影は止めない）。
+     */
     async close() {
       const videos = context.pages().map((p) => p.video()).filter(Boolean);
-      await context.close();
+      await context.close(); // ここで .raw/*.webm が確定する
       const saved = [];
       for (const [i, video] of videos.entries()) {
-        const raw = await video.path();
-        const dest = path.join(
-          take,
-          i === 0 ? `${partName}.webm` : `${partName}-popup${i}.webm`,
-        );
-        await rename(raw, dest);
-        saved.push(dest);
-        console.log(`  🎞  ${path.relative(OUTPUT_DIR, dest)}`);
+        const raw = await video.path(); // .raw/ 内のパス（ロスレス源として温存）
+        const base = i === 0 ? partName : `${partName}-popup${i}`;
+        const mp4 = path.join(take, `${base}.mp4`);
+        if (await transcodeToMp4(raw, mp4)) {
+          saved.push(mp4);
+          console.log(`  🎞  ${path.relative(OUTPUT_DIR, mp4)}  (源: .raw/${path.basename(raw)})`);
+        } else {
+          const webm = path.join(take, `${base}.webm`);
+          await rename(raw, webm);
+          saved.push(webm);
+          console.warn(`  🎞  ${path.relative(OUTPUT_DIR, webm)}  ⚠ mp4 変換 skip（ffmpeg 未検出: pnpm run setup / FFMPEG_PATH を確認）`);
+        }
       }
       await browser.close();
       return saved;

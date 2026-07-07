@@ -197,6 +197,16 @@ todo実施後に
 - [x] 【設計】抽出は domain 純関数 `reportTeaser`（UT 5ケース）。ティザー不成立（レポート無し/summary のみ）は素のリンクへフォールバック。ドロワー本文の射影境界（summary＝トリアージ用）は動かさない
 - 【検討済み代替】スクロールトリガー展開は非採用: ドロワーはスクロールが発生しないケースが多くトリガー自体が発火しない・スクロール起点の自動遷移は予期しない画面移動になる・インライン全文展開は詳細ページ（ディープリンク/共有）の存在意義と射影分離を崩す。フッター常時可視のティザーカードが最小コストで同じ目的を満たす
 
+### タスク D6: 引用照合の負の見え方是正（算定根拠が全件「未照合」）〔P0・取り: Lisa/David・strategy §4 D-6〕
+
+- 【実機発見 2026-07-07】影響評価の「算定根拠（引用）」4件が全件「未照合」表示。真因は表示側でなく**生成側**: impact triage の LLM が実IDでなく**プロンプトJSONのトップレベルキー＋連番の位置ラベル**（`infraEvidence-1`・`errorEvent-1`・`similarIncidents-1` 等）を発明して引用 → `CitationResolution` の決定論カタログ（実イベント名/pattern名/commit sha/terraformアドレス/メトリクス名/類似事例イベント名/相関alertId）に一致しない。ImpactTriageAgent の「citation を出せないなら impact を出すな」ガードが「何かしら出す」誘因になり、それっぽいラベルの発明を後押ししている
+- [x] 【プロンプト】ImpactTriageAgent（`ImpactTriageAgent.ts`）と本体プロンプト（`InvestigationPromptBuilder.ts` の citations 指示）に「**入力JSONに書かれている値をそのまま逐語で引用する**（イベント名文字列・commit sha・メトリクス名・terraform アドレス・alertId）。`infraEvidence-1` のような位置ラベル・セクション名参照は禁止」を明記＋良い例/悪い例を各1つ添付（✅ 2026-07-07 実装: SYSTEM_INSTRUCTION に「すべての citations / evidenceBundle は入力JSONに実在する値の逐語コピーのみ有効・位置ラベルは実在照合で全件未照合＝無効」の段落＋良/悪例を追加（**単一Gemini＝edge再調査と ADK coordinator の両経路が同一定数を再利用**するため1箇所で両方カバー）。JSON 例の impact.citations プレースホルダも「証拠/類似事例の id」→「入力に実在する値の逐語コピー」へ（例文自体が曖昧なアンカーだった）。ImpactTriageAgent は指示4に同ルール＋良/悪例・doc コメントに経緯（citation 必須ガードが位置ラベル発明を誘発した実害）を記録。回帰UT: SYSTEM_INSTRUCTION が「逐語コピー」「位置ラベル」「infraEvidence-1（悪い例）」を含むことを固定。AIInvestigation 202テスト＋tsc 緑）
+- 【不採用】照合側（`resolveOne`）で位置参照を解釈する案: `errorEvent-1`→イベント名は写像できても `infraEvidence-1` の指し先が commit/terraform/metric のどれか不定＝曖昧解決は捏造面を増やす。ゲート（J1 語彙）と表示（カタログ）の既存分離も崩さない
+- [x] 【追撃 2026-07-07・実走で発見した第2の未照合原因＝payload 生データ値】プロンプト修正後の実走でシナリオ2/3bは全件✓照合済みになったが、シナリオ1（payment-timeout）で1件未照合が残存: 引用が UUID で、`PaymentTimeoutDomainEvent.payload.orderId`＝**入力JSONに実在する値の逐語コピー（新ルールに準拠）だが照合カタログが index しない生データ値**。カタログに payload 値を足す案は不採用（注文IDは「検証可能な証拠」でなくただの観測ノイズ・類似検索でも UUID はノイズ扱いの既判断と整合）。対策＝引用語彙を**カタログと同じ閉集合**（eventName/パターン名/sha/tfアドレス/メトリクス名/類似eventName/alertId）に明示限定し「payload・ログ本文の注文ID/UUID は照合対象外＝引用禁止・観測イベント自体を根拠にするなら eventName を引用」を両プロンプトに追記（悪い例にも orderId を追加）。UT で「照合対象外」「orderId」の文言を固定。202テスト＋tsc 緑
+- [x] 【追撃2 2026-07-07・記述縛りの限界→citableIds 明示列挙方式へ転換】語彙を記述で縛る度に失敗モードが移動した（①位置ラベル→②payload orderId→③今回: プレフィックス装飾 `scope: event '...'`（部分一致で偶然✓になるが不安定）・充填値 `N/A`・セクション名 `past_incidents`・散文引用・相関アラートを alertId でなく eventName で参照）。**「引用できる種類の説明」を LLM に解釈させる方式自体を放棄**し、`buildUserPrompt` が表示照合カタログ（`buildCitationCatalog`）と同一ソースの **`citableIds`（引用可能IDの全量リスト・重複除去済み）を入力JSONに明示列挙**、SYSTEM_INSTRUCTION／ImpactTriageAgent は「citableIds の要素を一字一句そのまま・1要素1ID・装飾禁止・無ければ項目ごと省略」に単純化。relatedAlerts が candidateAlerts の alertId 列挙で安定している実績と同じ構造＝**解決可能な引用だけを選択肢として渡す**（リストは context から決定的に導出・捏造面ゼロ・トークン予算超過で similarIncidents を削っても citableIds は保持）。UT: citableIds の全量列挙・予算超過時の保持・SYSTEM_INSTRUCTION の文言固定を追加（204テスト＋tsc 緑）
+- [ ] 【確認】実 Gemini 再生成（F8/D3 実走と同一セッションで可）で ✓照合済みチップが出ること・未照合が例外側に落ちること（記述縛り版でシナリオ2/3b全件✓→シナリオ1未照合1件→シナリオ1全件✓→シナリオ2で装飾/N-A引用と揺れたため、citableIds 列挙版で**全シナリオ再確認**が必要。なお照合の部分一致規則により装飾付きでも実IDを含めば✓になる＝列挙版はその揺れ自体を抑える狙い）
+- **なぜP0か**: 「引用の実在照合＝ハルシネーション否定の可視化」は §1.7/J1/予兆で一貫させた売り。その画面で全件未検証が並ぶと**売りがそのまま弱点に見える**（審査基準3/4 直撃）
+
 ---
 
 ## E. デザイン攻勢（Lisa 視点・実機操作評価 2026-07-02 に基づく）

@@ -1,8 +1,13 @@
 # video-capture — 提出動画の素材テイク自動撮影
 
 台本 [docs/protopedia/video/script.md](../../docs/protopedia/video/script.md)（2分・7カット）に対応する
-**生テイク（.webm）と画面遷移ごとのスクリーンショット**を Playwright でパート単位に自動採取する。
-ナレーション・テロップ・倍速加工は撮影後の編集工程（ffmpeg）で行う＝**尺合わせは録画側でやらない**。
+**パート単位の動画（編集用 H.264 mp4）と画面遷移ごとのスクリーンショット**を Playwright で自動採取する。
+ナレーション・テロップ・倍速加工は撮影後の編集工程で行う＝**尺合わせは録画側でやらない**。
+
+Playwright の録画は VP8 in webm 固定で編集ソフト（DaVinci / Premiere / CapCut 等）が読めないため、
+撮影直後に **H.264 mp4 へ自動変換**してパート本体として出す（ロスレスな webm 源は `.raw/` に温存）。
+変換に使う ffmpeg は `pnpm run setup` で入る `ffmpeg-static`（root不要）。`FFMPEG_PATH` で自前の
+ffmpeg を指定してもよい。ffmpeg が見つからない環境では変換をスキップし webm のまま出す（警告付き）。
 
 撮り直しの定型運用は **[docs/protopedia/video/retake-prompt.md](../../docs/protopedia/video/retake-prompt.md)**
 （AI エージェントに貼り付けるランブック）を参照。
@@ -53,27 +58,34 @@ DRAFT_PR_URL=https://github.com/... node capture.mjs dogfooding
 ```
 output/
   take001/                        # 実行ごとに自動採番（TAKE= で固定可）
-    part1-forecast.webm           # パート本体（1920x1080）。外部タブは partN-*-popupM.webm
-    part2-investigation.webm
+    part1-forecast.mp4            # パート本体（H.264・1920x1080・30fps）。外部タブは partN-*-popupM.mp4
+    part2-investigation.mp4
     ...
     screens/part1-forecast/NN-<label>.png
-    .raw/                         # Playwright の一時 webm（リネーム前）
+    .raw/                         # Playwright 録画のロスレス webm 源（再変換用に温存）
 ```
+
+環境変数（変換）: `FFMPEG_PATH`（自前 ffmpeg のパス。未指定なら ffmpeg-static → PATH の順で解決）
 
 ProtoPedia 紹介画像5枚の採用候補は台本の対応表を参照（part1 `01-forecast-card` / part2 `03-live-timeline`・
 `05-evidence-panel` / part3 `01-known-instant`。アーキ図はスライドPNG）。
 
-## 編集（ffmpeg の目安）
+## 編集
+
+パート本体は編集用の H.264 mp4 なので、そのまま **DaVinci Resolve / Premiere / CapCut 等の
+タイムラインへ読み込める**（VP8 webm と違い、そのまま扱える）。ナレーション音声・テロップ・
+倍速区間はエディタ上で合わせる。GUI を使わず ffmpeg で組み立てるなら以下が目安（`ffmpeg` は
+`ffmpeg-static` の実体でも可・`node -e "console.log(require('ffmpeg-static'))"` でパス確認）:
 
 ```bash
 # カット4相当の倍速区間（例: 2倍速。×2 表示テロップは編集側で焼き込む）
-ffmpeg -i take001/part2-investigation.webm -filter:v "setpts=PTS/2" -an part2-x2.webm
+ffmpeg -i take001/part2-investigation.mp4 -filter:v "setpts=PTS/2" -an part2-x2.mp4
 
-# 結合（同解像度前提）: list.txt に file '...webm' を並べて
-ffmpeg -f concat -safe 0 -i list.txt -c copy master.webm
+# 結合（同解像度・同コーデック前提）: list.txt に file '...mp4' を並べて
+ffmpeg -f concat -safe 0 -i list.txt -c copy master.mp4
 
-# 合成音声（VOICEVOX 等で書き出した narration.wav）を載せて mp4 化（YouTube 用）
-ffmpeg -i master.webm -i narration.wav -c:v libx264 -crf 20 -c:a aac -shortest final.mp4
+# 合成音声（VOICEVOX 等で書き出した narration.wav）を載せる（YouTube 用の最終 mp4）
+ffmpeg -i master.mp4 -i narration.wav -c:v copy -c:a aac -shortest final.mp4
 ```
 
 ## 注意

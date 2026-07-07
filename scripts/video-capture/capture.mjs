@@ -49,18 +49,30 @@ async function clickMaybePopup(stage, locator, { dwellMs = 4000, label } = {}) {
 
 /**
  * シナリオ発火はデモ操作卓のボタンクリックを優先（映像に「注入の操作」が残る）。
- * ボタンが見つからなければ API 直叩きにフォールバック（録画は続行）。
+ * 段階開示UI（D2）のため、シナリオ行クリックは注入ではなくパネル展開。実際の発火は
+ * 展開後に現れる `aria-label="<ラベル> を実行"` ボタン。
+ * どちらのボタンも見つからなければ API 直叩きにフォールバック（録画は続行）。
  */
 async function triggerOnScreen(stage, buttonText, scenarioId) {
-  const button = stage.page.getByRole("button").filter({ hasText: buttonText }).first();
-  if (await button.count()) {
-    await button.scrollIntoViewIfNeeded();
-    await button.hover();
+  const injectButton = stage.page.getByRole("button", { name: `${buttonText} を実行`, exact: true });
+  if (!(await injectButton.count())) {
+    const row = stage.page.getByRole("button").filter({ hasText: buttonText }).first();
+    if (await row.count()) {
+      await row.scrollIntoViewIfNeeded();
+      await row.hover();
+      await dwell(500);
+      await row.click();
+      await injectButton.waitFor({ timeout: 5_000 }).catch(() => {});
+    }
+  }
+  if (await injectButton.count()) {
+    await injectButton.scrollIntoViewIfNeeded();
+    await injectButton.hover();
     await dwell(800);
-    await button.click();
+    await injectButton.click();
     return;
   }
-  console.warn(`  ⚠ デモ操作卓に「${buttonText}」が見つからず API で発火`);
+  console.warn(`  ⚠ デモ操作卓に「${buttonText}」の注入ボタンが見つからず API で発火`);
   await triggerScenario(scenarioId);
 }
 
@@ -211,9 +223,16 @@ async function sceneLearning() {
     await approve.scrollIntoViewIfNeeded();
     await dwell(1_000);
     await approve.click();
-    await dwell(4_000); // 承認完了通知（学習への反映）を映す
+    // 承認は submitFeedback→refreshCurrent の往復後に反映されるため、固定 dwell でなく
+    // 「承認済み」表示を待ってから次へ（往復が遅いテイクでも昇格ボタンを取りこぼさない）。
+    await page
+      .getByRole("button", { name: "承認済み" })
+      .waitFor({ timeout: 10_000 })
+      .catch(() => {});
+    await dwell(3_000); // 承認完了通知（学習への反映）を映す
 
-    const promote = page.getByRole("button", { name: /既知へ昇格/ }).first();
+    const promote = page.getByRole("button", { name: /既知パターンへ昇格/ }).first();
+    await promote.waitFor({ timeout: 10_000 }).catch(() => {});
     if (await promote.count()) {
       await promote.scrollIntoViewIfNeeded();
       await dwell(1_000);

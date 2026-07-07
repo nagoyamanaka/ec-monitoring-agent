@@ -84,6 +84,7 @@ export const CITATION_KIND_LABEL: Record<CitationSourceKind, string> = {
   incident: "類似事例",
   alert: "相関アラート",
   log: "アプリログ",
+  cve: "脆弱性 (CVE)",
 };
 
 /** 照合済み kind → レーンの写像（プレフィックス推測に依らない決定論の系）。 */
@@ -93,6 +94,8 @@ const KIND_TO_GROUP: Record<CitationSourceKind, CitationGroupKey> = {
   log: "observation",
   // 相関アラート＝同時期の別観測（変更でも記憶でもない）。
   alert: "observation",
+  // CVE＝スキャナ（Trivy）の観測結果に含まれる検証可能ID。
+  cve: "observation",
   commit: "change",
   terraform: "change",
   pattern: "memory",

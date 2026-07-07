@@ -59,6 +59,58 @@ describe("InvestigationPromptBuilder", () => {
       // 削減後もerrorEvent/knownPatternsは残る
       expect(parsed.errorEvent).toBeDefined();
     });
+
+    it("citableIdsに収集済み証拠のIDを全量列挙する（表示照合カタログと同一ソース・タスクD6）", () => {
+      const context = baseContext({
+        similarIncidents: [
+          { eventName: "DBConnectionExhausted", occurredOn: "2026-06-19T00:00:00.000Z", resolvedNote: "プール拡張で復旧" },
+        ],
+        infraEvidence: {
+          appLogs: [],
+          collectedAt: new Date("2026-06-20T00:00:00.000Z"),
+          recentCommits: [
+            { sha: "a1b2c3d4e5f", message: "pool縮小", author: "dev", committedAt: new Date("2026-06-19T23:00:00.000Z") },
+          ],
+        },
+        candidateAlerts: [
+          { alertId: "alert-uuid-1", eventName: "OtherAlert", category: "CAPACITY", occurredOn: "2026-06-20T00:00:00.000Z", summary: "同時期" },
+        ],
+      } as Partial<InvestigationContext>);
+
+      const parsed = JSON.parse(buildUserPrompt(context));
+      expect(parsed.citableIds).toContain("PaymentTimeout"); // errorEvent.eventName
+      expect(parsed.citableIds).toContain("a1b2c3d4e5f"); // commit sha
+      expect(parsed.citableIds).toContain("DBConnectionExhausted"); // 類似事例 eventName
+      expect(parsed.citableIds).toContain("alert-uuid-1"); // 相関候補 alertId
+    });
+
+    it("payloadのCVE識別子はcitableIdsに載る・orderId等の生データ値は載らない（シナリオ4）", () => {
+      const context = baseContext({
+        errorEvent: {
+          eventName: "security.vulnerability.detected",
+          occurredOn: "2026-06-20T00:00:00.000Z",
+          payload: { orderId: "abc", vulnerabilities: [{ cveId: "CVE-2021-3807" }] },
+          severity: "CRITICAL",
+        },
+      } as Partial<InvestigationContext>);
+
+      const parsed = JSON.parse(buildUserPrompt(context));
+      expect(parsed.citableIds).toContain("CVE-2021-3807");
+      expect(parsed.citableIds).not.toContain("abc");
+    });
+
+    it("予算超過でsimilarIncidentsを削ってもcitableIdsはそのeventNameを保持する（収集済み事実は引用可能）", () => {
+      const huge = "X".repeat(20000);
+      const context = baseContext({
+        similarIncidents: [
+          { eventName: "HugeIncident", occurredOn: "2026-06-19T00:00:00.000Z", resolvedNote: huge },
+        ],
+      });
+
+      const parsed = JSON.parse(buildUserPrompt(context));
+      expect(parsed.similarIncidents).toEqual([]);
+      expect(parsed.citableIds).toContain("HugeIncident");
+    });
   });
 
   it("SYSTEM_INSTRUCTIONはJSON出力を要求する指示を含む", () => {
@@ -77,5 +129,16 @@ describe("InvestigationPromptBuilder", () => {
   it("SYSTEM_INSTRUCTIONのJSON例confidenceは高アンカー(0.87)ではない", () => {
     // スキーマ例の値は LLM のアンカーになるため高値を置かない（中立な見本値であること）。
     expect(SYSTEM_INSTRUCTION).not.toContain('"confidence": 0.87');
+  });
+
+  it("SYSTEM_INSTRUCTIONはcitableIds列挙からの逐語引用強制を含む（タスクD6）", () => {
+    // この指示が消えると LLM が位置ラベル（"infraEvidence-1"）・payload UUID・プレフィックス装飾・
+    // "N/A" 充填を発明し、実在照合で「未照合」が並ぶ表示に戻るため回帰で守る。
+    // 記述で種類を縛る方式は失敗モードが移動し続けたため「全量リストから選ぶ」方式（2026-07-07）。
+    expect(SYSTEM_INSTRUCTION).toContain("citableIds");
+    expect(SYSTEM_INSTRUCTION).toContain("一字一句");
+    // 実機で観測した失敗モードが悪い例として明示されていること。
+    expect(SYSTEM_INSTRUCTION).toContain("infraEvidence-1");
+    expect(SYSTEM_INSTRUCTION).toContain("N/A");
   });
 });
