@@ -70,6 +70,10 @@ export const config = {
     enabled: process.env.FORECAST_ENABLED ?? "true",
     // 予報の対象期間。POST /forecast はこの値で固定生成する（無認証デモ経路に入力面を作らない）。
     horizon: process.env.FORECAST_HORIZON ?? "今週末",
+    // 未適用 plan（plan-1・Cloud SQL max_connections 100→40）の引用チップ「証拠を開く」の解決先。
+    // DEMO_INFRA_APPLY_PR_URL（適用済み 100→20 の過去証拠）と対の、未来 plan の証拠 PR。
+    // 空なら plan-1 は従来通り非リンク表示（撮影済みの映像と一致）。事前起票した本物 PR を指す。
+    pendingPlanPrUrl: process.env.FORECAST_PENDING_PLAN_PR_URL ?? "",
   },
   demo: {
     enabled: process.env.DEMO_ENABLED === "true",

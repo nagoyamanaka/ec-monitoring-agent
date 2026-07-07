@@ -46,6 +46,10 @@ jobs:
           service_account: ${{ vars.DEPLOYER_SA }}
 
       - uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          # wrapper は stdout を横取りするため `terraform show -json > file` のリダイレクトを壊す
+          # （setup-terraform の既知問題）。plan job は step outputs を使わないので無効化する。
+          terraform_wrapper: false
 
       - run: terraform init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="prefix=ec-monitoring-agent/prod"
 
@@ -54,7 +58,119 @@ jobs:
 
       - run: terraform validate
 
-      - run: terraform plan -no-color -input=false -lock-timeout=5m
+      - run: terraform plan -out=tfplan -no-color -input=false -lock-timeout=5m
+
+      # plan の永続化（D2）: 表示用テキストと構造化差分を成果物に残す。
+      # ★生の `terraform show -json` は sensitive 値（Secret Manager の secret_data 等）を
+      # 平文で含むため artifact に載せない（公開リポジトリでは誰でも取得できる）。
+      # テキスト版（terraform がマスク済み）と、jq で redact 済みの plan-changes.json のみ保存する。
+      # plan-changes.json は D3 の ingest payload（PendingPlan ワイヤ形）を兼ねる。
+      - name: Render plan (text + redacted changes JSON)
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          terraform show -no-color tfplan > plan.txt
+          terraform show -json tfplan > plan.json
+          PLAN_URL="${PR_URL:-${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}}"
+          if [ -n "$PR_NUMBER" ]; then PLAN_REF="PR #${PR_NUMBER}"; else PLAN_REF="main@${GITHUB_SHA::7}"; fi
+          jq -f "$GITHUB_WORKSPACE/.github/scripts/tfplan-to-pending-plan.jq" \
+            --arg url "$PLAN_URL" \
+            --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg pr "$PLAN_REF" \
+            plan.json > plan-changes.json
+          rm -f plan.json # 生 JSON は sensitive を平文で含むため残さない
+          echo "リソース変更: $(jq -r '.resourceChanges | length' plan-changes.json 2>/dev/null || echo 0) 件"
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            infra/terraform/envs/prod/plan.txt
+            infra/terraform/envs/prod/plan-changes.json
+          retention-days: 7
+
+      # PR への plan 差分コメント（D2）。マーカー付きコメントを upsert し増殖させない。
+      # コメント失敗（fork の権限等）で必須の plan ジョブ自体は落とさない。
+      - name: Comment plan on PR (upsert)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const dir = 'infra/terraform/envs/prod';
+            const planTxtRaw = fs.readFileSync(`${dir}/plan.txt`, 'utf8');
+            let changes = [];
+            try {
+              // リソース変更 0 件のとき jq は empty を返す＝空ファイル（JSON.parse が throw）
+              changes = JSON.parse(fs.readFileSync(`${dir}/plan-changes.json`, 'utf8')).resourceChanges ?? [];
+            } catch {}
+            const MAX = 55000; // GitHub コメント上限 65536 の手前で切る
+            const planTxt = planTxtRaw.length > MAX ? planTxtRaw.slice(0, MAX) + '\n…（省略）' : planTxtRaw;
+            const marker = '<!-- terraform-plan-comment -->';
+            const lines = changes.map((rc) => `- \`${rc.address}\` — ${rc.action}`);
+            const body = [
+              marker,
+              `### terraform plan（リソース変更 ${changes.length} 件）`,
+              '',
+              lines.length ? lines.join('\n') : '_リソース変更なし（no-op）_',
+              '',
+              '<details><summary>plan 全文（sensitive はマスク済み）</summary>',
+              '',
+              '```text',
+              planTxt,
+              '```',
+              '',
+              '</details>',
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((c) => c.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      # 未適用 plan の投入（D3）: 予兆の FUTURE_CHANGE シグナル（url 付き＝証拠を開く可）として
+      # backoffice の record 口（デモ seed と同じ）へ積む。security-scan（app.yml）と同じ
+      # INGEST_URL/INGEST_TOKEN の直 POST。失敗しても必須の plan ジョブは落とさない。
+      - name: Ingest plan to backoffice (FUTURE_CHANGE signal)
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          INGEST_URL: ${{ secrets.INGEST_URL }}
+          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+        run: |
+          if [ -z "$INGEST_URL" ]; then
+            echo "INGEST_URL 未設定。ingest スキップ。"
+            exit 0
+          fi
+          if [ ! -s plan-changes.json ]; then
+            echo "リソース変更なし。ingest スキップ。"
+            exit 0
+          fi
+          jq '{resourceCount: (.resourceChanges | length), summary, url}' plan-changes.json
+          curl -fsS -X POST "$INGEST_URL/ingest/terraform-plan" \
+            -H "Content-Type: application/json" \
+            -H "x-ingest-token: $INGEST_TOKEN" \
+            -d @plan-changes.json
 
   apply:
     # main への push（または手動）でのみ apply。environment 承認ゲートを噛ませる。

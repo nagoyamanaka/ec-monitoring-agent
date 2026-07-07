@@ -75,7 +75,10 @@ import { ResolvedAlertForecastMemoryRepository } from "../../../../Contexts/Moni
 import { ScheduleSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/ScheduleSignalSource.js";
 import { SeedScheduleSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/SeedScheduleSource.js";
 import { FORECAST_SCHEDULE_SEED } from "../../../../Contexts/Monitoring/seeds/ForecastScheduleSeed.js";
-import { FORECAST_PENDING_PLAN_SEED } from "../../../../Contexts/Monitoring/seeds/ForecastPendingPlanSeed.js";
+import {
+  FORECAST_PENDING_PLAN_SEED,
+  withPendingPlanEvidenceUrl,
+} from "../../../../Contexts/Monitoring/seeds/ForecastPendingPlanSeed.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
 import { RedisSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/RedisSSEAlertNotifier.js";
 import { SSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/domain/SSEAlertNotifier.js";
@@ -207,7 +210,12 @@ export class BackofficeApp {
     // デモではフラッグシップ seed（F8・Cloud SQL 接続上限縮小）を DEMO_ENABLED 配下で投入する。
     const pendingInfraPlanStore = new InMemoryPendingInfraPlanStore();
     if (config.demo.enabled) {
-      for (const plan of FORECAST_PENDING_PLAN_SEED) {
+      // 引用チップ「証拠を開く」の解決先 PR を env 経由で後付けする（空なら非リンクのまま）。
+      const seededPlans = withPendingPlanEvidenceUrl(
+        FORECAST_PENDING_PLAN_SEED,
+        config.forecast.pendingPlanPrUrl,
+      );
+      for (const plan of seededPlans) {
         await pendingInfraPlanStore.record(plan);
       }
     }
@@ -551,6 +559,8 @@ export class BackofficeApp {
           collectMonitoringEventUseCase,
           // CI(AIリメディジョブ)からの結果 callback。
           recordRemediationResultUseCase,
+          // CI(terraform plan ジョブ)からの未適用 plan 投入（予兆 FUTURE_CHANGE・seed と同じ record 口）。
+          pendingInfraPlanStore,
           ingestToken: config.ingestToken,
         },
         {

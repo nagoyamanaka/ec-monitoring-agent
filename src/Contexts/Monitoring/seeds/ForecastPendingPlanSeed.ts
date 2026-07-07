@@ -25,3 +25,20 @@ export const FORECAST_PENDING_PLAN_SEED: PendingPlan[] = [
     summary: "Cloud SQL max_connections 100→40 縮小（コスト最適化・plan済み未適用）",
   },
 ];
+
+/**
+ * seed（fixture）に「証拠を開く」deep link を後付けする（純粋関数・seed 本体は不変に保つ）。
+ * infraApplyPrUrl（適用済み 100→20 の過去証拠 PR）と対になる、未適用 plan（100→40・未来）の
+ * 証拠 PR を env 経由で注入する。DEMO_INFRA_APPLY_PR_URL と同じ「事前起票した本物を毎回指す」割り切り。
+ * url が空文字（未設定）なら url を付けない＝撮影済みのリンク無し表示をそのまま維持する。
+ * 既に url を持つ plan（CI ingest 由来など）は上書きしない。
+ */
+export function withPendingPlanEvidenceUrl(
+  plans: PendingPlan[],
+  url: string,
+): PendingPlan[] {
+  if (!url) {
+    return plans;
+  }
+  return plans.map((plan) => (plan.url ? plan : { ...plan, url }));
+}
