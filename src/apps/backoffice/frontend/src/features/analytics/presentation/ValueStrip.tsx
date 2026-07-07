@@ -39,11 +39,14 @@ export function ValueStrip({ api, refreshKey }: ValueStripProps) {
 
   if (!analytics) return null;
 
-  const items = [
-    { label: "自動トリアージ", value: analytics.totalAlerts },
+  // 等式レイアウト: 総アラート N 件 ＝ 既知即決 a ＋ AI調査 b ｜ 学習パターン化 c
+  // 総数と内訳の親子関係を「＝」「＋」で構造ごと見せる（4+6=10 が自己検証でき、
+  // ラベルの意味を説明しなくても数字の正体＝アラート件数の内訳だと読める）。
+  // 親は「自動対応」等の処理結果でなく入口の総数（Analytics ページのタイルと同語）:
+  // AI調査は人の承認待ちを含むため「対応済み」に足し込むと過大主張になる。
+  const terms = [
     { label: "既知即決", value: analytics.knownCount },
-    { label: "AI 調査", value: analytics.unknownCount },
-    { label: "昇格パターン", value: analytics.promotedPatternCount },
+    { label: "AI調査", value: analytics.unknownCount },
   ];
 
   return (
@@ -51,17 +54,37 @@ export function ValueStrip({ api, refreshKey }: ValueStripProps) {
       type="button"
       onClick={() => navigate("/analytics")}
       title="クリックで Analytics（内訳・正答率・承認履歴）へ。件数は過去の解決実績（学習済み履歴）を含む累計です"
-      className="flex w-full max-w-4xl flex-wrap items-center gap-x-5 gap-y-1 rounded-tremor-default bg-slate-800/30 px-4 py-2 text-left text-xs ring-1 ring-inset ring-slate-700/50 transition hover:bg-slate-800/50 hover:ring-slate-600"
+      className="flex w-full max-w-4xl flex-wrap items-center gap-x-2.5 gap-y-1 rounded-tremor-default bg-slate-800/30 px-4 py-2 text-left text-xs ring-1 ring-inset ring-slate-700/50 transition hover:bg-slate-800/50 hover:ring-slate-600"
     >
-      {items.map((item) => (
-        <span key={item.label} className="inline-flex items-baseline gap-1.5">
-          <span className="text-slate-400">{item.label}</span>
-          <span className="text-sm font-semibold tabular-nums text-slate-100">
-            {item.value}
+      <span className="inline-flex items-baseline gap-1.5">
+        <span className="text-slate-400">総アラート</span>
+        <span className="text-sm font-semibold tabular-nums text-slate-100">
+          {analytics.totalAlerts}
+        </span>
+        <span className="text-slate-400">件</span>
+      </span>
+      {terms.map((term, i) => (
+        <span key={term.label} className="inline-flex items-baseline gap-2.5">
+          <span className="text-slate-500" aria-hidden>
+            {i === 0 ? "＝" : "＋"}
           </span>
-          <span className="text-slate-400">件</span>
+          <span className="inline-flex items-baseline gap-1.5">
+            <span className="text-slate-400">{term.label}</span>
+            <span className="text-sm font-semibold tabular-nums text-slate-100">
+              {term.value}
+            </span>
+          </span>
         </span>
       ))}
+      <span className="text-slate-600" aria-hidden>
+        ｜
+      </span>
+      <span className="inline-flex items-baseline gap-1.5">
+        <span className="text-slate-400">学習パターン化</span>
+        <span className="text-sm font-semibold tabular-nums text-slate-100">
+          {analytics.promotedPatternCount}
+        </span>
+      </span>
       <span className="text-[10px] text-slate-500">※過去実績含む</span>
       <span className="ml-auto text-cyan-300/80" aria-hidden>
         Analytics →
