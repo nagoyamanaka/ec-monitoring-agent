@@ -104,12 +104,9 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
               <p className="text-sm text-slate-300">
                 障害が
                 <strong className="text-slate-100">
-                  起きる前に、先手を打って握りつぶす
+                  起きる前に、根拠付きで予報し、いま打てる先手
                 </strong>
-                ための予報です。未マージ PR・未適用のインフラ変更・
-                負荷スケジュール・過去の同型事例を AI が突合し、
-                直近のリスクと今打てる先手を提示します。
-                根拠（引用）は実在シグナルと照合済みのものだけを表示します。
+                まで提示します——引用は実在シグナルと照合済みのものだけ。
               </p>
             </div>
           </header>
