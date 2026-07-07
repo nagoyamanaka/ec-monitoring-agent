@@ -118,11 +118,10 @@ export function AlertsHeader({
   return (
     <div className="space-y-3">
       <p className="text-[15px] leading-relaxed text-slate-200">
-        アラート発火後の
+        アラートの
         <span className="font-semibold text-cyan-300">調査・評価・報告</span>
-        を AI エージェントが肩代わりします。既知の障害は1秒未満で確定、
-        未知の障害は証拠つきで原因を提示 —
-        承認するとその判断を学習し、次回から即時判定になります。
+        を AI エージェントが肩代わり — 未知の障害は証拠つきで原因を提示し、
+        承認するとその判断を学習して次回から1秒未満で確定します。
       </p>
 
       {/* 作業指標になる数だけ出す（総件数は出さない）。

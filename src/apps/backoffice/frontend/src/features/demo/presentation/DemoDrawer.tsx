@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { DemoApi } from "../infrastructure/demoApi";
 import { useDemoControls } from "./hooks/useDemoControls";
-import { SystemStatus } from "./SystemStatus";
 import { ScenarioControls } from "./ScenarioControls";
 import { GamepadIcon } from "@shared/ui/icons";
 
@@ -9,13 +8,6 @@ export interface DemoDrawerProps {
   api: DemoApi;
   /** reset 完了後に呼ばれるコールバック。アラート一覧の全件再取得に使う。 */
   onAfterReset?: () => void;
-  /**
-   * 値が変わるたびに /demo/status を再取得する（ValueStrip と同じイディオム）。
-   * シナリオ注入は非同期にアラート化するため、注入直後の再取得だけでは
-   * 「一覧にはアラートがあるのにアクティブアラート 0」とズレる。SSE 着弾
-   * （useAlerts の lastUpdatedAt）を渡して件数を追随させる。
-   */
-  refreshKey?: number | null;
   /**
    * 最後に SSE で受信したアラート（category だけ読む・受信ごとに参照が変わる）。
    * 「検知待ち」バナーを、待った当のアラート（pendingDetection.matchCategory 一致）の
@@ -28,36 +20,23 @@ export interface DemoDrawerProps {
  * デモ操作ドロワー（タスク10）。AlertsLayout の右 aside にだけ差し込み、プロダクション UI を侵食しない。
  * DEMO_ENABLED=false の本番では /demo/status が 404 → available=false で**何も描画しない**。
  * シナリオ注入→一覧に SSE で障害が流れる、という「デモの舞台裏の操作卓」。
+ * 件数タイル（旧「現在の状態」）は持たない: アラート件数は隣の一覧が、既知化・昇格は
+ * アラート行のチップと昇格通知が既に語っており、コンソール内の数字は冗長だった。
  */
 export function DemoDrawer({
   api,
   onAfterReset,
-  refreshKey,
   lastIncomingAlert,
 }: DemoDrawerProps) {
   const {
     available,
-    loading,
-    status,
     error,
     busy,
     pendingDetection,
     triggerScenario,
     reset,
-    refresh,
     clearPendingDetection,
   } = useDemoControls(api, { onAfterReset });
-
-  // SSE 着弾（refreshKey 変化）で件数を追随。初回はフック側の初期取得に任せる。
-  const initialKeyRef = useRef(true);
-  useEffect(() => {
-    if (initialKeyRef.current) {
-      initialKeyRef.current = false;
-      return;
-    }
-    if (refreshKey == null) return;
-    void refresh();
-  }, [refreshKey, refresh]);
 
   // 「検知待ち」を、待った当のアラートの着弾でだけ畳む（当てずっぽうで閉じない）。
   // 待機開始時点の lastIncomingAlert を snapshot し、その後に別参照の受信が来て、かつ
@@ -99,7 +78,6 @@ export function DemoDrawer({
         </span>
       </div>
 
-      <SystemStatus status={status} loading={loading} />
       <ScenarioControls
         busy={busy}
         onTrigger={triggerScenario}
