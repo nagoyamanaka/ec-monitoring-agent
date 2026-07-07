@@ -75,7 +75,7 @@ flowchart TD
   U --> INV["InvestigateAlertUseCase<br/>類似検索→InfraEvidence 事前収集→AIInvestigationPort"]
   INV --> RPT["InvestigationReport 添付 → OPEN → SSE push"]
   RPT --> H{"人間レビュー"}
-  H -->|"承認（訂正メモ可）<br/>PATCH /alerts/:id/feedback"| SIDX["SimilarIncident.index()<br/>訂正が resolvedNote として学習され<br/>類似分類の母集団が太る"]
+  H -->|"承認 <br/>PATCH /alerts/:id/feedback"| SIDX["SimilarIncident.index()<br/>訂正が resolvedNote として学習され<br/>類似分類の母集団が太る"]
   SIDX -->|"閾値到達で自動昇格"| KP["KnownErrorPattern 生成"]
   SIDX -->|"同型再発は SIMILARITY 即分類<br/>（sourceAlertId が訂正事例を指す）"| C
   H -->|"手動即時昇格<br/>POST /alerts/:id/promote"| KP
@@ -87,7 +87,7 @@ flowchart TD
 - 却下→再調査は「やり直し」＝過去のレビューをクリアして新レポートを白紙で承認/却下できる状態に戻す（`Alert.reopenForReinvestigation`・operatorNote が次の調査プロンプトに載る）。二値学習の feedback とは別概念。
 - このループは E2E で縦に担保: 未知→調査→承認（OPEN 据置）→手動昇格→再発が即・既知（AI 調査なし）→オンデマンドレポート→却下→再調査差し替え（`e2e/backoffice/feedback-lifecycle.e2e.test.ts`）、および「オペレーターの訂正が次回の SIMILARITY 分類の正になる」学習一周（同ファイル similarity learning loop）。
 - **却下は分類を変えない（学習は承認のみ）**: `SubmitFeedbackUseCase` が SimilarIncident に index するのは `isCorrect=true`（承認）時だけ。却下（`isCorrect=false`）は、直前が承認だった場合にその学習を撤回する（`withdrawResolved`）のみで、新たな学習は積まない。却下時の operatorNote は当該 Alert に残るが将来の分類母集団には流れない＝二値学習シグナルを濁さない設計。オペレーターの「これは DB でなく X だった」を将来へ効かせる唯一の経路は **再調査（operatorNote で AI に該当 Alert の結論を訂正させる）→ その結果を承認（訂正が `resolvedNote` としてコーパスに入る）**。「却下理由そのものを負例／訂正シグナルとして学習に反映する」経路は現状なく、やるなら新規の設計判断。
-- **同型 eventName の判別限界（正直さ）**: 3/3b のように eventName・payload が近い別障害は、決定論の `SimilarPatternRule`（Jaccard [0,1]）では判別力が弱く、実質の分岐は AI 調査の判断に委ねられる。承認メモに新障害を特徴づける語（エラーメッセージ／リソース名）を残すほど次回の SIMILARITY と AI プロンプトの弁別が効く。なお InMemory コーパスは起動時 warmUp＝揮発（`/demo/reset` で全 DB 話の seed に戻る）で、訂正の永続は Elasticsearch 構成時のみ。
+- **同型 eventName の判別限界（正直さ）**: 3/3b のように eventName・payload が近い別障害は、決定論の `SimilarPatternRule`（Jaccard [0,1]）では判別力が弱く、実質の分岐は AI 調査の判断に委ねられる。メモに新障害を特徴づける語（エラーメッセージ／リソース名）を残すほど次回の SIMILARITY と AI プロンプトの弁別が効く。なお InMemory コーパスは起動時 warmUp＝揮発（`/demo/reset` で全 DB 話の seed に戻る）で、訂正の永続は Elasticsearch 構成時のみ。
 
 ## 4. AI 調査の2経路（ポート DI 差し替え）
 
