@@ -61,13 +61,14 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     rows: [
       {
         label: "未適用の Terraform plan",
-        description: "Cloud SQL max_connections 100→40 縮小（apply されると有効）",
+        description:
+          "バックボーンVM（Mongo 同居）を e2-standard-2 → e2-small に縮小（apply されると有効・実 PR の plan と同内容）",
         realness: "seed",
       },
       {
         label: "未マージ PR",
         description:
-          "実リポジトリの open PR を全件 read（DB 接続プール縮小の draft PR ほか）",
+          "実リポジトリの open PR を全件 read（VM 縮小・プール縮小の draft PR ほか）",
         realness: "real",
       },
     ],
@@ -95,7 +96,8 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     rows: [
       {
         label: "過去の解決済み事例",
-        description: "同型障害のアーカイブ（実在の Alert として開ける）",
+        description:
+          "前回の VM 縮小で枯渇した事例ほか同型障害のアーカイブ（実在の Alert として開ける）",
         realness: "seed",
       },
     ],

@@ -21,7 +21,8 @@
 | D1  | 提出文の plan リンク主張を正確化              | ★★★★☆         | エージェント             | 済（submission 76行目を「実在の draft PR・過去事例」へ修正・planを実在リンク列挙から除外）                                                        |
 | D2  | terraform plan の永続化＋PRコメント（CIのみ） | ★★★☆☆         | エージェント＋人間(CI確認) | 済（plan.txt＋redacted JSONをartifact保存・PRコメントupsert・生plan.jsonはsensitive平文を含むため不保存／要人間=ダミーPRでCI確認）                |
 | D3  | plan の record口への自動投入                  | ★★☆☆☆（D2後） | エージェント＋人間(CI確認) | 済（POST /ingest/terraform-plan 新設・CIからredacted差分を自動POST・UT+9 1065緑・tsc緑／要人間=D2と同じダミーPRで疎通確認）                       |
-| D4  | plan リンク入り予報の再撮影                   | ★☆☆☆☆（余力） | エージェント             | 未（現行 take003 はリンク無し状態の撮影＝映像に虚偽なし・D3完了かつ時間が余った場合のみ）                                                          |
+| D3.5| flagship plan-1 を実在VM plan へ張り替え＋#83リンク | ★★★★☆    | エージェント＋人間(PR)   | 済（plan-1=バックボーンVM e2-standard-2→e2-small・過去事例/stub/subject突合も張り替え・#83を既定リンク・ローカル実Gemini検証で引用[plan-1,sch-1,inc-2]・1069緑）|
+| D4  | flagship張り替え後の part1/part2 再撮影         | ★★★☆☆（B必須）| エージェント             | 未（Option Bで plan-1=VM縮小＋証拠を開く→#83 に変化・音声台本不変/on-screenのみ・script.mdカット1/2メモ更新済み）                                 |
 | A5  | 調査中の証拠パネルの逐次表示                  | ★☆☆☆☆（余力） | エージェント             | 未                                                                                                                                                |
 
 ---
@@ -264,9 +265,32 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 - 検証: 翻訳器 UT6件＋store UT3件を追加（全体 1065件緑・tsc 緑）。ワークフローは YAML 構造検証＋jq をフィクスチャで実行確認。**terraform.yml の `secrets.INGEST_URL/INGEST_TOKEN` は app.yml と同一 repo secrets のため追加設定不要**。
 - **残（人間）**: D2 のダミー draft PR で ①plan コメント ②artifact ③ingest 202（Actions ログの `{resourceCount,summary,url}` 出力）④本番 `POST /forecast` 再生成後に url 付き FUTURE_CHANGE が引用され得ること、を確認 → PR クローズ。store は InMemory のため edge 再起動で実投入分は消える（seed は DEMO_ENABLED で復元・割り切りは本文の論点どおり）。
 
-### D4 plan リンク入り予報の再撮影 ★☆☆☆☆（余力のみ）
+### D3.5 flagship plan-1 を実在リソースの本物 plan へ張り替え（Option B）＋実 PR #83 リンク ★★★★☆
 
-現行 take003 は plan-1 チップに外部リンクが無い状態で撮影済み＝**映像自体に虚偽なし**（ユーザー判断: このまま進める）。D3 まで完了し、かつ締切まで余裕がある場合のみ、part1（予報）だけ再撮影を検討。再撮影時は C2 の落とし穴（dedup・`POST /demo/reset` 先行）に注意。
+**背景（2026-07-08 判断）**: 旧 flagship plan-1（`google_sql_database_instance.ec_db` 100→40）は監視対象 EC の**合成インフラ**で本番 infra/terraform に実体が無く、CI で本物の terraform plan を生成できない。そこにリンクを張ると「Cloud SQL と書いてあるのに別 PR に飛ぶ」捏造になる（当初は別 subject で共存させる案だったが、ユーザー判断で**flagship 自体を実話に張り替える Option B** を採用）。「どうせリンクを付けるなら part1 は撮り直し」との判断。
+
+**張り替え後の flagship**: plan-1 を**実在リソース** `module.gce_backbone.google_compute_instance.backbone`（RabbitMQ+Mongo+ES+Valkey+worker 同居 VM＝本番 DB(Mongo) のホスト）の `machine_type` を **e2-standard-2 → e2-small** に縮小する plan に変更。VM 縮小＝Mongo がメモリ/接続を捌けず接続枯渇の再来リスク＝予兆テーマは維持。**実 PR #83 が CI で本物の plan を生成済み**なので「証拠を開く」は本物に解決＝捏造でない。
+
+**エージェント実施（2026-07-08）**:
+- 証拠 PR: ブランチ `chore/vm-cost-optimization`（base `develop`＝infra が main と一致・merge しても apply されない）→ 人間が push・**PR #83** 作成済み（`infra/terraform/envs/prod/main.tf` に `machine_type = "e2-small"`・`terraform fmt -check` 通過・DO NOT MERGE draft）。
+- seed 張り替え: `ForecastPendingPlanSeed.ts`＝plan-1 を VM machine_type 変更へ。`ResolvedAlertSeed.ts` の過去事例 `poolShrinkRegression` を「前回 VM 縮小で枯渇」へ、`report.subject` を `google_compute_instance.backbone` に（pending plan address とトークン突合 4 語＝MEMORY 突合維持）。`StubLLMClient.ts` の固定予報 subject/reasoning/先手を VM 話へ。
+- リンク配線: `config.forecast.pendingPlanPrUrl`（env `FORECAST_PENDING_PLAN_PR_URL`・**既定 = PR #83**）を `withPendingPlanEvidenceUrl` で plan-1 seed に後付け。DEMO_INFRA_APPLY_PR_URL（#60）と同じ「本物 PR を毎回指す」規約。ローカル/本番とも既定で #83 リンクが出る。
+- **ローカル実機検証（実 Gemini 経路）**: restart→reset→`POST /forecast` で plan-1 が `subject=module_gce_backbone_google_compute_instance_backbone`・desc=VM 縮小・`url=…/pull/83` を持ち、予報リスクが `citations=[plan-1, sch-1, inc-2]`／inc-2=MEMORY `google_compute_instance.backbone`（過去の同一 VM 枯渇）を引用、reasoning も「VM 縮小→過去同種障害→週末負荷」と一貫。**全体 1069 UT 緑・tsc 緑**。
+- 突合維持の要点: `subjectsMatch` はトークン重なり（多トークンは 2 語以上）。pending(VM address) と past(`google_compute_instance.backbone`) は google/compute/instance/backbone の 4 語共有で成立。schedule↔weekendCheckout は不変。E2E（`forecast.e2e.test.ts`）は id ベースのアサートなので緑を維持（コメントのみ更新）。
+
+**残（人間）**: ①**PR #83 は draft のまま開けておく**（「証拠を開く」が open な pending plan に解決するため。閉じても閲覧は可）。②本番 tf の `plain_env` に `FORECAST_PENDING_PLAN_PR_URL` は入れなくても既定 #83 で動くが、明示したい場合は追記。③**part1/part2 の再撮影**（下記 D4）。
+
+**追補（2026-07-08・スクショレビューで判明した残整合）**:
+- **UI の pr-55/pr-83 チップは PR タイトル直写し**（`PullRequestSignalSource` が desc/subject にタイトルを使う）＝コード変更でなく **GitHub 上のリタイトルで直す（人間）**:
+  - **PR #55**: 「cap DB connection pool (max_connections 100→40) for cost optimization」→「**chore(db): cap Mongo connection pool (maxPoolSize 100→40) to fit downsized backbone VM**」。diff（MongoClientFactory `maxPoolSize: 40`）はそのままタイトルを実態に合わせ、「VM 縮小に合わせてアプリ側プールも縮小」として flagship と同一物語に編入する（旧 Cloud SQL 語彙 `max_connections` を UI から消す）。connection/pool トークンは維持されるので inc-1/inc-3 との MEMORY 突合も切れない。
+  - **PR #83**: タイトルから「（デモ証拠PR・DO NOT MERGE）」を外す（pr-83 チップに直写しされ予報 UI に出るため）。draft 状態＋本文警告は維持（draft はマージ不可なので安全）。
+- **デモコンソール（投入シグナル台帳）は VM 話へ更新済み**（`ForecastDemoConsole.tsx`・静的台帳: Terraform plan 行=バックボーンVM e2-standard-2→e2-small・実 PR の plan と同内容／未マージ PR 行=VM 縮小・プール縮小の draft PR ほか／過去事例行=前回の VM 縮小で枯渇した事例ほか）。
+- **過去の同型障害アラート**: inc-2（`poolShrinkRegression`）は VM 話へ再構築済み（前回の VM 縮小→枯渇→machine_type 戻して解消・subject=`google_compute_instance.backbone`）。inc-1（週末 checkout 負荷）・inc-3（汎用プール枯渇アーカイブ）は **Cloud SQL 語彙を含まず物語とも矛盾しない**（負荷側・症状側の記憶）ため意図的に据置＝全記憶を VM 話に揃えると単調になり、リタイトル後の pr-55（プール縮小）との突合材料も失うため。
+- **#83 の D2/D3 パイプライン発火の前提**: PR の plan job は「PR ブランチ×base(develop) のマージ結果」の terraform.yml で走る。D2/D3 改修（commit `2f69b35`）が develop に無い間は旧 plan job（コメント/artifact/ingest なし・plan 実行のみ）。**feature/step7-d を develop へ merge 後、#83 の checks を Re-run** すると plan コメント＋artifact＋ingest が発火する。
+
+### D4 flagship 実話張り替え後の part1/part2 再撮影 ★★★☆☆（Option B に伴い必須化）
+
+take003 は旧 Cloud SQL 表示・plan-1 リンクなしで撮影済み。Option B で plan-1 が「バックボーンVM e2-standard-2→e2-small 縮小」＋「証拠を開く→PR #83」に変わったため、**カット1（予報カード）とカット2（引用チップの証拠を開く）は要再撮影**。ナレは揮発値・リソース名を言わない設計なので**音声台本は不変**、on-screen のみ差分（`script.md` カット1/2 メモ更新済み）。再撮影時は C2 の落とし穴（dedup・`POST /demo/reset` 先行）に注意。plan-1 チップの「証拠を開く」→ PR #83 のクリック解決も収録するとドッグフーディングが映える。
 
 ---
 
