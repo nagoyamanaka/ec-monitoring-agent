@@ -120,6 +120,13 @@ export async function openStage(partName) {
     headless: process.env.HEADED !== "1",
     // 操作間に最低限の人間らしい間を入れる（細かい間合いは各シーンの dwell で作る）
     slowMo: Number(process.env.SLOWMO ?? "150"),
+    // 白飛び対策(1/2): サイト分離を無効化し、localhost→github.com のクロスオリジン遷移でも
+    // レンダラのプロセス差し替えを避ける。差し替えが起きないと Chromium の paint-holding が
+    // 前フレームを保持したまま遷移先を描画→切替できるため、遷移中の空白フレーム自体が出ない。
+    args: [
+      "--disable-site-isolation-trials",
+      "--disable-features=IsolateOrigins,site-per-process",
+    ],
   });
   const context = await browser.newContext({
     viewport: { width: 1920, height: 1080 },
@@ -131,6 +138,17 @@ export async function openStage(partName) {
   await context.addInitScript(FAKE_CURSOR_INIT);
 
   const page = await context.newPage();
+  // 白飛び対策(2/2): プロセス差し替えが残った場合の保険。遷移中にコンポジタが描く
+  // デフォルトの base background（白）をアプリ背景色 #0b0e14 に上書きし、白フレームを
+  // ダークに寄せる。paint-holding が効けばそもそも空白は出ないが、効かなかったときの色ズレを消す。
+  try {
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Emulation.setDefaultBackgroundColorOverride", {
+      color: { r: 11, g: 14, b: 20, a: 1 },
+    });
+  } catch {
+    // CDP 非対応環境でも撮影は続行（白飛び対策(1)のみで運用）。
+  }
   let shotIndex = 0;
 
   return {
