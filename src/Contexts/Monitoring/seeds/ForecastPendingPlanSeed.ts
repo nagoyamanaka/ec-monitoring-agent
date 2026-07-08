@@ -30,7 +30,7 @@ export const FORECAST_PENDING_PLAN_SEED: PendingPlan[] = [
     ],
     plannedAt: new Date("2026-07-08T09:00:00.000Z"),
     summary:
-      "バックボーンVM（Mongo 同居）を e2-standard-2 → e2-small に縮小（コスト最適化・plan済み未適用）",
+      "バックボーンVM（Mongo 同居）を e2-standard-2 → e2-small に縮小＝メモリ 8→2GB。Mongo のワーキングセットが溢れ接続を捌けず枯渇リスク（コスト最適化・plan済み未適用）",
   },
 ];
 

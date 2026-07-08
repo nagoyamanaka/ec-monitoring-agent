@@ -36,6 +36,8 @@ type SignalRow = {
   readonly label: string;
   readonly description: string;
   readonly realness: SignalRealness;
+  /** この行だけ realness 既定の hover 注記を上書きする（例: seed だが内容は実 CI plan 由来）。 */
+  readonly note?: string;
 };
 
 /** 材料の1系統（引用レーンと同じ分類・同じ色）。 */
@@ -62,8 +64,9 @@ const SIGNAL_LANES: readonly SignalLane[] = [
       {
         label: "未適用の Terraform plan",
         description:
-          "バックボーンVM（Mongo 同居）を e2-standard-2 → e2-small に縮小（apply されると有効・実 PR の plan と同内容）",
+          "バックボーンVM（Mongo 同居）を e2-standard-2 → e2-small に縮小＝メモリ 8→2GB。実 PR #83 の CI terraform plan と同内容（apply されると有効）",
         realness: "seed",
+        note: "決定論のため事前投入した seed だが、内容は実 PR #83 が CI の terraform plan で生成した本物の差分と一致し、引用チップ「証拠を開く」は実 PR に解決する（＝合成なのは注入経路だけ・plan 自体は実在）。",
       },
       {
         label: "未マージ PR",
@@ -170,7 +173,7 @@ export function ForecastDemoConsole({
                           {row.label}
                         </span>
                         <span
-                          title={realness.note}
+                          title={row.note ?? realness.note}
                           className={`shrink-0 cursor-help rounded px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
                         >
                           {realness.label}
