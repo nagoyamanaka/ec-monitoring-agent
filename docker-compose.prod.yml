@@ -15,6 +15,20 @@ services:
       - "9200:9200"
 
   valkey:
+    # backbone VM のメモリ最適化に追随して Valkey の使用上限を 4GB→2GB に縮小する。
+    # 上限到達時は LRU で eviction（SoT ではない派生ビュー/transport なので破棄可）。
+    command:
+      [
+        "valkey-server",
+        "--save",
+        "",
+        "--appendonly",
+        "no",
+        "--maxmemory",
+        "2gb",
+        "--maxmemory-policy",
+        "allkeys-lru",
+      ]
     ports:
       - "6379:6379"
 
