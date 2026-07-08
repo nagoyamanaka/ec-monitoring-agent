@@ -10,9 +10,10 @@
 | --- | ------------------------------------------------------ | ----- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | U0  | keepwarm（旧T1）の稼働確認・未なら実施                 | ★★★★★ | エージェント＋人間(var設定)     | **着手（7/9）: workflow新設・200経路を本番edgeでローカル実証／残=H1変数設定＋push＝GitHub側での自動起動有効化**                |
 | U1  | Forecast UI: 収束ミニフロー＋引用コンパクト化（③＋②a） | ★★★★☆ | エージェント                    | **実装済（7/9・フロントのみ・contracts/edge 不変）／残=ローカル compose 目視＋フロントのみデプロイ（GET /forecast 200 維持）** |
-| U2  | 予兆シナリオ2本目: Valkeyキャッシュ・カスケード（①）   | ★★★★☆ | エージェント＋人間(PR)          | 未                                                                                                                             |
+| U2  | 予兆シナリオ2本目: Valkeyキャッシュ・カスケード（①）   | ★★★★☆ | エージェント＋人間(PR)          | **実装済（7/9・seed+stub+台帳・全テスト緑）／残=H4 実draft PR＋ローカル実Gemini検証＋デプロイ（edge再起動→POST /forecast）**    |
 | U3  | 推論説明のプロンプト強化（②b・U2と同一再生成に同乗）   | ★★★☆☆ | エージェント                    | 未                                                                                                                             |
 | U4  | 【任意・U2着地後のみ】動画part1差し替え＋素材更新      | ★★★☆☆ | エージェント＋人間(編集/アップ) | 未                                                                                                                             |
+| U5  | Analytics を「学習の軌跡」へ転回（デプロイURL上積み）  | ★★★☆☆ | エージェント                    | 未（フロントのみ・既存 /analytics データ・動画は不要＝カット6が学習を既に担保）                                               |
 | T1  | 予報キャッシュの維持機構（審査期間の床）→ U0 に統合    | ★★★★★ | —                               | **済（7/9・`.github/workflows/forecast-keepwarm.yml` 新設）**                                                                  |
 | T2  | 動画末尾にタイトルカード追記（締めの回収）             | ★★★★☆ | —                               | **済（7/9 ユーザー報告・outro追加済）**                                                                                        |
 | T3  | 数値ドリフト修正（1017→実測値）＋原稿の素材注記更新    | ★★★☆☆ | エージェント                    | 済                                                                                                                             |
@@ -159,6 +160,23 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 5. `ForecastDemoConsole.tsx` の投入シグナル台帳に行追加。**バッジの正直さ**: Valkey plan 行は「合成seed」バッジ（plan-1 の「実plan」と区別）・PR行は実draft PR なので「実データ」のまま。
 6. H4（人間）: 実 draft PR を作成——タイトル「chore(cache): カタログキャッシュ TTL 300s→60s に短縮（Valkeyメモリ縮小に追随）」等・**タイトルがそのままチップに直写しされる**ので人間語で・diff は無害（設定値 or ドキュメント）・base=develop・DO NOT MERGE 本文。間に合わない場合は PR レーン無しの3系統で成立させる（**縮退であって中止ではない**）。
 
+**進捗（2026-07-09・実装済＝手順1〜5完了・全テスト緑）**:
+
+- ①seed（手順1）: `ForecastPendingPlanSeed.ts` に plan-2（Valkey `memory_size_gb 4→2`・合成 address `module.valkey_cache.google_redis_instance.catalog_cache`）を追加。**⚠捏造ガード修正済**: `withPendingPlanEvidenceUrl` を「先頭 address == flagship の backbone address のときだけ #83 を付ける」に変更＝合成 Valkey plan は非リンクのまま（UT で両ケース固定）。**plannedAt は flagship(09:00) より古い 08:00** に設定＝store は新しい順で返すため **flagship=plan-1 / Valkey=plan-2** の連番が確定（新旧逆転バグを実チェーン検証で発見→修正）。
+- 手順2: `ForecastScheduleSeed.ts` は不変（sch-1 共用）。
+- ③記憶（手順3）: `ResolvedAlertSeed.ts` に inc 相当2件追加（`valkeyTtlRegression`=`valkey_cache_ttl` / `valkeyMemoryShrink`=`valkey_cache_maxmemory`・いずれも report.subject が plan-2 と valkey+cache の2トークン突合・結論は DB接続プール枯渇に収束）。flagship の inc（backbone/checkout）は不変・**末尾に追加**（記憶の突合件数は決定論で4件＝inc-1..inc-4 が必ず存在）。
+- ④stub（手順4）: `StubLLMClient.FORECAST_CANNED_OUTPUT` に2本目リスク（HIGH 0.72・`citations:[plan-2, sch-1, inc-3, inc-4]`）を追加。flagship(0.78)＞Valkey(0.72) で並びは flagship→Valkey→uncited(破棄)。E2E は risks 2件・両者の citations を固定検証。
+- ⑤台帳（手順5）: `ForecastDemoConsole.tsx` の「未来の変更」レーンに Valkey plan 行を追加＝**「合成seed」バッジ**（flagship の「実plan」と区別・実 PR 非対応を正直に明示）。過去事例行の説明も Valkey に言及。
+- 検証: `pnpm test`（ルート unit **1079件**全緑）／backoffice-frontend **389件**全緑＋`tsc --noEmit` 緑／backend integration（forecast/demo）緑。**実チェーン検証**（実 seed＋StubLLMClient＋InMemory 一式で ForecastRiskUseCase を駆動）で plan-1=backbone(url=#83)／plan-2=valkey(url無)／risks 2件／citations 期待どおりを確認済み。
+- **残（この環境では不可）**: 手順6=H4 実 draft PR（gh 認証不可）／検証2=ローカル実 Gemini 1回（課金・目視）／検証3=デプロイ後の本番 `POST /forecast`（edge 再起動＝キャッシュ消滅を伴うため U0 keepwarm 前提）。rollback 基準は本節検証2/3 で flagship 劣化時に seed コミット revert。
+
+**追補（2026-07-09・ユーザー判断=Valkey plan-2 も実 PR に紐づける／Option B）**:
+
+- **未マージ PR シグナルの仕組みを確認**: `PullRequestSignalSource` は repo の open PR を**全件ライブ read**（URL は GitHub API 由来・config 不要）。予報はキャッシュに凍結されるので、生成時に PR が open なら表示 URL は固定。**config で pin するのは合成 plan だけ**（ライブ PR が生成しないため）。pr-55 は本番で自動的に載る（stub/ローカルは GitHub 未設定＝PR 0件で想定内）。
+- **plan-2 も実 PR に解決させる wiring 追加**: `withPendingPlanEvidenceUrl(plans, url)` を **`withPendingPlanEvidenceUrls(plans, urlByAddress)`（address→URL 対応表）** に一般化。flagship address→#83／Valkey address→`config.forecast.valkeyPlanPrUrl`（env `FORECAST_VALKEY_PLAN_PR_URL`・**既定は空＝PR 起票後に設定**）。同一 URL の live open PR と dedup で1本に畳まれ、flagship #83 と同じ挙動。台帳の plan-2 バッジは「合成seed」のまま（terraform address は合成＝正直）だが説明は「証拠を開く→実 draft PR」に更新。
+- **人間が作る draft PR は2本**（下記 H4 更新）: ①cache TTL 短縮（app 設定）＝live 未マージ PR シグナル ②Valkey maxmemory 縮小（compose）＝plan-2 の解決先。**両ブランチ＋コミットは用意済み**（`chore/valkey-cache-ttl-shorten`＝`.env.example` +4／`chore/valkey-maxmemory-shrink`＝`docker-compose.prod.yml` valkey `--maxmemory 2gb`）。人間は push→draft PR 作成のみ。②の PR 番号を `FORECAST_VALKEY_PLAN_PR_URL` に設定（デプロイ前）。
+- **デモコンソール台帳を圧縮**（ユーザー要望「みやすく」）: 1材料=1行（ラベル＋本物度バッジ・説明は line-clamp+title ホバー）。3レーンの色（引用と統一）は不変。全テスト緑。
+
 **検証（この順で・省略禁止）**:
 
 1. ローカル stub: UT/E2E 全緑（1070+追加分）。
@@ -180,18 +198,57 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 
 **価値**: 凍結素材（動画・ポスター・サムネ）側にも「予兆は複数シナリオ」が映る＝①〜③の効果を審査の主戦場に露出させる。ナレ・字幕はシナリオ固有名を言わないため**音声そのまま・映像だけ差し替え**が成立する。
 
+> **+α（U5着地時のみ・任意）＝ Analytics(学習)の 2〜3秒 B-roll**: この U4 で**どうせ再エンコードする「ついで」**に限り、outro タイトルカードの直前に `/analytics` の「学習の軌跡」ヒーローを2〜3秒挿し、`予防→対応→学習` の3幕を映像でも明示する。**単独では絶対にやらない**（学習はカット6で担保済み・冗長・2:00圧迫）。ナレは足さない（無音B-roll・字幕は「学習」1語のみ可）。前提=U5がデプロイURLに着地し `/demo/reset` 後にヒーローが空でないこと。詳細は `video/script.md` 改善メモ5。
+
 **手順**:
 
 1. 撮影: `POST /demo/reset` → 予報再生成済みを確認 → `RESET=1 TAKE=take005 node capture.mjs forecast`。2カード表示・plan-1→#83/pr-55→#55 遷移が本編に焼き込まれること（新シナリオのチップクリックは**足さない**＝尺と字幕タイミングを変えないため）。
+   - **+α（U5着地時のみ）**: 続けて `/analytics` を撮影＝`RESET=1 TAKE=take005 node capture.mjs analytics`（capture.mjs に analytics シーンが無ければ forecast シーンに倣って追加。学習の軌跡ヒーローが画面上部に出た静止/緩パンを2〜3秒）。チップクリック等の操作は足さない（尺確定のため）。
 2. 編集（人間）: 完成版の part1 区間（0:05–0:44）の映像のみ take005 に差し替え・音声/字幕/outro は不変。
+   - **+α（U5着地時のみ）**: outro タイトルカード（カット0再掲・末尾2.5秒静止）の**直前**に analytics B-roll 2〜3秒を挿入。総尺が 2:00 を超えないこと（現1:57＋2〜3秒で 2:00 ぎりぎり＝**超えるなら outro を 2.5→1.5秒に詰めるか B-roll を捨てる**）。字幕を足す場合は「学習」1語のみ・ナレ無音。
 3. 素材再生成: `TAKE=take005 node scripts/video-capture/make-posters.mjs`（poster-1-hero のみ）＋ `make-thumbnail.mjs`。
 4. アップロード差し替え（人間・**チェックリスト必須＝差し替え漏れが新たな失点源**）:
    - [ ] YouTube へ新版アップ（動画差し替え不可のため**新URL**）・サムネ設定
    - [ ] ProtoPedia の動画URLを新URLへ更新
    - [ ] ProtoPedia の poster-1-hero / サムネ画像を差し替え
    - [ ] 旧YouTube動画を非公開化（審査員が旧版に迷い込まない）
-   - [ ] script.md のas-built（カット1〜2の実測・素材構成表）を take005 で更新
-5. **中止基準**: U2の本番着地が7/10中でない／編集時間が確保できない → やらない（現行動画で提出。①〜③はURL訪問者向けの上積みとして成立済み）。
+   - [ ] script.md のas-built（カット1〜2の実測・素材構成表）を take005 で更新（**+α実施時は末尾カット＝analytics B-roll も素材構成表・カット表に追記**）
+5. **中止基準**: U2の本番着地が7/10中でない／編集時間が確保できない → やらない（現行動画で提出。①〜③はURL訪問者向けの上積みとして成立済み）。**+αのAnalytics B-roll は U5未着地・尺超過・時間不足のいずれかで即カット**（本体の part1 差し替えより優先度が低い）。
+
+## U5 Analytics を「学習の軌跡」へ転回 ★★★☆☆ — デプロイURL上積み（フロントのみ）
+
+**なぜやるか・なぜ動画ではないか**: 「使うほどAIを呼ばなくなる＝賢くなる」を Forecast(予防)→Alerts(対応)→**Analytics(学習)** の3幕で締める。ただし**この学習物語は完成版動画のカット6（承認→昇格→再発火が即・既知1秒・AIコストゼロ）で既に担保済み**＝動画への新カット追加は不要（凍結素材・2:00上限・U4級の再編集コストに見合わない）。**真の対象は審査員が非同期で触るデプロイURLの Analytics タブ**。現状は「正答率ゲージ＋既知/未知ドーナツ＋件数5枚＋承認一覧」＝一般的ダッシュボードに見える（`AnalyticsPage.tsx`）。これを**集計の網羅ではなく1本のライフサイクル物語**に振り切り、generic な見えを殺す。
+
+**設計方針（決定・2026-07-09 ユーザー合意）**: 「集計ダッシュボード強化」路線は捨て、「集計をやめてライフサイクル物語1本」へ振り切る（後者）。
+
+**制約の厳守**: **フロントのみ・新API/新contractsフィールドゼロ**。既存 `GET /analytics`（`AnalyticsResponse`）が返す `approvedAlerts[]`（`classificationType`/`patternName`/`occurrenceCount`/`operatorNote`/`occurredOn`）＋`knownCount`/`unknownCount` だけで組む。調査時間・証拠件数の実測（`InvestigationMetrics`＝`elapsedMs`/`evidenceCounts`）は **/analytics には載っていない**ので Analytics 上で数値化せず、ヒーローの「AI調査」ステップから**既存のアラート詳細（`GET /alerts/:id` の証拠フロー＝`evidenceFlow.ts`/`investigationWorkload.ts`）へ深リンク**して実測をそこで見せる（=既存UIの再利用・盛らない制約を維持）。
+
+**中身（`AnalyticsPage.tsx` の再構成・フロントのみ）**:
+
+1. **ヒーロー「1件の学習の軌跡（Knowledge Lifecycle）」**: `approvedAlerts` から代表1件（`classificationType==="unknown"` で `patternName` あり＝AI推定パターンを持ち、可能なら `occurrenceCount>1`＝再発済み）を選び、横タイムラインで:
+   ```
+   [未知] eventName          （AI推定: patternName）
+     ↓  AI調査（← このステップだけ /alerts/:id?focus= へ深リンク＝実測92秒/62件は既存詳細で）
+   [承認] operatorNote        （人間の判断＝知識化の瞬間）
+     ↓  Known Pattern へ昇格
+   [既知] 再発火は即確定       （occurrenceCount>1 が証拠・AI調査なし）
+   ```
+   代表が居ないseed状態では empty state（「まだ学習の軌跡がありません」）に劣化。
+2. **支えの数字を1つだけ**: `knownCount` を「**AIを呼ばず即確定した件数**」として提示。対比は「**既知＝AI調査を実行しない（即確定）** vs 未知＝AIエージェント調査」。⚠**honest**: 既知一致は `InvestigationReport` 自体が無い（調査していない）ので **「1秒未満」ではなく「調査ゼロ／即確定」で表現**する（`③既知判定:1秒未満` の元案は不正確＝修正）。vanity% を大書きしない（seed依存＝Davidの「数字はハルシネーション」批判の的）。
+3. **撤去/従属化**: 正答率ゲージ・既知/未知ドーナツ・件数5枚 StatCard は**主役から降ろす**（削除 or ヒーロー下の折りたたみ的な従属ブロックへ）。承認済み一覧（`ApprovedAlertsSection`）はライフサイクルの「蓄積された知識」として下段に残す（既存の深リンクは維持）。
+
+**やらないこと（前回議論で確定）**: (a) Unknown→**Similar**→Known の3ティア図＝現 DTO は Similar を known/unknown に畳んでおり、ティア化には新フィールドが要る＝制約違反。Similar は**ティア図をやめてライフサイクルの一段（照合）で語る**。 (b) 証拠ソース集計円グラフ・総調査時間カウンタ＝per-alert に既存・集計は低ROI＆vanity数値リスク。
+
+**ガードレール**: フロントのみ・`contracts`/`edge`/`AnalyticsResponse` 不変・キャッシュ無傷・全テスト緑（追加UTで純関数の写像を固定）。予報カードの「顔」やaルート構成には触れない。
+
+**検証**:
+1. ローカル compose 目視: `/analytics` がライフラインを主役に描画・代表が居るseedでヒーロー成立・deep link で該当アラート詳細（証拠フロー）へ飛べる。empty state も1回確認。
+2. seed 確認: デモseedに **unknown→承認→昇格→再発火（`occurrenceCount>1`）の1件が実在**すること（カット6の物語と同一のアラート系列＝`/demo/reset` 後に `GET /analytics` の `approvedAlerts` に出るか）。無ければヒーロー選定条件を「`occurrenceCount>1` 必須」から「AI推定 `patternName` あり」へ緩める。
+3. フロントのみデプロイ→ `GET /forecast` 200 維持（edge 非再起動）＋ `/analytics` 目視。
+
+**受け入れ条件**: `/analytics` を開いた審査員が、集計表ではなく「Unknown→AI調査→承認→Known→再一致」の1本の学習物語をまず読む。既存 UT＋追加UT緑。**新APIゼロ**。
+
+**動画側（任意・U4同梱時のみ）**: 台本 `video/script.md` の改善メモに**任意カット**として追記済み。**単独では動画を触らない**（カット6が学習を担保・再編集は U4 の part1 差し替えと同時のときだけ、outro 直前に Analytics ライフラインを2〜3秒 B-roll で足す選択肢）。
 
 ## T5 提出直前の最終疎通リハ（人間・7/12 提出直前）★★★☆☆
 
@@ -200,8 +257,9 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 1. `/forecast` — 予報カードが出る（**404なら keepwarm を手動実行**）・カード2枚（U2後）・「証拠を開く」→PR#83/#55/（H4のPR）が開く
 2. `/alerts` — デモコンソールでシナリオ1本注入→分類→（時間があれば）調査完走
 3. 既知アラート→詳細→過去レポートが開く
-4. GitHub リポ公開状態・PR #83/#55/#29 が開ける
-5. ProtoPedia ページ・YouTube 動画（U4後は新URL）が非ログインで再生できる
+4. `/analytics`（U5後）— 学習の軌跡ヒーローが出る・「AI調査」ステップから該当アラート詳細へ飛べる
+5. GitHub リポ公開状態・PR #83/#55/#29 が開ける
+6. ProtoPedia ページ・YouTube 動画（U4後は新URL）が非ログインで再生できる
 
 ---
 
@@ -211,8 +269,9 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 | --- | ----------------------------- | -------------------------------------------------------------------------- |
 | H1  | repo variable 設定            | `FORECAST_EDGE_URL` を Actions variables に追加（U0/T1 の前提）            |
 | H2  | ~~YouTube アップロード~~      | 済（7/9報告）。U4実施時のみ新URL再アップ＋ProtoPedia更新                   |
-| H3  | 審査終了後の後始末            | forecast-keepwarm.yml の無効化・PR #83/H4のPR クローズ可否判断             |
-| H4  | シナリオ2用の実 draft PR 作成 | U2手順6参照（タイトル=チップ直写し・無害diff・base=develop・DO NOT MERGE） |
+| H3  | 審査終了後の後始末            | forecast-keepwarm.yml の無効化・PR #83/H4a/H4b のPR クローズ可否判断        |
+| H4a | cache TTL 短縮 draft PR       | ブランチ `chore/valkey-cache-ttl-shorten`（用意済）を push→draft PR 作成（base develop・DO NOT MERGE）。live 未マージ PR シグナルになる |
+| H4b | Valkey maxmemory draft PR     | ブランチ `chore/valkey-maxmemory-shrink`（用意済）を push→draft PR 作成（base develop・DO NOT MERGE）。**その PR URL を repo/edge の env `FORECAST_VALKEY_PLAN_PR_URL` に設定**＝plan-2 の「証拠を開く」解決先（デプロイ前） |
 | H5  | U4 の編集・アップロード       | part1差し替え編集＋U4チェックリスト消化                                    |
 
 ## 完了の定義（優秀賞ラインの床・最終形）
@@ -224,4 +283,5 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 - [x] ProtoPedia 登録済み（7/9 ユーザー報告）— 第三者閲覧確認は T5 で
 - [ ] 【上積み】予報カードが「入力→推論→結論→先手」で読める（U1）
 - [ ] 【上積み】本番 `/forecast` に2本目のシナリオ（U2・flagship 無傷が条件）
+- [ ] 【上積み】デプロイURLの `/analytics` が学習の軌跡物語で締まる（U5・フロントのみ・新APIゼロ）
 - [ ] 【任意】動画 part1 に2カードが映る（U4・チェックリスト完走が条件）
