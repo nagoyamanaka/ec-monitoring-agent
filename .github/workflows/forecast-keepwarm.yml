@@ -1,0 +1,73 @@
+name: Forecast Keepwarm
+
+# 審査期間中、本番 edge の予報キャッシュ（InMemory・edge 再起動で消える）を維持する保険。
+# 30分毎に GET /forecast を叩き、404（＝キャッシュ消失）のときだけ POST /forecast で再生成する。
+# 予報は本作品の最大の売り。審査員がクリックした瞬間に白紙(404)にならないための床。
+#
+# on/off:
+#   - 一時停止: GitHub UI の Actions → このワークフロー → "..." → Disable workflow
+#   - 手動起動: Actions → Run workflow（workflow_dispatch）
+#   - 審査終了後の恒久停止: 本ファイル削除 or schedule をコメントアウト（H3）
+#
+# コスト: POST は実 Gemini 課金（再生成が発生したときのみ・1回/約23秒）。
+#         30分毎の GET は無料。頻度は上げないこと。
+on:
+  schedule:
+    - cron: "*/30 * * * *" # 30分毎（UTC）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepwarm:
+    runs-on: ubuntu-latest
+    env:
+      # 本番 edge の URL。repo variable に設定（人間・H1）:
+      #   Settings → Secrets and variables → Actions → Variables → FORECAST_EDGE_URL
+      #   値: https://backoffice-edge-510288040594.asia-northeast1.run.app
+      #        （Cloud Run コンソールの正URL。旧 a.run.app ハッシュ形式も同一サービスの別名だが非推奨形式のため使わない）
+      EDGE_URL: ${{ vars.FORECAST_EDGE_URL }}
+    steps:
+      - name: Guard - FORECAST_EDGE_URL must be set
+        run: |
+          if [ -z "$EDGE_URL" ]; then
+            echo "::error::repo variable FORECAST_EDGE_URL が未設定です（H1）。Settings → Variables で設定してください。"
+            exit 1
+          fi
+          echo "EDGE_URL=$EDGE_URL"
+
+      - name: Check /forecast and regenerate if 404
+        run: |
+          set -uo pipefail
+          # curl のタイムアウト/接続失敗は exit≠0 かつ code は "000"。
+          # `|| true` で拾ってエラー分岐に落とし、必ず明示メッセージで fail させる。
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$EDGE_URL/forecast" -m 20 || true)
+          code=${code:-000}
+          echo "GET /forecast -> $code"
+
+          if [ "$code" = "200" ]; then
+            echo "キャッシュ生存。何もしない。"
+            exit 0
+          fi
+
+          if [ "$code" = "404" ]; then
+            echo "キャッシュ消失。POST /forecast で再生成する（実 Gemini・最大150秒）…"
+            if ! curl -fsS -X POST "$EDGE_URL/forecast" -m 150 -o /dev/null; then
+              echo "::error::POST /forecast が失敗しました（Gemini 呼び出し失敗/タイムアウト）。edge を確認してください。"
+              exit 1
+            fi
+            after=$(curl -s -o /dev/null -w "%{http_code}" "$EDGE_URL/forecast" -m 20 || true)
+            after=${after:-000}
+            echo "再生成後 GET /forecast -> $after"
+            if [ "$after" != "200" ]; then
+              echo "::error::再生成後も GET /forecast が 200 になりません（$after）。"
+              exit 1
+            fi
+            echo "再生成成功。200 を確認。"
+            exit 0
+          fi
+
+          # 5xx / timeout(000) / その他 = 異常。job を fail させて通知代わりにする。
+          echo "::error::GET /forecast が想定外のステータス ($code)。edge の稼働を確認してください。"
+          exit 1
