@@ -35,10 +35,12 @@ describe("ForecastDemoConsole", () => {
     expect(screen.getByText("未マージ PR")).toBeInTheDocument();
     expect(screen.getByText("負荷スケジュール")).toBeInTheDocument();
     expect(screen.getByText("過去の解決済み事例")).toBeInTheDocument();
-    // 正直さ: 実 GitHub PR だけが実データ・残り3つは合成 seed。
-    // open PR は全件 read＝台帳に無い PR が予報に現れても嘘にならない文言。
+    // 正直さ: 未来の変更は実データ（open PR）＋実plan（実 PR #83 の CI plan を固定投入）＝実在。
+    // スケジュール・過去事例の2つだけが合成 seed。open PR は全件 read＝台帳に無い PR が予報に
+    // 現れても嘘にならない文言。
     expect(screen.getAllByText("実データ")).toHaveLength(1);
-    expect(screen.getAllByText("合成seed")).toHaveLength(3);
+    expect(screen.getAllByText("実plan")).toHaveLength(1);
+    expect(screen.getAllByText("合成seed")).toHaveLength(2);
     expect(screen.getByText(/open PR を全件 read/)).toBeInTheDocument();
   });
 

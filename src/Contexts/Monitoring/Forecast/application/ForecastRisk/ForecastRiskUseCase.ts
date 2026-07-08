@@ -50,7 +50,43 @@ export class ForecastRiskUseCase {
     const collected = await Promise.all(
       this.signalSources.map((source) => source.collect(horizon)),
     );
-    return collected.flat();
+    return this.dedupeByEvidenceUrl(collected.flat());
+  }
+
+  /**
+   * 同一 url（＝同じ PR / 変更）を複数ソースが拾うと二重引用に見える。
+   * 例: 未適用 plan（terraform.plan・plan-1）と open PR（github.pr・pr-83）が
+   * どちらも同じ #83 を指す＝「plan済み未適用」と「未マージPR」で二重計上に見える。
+   * url 単位で1本に畳み、terraform.plan（リソース差分まで持つ具体証拠＝flagship の
+   * 「plan済み未適用」レーン）を open PR より優先して残す。最初の出現位置は保つ。
+   * url を持たない signal・url が異なる signal（別 PR の pr-55 等）はそのまま通す。
+   */
+  private dedupeByEvidenceUrl(signals: ForecastSignal[]): ForecastSignal[] {
+    const winnerByUrl = new Map<string, ForecastSignal>();
+    for (const signal of signals) {
+      if (!signal.url) continue;
+      const current = winnerByUrl.get(signal.url);
+      if (!current || this.evidencePriority(signal) > this.evidencePriority(current)) {
+        winnerByUrl.set(signal.url, signal);
+      }
+    }
+    const emitted = new Set<string>();
+    const result: ForecastSignal[] = [];
+    for (const signal of signals) {
+      if (!signal.url) {
+        result.push(signal);
+        continue;
+      }
+      if (emitted.has(signal.url)) continue;
+      emitted.add(signal.url);
+      result.push(winnerByUrl.get(signal.url)!);
+    }
+    return result;
+  }
+
+  // terraform.plan（未適用 plan＝リソース差分まで持つ具体証拠）を open PR より優先。
+  private evidencePriority(signal: ForecastSignal): number {
+    return signal.source.startsWith("terraform.plan") ? 2 : 1;
   }
 
   // 主シグナルの subject（重複除去済み）で記憶を引き、MEMORY シグナルへ正規化する。

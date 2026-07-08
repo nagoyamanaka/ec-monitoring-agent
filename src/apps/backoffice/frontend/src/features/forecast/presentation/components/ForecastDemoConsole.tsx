@@ -14,7 +14,7 @@
  */
 import { GamepadIcon } from "@shared/ui/icons";
 
-type SignalRealness = "real" | "seed";
+type SignalRealness = "real" | "pinnedReal" | "seed";
 
 const REALNESS_META: Record<
   SignalRealness,
@@ -25,10 +25,17 @@ const REALNESS_META: Record<
     className: "bg-emerald-500/15 text-emerald-200 ring-emerald-500/30",
     note: "実 GitHub リポジトリの未マージ PR を read-only で取得する実経路。",
   },
+  // 実在の証拠（実 PR の CI plan）だが、予報の決定論のため同内容を固定投入している行。
+  // 「合成seed」と区別する＝差分もリンクも実在で、合成なのは注入経路ではない。
+  pinnedReal: {
+    label: "実plan",
+    className: "bg-teal-500/15 text-teal-200 ring-teal-500/30",
+    note: "実 PR #83 が CI の terraform plan で生成した本物の差分と同一。予報の決定論のため同内容を固定投入しているが、差分もリンクも実在し、引用チップ「証拠を開く」は実 PR に解決する。",
+  },
   seed: {
     label: "合成seed",
     className: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
-    note: "デモ用に投入した合成シグナル（本番では実 plan / 実スケジュール / 実インシデント履歴が同じ入口に入る）。突合 → AI 予報 → 引用検証は実経路・実 AI。",
+    note: "デモ用に投入した合成シグナル（本番では実スケジュール / 実インシデント履歴が同じ入口に入る）。突合 → AI 予報 → 引用検証は実経路・実 AI。",
   },
 };
 
@@ -36,8 +43,6 @@ type SignalRow = {
   readonly label: string;
   readonly description: string;
   readonly realness: SignalRealness;
-  /** この行だけ realness 既定の hover 注記を上書きする（例: seed だが内容は実 CI plan 由来）。 */
-  readonly note?: string;
 };
 
 /** 材料の1系統（引用レーンと同じ分類・同じ色）。 */
@@ -65,8 +70,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
         label: "未適用の Terraform plan",
         description:
           "バックボーンVM（Mongo 同居）を e2-standard-2 → e2-small に縮小＝メモリ 8→2GB。実 PR #83 の CI terraform plan と同内容（apply されると有効）",
-        realness: "seed",
-        note: "決定論のため事前投入した seed だが、内容は実 PR #83 が CI の terraform plan で生成した本物の差分と一致し、引用チップ「証拠を開く」は実 PR に解決する（＝合成なのは注入経路だけ・plan 自体は実在）。",
+        realness: "pinnedReal",
       },
       {
         label: "未マージ PR",
@@ -173,7 +177,7 @@ export function ForecastDemoConsole({
                           {row.label}
                         </span>
                         <span
-                          title={row.note ?? realness.note}
+                          title={realness.note}
                           className={`shrink-0 cursor-help rounded px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
                         >
                           {realness.label}
