@@ -22,8 +22,8 @@
 | D2   | terraform plan の永続化＋PRコメント（CIのみ）       | ★★★☆☆          | エージェント＋人間(CI確認) | 済（plan.txt＋redacted JSONをartifact保存・PRコメントupsert・生plan.jsonはsensitive平文を含むため不保存／要人間=ダミーPRでCI確認）                               |
 | D3   | plan の record口への自動投入                        | ★★☆☆☆（D2後）  | エージェント＋人間(CI確認) | 済（POST /ingest/terraform-plan 新設・CIからredacted差分を自動POST・UT+9 1065緑・tsc緑／要人間=D2と同じダミーPRで疎通確認）                                      |
 | D3.5 | flagship plan-1 を実在VM plan へ張り替え＋#83リンク | ★★★★☆          | エージェント＋人間(PR)     | 済（plan-1=バックボーンVM e2-standard-2→e2-small・過去事例/stub/subject突合も張り替え・#83を既定リンク・ローカル実Gemini検証で引用[plan-1,sch-1,inc-2]・1069緑） |
-| D4   | part1 再撮影（VM予報＋plan-1リンク＋同一タブ遷移）  | ★★★☆☆（B必須） | エージェント               | 未（Option Bで plan-1=VM縮小＋証拠を開く→#83／capture.mjs=(c)方式で証拠リンクを同一タブに焼く・音声台本不変/on-screenのみ／後続でB2#1・B3再生成／script.md・retake-prompt更新済み） |
-| D5   | part4 再撮影（カット7 同一タブ「修正PRを開く」動線）| ★★★☆☆          | エージェント               | 未（アラート→AI起票PRを1動線に・調査完了(drafted)待ち+約2分・未検出時#29直行フォールバック・capture.mjs/script.md/retake-prompt更新済み）                        |
+| D4   | part1 再撮影（VM予報＋plan-1リンク＋同一タブ遷移）  | ★★★☆☆（B必須） | エージェント               | 済（take004 撮影＝VM予報・plan-1→#83/pr-55→draft を本編同一タブに焼き込み・確信度90%・豆腐0／goBack→goto 修正/B2 poster-1・B3 thumbnail を take004 で再生成/script.md 実測=take004 更新）             |
+| D5   | part4 再撮影（カット7 同一タブ「修正PRを開く」動線）| ★★★☆☆          | エージェント               | 済（take004 撮影＝CVE検知→調査116秒→「修正を起票」実クリック→drafted→修正PRを開く→#29 を1動線で本編に焼き込み／capture.mjs に起票クリック手順を追加/script.md 実測=take004 更新）              |
 | A5   | 調査中の証拠パネルの逐次表示                        | ★☆☆☆☆（余力）  | エージェント               | 未                                                                                                                                                               |
 
 ---
@@ -313,6 +313,21 @@ take003 は旧 Cloud SQL 表示・plan-1 リンクなしで撮影済み。Option
 - **確認**: `cve-alert`（調査後・レポート/RemediationPanel が出た状態）と `draft-pr`（PR #29）が本編に写る。
 - **C3**: カット7 の実測を take004 で突合（ナレ不変）。
 - **依存文言**: 「修正 PR を開く」（RemediationPanel drafted 時）。`retake-prompt.md` のドリフト表に追記済み。
+
+**実施記録（2026-07-08・D4）**: `TAKE=take004 node capture.mjs forecast` で part1 を再撮影（実 Gemini 経路・予報は事前生成キャッシュ＝POSTなし・課金なし）。出力 `output/take004/part1-forecast.mp4`（2.6M・H.264/1920×1080）＋スクショ5枚。
+
+- **capture.mjs バグ修正**: カット2の外部チップ（github PR #83/#55）から /forecast へ戻る動線が `page.goBack()` だとクロスオリジン戻りで SPA カード（article）が復帰せずタイムアウトしていた。**`page.goto(/forecast)` の明示リロードに変更**（初回 goto は成功する＝GET /forecast 200 でカード再描画）。これで part1 が最後まで完走。
+- **目視検証（豆腐0・Kizashi・VM 物語）**: `01-forecast-card`＝予兆ブリーフィング・plan-1「バックボーンVM e2-standard-2→e2-small 縮小・証拠を開く」・pr-55「cap Mongo connection pool (maxPoolSize 100→40)」・A3 人間語見出し/mono メタ・A4 一文導入・**確信度 90%**（旧 take003 は 95%）。`02/03`＝plan-1→**PR #83**（terraform plan コメント3件変更・gce_backbone 含む＝D2/D3 発火済み）／pr-55→**PR #55 draft**（いずれも本編同一タブ遷移＝(c)方式で mp4 に PR が写る）。`04`＝過去 Alert inc-1「チェックアウト遅延」へアプリ内遷移。`05`＝今打てる先手。すべて U+FFFD/□ なし。
+- **後続完了**: `make-posters.mjs`/`make-thumbnail.mjs` を take 指定可に改修（poster-1-hero と video-thumbnail を **take004** から、poster 3/4/5 は part2/part3 由来で take003 据置）→ `poster-1-hero.png`・`video-thumbnail.png` を VM 予報カードで再生成（豆腐0・目視 OK）。
+- **C3**: `script.md` カット1/2 を「実測（take004）」へ更新（確信度 95%→**90%**・plan-1=VM・同一タブ遷移の焼き込み確認）。ナレは揮発値を言わない設計のため不変。
+- **残（人間）**: 採用 mp4/スクショの確定と提出物への反映（output/ は .gitignore・採用スクショのみ docs/protopedia/assets/ へコピー）。前提の GitHub リタイトル #55/#83 は反映済みを確認（予報 JSON・スクショで実タイトル表示）。
+
+**実施記録（2026-07-08・D5）**: 先に `POST /demo/reset`（シナリオ4 dedup 回避）→ `TAKE=take004 node capture.mjs dogfooding` で part4 を再撮影（実 Gemini 調査・**116秒**・証拠12件・確信度90%・fallbackなし）。
+
+- **capture.mjs バグ修正**: 旧実装は調査完了後すぐ「修正 PR を開く」リンクを探したが、**調査直後の RemediationPanel は status=none で「修正を起票」ボタンしか無く drafted リンクは未出現**＝毎回フォールバック（#29 直行）していた。**「修正を起票」ボタンを実クリック→drafted 化を待つ手順を追加**（remediation mode=demo は即 drafted で PR #29 を返すことを API で事前検証）。これで「修正 PR を開く →」実リンクが出現し (c)方式で同一タブ遷移。
+- **目視検証**: `02-cve-alert`＝脆弱性の検知・8エージェント調査・実 CVE 引用（ansi-regex/semver）。`03-remediation-drafted`＝「修正 PR 作成済み・対象脆弱性2件・修正 PR を開く →」＋ Trivy CI 証拠（CVE-2021-3807/CVE-2022-25883）。`04-draft-pr`＝**PR #29**「セキュリティ: 依存関係の脆弱性を修正」に本編同一タブ遷移（Draft・ai-remediation[bot] 2コミット・「AI が起票した草案・自動マージしません」）。豆腐0・Kizashi ヘッダ。
+- 動線が「CVE検知 → AI調査 → 修正を起票 → 修正PR」の1本に繋がった（旧 part4 は page.goto 直行ジャンプでアプリ動線が映らなかった問題を解消）。
+- **C3**: `script.md` カット7 を「実測（take004）」へ更新（116秒/12件・起票クリック手順・#29 遷移）。ナレ不変。
 
 ---
 

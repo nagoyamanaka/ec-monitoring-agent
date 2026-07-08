@@ -154,8 +154,10 @@ async function sceneForecast() {
       await revealLinkSameTab(stage, externalChips.nth(i), {
         label: `citation-external-${i + 1}`,
       });
-      await page.goBack();
-      await card.waitFor({ timeout: 10_000 });
+      // 外部（github）から戻るのは goBack だと SPA カードが復帰しないことがある
+      // （クロスオリジン遷移後の bfcache 無効化）。/forecast へ明示 goto して確実に再描画。
+      await page.goto(`${FRONT_URL}/forecast`);
+      await card.waitFor({ timeout: 15_000 });
       await dwell(1_500);
     }
     const internalChip = card.locator('a[href^="/alerts"]').first();
@@ -317,9 +319,28 @@ async function sceneDogfooding() {
     await dwell(4_000);
     await stage.shot("cve-alert");
 
-    // アプリ内の実リンク「修正 PR を開く →」から draft PR へ。target=_blank なので
-    // 同一タブ遷移で本編に写す＝「アラート→AI起票のPR」が1本の動線として繋がる。
+    // 起票は人間の承認アクション。調査完了時点では RemediationPanel は status=none で
+    // 「修正を起票」ボタンを出す（drafted リンクはまだ無い）。実際にボタンをクリックして
+    // PR を起票させる（demo モードは事前起票の PR #29 を即 drafted で返す）。これで動線が
+    // 「CVE検知 → AI調査 → 修正を起票 → 修正PR」の1本に繋がる。
+    const draftButton = page
+      .getByRole("button", { name: "修正を起票", exact: true })
+      .first();
+    if (await draftButton.count()) {
+      await draftButton.scrollIntoViewIfNeeded();
+      await draftButton.hover();
+      await dwell(1_500);
+      await draftButton.click();
+      await dwell(2_000);
+      await stage.shot("remediation-drafted");
+    } else {
+      console.warn("  ⚠ 「修正を起票」ボタン未検出（remediable=false の可能性）");
+    }
+
+    // 起票後 drafted になると「修正 PR を開く →」の実リンクが出る。出現を待ってから
+    // アプリ内の実リンクを (c)方式で同一タブ遷移＝本編 mp4 に PR を写す。
     const prLink = page.getByRole("link", { name: /修正 PR を開く/ }).first();
+    await prLink.waitFor({ timeout: 30_000 }).catch(() => {});
     if (await prLink.count()) {
       await revealLinkSameTab(stage, prLink, { label: "draft-pr", dwellMs: 6_000 });
     } else {
