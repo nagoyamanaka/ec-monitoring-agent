@@ -1,15 +1,16 @@
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { ClockIcon, ShieldIcon } from "@shared/ui/icons";
 import { ConfidenceBar } from "@shared/ui/tremor";
-import { citationKindCount } from "../../domain/ForecastView";
+import { citationKindCount, pastIncidentCount } from "../../domain/ForecastView";
 import type { RiskCardView } from "../../domain/ForecastView";
 import { riskLevelLabel } from "../../domain/RiskLevel";
 import { CitationList } from "./CitationList";
+import { ConvergenceMiniFlow } from "./ConvergenceMiniFlow";
 
 /**
  * 予兆リスク1件のカード（step6 F7）: 「いつ危ないか」が予報の答えなので **window を主見出し**、
  * subject は補足行に置く（horizon「今週末」はページ側のメタ情報）。level 色は SeverityBadge
- * （HIGH/MEDIUM/LOW 転用）が担い、根拠の系統数（収束の強さ）を level の隣にチップで示す。
+ * （HIGH/MEDIUM/LOW 転用）が担い、根拠の種類数（収束の強さ）を level の隣にチップで示す。
  */
 export interface RiskCardProps {
   risk: RiskCardView;
@@ -17,6 +18,7 @@ export interface RiskCardProps {
 
 export function RiskCard({ risk }: RiskCardProps) {
   const kindCount = citationKindCount(risk.citations);
+  const pastCount = pastIncidentCount(risk.citations);
   return (
     <article
       className="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-5"
@@ -35,9 +37,9 @@ export function RiskCard({ risk }: RiskCardProps) {
             {kindCount >= 2 && (
               <span
                 className="rounded-full bg-slate-700/40 px-2 py-0.5 text-[11px] font-medium text-slate-300"
-                title="独立した系統（変更予定・負荷予定・過去の記憶）が重なるほどリスクの裏付けが強い"
+                title="独立した種類の根拠（変更予定・負荷予定・過去の記憶）が重なるほどリスクの裏付けが強い"
               >
-                根拠 {kindCount}系統
+                根拠 {kindCount}種類
               </span>
             )}
             <SeverityBadge level={risk.level} />
@@ -46,6 +48,9 @@ export function RiskCard({ risk }: RiskCardProps) {
         </div>
       </div>
       <p className="text-sm leading-relaxed text-slate-300">{risk.reasoning}</p>
+      {/* U1③: 収束ミニフロー＝「入力（根拠の種類別件数）→ AI 調査 → 結論」。
+          カードは「入力→AI推論→結論→先手」の順で読ませたいので先手ブロックの直前に置く。 */}
+      <ConvergenceMiniFlow risk={risk} />
       {/* F11a: 先手＝カード内の視覚的主役。実行主体は人間（write-zero）＝ボタンにしない。
           実行先（PR/plan/過去事例）への動線は下の CitationList の実リンクが担う。
           LLM が出さなければフィールドごと欠落＝このブロックが消えるだけの縮退。 */}
@@ -63,6 +68,13 @@ export function RiskCard({ risk }: RiskCardProps) {
           <p className="mt-1 text-sm leading-relaxed text-cyan-100">
             {risk.preventiveAction}
           </p>
+          {/* U1③: 先手の効果1行（決定論テンプレ・引用の past 件数から生成）。
+              ②b の LLM 文（preventiveAction）を上書きせず別行で共存する（0件なら出さない）。 */}
+          {pastCount > 0 && (
+            <p className="mt-2 border-t border-cyan-500/20 pt-2 text-[11px] leading-relaxed text-cyan-200/80">
+              この先手で、過去の同型事例（{pastCount}件）と同じ経路の再発を高負荷窓の外へ外します。
+            </p>
+          )}
         </div>
       )}
       <CitationList citations={risk.citations} />

@@ -125,6 +125,41 @@ export function citationKindCount(citations: readonly CitationView[]): number {
   return new Set(citations.map((c) => c.kind)).size;
 }
 
+/** 収束ミニフローの入力レーン1本（種別ラベル＋その系統の件数）。 */
+export type ConvergenceLane = {
+  readonly kind: string;
+  readonly kindLabel: string;
+  readonly count: number;
+};
+
+/**
+ * 収束ミニフロー（U1③）の入力レーンを決定論で導出する。
+ * 「どの系統が何件収束したか」を LLM 文ではなく引用の kind グルーピングから数える
+ * ＝「なぜ HIGH か」を構造で見せる（groupCitationsByKind と同じレーン順）。
+ */
+export function convergenceLanes(
+  citations: readonly CitationView[],
+): ConvergenceLane[] {
+  return groupCitationsByKind(citations).map((lane) => ({
+    kind: lane.kind,
+    kindLabel: lane.kindLabel,
+    count: lane.citations.length,
+  }));
+}
+
+/** シグナル種別 MEMORY（過去の同型事例）。 */
+const MEMORY_KIND = "MEMORY";
+
+/**
+ * 引用に含まれる「過去の同型事例」の件数（先手の効果1行 U1③ の N に使う）。
+ * 0 件なら効果行は出さない（盛らない側＝経路の根拠が無いのに再発型を語らない）。
+ */
+export function pastIncidentCount(
+  citations: readonly CitationView[],
+): number {
+  return citations.filter((c) => c.kind === MEMORY_KIND).length;
+}
+
 function toCitationView(signal: ForecastSignalPrimitives): CitationView {
   return {
     id: signal.id,

@@ -4,9 +4,9 @@
  * 初見の審査員に (1) この予報の材料は何か＝投入シグナルの台帳と本物度、(2) ボタンが何をするか、
  * を1画面で伝える。デモ系 UI はこのパネルに閉じ込め、予報本文（プロダクション面）を侵食しない。
  *
- * 台帳は**材料の分類**を語る（AI の評価結果ではない）: 予報カードの引用レーンと同じ3系統・
+ * 台帳は**材料の分類**を語る（AI の評価結果ではない）: 予報カードの引用レーンと同じ3種類・
  * 同じ色（未来の変更=cyan / スケジュール=amber / 過去の同型事例=emerald）でグルーピングし、
- * 「材料の3系統 → 根拠 n系統チップ → 引用レーン」が同一の視覚語彙で一本につながるようにする。
+ * 「材料の3種類 → 根拠 n種類チップ → 引用レーン」が同一の視覚語彙で一本につながるようにする。
  *
  * realness はアラート側デモ卓と同じ正直さ運用: 合成 seed は「入口のみ合成・突合→AI 予報→
  * 引用検証は実経路」を明示し、実データ（GitHub の実 PR）と区別する。未マージ PR は実リポジトリの
@@ -45,15 +45,15 @@ type SignalRow = {
   readonly realness: SignalRealness;
 };
 
-/** 材料の1系統（引用レーンと同じ分類・同じ色）。 */
+/** 材料の1種類（引用レーンと同じ分類・同じ色）。 */
 type SignalLane = {
   /** 引用レーンと同一のラベル（CitationList の KIND_LABELS と揃える）。 */
   readonly kindLabel: string;
-  /** この系統が予報に与える役割（初見向けの一言）。 */
+  /** この種類が予報に与える役割（初見向けの一言）。 */
   readonly role: string;
   /** レーン左ボーダー（CitationList の LANE_BORDERS と同色）。 */
   readonly border: string;
-  /** 系統チップの塗り（CitationList の KIND_TONES と同色）。 */
+  /** 種類チップの塗り（CitationList の KIND_TONES と同色）。 */
   readonly chipClassName: string;
   readonly rows: readonly SignalRow[];
 };
@@ -148,7 +148,7 @@ export function ForecastDemoConsole({
           投入シグナル（予報の材料）
         </h3>
         <p className="text-[11px] leading-relaxed text-slate-400">
-          予報はこの3系統の突合だけから作られます（色＝予報カードの引用レーン、バッジ＝入力の本物度）。
+          予報はこの3種類の突合だけから作られます（色＝予報カードの引用レーン、バッジ＝入力の本物度）。
         </p>
         <div className="space-y-2.5">
           {SIGNAL_LANES.map((lane) => (
@@ -201,14 +201,14 @@ export function ForecastDemoConsole({
           type="button"
           disabled={busy}
           onClick={onGenerate}
-          title="上記シグナルを AI（Gemini）が突合し、リスク・確信度・根拠（引用）・今打てる先手を1ショット生成する"
+          title="上記シグナルを AI が突合し、リスク・確信度・根拠（引用）・今打てる先手を1ショット生成する"
           className="w-full rounded-md bg-cyan-500/15 px-3 py-2 text-sm font-semibold text-cyan-100 ring-1 ring-inset ring-cyan-500/40 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
         >
           {generating
-            ? "AI が突合中…（約1分）"
+            ? "AI が調査中…（約1分）"
             : hasBriefing
-              ? "▶ 予報を再生成（AI 突合・約1分）"
-              : "▶ 予報を生成（AI 突合・約1分）"}
+              ? "▶ 予報を再生成（AI 調査・約1分）"
+              : "▶ 予報を生成（AI 調査・約1分）"}
         </button>
         {/* 結果が出る場所を指し示す（視線誘導）。押下はここだが、進行状況と着地は本文側。 */}
         {generating && (
