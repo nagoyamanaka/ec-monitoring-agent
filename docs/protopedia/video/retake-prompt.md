@@ -30,8 +30,14 @@
 | デモ操作卓ボタン「インフラ障害（合成・反復用）」「脆弱性検知」（行クリックはパネル展開のみ・発火は展開後の`aria-label="<ラベル> を実行"`ボタン） | part2/3/4 シナリオ発火 |
 | ボタン「承認」（exact）・「既知パターンへ昇格」 | part2/3 レビュー操作 |
 | eventName `critical_log_entries`（3b） | part3 の対象 Alert 特定 |
+| 予報カードの外部引用チップ `a[href^="http"]`（plan-1→PR #83 / pr-55→draft PR） | part1 カット2 の「証拠を開く」同一タブ遷移 |
+| リンク「修正 PR を開く」（RemediationPanel・drafted 時） | part4 カット7 の draft PR 同一タブ遷移 |
 
 あわせて台本のカット表と現行 UI の流れに乖離がないか（画面・遷移が実在するか）を確認する。
+
+**証拠リンクの写り方（重要）**: 「証拠を開く」「修正 PR を開く」は実装上 `target=_blank`（別タブ）だが、
+撮影スクリプトは (c) 方式＝**撮影時だけその要素の target を外し、本物のクリックで同一タブ遷移**させて
+**本編 mp4 に PR を焼く**（別タブ popup を編集で差し込む必要はない・アプリのソースは無改変）。
 
 ## Step 2 — 台本ブラッシュアップ（構成は変えない）
 
@@ -51,6 +57,8 @@
 3. 予報の引用チップの解決先 URL（実PR / 過去Alert）を HTTP で疎通確認
 4. `AI_INVESTIGATION_STUB=false`（実 Gemini）であること。本番テイクで stub は不可
 5. `DRAFT_PR_URL`（AI 起票済み draft PR の URL）— **既定は PR #29（`https://github.com/nagoyamanaka/ec-monitoring-agent/pull/29`）が capture.mjs にハードコード済み**。差し替える場合のみ env で上書き
+6. **カット7（part4）は調査完了（RemediationPanel が `drafted`）を待ってからアプリ内「修正 PR を開く」を押す**設計＝part4 が**約2分長くなる**（実 Gemini 調査を待つため）。リンクが出ない環境（remediation 未 drafted 等）は既定 #29 への直行にフォールバックする
+7. **カット2（part1）は予報カードの外部チップ2本（plan-1→#83 / pr-55→draft）を順に同一タブで開いて /forecast へ戻る**。撮影前に両 href の疎通を確認（Step 3-3 の疎通確認に含める）
 
 ## Step 4 — 撮影実行
 
