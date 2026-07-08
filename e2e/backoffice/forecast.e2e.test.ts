@@ -17,7 +17,7 @@ import { BACKOFFICE_BASE_URL, resetDemo } from "./support.js";
 
 // ResolvedAlertSeed の FORECAST_MEMORY_SEED_ALERT_IDS と同値（e2e は src を import しない）。
 const MEMORY_SEED_ALERT_IDS = [
-  "5eed0000-0000-4000-8000-000000000002", // 過去の接続上限縮小→枯渇（pending plan と同 subject）
+  "5eed0000-0000-4000-8000-000000000002", // 過去のバックボーンVM縮小→枯渇（pending plan と同 subject）
   "5eed0000-0000-4000-8000-000000000003", // 週末セール checkout 負荷（schedule seed と同 subject）
 ];
 
@@ -62,7 +62,7 @@ describe("backoffice E2E: 予兆ブリーフィング（フラッグシップ se
 
   it("フラッグシップ seed の3系統シグナル（plan / schedule / MEMORY）が収集される", () => {
     const ids = generated.signals.map((s) => s.id);
-    expect(ids).toContain("plan-1"); // pending plan seed（Cloud SQL max_connections 100→40）
+    expect(ids).toContain("plan-1"); // pending plan seed（バックボーンVM e2-standard-2→e2-small 縮小）
     expect(ids).toContain("sch-1"); // schedule seed（土20:00 checkout 負荷x5）
 
     // MEMORY: reset が seed した過去解決事例が subject 突合で記憶として載る

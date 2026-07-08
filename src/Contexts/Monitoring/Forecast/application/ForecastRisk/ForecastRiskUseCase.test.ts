@@ -138,6 +138,51 @@ describe("ForecastRiskUseCase", () => {
     expect(repository.saved[0].forecast.risks).toHaveLength(1);
   });
 
+  it("同一 url を複数ソースが拾ったら1本に畳み、terraform.plan を open PR より優先する", async () => {
+    const url = "https://github.com/o/r/pull/83";
+    // open PR ソース（先に collect される）と terraform.plan ソースが同じ #83 を指す。
+    const prSignal: ForecastSignal = {
+      id: "pr-83",
+      kind: ForecastSignalKind.FUTURE_CHANGE,
+      subject: "chore_infra_vm",
+      when: "未マージ",
+      desc: "[draft] VM を e2-small に縮小",
+      source: "github.pr#83",
+      url,
+    };
+    const planSignal: ForecastSignal = {
+      id: "plan-1",
+      kind: ForecastSignalKind.FUTURE_CHANGE,
+      subject: "module_gce_backbone_google_compute_instance_backbone",
+      when: "plan済み・未適用",
+      desc: "VM machine_type 縮小",
+      source: "terraform.plan",
+      url,
+    };
+    const otherPr: ForecastSignal = {
+      id: "pr-55",
+      kind: ForecastSignalKind.FUTURE_CHANGE,
+      subject: "chore_db_pool",
+      when: "未マージ",
+      desc: "pool 縮小",
+      source: "github.pr#55",
+      url: "https://github.com/o/r/pull/55",
+    };
+    const port = new FakePort([risk("db_connection_pool", ["plan-1", "pr-55"])]);
+    const { useCase } = build({
+      sources: [new FakeSource([prSignal, otherPr]), new FakeSource([planSignal])],
+      port,
+    });
+
+    await useCase.run({ horizon: "今週末" });
+
+    // #83 は plan-1（terraform.plan）1本に畳まれ、pr-83 は落ちる。別 PR の pr-55 は残る。
+    const ids = port.contexts[0].signals.map((s) => s.id);
+    expect(ids).toContain("plan-1");
+    expect(ids).not.toContain("pr-83");
+    expect(ids).toContain("pr-55");
+  });
+
   it("引用検証: 偽引用は citations から落とし、裏付けゼロのリスクは丸ごと落とす", async () => {
     const port = new FakePort([
       risk("real", ["pr-1"]),

@@ -4,6 +4,7 @@ import { QueryBus } from "../../../../../Contexts/Shared/domain/QueryBus.js";
 import { SSEAlertNotifier } from "../../../../../Contexts/Monitoring/AlertNotification/domain/SSEAlertNotifier.js";
 import { CollectMonitoringEventUseCase } from "../../../../../Contexts/Monitoring/AlertAnalysis/application/CollectMonitoringEvent/CollectMonitoringEventUseCase.js";
 import { RecordRemediationResultUseCase } from "../../../../../Contexts/Monitoring/AIInvestigation/application/RecordRemediationResult/RecordRemediationResultUseCase.js";
+import { PendingInfraPlanStore } from "../../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/PendingInfraPlanStore.js";
 import { DemoDependencies } from "../demo/DemoDependencies.js";
 import { registerAlertRoutes } from "./alertRoutes.js";
 import { registerEvidenceRoutes } from "./evidenceRoutes.js";
@@ -18,6 +19,7 @@ import { ForecastDependencies, registerForecastRoutes } from "./forecastRoutes.j
 export type IngestDependencies = {
   collectMonitoringEventUseCase: CollectMonitoringEventUseCase;
   recordRemediationResultUseCase: RecordRemediationResultUseCase;
+  pendingInfraPlanStore: PendingInfraPlanStore;
   ingestToken: string;
 };
 
@@ -43,6 +45,7 @@ export function registerRoutes(
     router,
     ingestDeps.collectMonitoringEventUseCase,
     ingestDeps.recordRemediationResultUseCase,
+    ingestDeps.pendingInfraPlanStore,
     ingestDeps.ingestToken,
   );
 }

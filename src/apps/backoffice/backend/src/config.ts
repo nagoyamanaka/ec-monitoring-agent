@@ -70,6 +70,13 @@ export const config = {
     enabled: process.env.FORECAST_ENABLED ?? "true",
     // 予報の対象期間。POST /forecast はこの値で固定生成する（無認証デモ経路に入力面を作らない）。
     horizon: process.env.FORECAST_HORIZON ?? "今週末",
+    // flagship plan-1（バックボーン VM を e2-standard-2→e2-small に縮小）の引用チップ「証拠を開く」
+    // の解決先＝この plan を CI の terraform plan ジョブで本物の plan として生成した実 PR（#83）。
+    // DEMO_INFRA_APPLY_PR_URL（scenario3/3b の適用済み証拠 PR #60）と同じ「事前起票した本物を毎回指す」
+    // 割り切り。空にすると plan-1 は非リンク表示に戻る（env で上書き可）。
+    pendingPlanPrUrl:
+      process.env.FORECAST_PENDING_PLAN_PR_URL ??
+      "https://github.com/nagoyamanaka/ec-monitoring-agent/pull/83",
   },
   demo: {
     enabled: process.env.DEMO_ENABLED === "true",

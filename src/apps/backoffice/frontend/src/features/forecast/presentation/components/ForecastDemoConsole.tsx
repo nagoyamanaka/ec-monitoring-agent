@@ -14,7 +14,7 @@
  */
 import { GamepadIcon } from "@shared/ui/icons";
 
-type SignalRealness = "real" | "seed";
+type SignalRealness = "real" | "pinnedReal" | "seed";
 
 const REALNESS_META: Record<
   SignalRealness,
@@ -25,10 +25,17 @@ const REALNESS_META: Record<
     className: "bg-emerald-500/15 text-emerald-200 ring-emerald-500/30",
     note: "実 GitHub リポジトリの未マージ PR を read-only で取得する実経路。",
   },
+  // 実在の証拠（実 PR の CI plan）だが、予報の決定論のため同内容を固定投入している行。
+  // 「合成seed」と区別する＝差分もリンクも実在で、合成なのは注入経路ではない。
+  pinnedReal: {
+    label: "実plan",
+    className: "bg-teal-500/15 text-teal-200 ring-teal-500/30",
+    note: "実 PR #83 が CI の terraform plan で生成した本物の差分と同一。予報の決定論のため同内容を固定投入しているが、差分もリンクも実在し、引用チップ「証拠を開く」は実 PR に解決する。",
+  },
   seed: {
     label: "合成seed",
     className: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
-    note: "デモ用に投入した合成シグナル（本番では実 plan / 実スケジュール / 実インシデント履歴が同じ入口に入る）。突合 → AI 予報 → 引用検証は実経路・実 AI。",
+    note: "デモ用に投入した合成シグナル（本番では実スケジュール / 実インシデント履歴が同じ入口に入る）。突合 → AI 予報 → 引用検証は実経路・実 AI。",
   },
 };
 
@@ -61,13 +68,14 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     rows: [
       {
         label: "未適用の Terraform plan",
-        description: "Cloud SQL max_connections 100→40 縮小（apply されると有効）",
-        realness: "seed",
+        description:
+          "バックボーンVM（Mongo 同居）を e2-standard-2 → e2-small に縮小＝メモリ 8→2GB。実 PR #83 の CI terraform plan と同内容（apply されると有効）",
+        realness: "pinnedReal",
       },
       {
         label: "未マージ PR",
         description:
-          "実リポジトリの open PR を全件 read（DB 接続プール縮小の draft PR ほか）",
+          "実リポジトリの open PR を全件 read（VM 縮小・プール縮小の draft PR ほか）",
         realness: "real",
       },
     ],
@@ -95,7 +103,8 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     rows: [
       {
         label: "過去の解決済み事例",
-        description: "同型障害のアーカイブ（実在の Alert として開ける）",
+        description:
+          "前回の VM 縮小で枯渇した事例ほか同型障害のアーカイブ（実在の Alert として開ける）",
         realness: "seed",
       },
     ],

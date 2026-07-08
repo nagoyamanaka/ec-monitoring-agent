@@ -75,7 +75,10 @@ import { ResolvedAlertForecastMemoryRepository } from "../../../../Contexts/Moni
 import { ScheduleSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/ScheduleSignalSource.js";
 import { SeedScheduleSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/SeedScheduleSource.js";
 import { FORECAST_SCHEDULE_SEED } from "../../../../Contexts/Monitoring/seeds/ForecastScheduleSeed.js";
-import { FORECAST_PENDING_PLAN_SEED } from "../../../../Contexts/Monitoring/seeds/ForecastPendingPlanSeed.js";
+import {
+  FORECAST_PENDING_PLAN_SEED,
+  withPendingPlanEvidenceUrl,
+} from "../../../../Contexts/Monitoring/seeds/ForecastPendingPlanSeed.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
 import { RedisSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/RedisSSEAlertNotifier.js";
 import { SSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/domain/SSEAlertNotifier.js";
@@ -204,10 +207,15 @@ export class BackofficeApp {
     // 実機では CI からの HTTP ingest を上流に差し込み、本ストアはその受け皿になる。
     const appliedInfraChangeStore = new InMemoryAppliedInfraChangeStore();
     // 未適用 plan（予兆の FUTURE_CHANGE シグナル）の受け皿。CI の plan ingest が record する想定で、
-    // デモではフラッグシップ seed（F8・Cloud SQL 接続上限縮小）を DEMO_ENABLED 配下で投入する。
+    // デモではフラッグシップ seed（F8・バックボーン VM 縮小）を DEMO_ENABLED 配下で投入する。
+    // 引用チップ「証拠を開く」の解決先 PR（#83＝この plan を CI が本物の plan にした PR）を env で後付けする。
     const pendingInfraPlanStore = new InMemoryPendingInfraPlanStore();
     if (config.demo.enabled) {
-      for (const plan of FORECAST_PENDING_PLAN_SEED) {
+      const seededPlans = withPendingPlanEvidenceUrl(
+        FORECAST_PENDING_PLAN_SEED,
+        config.forecast.pendingPlanPrUrl,
+      );
+      for (const plan of seededPlans) {
         await pendingInfraPlanStore.record(plan);
       }
     }
@@ -551,6 +559,8 @@ export class BackofficeApp {
           collectMonitoringEventUseCase,
           // CI(AIリメディジョブ)からの結果 callback。
           recordRemediationResultUseCase,
+          // CI(terraform plan ジョブ)からの未適用 plan 投入（予兆 FUTURE_CHANGE・seed と同じ record 口）。
+          pendingInfraPlanStore,
           ingestToken: config.ingestToken,
         },
         {
