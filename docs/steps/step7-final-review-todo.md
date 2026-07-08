@@ -6,24 +6,25 @@
 
 ## 優先順位一覧（上から消化）
 
-| #   | タスク                                        | 優先          | 実行者                   | 状態                                                                                                                                              |
-| --- | --------------------------------------------- | ------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| H1  | 本番デプロイURLの床（tf apply・予報403・OOM） | ★★★★★         | 人間                     | 未                                                                                                                                                |
-| A1  | 絵文字の豆腐化解消（フォント＋SVG化）         | ★★★★★         | 人間(sudo)＋エージェント | 済（フォント導入＋主役絵文字SVG化・要C2再撮影で最終確認）                                                                                         |
-| C1  | 動画タイトルカード（0:00-0:05）作成           | ★★★★★         | エージェント             | 済（`title-card.png` 1920×1080・#0B1220・Heroコピー＋Kizashi副題・豆腐なし目視確認）                                                              |
-| A2  | ブランド統一（EC Monitoring→Kizashi）         | ★★★★☆         | エージェント             | 未                                                                                                                                                |
-| B1  | アーキ図ダーク版再レンダ                      | ★★★★☆         | エージェント             | 済（architecture.md と同期済みを検証の上ダーク化・Kizashiロゴ追加・3520×2060差替／ライト版退避）                                                  |
-| C2  | take003 再撮影（豆腐なし・新ブランド）        | ★★★★☆         | エージェント→人間確認    | 済（実Gemini経路で4パート撮影・主役6枚を目視＝豆腐0/ヘッダKizashi/実調査90%・fallbackなし／part4のdraft PRカットも PR #29 で撮影済み）           |
-| B2  | ProtoPedia画像5枚のポスター化                 | ★★★☆☆         | エージェント             | 済（take003素材に下辺グラデ帯＋1行コピー焼き込み・4ポスター生成＋アーキ図で5枚・目視で可読/豆腐0）                                                 |
-| A3  | 生ID露出の人間語化                            | ★★★☆☆         | エージェント             | 済（予報引用チップ=desc主／subject生IDをmonoメタ行へ・アラート詳細のAI推定パターン機械IDを人間語化＋生IDをパターンIDメタ行へ・UT+2 369緑・tsc緑） |
-| B3  | 動画サムネイル作成                            | ★★★☆☆         | エージェント             | 済（予報カードを1.92倍クローズアップ・左上Kizashi・下部Heroコピー・1280×720・豆腐0／YouTube設定は人間H3）                                          |
-| A4  | 予兆ページ導入文の圧縮＋Heroコピー            | ★★☆☆☆         | エージェント             | 未                                                                                                                                                |
-| D1  | 提出文の plan リンク主張を正確化              | ★★★★☆         | エージェント             | 済（submission 76行目を「実在の draft PR・過去事例」へ修正・planを実在リンク列挙から除外）                                                        |
-| D2  | terraform plan の永続化＋PRコメント（CIのみ） | ★★★☆☆         | エージェント＋人間(CI確認) | 済（plan.txt＋redacted JSONをartifact保存・PRコメントupsert・生plan.jsonはsensitive平文を含むため不保存／要人間=ダミーPRでCI確認）                |
-| D3  | plan の record口への自動投入                  | ★★☆☆☆（D2後） | エージェント＋人間(CI確認) | 済（POST /ingest/terraform-plan 新設・CIからredacted差分を自動POST・UT+9 1065緑・tsc緑／要人間=D2と同じダミーPRで疎通確認）                       |
-| D3.5| flagship plan-1 を実在VM plan へ張り替え＋#83リンク | ★★★★☆    | エージェント＋人間(PR)   | 済（plan-1=バックボーンVM e2-standard-2→e2-small・過去事例/stub/subject突合も張り替え・#83を既定リンク・ローカル実Gemini検証で引用[plan-1,sch-1,inc-2]・1069緑）|
-| D4  | flagship張り替え後の part1/part2 再撮影         | ★★★☆☆（B必須）| エージェント             | 未（Option Bで plan-1=VM縮小＋証拠を開く→#83 に変化・音声台本不変/on-screenのみ・script.mdカット1/2メモ更新済み）                                 |
-| A5  | 調査中の証拠パネルの逐次表示                  | ★☆☆☆☆（余力） | エージェント             | 未                                                                                                                                                |
+| #    | タスク                                              | 優先           | 実行者                     | 状態                                                                                                                                                             |
+| ---- | --------------------------------------------------- | -------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1   | 本番デプロイURLの床（tf apply・予報403・OOM）       | ★★★★★          | 人間                       | 未                                                                                                                                                               |
+| A1   | 絵文字の豆腐化解消（フォント＋SVG化）               | ★★★★★          | 人間(sudo)＋エージェント   | 済（フォント導入＋主役絵文字SVG化・要C2再撮影で最終確認）                                                                                                        |
+| C1   | 動画タイトルカード（0:00-0:05）作成                 | ★★★★★          | エージェント               | 済（`title-card.png` 1920×1080・#0B1220・Heroコピー＋Kizashi副題・豆腐なし目視確認）                                                                             |
+| A2   | ブランド統一（EC Monitoring→Kizashi）               | ★★★★☆          | エージェント               | 未                                                                                                                                                               |
+| B1   | アーキ図ダーク版再レンダ                            | ★★★★☆          | エージェント               | 済（architecture.md と同期済みを検証の上ダーク化・Kizashiロゴ追加・3520×2060差替／ライト版退避）                                                                 |
+| C2   | take003 再撮影（豆腐なし・新ブランド）              | ★★★★☆          | エージェント→人間確認      | 済（実Gemini経路で4パート撮影・主役6枚を目視＝豆腐0/ヘッダKizashi/実調査90%・fallbackなし／part4のdraft PRカットも PR #29 で撮影済み）                           |
+| B2   | ProtoPedia画像5枚のポスター化                       | ★★★☆☆          | エージェント               | 済（take003素材に下辺グラデ帯＋1行コピー焼き込み・4ポスター生成＋アーキ図で5枚・目視で可読/豆腐0）                                                               |
+| A3   | 生ID露出の人間語化                                  | ★★★☆☆          | エージェント               | 済（予報引用チップ=desc主／subject生IDをmonoメタ行へ・アラート詳細のAI推定パターン機械IDを人間語化＋生IDをパターンIDメタ行へ・UT+2 369緑・tsc緑）                |
+| B3   | 動画サムネイル作成                                  | ★★★☆☆          | エージェント               | 済（予報カードを1.92倍クローズアップ・左上Kizashi・下部Heroコピー・1280×720・豆腐0／YouTube設定は人間H3）                                                        |
+| A4   | 予兆ページ導入文の圧縮＋Heroコピー                  | ★★☆☆☆          | エージェント               | 未                                                                                                                                                               |
+| D1   | 提出文の plan リンク主張を正確化                    | ★★★★☆          | エージェント               | 済（submission 76行目を「実在の draft PR・過去事例」へ修正・planを実在リンク列挙から除外）                                                                       |
+| D2   | terraform plan の永続化＋PRコメント（CIのみ）       | ★★★☆☆          | エージェント＋人間(CI確認) | 済（plan.txt＋redacted JSONをartifact保存・PRコメントupsert・生plan.jsonはsensitive平文を含むため不保存／要人間=ダミーPRでCI確認）                               |
+| D3   | plan の record口への自動投入                        | ★★☆☆☆（D2後）  | エージェント＋人間(CI確認) | 済（POST /ingest/terraform-plan 新設・CIからredacted差分を自動POST・UT+9 1065緑・tsc緑／要人間=D2と同じダミーPRで疎通確認）                                      |
+| D3.5 | flagship plan-1 を実在VM plan へ張り替え＋#83リンク | ★★★★☆          | エージェント＋人間(PR)     | 済（plan-1=バックボーンVM e2-standard-2→e2-small・過去事例/stub/subject突合も張り替え・#83を既定リンク・ローカル実Gemini検証で引用[plan-1,sch-1,inc-2]・1069緑） |
+| D4   | part1 再撮影（VM予報＋plan-1リンク＋同一タブ遷移）  | ★★★☆☆（B必須） | エージェント               | 未（Option Bで plan-1=VM縮小＋証拠を開く→#83／capture.mjs=(c)方式で証拠リンクを同一タブに焼く・音声台本不変/on-screenのみ／後続でB2#1・B3再生成／script.md・retake-prompt更新済み） |
+| D5   | part4 再撮影（カット7 同一タブ「修正PRを開く」動線）| ★★★☆☆          | エージェント               | 未（アラート→AI起票PRを1動線に・調査完了(drafted)待ち+約2分・未検出時#29直行フォールバック・capture.mjs/script.md/retake-prompt更新済み）                        |
+| A5   | 調査中の証拠パネルの逐次表示                        | ★☆☆☆☆（余力）  | エージェント               | 未                                                                                                                                                               |
 
 ---
 
@@ -86,6 +87,7 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 **受け入れ条件**: 予報カードとアラート詳細の見出し行に snake_case が現れない（メタ行は可）。
 
 **実施記録（2026-07-07）**: 表示順の入替のみ・contracts/保存値は不変。
+
 - 予報引用チップ（`CitationList.tsx`）: `ReferencedEvidenceCard` に `meta?` prop を追加し、`title`=人間語 `desc`（font-medium 見出し）／`meta`=生ID `subject`（font-mono の小メタ行）へ入替。`description` は任意化。
 - アラート詳細（`AlertCardExpanded.tsx`）: AI 推定パターン名が機械 ID（`^[A-Z0-9]+(_[A-Z0-9]+)+$`）のときだけ `replace(/_/g," ").toLowerCase()` で見出しを人間語化し、生IDは既存の結晶化行と同型の「パターンID: `<code>`」メタ行へ降格。既に人間語の patternName は誤変換しない。
 - UT +2（機械ID/人間語・見出し=desc/メタ=mono subject）。フロントUT 369件緑・`tsc --noEmit` 緑。**ライブ視覚確認は生ID発生に有料 AI 経路が必要なため未実施**（表示専用のため UT で担保）。
@@ -146,13 +148,13 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 
 **実施記録（2026-07-07）**: 生成スクリプト `scripts/video-capture/make-posters.mjs` を新設（Playwright chromium・take003 スクショを data URI 背景＋下辺グラデ帯＋teal アクセントバー＋`KIZASHI AI-SRE` ラベル＋1行コピー・1920×1080）。`node make-posters.mjs` で `docs/protopedia/assets/` に4枚出力：
 
-| # | 出力 | 元スクショ | 焼き込みコピー |
-| --- | --- | --- | --- |
-| 1（Hero） | `poster-1-hero.png` | part1 `01-forecast-card` | 障害は、起きる前に終わらせる。 |
-| 2 | `architecture.png`（B1ダーク版・帯なし図のみ） | — | （コピーなし） |
-| 3 | `poster-3-live-agents.png` | part2 `03-live-timeline` | 8つのAIエージェントが、ライブで調査する。 |
-| 4 | `poster-4-evidence.png` | part2 `06-evidence-panel` | 結論には、実在する証拠だけ。 |
-| 5 | `poster-5-known.png` | part3 `01-known-instant` | 二度目の同じ障害は、1秒で終わる。 |
+| #         | 出力                                           | 元スクショ                | 焼き込みコピー                            |
+| --------- | ---------------------------------------------- | ------------------------- | ----------------------------------------- |
+| 1（Hero） | `poster-1-hero.png`                            | part1 `01-forecast-card`  | 障害は、起きる前に終わらせる。            |
+| 2         | `architecture.png`（B1ダーク版・帯なし図のみ） | —                         | （コピーなし）                            |
+| 3         | `poster-3-live-agents.png`                     | part2 `03-live-timeline`  | 8つのAIエージェントが、ライブで調査する。 |
+| 4         | `poster-4-evidence.png`                        | part2 `06-evidence-panel` | 結論には、実在する証拠だけ。              |
+| 5         | `poster-5-known.png`                           | part3 `01-known-instant`  | 二度目の同じ障害は、1秒で終わる。         |
 
 目視検証: コピーは 60〜76px（最小28px要件を大きく満たす）・帯は下端の空きダーク領域に載り主要コンテンツ（予報カード/8エージェント/90%証拠/完全一致）を隠さない・全画面ヘッダ Kizashi・U+FFFD/□ なし。ポスター1/4は最下部の証跡行が帯に一部かかるが結論情報は露出。B3 動画サムネ（1280×720）も同 `make-posters.mjs` 系で流用可。
 
@@ -217,6 +219,7 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 **seed 撤去は不可（2026-07-07 判断）**: 「今打てる先手」＝「sch-1 完了まで plan-1 の適用を延期」であり、先手提示・過去事例突合（inc-1/inc-2 と同 subject）・確信度95%・pr-55 とのワンセット物語のすべてが plan-1 に依存。撤去＝flagship 再設計＋全面再撮影になる。整理としても嘘ではない: `ec_db` は**監視対象EC（架空環境）のインフラ**であって Kizashi 自身のインフラではなく、決済シナリオの決済システムが実在しないのと同格の合成入力（バッジ開示済み）。Kizashi 側の処理（ストア照合・偽引用破棄・Gemini突合）は実経路。
 
 **想定問答（審査で指摘された場合・H4 リハに含める）**:
+
 > Q: この Terraform plan は実在するのか？
 > A: デモの監視対象（EC）は合成環境で、plan もその一部——UI のバッジで明示しています。ただし Kizashi 側は本物で、plan の取り込み口（record口・URL付き引用解決）は実装済み、引用の実在照合はシグナルストアに対して実際に走ります。実在リンクへ解決する引用は pr-55（実 draft PR）と過去事例で確認できます。実運用では CI の plan パイプラインが同じ口へ構造化差分を積む設計です（D2/D3 実施済みならその旨を添える）。
 
@@ -224,7 +227,7 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 
 **実施記録（2026-07-07）**: `protopedia-submission.md` 76行目「対処先（実在の PR・plan・過去事例）へ飛べます」→「対処先（実在の draft PR・過去事例）へ飛べます」。plan を実在リンクの列挙から除外（plan-1 チップは外部リンク無しで表示される実態と一致）。特徴①冒頭の「未適用の Terraform plan…を突合し」はシステムが受け付ける**シグナル種の説明**であり虚偽でないため据置。動画 `script.md` は撮影メモに「plan-1 はTerraformプランで外部PRなし」と明記済みで修正不要。
 
-### D2 terraform plan の永続化＋PRコメント（CIのみ・バックエンド変更なし） ★★★☆☆
+### D2 terraform plan の永続化＋PRコメント（CIのみ・バックエンド変更なし） ★★★☆☆　✅
 
 **内容**: `.github/workflows/terraform.yml` の plan job を主流の plan-visible 形へ:
 
@@ -245,11 +248,12 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 - `setup-terraform` の wrapper が stdout リダイレクトを壊す既知問題があるため plan job のみ `terraform_wrapper: false`（step outputs 未使用なので安全・apply job は不変）。
 - **残（人間）**: infra を触るダミー draft PR で plan コメント・artifact・（D3の）ingest を確認 → クローズ。
 
-### D3 plan の record口への自動投入 ★★☆☆☆（D2 完了後・時間があれば）
+### D3 plan の record口への自動投入 ★★☆☆☆（D2 完了後・時間があれば）✅
 
 **内容**: D2 の `plan.json` から `resource_changes` を `PendingPlan` 型（`address`/`action`/`attributeDeltas`/`plannedAt`/`summary`/`url`=PR html_url）へ変換し、バックエンドの `pendingInfraPlanStore.record()`（`BackofficeApp.ts:208` 付近）に到達する ingest エンドポイントへ CI から POST する。これで「未適用 plan が予兆シグナル（FUTURE_CHANGE・url付き＝証拠を開く可）として現れる」が実配線になる。
 
 **論点（着手前に判断すること）**:
+
 - **認証**: 本番は IAP 背後。CI からは deployer SA の OIDC で IAP audience トークンを取るか、検知ソースの peer ingest と同型の内部認証口を使う。ここが一番の工数リスク——半日超えそうなら D3 は見送り、D2 止まりで提出してよい（D2 だけでも「plan の永続化・可視化」は本物）。
 - **揮発性**: store は InMemory のため再起動で消える。flagship は `DEMO_ENABLED` の seed 再投入で復元されるので影響なし。実投入分は「PR が開いている間に再投入され得る」程度の割り切りで可。
 - **seed との共存**: ガードレール参照。`plan-1` には触れない。実投入 plan は別 id で共存し、subject が一致しない限り flagship の物語には影響しない。
@@ -265,22 +269,24 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 - 検証: 翻訳器 UT6件＋store UT3件を追加（全体 1065件緑・tsc 緑）。ワークフローは YAML 構造検証＋jq をフィクスチャで実行確認。**terraform.yml の `secrets.INGEST_URL/INGEST_TOKEN` は app.yml と同一 repo secrets のため追加設定不要**。
 - **残（人間）**: D2 のダミー draft PR で ①plan コメント ②artifact ③ingest 202（Actions ログの `{resourceCount,summary,url}` 出力）④本番 `POST /forecast` 再生成後に url 付き FUTURE_CHANGE が引用され得ること、を確認 → PR クローズ。store は InMemory のため edge 再起動で実投入分は消える（seed は DEMO_ENABLED で復元・割り切りは本文の論点どおり）。
 
-### D3.5 flagship plan-1 を実在リソースの本物 plan へ張り替え（Option B）＋実 PR #83 リンク ★★★★☆
+### D3.5 flagship plan-1 を実在リソースの本物 plan へ張り替え（Option B）＋実 PR #83 リンク ★★★★☆　✅
 
 **背景（2026-07-08 判断）**: 旧 flagship plan-1（`google_sql_database_instance.ec_db` 100→40）は監視対象 EC の**合成インフラ**で本番 infra/terraform に実体が無く、CI で本物の terraform plan を生成できない。そこにリンクを張ると「Cloud SQL と書いてあるのに別 PR に飛ぶ」捏造になる（当初は別 subject で共存させる案だったが、ユーザー判断で**flagship 自体を実話に張り替える Option B** を採用）。「どうせリンクを付けるなら part1 は撮り直し」との判断。
 
 **張り替え後の flagship**: plan-1 を**実在リソース** `module.gce_backbone.google_compute_instance.backbone`（RabbitMQ+Mongo+ES+Valkey+worker 同居 VM＝本番 DB(Mongo) のホスト）の `machine_type` を **e2-standard-2 → e2-small** に縮小する plan に変更。VM 縮小＝Mongo がメモリ/接続を捌けず接続枯渇の再来リスク＝予兆テーマは維持。**実 PR #83 が CI で本物の plan を生成済み**なので「証拠を開く」は本物に解決＝捏造でない。
 
 **エージェント実施（2026-07-08）**:
+
 - 証拠 PR: ブランチ `chore/vm-cost-optimization`（base `develop`＝infra が main と一致・merge しても apply されない）→ 人間が push・**PR #83** 作成済み（`infra/terraform/envs/prod/main.tf` に `machine_type = "e2-small"`・`terraform fmt -check` 通過・DO NOT MERGE draft）。
 - seed 張り替え: `ForecastPendingPlanSeed.ts`＝plan-1 を VM machine_type 変更へ。`ResolvedAlertSeed.ts` の過去事例 `poolShrinkRegression` を「前回 VM 縮小で枯渇」へ、`report.subject` を `google_compute_instance.backbone` に（pending plan address とトークン突合 4 語＝MEMORY 突合維持）。`StubLLMClient.ts` の固定予報 subject/reasoning/先手を VM 話へ。
 - リンク配線: `config.forecast.pendingPlanPrUrl`（env `FORECAST_PENDING_PLAN_PR_URL`・**既定 = PR #83**）を `withPendingPlanEvidenceUrl` で plan-1 seed に後付け。DEMO_INFRA_APPLY_PR_URL（#60）と同じ「本物 PR を毎回指す」規約。ローカル/本番とも既定で #83 リンクが出る。
 - **ローカル実機検証（実 Gemini 経路）**: restart→reset→`POST /forecast` で plan-1 が `subject=module_gce_backbone_google_compute_instance_backbone`・desc=VM 縮小・`url=…/pull/83` を持ち、予報リスクが `citations=[plan-1, sch-1, inc-2]`／inc-2=MEMORY `google_compute_instance.backbone`（過去の同一 VM 枯渇）を引用、reasoning も「VM 縮小→過去同種障害→週末負荷」と一貫。**全体 1069 UT 緑・tsc 緑**。
 - 突合維持の要点: `subjectsMatch` はトークン重なり（多トークンは 2 語以上）。pending(VM address) と past(`google_compute_instance.backbone`) は google/compute/instance/backbone の 4 語共有で成立。schedule↔weekendCheckout は不変。E2E（`forecast.e2e.test.ts`）は id ベースのアサートなので緑を維持（コメントのみ更新）。
 
-**残（人間）**: ①**PR #83 は draft のまま開けておく**（「証拠を開く」が open な pending plan に解決するため。閉じても閲覧は可）。②本番 tf の `plain_env` に `FORECAST_PENDING_PLAN_PR_URL` は入れなくても既定 #83 で動くが、明示したい場合は追記。③**part1/part2 の再撮影**（下記 D4）。
+**残（人間）**: ①**PR #83 は draft のまま開けておく**（「証拠を開く」が open な pending plan に解決するため。閉じても閲覧は可）。②本番 tf の `plain_env` に `FORECAST_PENDING_PLAN_PR_URL` は入れなくても既定 #83 で動くが、明示したい場合は追記。③**part1 の再撮影（D4）と part4 の再撮影（D5）**。part2/part3 は Option B 影響外＝据置。
 
 **追補（2026-07-08・スクショレビューで判明した残整合）**:
+
 - **UI の pr-55/pr-83 チップは PR タイトル直写し**（`PullRequestSignalSource` が desc/subject にタイトルを使う）＝コード変更でなく **GitHub 上のリタイトルで直す（人間）**:
   - **PR #55**: 「cap DB connection pool (max_connections 100→40) for cost optimization」→「**chore(db): cap Mongo connection pool (maxPoolSize 100→40) to fit downsized backbone VM**」。diff（MongoClientFactory `maxPoolSize: 40`）はそのままタイトルを実態に合わせ、「VM 縮小に合わせてアプリ側プールも縮小」として flagship と同一物語に編入する（旧 Cloud SQL 語彙 `max_connections` を UI から消す）。connection/pool トークンは維持されるので inc-1/inc-3 との MEMORY 突合も切れない。
   - **PR #83**: タイトルから「（デモ証拠PR・DO NOT MERGE）」を外す（pr-83 チップに直写しされ予報 UI に出るため）。draft 状態＋本文警告は維持（draft はマージ不可なので安全）。
@@ -288,9 +294,25 @@ TODO記載の 📋（コピー）・📅（カレンダー）は**コード上�
 - **過去の同型障害アラート**: inc-2（`poolShrinkRegression`）は VM 話へ再構築済み（前回の VM 縮小→枯渇→machine_type 戻して解消・subject=`google_compute_instance.backbone`）。inc-1（週末 checkout 負荷）・inc-3（汎用プール枯渇アーカイブ）は **Cloud SQL 語彙を含まず物語とも矛盾しない**（負荷側・症状側の記憶）ため意図的に据置＝全記憶を VM 話に揃えると単調になり、リタイトル後の pr-55（プール縮小）との突合材料も失うため。
 - **#83 の D2/D3 パイプライン発火の前提**: PR の plan job は「PR ブランチ×base(develop) のマージ結果」の terraform.yml で走る。D2/D3 改修（commit `2f69b35`）が develop に無い間は旧 plan job（コメント/artifact/ingest なし・plan 実行のみ）。**feature/step7-d を develop へ merge 後、#83 の checks を Re-run** すると plan コメント＋artifact＋ingest が発火する。
 
-### D4 flagship 実話張り替え後の part1/part2 再撮影 ★★★☆☆（Option B に伴い必須化）
+### D4 part1 再撮影（VM予報＋plan-1リンク＋同一タブ遷移）★★★☆☆（Option B に伴い必須化）
 
-take003 は旧 Cloud SQL 表示・plan-1 リンクなしで撮影済み。Option B で plan-1 が「バックボーンVM e2-standard-2→e2-small 縮小」＋「証拠を開く→PR #83」に変わったため、**カット1（予報カード）とカット2（引用チップの証拠を開く）は要再撮影**。ナレは揮発値・リソース名を言わない設計なので**音声台本は不変**、on-screen のみ差分（`script.md` カット1/2 メモ更新済み）。再撮影時は C2 の落とし穴（dedup・`POST /demo/reset` 先行）に注意。plan-1 チップの「証拠を開く」→ PR #83 のクリック解決も収録するとドッグフーディングが映える。
+take003 は旧 Cloud SQL 表示・plan-1 リンクなしで撮影済み。Option B で plan-1 が「バックボーンVM e2-standard-2→e2-small 縮小」＋「証拠を開く→PR #83」に変わったため、**カット1（予報カード）とカット2（引用チップの証拠を開く）は要再撮影**。ナレは揮発値・リソース名を言わない設計なので**音声台本は不変**、on-screen のみ差分（`script.md` カット1/2 メモ更新済み）。
+
+- **前提（人間）**: GitHub リタイトル #55/#83（`script.md` カット2 の⚠参照）→ 予報再生成 → `GET /forecast` 200。
+- **撮影**: `RESET=1 TAKE=take004 node capture.mjs forecast`（テイク混在を避け take004 に集約）。C2 の落とし穴（dedup・`POST /demo/reset` 先行）に注意。
+- **capture.mjs 側は改修済み（2026-07-08）**: カット2 の「証拠を開く」を **(c)方式＝撮影時だけ target を外し本物クリックで同一タブ遷移**させ、**本編 mp4 に PR を焼く**（旧実装は別タブ popup が本編に写らず「PRに飛んでいない」状態だった）。plan-1→#83 と pr-55→draft の外部チップ2本を順に開いて /forecast へ戻る。
+- **確認**: forecast-card が VM `machine_type` 表示・plan-1 に「証拠を開く」・カット2で2本の PR が本編に写る。
+- **後続**: **B2 #1（`poster-1-hero`）と B3（`video-thumbnail`）を再生成**（`make-posters.mjs`/`make-thumbnail.mjs`・part1 `01-forecast-card.png` 差替後）。B2 #3/#4/#5 は part2/part3 由来で Option B 影響外＝据置。
+- **C3**: カット1/2 の「実測（take003）」値を take004 で突合し `script.md` を更新（ナレ不変）。
+
+### D5 part4 再撮影（カット7 同一タブ「修正PRを開く」動線）★★★☆☆
+
+旧 part4 は `page.goto` の直行ジャンプで、CVEアラートから draft PR への**アプリ内動線が映らなかった**（本編と繋がらず「PRに飛んでいない」ように見える）。**capture.mjs 改修済み（2026-07-08）**: 調査完了（RemediationPanel が `drafted`・remediation mode=demo が PR #29 を返す）を待ち、**アプリ内の実リンク「修正 PR を開く →」を (c)方式で同一タブ遷移**させて「CVE検知→AI起票PR」を1本の動線に。リンク未検出時は既定 #29 への直行フォールバック。
+
+- **撮影**: `TAKE=take004 node capture.mjs dogfooding`（先に `POST /demo/reset`・シナリオ4 の dedup 注意）。調査完了待ちで **part4 は約2分長くなる**。
+- **確認**: `cve-alert`（調査後・レポート/RemediationPanel が出た状態）と `draft-pr`（PR #29）が本編に写る。
+- **C3**: カット7 の実測を take004 で突合（ナレ不変）。
+- **依存文言**: 「修正 PR を開く」（RemediationPanel drafted 時）。`retake-prompt.md` のドリフト表に追記済み。
 
 ---
 

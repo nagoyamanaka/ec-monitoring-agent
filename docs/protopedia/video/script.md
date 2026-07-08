@@ -86,7 +86,7 @@
 - **画面**: 「未マージPR」の引用チップ（`pr-55`・`[draft] chore(db): cap DB connection pool`）の「証拠を開く」をクリック → 実在の draft PR に解決 → 戻って「🛡 今打てる先手」を静止。
 - **ナレーション**（79字）: 根拠は引用。プール縮小の未マージPR、週末セールの負荷予定、過去の同型障害。偽の引用は実在照合で自動で落ち、さらに、いま打てる先手まで提示します。
 - **テロップ**: 引用は実在照合済み・偽引用は自動除外
-- **撮影メモ**: PR チップの解決先は実 draft PR（branch `chore/db-connection-pool-cap`）。撮影前にリンク切れ確認。**⚠ Option B で要再撮影（take003 は旧内容）**: plan-1 を実在リソースの本物 plan（バックボーンVM `e2-standard-2→e2-small` 縮小＝PR #83）に張り替え、plan-1 チップにも「証拠を開く」リンクを付けた。新on-screen: 引用レーンは3系統＝未来の変更（plan-1 VM 縮小＝**実 PR #83 にリンク**／pr-55 draft）・スケジュール（sch-1 週末セール checkout x5）・過去の同型事例（inc-1／inc-2＝過去に同じ VM 縮小で枯渇）。**外部リンク付きは pr-55 と plan-1 の両方**。先手＝「高負荷スケジュール(sch-1)完了まで VM 縮小プラン(plan-1)適用を延期」。
+- **撮影メモ**: PR チップの解決先は実 draft PR（branch `chore/db-connection-pool-cap`）。撮影前にリンク切れ確認。**⚠ Option B で要再撮影（take003 は旧内容）**: plan-1 を実在リソースの本物 plan（バックボーンVM `e2-standard-2→e2-small` 縮小＝PR #83）に張り替え、plan-1 チップにも「証拠を開く」リンクを付けた。新on-screen: 引用レーンは3系統＝未来の変更（plan-1 VM 縮小＝**実 PR #83 にリンク**／pr-55 draft）・スケジュール（sch-1 週末セール checkout x5）・過去の同型事例（inc-1／inc-2＝過去に同じ VM 縮小で枯渇）。**外部リンク付きは pr-55 と plan-1 の両方**。先手＝「高負荷スケジュール(sch-1)完了まで VM 縮小プラン(plan-1)適用を延期」。**capture.mjs 更新（2026-07-08・(c)方式）で「証拠を開く」は撮影時だけ target を外し本物クリックで本編と同一タブに遷移する**（旧実装は別タブ popup を別 webm に録って閉じ、本編 mp4 に PR が一切写らなかった＝「PRに飛んでいない」の実体）。plan-1→PR #83、pr-55→draft PR の2本を順に開いて /forecast へ戻る。
 - **⚠ 撮影前の GitHub リタイトル（人間・VM 物語への整合）**: ①**PR #55** を「[現行] cap DB connection pool (max_connections 100→40)…」→「**chore(db): cap Mongo connection pool (maxPoolSize 100→40) to fit downsized backbone VM**」へ（diff=MongoClientFactory maxPoolSize 40 のままタイトルだけ実態に合わせ、VM 縮小に合わせたプール縮小＝flagship と同一物語に編入。チップ desc/subject は PR タイトル直写しなのでリタイトルだけで UI が直る）。②**PR #83** のタイトルから「（デモ証拠PR・DO NOT MERGE）」を外し「chore(infra): バックボーンVMをコスト最適化で e2-small に縮小」へ（pr-83 チップにも title が直写しされるため。draft 状態＋本文の DO NOT MERGE 警告は維持＝draft はマージボタンが塞がれるので安全）。リタイトル後に予報を再生成してから撮影。
 
 ### カット3｜0:36–0:48｜発火 → 未知分類
@@ -122,7 +122,7 @@
 - **画面**: 自リポジトリ CI（Trivy）検知のアラート → AI起票の**実 draft PR**（2〜3秒）→ スライドPNG（アーキ4層＋数字パック: ユニットテスト全緑・既知1秒未満・調査約2〜3分）→ タイトル。
 - **ナレーション**（72字）: このリポジトリ自身も監視対象。CIの脆弱性検知から、AIが修正のドラフトPRまで起票します。起きる前に予報し、起きた後は自律調査する——Kizashiです。
 - **テロップ**: 自分自身も監視（自動マージなし・人間承認） ／ 数値はすべて実測
-- **撮影メモ**: draft PR は事前起票済みの実物＝**PR #29（`https://github.com/nagoyamanaka/ec-monitoring-agent/pull/29`）を capture.mjs に既定ハードコード**（差し替えは `DRAFT_PR_URL` で上書き）。スライドは HTML→headless Chrome→PNG。**実測（take003）**: CVEアラート＝「脆弱性の検知」（`security.vulnerability_detected`・trivy）。draft PR に実CVEリンク（CVE-2021-3807／CVE-2022-25883）・`ai-remediation[bot]` の2コミット・`Draft`／「自動マージはしません」表示。
+- **撮影メモ**: draft PR は事前起票済みの実物＝**PR #29**。**カット7は capture.mjs 更新（2026-07-08・(c)方式）で「アプリ内の実リンク『修正 PR を開く →』を撮影時だけ target を外し本物クリックで同一タブに開く」動線に変更**（調査完了＝RemediationPanel が drafted になるまで待ってからクリック。remediation mode=demo が PR #29 を返す）。リンクが出ない環境は `DRAFT_PR_URL`／既定 #29 への直行にフォールバック。旧実装は `page.goto` の直行ジャンプで**アプリからの動線が映らなかった**（本編と繋がらない）ための改修。スライドは HTML→headless Chrome→PNG。**実測（take003）**: CVEアラート＝「脆弱性の検知」（`security.vulnerability_detected`・trivy）。draft PR に実CVEリンク（CVE-2021-3807／CVE-2022-25883）・`ai-remediation[bot]` の2コミット・`Draft`／「自動マージはしません」表示。
 
 ---
 

@@ -52,6 +52,33 @@ async function clickMaybePopup(stage, locator, { dwellMs = 4000, label } = {}) {
 }
 
 /**
+ * 引用チップ・証拠リンクの「証拠を開く / 修正 PR を開く」を **本編と同じタブ** で開いて見せる。
+ * アプリ実装は target=_blank（別タブ）だが、Playwright は別タブを別 webm に録るうえ、
+ * clickMaybePopup は popup を閉じてしまい mp4 化もされない＝**本編 mp4 に遷移先(PR)が一切写らない**。
+ * 動画は「クリック→遷移先が同じ画面に出る」連続性が命。
+ *
+ * (c) 方式: **撮影時だけ** その <a> の target/rel を剥がし、**本物のクリック**で同一タブ遷移させる
+ * （アプリのソースは無改変・DOM 属性を1要素だけ外すのみ）。別タブ popup を作らないので本編 mp4 に
+ * 遷移先が写り、かつ「擬似操作」でなく実クリック→実遷移になる（偽カーソルの膨らみも実 mousedown で出る）。
+ * 遷移先が落ちていても録画は止めない（警告のみ）。
+ */
+async function revealLinkSameTab(stage, locator, { label, dwellMs = 5000 } = {}) {
+  await locator.scrollIntoViewIfNeeded();
+  await locator.hover();
+  await dwell(700);
+  // 撮影時のみ別タブ化を無効化（この1要素だけ・ソース非改変）。
+  await locator.evaluate((el) => {
+    el.removeAttribute("target");
+    el.removeAttribute("rel");
+  });
+  // noWaitAfter: click 起因の遷移で実行コンテキストが破棄されても例外にしない（遷移完了は下で待つ）。
+  await locator.click({ noWaitAfter: true }).catch(() => {});
+  await stage.page.waitForLoadState("load", { timeout: 15_000 }).catch(() => {});
+  await dwell(dwellMs);
+  if (label) await stage.shot(label);
+}
+
+/**
  * シナリオ発火はデモ操作卓のボタンクリックを優先（映像に「注入の操作」が残る）。
  * 段階開示UI（D2）のため、シナリオ行クリックは注入ではなくパネル展開。実際の発火は
  * 展開後に現れる `aria-label="<ラベル> を実行"` ボタン。
@@ -118,13 +145,18 @@ async function sceneForecast() {
     await dwell(8_000); // カット1: カード全景の静止尺（フック）
     await stage.shot("forecast-card"); // ProtoPedia 画像1
 
-    // カット2: 引用チップを順にクリック。外部（PR/plan）は新規タブ、過去Alertはアプリ内遷移。
+    // カット2: 引用チップの「証拠を開く」を順に開く。外部（plan-1→PR #83 / pr-55 draft）は
+    // 本編と同一タブで遷移して PR を本編 mp4 に写す（別タブ popup だと本編に写らない）。開いたら
+    // /forecast へ戻って次のチップへ。過去Alert(内部リンク)は下で別途アプリ内遷移。
     const externalChips = card.locator('a[href^="http"]');
     const externalCount = Math.min(await externalChips.count(), 2);
     for (let i = 0; i < externalCount; i++) {
-      await clickMaybePopup(stage, externalChips.nth(i), {
+      await revealLinkSameTab(stage, externalChips.nth(i), {
         label: `citation-external-${i + 1}`,
       });
+      await page.goBack();
+      await card.waitFor({ timeout: 10_000 });
+      await dwell(1_500);
     }
     const internalChip = card.locator('a[href^="/alerts"]').first();
     if (await internalChip.count()) {
@@ -276,18 +308,28 @@ async function sceneDogfooding() {
     const alert = await waitForAlert((a) => !before.has(a.id), { label: "security-vuln" });
     await dwell(3_000);
     await gotoAlertDetail(stage, alert.id);
+    await dwell(3_000);
+    await stage.shot("cve-alert-investigating");
+
+    // 調査完了を待つ（実 Gemini・約2分）。完了すると RemediationPanel が
+    // 「修正 PR を開く →」の実リンク（remediation mode=demo=事前起票の PR #29）を出す。
+    await waitForReport(alert.id).catch(() => {});
     await dwell(4_000);
     await stage.shot("cve-alert");
 
-    // AI が起票した実 draft PR。既定は事前確認済みの PR #29。DRAFT_PR_URL で上書き可。
-    const prUrl = process.env.DRAFT_PR_URL || DEFAULT_DRAFT_PR_URL;
-    if (prUrl) {
+    // アプリ内の実リンク「修正 PR を開く →」から draft PR へ。target=_blank なので
+    // 同一タブ遷移で本編に写す＝「アラート→AI起票のPR」が1本の動線として繋がる。
+    const prLink = page.getByRole("link", { name: /修正 PR を開く/ }).first();
+    if (await prLink.count()) {
+      await revealLinkSameTab(stage, prLink, { label: "draft-pr", dwellMs: 6_000 });
+    } else {
+      // 修正リンクが出ない環境（remediation 未 drafted 等）は既定 PR へ直行フォールバック。
+      const prUrl = process.env.DRAFT_PR_URL || DEFAULT_DRAFT_PR_URL;
+      console.warn("  ⚠ 「修正 PR を開く」リンク未検出。既定 PR に直行フォールバック");
       await page.goto(prUrl);
       await page.waitForLoadState("load", { timeout: 20_000 }).catch(() => {});
       await dwell(6_000);
       await stage.shot("draft-pr");
-    } else {
-      console.warn("  ⚠ DRAFT_PR_URL 未指定のため draft PR カットはスキップ");
     }
   } finally {
     await stage.close();
