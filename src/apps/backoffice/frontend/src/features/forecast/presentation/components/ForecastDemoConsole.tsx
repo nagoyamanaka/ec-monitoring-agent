@@ -4,9 +4,9 @@
  * 初見の審査員に (1) この予報の材料は何か＝投入シグナルの台帳と本物度、(2) ボタンが何をするか、
  * を1画面で伝える。デモ系 UI はこのパネルに閉じ込め、予報本文（プロダクション面）を侵食しない。
  *
- * 台帳は**材料の分類**を語る（AI の評価結果ではない）: 予報カードの引用レーンと同じ3系統・
+ * 台帳は**材料の分類**を語る（AI の評価結果ではない）: 予報カードの引用レーンと同じ3種類・
  * 同じ色（未来の変更=cyan / スケジュール=amber / 過去の同型事例=emerald）でグルーピングし、
- * 「材料の3系統 → 根拠 n系統チップ → 引用レーン」が同一の視覚語彙で一本につながるようにする。
+ * 「材料の3種類 → 根拠 n種類チップ → 引用レーン」が同一の視覚語彙で一本につながるようにする。
  *
  * realness はアラート側デモ卓と同じ正直さ運用: 合成 seed は「入口のみ合成・突合→AI 予報→
  * 引用検証は実経路」を明示し、実データ（GitHub の実 PR）と区別する。未マージ PR は実リポジトリの
@@ -45,15 +45,15 @@ type SignalRow = {
   readonly realness: SignalRealness;
 };
 
-/** 材料の1系統（引用レーンと同じ分類・同じ色）。 */
+/** 材料の1種類（引用レーンと同じ分類・同じ色）。 */
 type SignalLane = {
   /** 引用レーンと同一のラベル（CitationList の KIND_LABELS と揃える）。 */
   readonly kindLabel: string;
-  /** この系統が予報に与える役割（初見向けの一言）。 */
+  /** この種類が予報に与える役割（初見向けの一言）。 */
   readonly role: string;
   /** レーン左ボーダー（CitationList の LANE_BORDERS と同色）。 */
   readonly border: string;
-  /** 系統チップの塗り（CitationList の KIND_TONES と同色）。 */
+  /** 種類チップの塗り（CitationList の KIND_TONES と同色）。 */
   readonly chipClassName: string;
   readonly rows: readonly SignalRow[];
 };
@@ -67,15 +67,21 @@ const SIGNAL_LANES: readonly SignalLane[] = [
       "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
     rows: [
       {
-        label: "未適用の Terraform plan",
+        label: "未適用の Terraform plan（VM 縮小）",
         description:
           "バックボーンVM（Mongo 同居）を e2-standard-2 → e2-small に縮小＝メモリ 8→2GB。実 PR #83 の CI terraform plan と同内容（apply されると有効）",
         realness: "pinnedReal",
       },
       {
+        label: "未適用の Terraform plan（Valkey 縮小）",
+        description:
+          "カタログキャッシュ（Valkey）の maxmemory を 4GB → 2GB に縮小＝ヒット率低下でキャッシュミスが DB を直撃（合成 plan・Valkey は VM 上 compose 稼働で terraform 単独リソースが無く非リンク）",
+        realness: "seed",
+      },
+      {
         label: "未マージ PR",
         description:
-          "実リポジトリの open PR を全件 read（VM 縮小・プール縮小の draft PR ほか）",
+          "実リポジトリの open PR を全件 read（未マージの変更予定を実 URL 付きで拾う・台帳に無い PR が予報に出ても実在）",
         realness: "real",
       },
     ],
@@ -104,7 +110,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
       {
         label: "過去の解決済み事例",
         description:
-          "前回の VM 縮小で枯渇した事例ほか同型障害のアーカイブ（実在の Alert として開ける）",
+          "前回の VM 縮小・Valkey 縮小/TTL 短縮で枯渇した事例ほか同型障害のアーカイブ（実在の Alert として開ける）",
         realness: "seed",
       },
     ],
@@ -148,13 +154,13 @@ export function ForecastDemoConsole({
           投入シグナル（予報の材料）
         </h3>
         <p className="text-[11px] leading-relaxed text-slate-400">
-          予報はこの3系統の突合だけから作られます（色＝予報カードの引用レーン、バッジ＝入力の本物度）。
+          予報はこの3種類の突合だけから作られます（色＝予報カードの引用レーン、バッジ＝入力の本物度）。
         </p>
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {SIGNAL_LANES.map((lane) => (
             <div
               key={lane.kindLabel}
-              className={`space-y-1.5 border-l-2 pl-2.5 ${lane.border}`}
+              className={`border-l-2 pl-2.5 ${lane.border}`}
             >
               <div className="flex items-baseline gap-1.5">
                 <span
@@ -164,28 +170,32 @@ export function ForecastDemoConsole({
                 </span>
                 <span className="text-[11px] text-slate-400">{lane.role}</span>
               </div>
-              <ul className="space-y-1.5">
+              {/* 1 材料 = 1 行に圧縮（ラベル＋本物度バッジ）。長い説明は title ホバーへ逃がして縦長を解消。 */}
+              <ul className="mt-1 divide-y divide-slate-800/60">
                 {lane.rows.map((row) => {
                   const realness = REALNESS_META[row.realness];
                   return (
                     <li
                       key={row.label}
-                      className="rounded-md bg-slate-800/50 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+                      className="flex items-start justify-between gap-2 py-1"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-semibold text-slate-50">
+                      <div className="min-w-0">
+                        <span className="text-[12px] font-medium text-slate-100">
                           {row.label}
                         </span>
-                        <span
-                          title={realness.note}
-                          className={`shrink-0 cursor-help rounded px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
+                        <p
+                          title={row.description}
+                          className="text-[11px] leading-snug text-slate-500 line-clamp-1"
                         >
-                          {realness.label}
-                        </span>
+                          {row.description}
+                        </p>
                       </div>
-                      <p className="mt-0.5 text-[12px] leading-snug text-slate-400">
-                        {row.description}
-                      </p>
+                      <span
+                        title={realness.note}
+                        className={`mt-0.5 shrink-0 cursor-help rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${realness.className}`}
+                      >
+                        {realness.label}
+                      </span>
                     </li>
                   );
                 })}
@@ -201,14 +211,14 @@ export function ForecastDemoConsole({
           type="button"
           disabled={busy}
           onClick={onGenerate}
-          title="上記シグナルを AI（Gemini）が突合し、リスク・確信度・根拠（引用）・今打てる先手を1ショット生成する"
+          title="上記シグナルを AI が突合し、リスク・確信度・根拠（引用）・今打てる先手を1ショット生成する"
           className="w-full rounded-md bg-cyan-500/15 px-3 py-2 text-sm font-semibold text-cyan-100 ring-1 ring-inset ring-cyan-500/40 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
         >
           {generating
-            ? "AI が突合中…（約1分）"
+            ? "AI が調査中…（約1分）"
             : hasBriefing
-              ? "▶ 予報を再生成（AI 突合・約1分）"
-              : "▶ 予報を生成（AI 突合・約1分）"}
+              ? "▶ 予報を再生成（AI 調査・約1分）"
+              : "▶ 予報を生成（AI 調査・約1分）"}
         </button>
         {/* 結果が出る場所を指し示す（視線誘導）。押下はここだが、進行状況と着地は本文側。 */}
         {generating && (

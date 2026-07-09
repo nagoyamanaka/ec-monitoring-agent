@@ -140,7 +140,7 @@ describe("ForecastPage", () => {
     ).toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "▶ 予報を生成（AI 突合・約1分）" }),
+      screen.getByRole("button", { name: "▶ 予報を生成（AI 調査・約1分）" }),
     );
     expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
     expect(api.generate).toHaveBeenCalledTimes(1);
@@ -161,12 +161,12 @@ describe("ForecastPage", () => {
 
     await userEvent.click(
       await screen.findByRole("button", {
-        name: "▶ 予報を生成（AI 突合・約1分）",
+        name: "▶ 予報を生成（AI 調査・約1分）",
       }),
     );
 
     // 進行バナー（経過タイマー・処理ステップ・引用検証の説明）が本文側に出る
-    expect(screen.getByText("AI が突合中…")).toBeInTheDocument();
+    expect(screen.getByText("AI が調査中…")).toBeInTheDocument();
     expect(screen.getByText("引用検証（実在照合）")).toBeInTheDocument();
     // 「生成してください」の empty 案内は生成中は矛盾するので伏せる
     expect(
@@ -179,7 +179,7 @@ describe("ForecastPage", () => {
 
     resolveGenerate(BRIEFING);
     expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
-    expect(screen.queryByText("AI が突合中…")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI が調査中…")).not.toBeInTheDocument();
   });
 
   it("再生成中は前回の予報を暗転ラベルつきで残し、完了で置き換える", async () => {
@@ -196,7 +196,7 @@ describe("ForecastPage", () => {
     expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "▶ 予報を再生成（AI 突合・約1分）" }),
+      screen.getByRole("button", { name: "▶ 予報を再生成（AI 調査・約1分）" }),
     );
 
     // 前回分は空白にせず暗転して残す（新旧の取り違え防止ラベルつき）
@@ -229,7 +229,7 @@ describe("ForecastPage", () => {
 
     await userEvent.click(
       await screen.findByRole("button", {
-        name: "▶ 予報を生成（AI 突合・約1分）",
+        name: "▶ 予報を生成（AI 調査・約1分）",
       }),
     );
     expect(

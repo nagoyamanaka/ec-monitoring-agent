@@ -24,7 +24,7 @@ const SLOW_HINT_AFTER_SEC = 60;
 
 const GENERATION_STEPS = [
   "シグナル収集",
-  "AI 突合（Gemini）",
+  "突合",
   "引用検証（実在照合）",
   "予報カード",
 ] as const;
@@ -63,7 +63,7 @@ export function ForecastGenerationPendingBanner({
             aria-hidden
             className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-300"
           />
-          AI が突合中…
+          AI が調査中…
         </span>
         <span className="shrink-0 tabular-nums text-[11px] text-sky-200/80">
           経過 {elapsedSec} 秒 ・ 通常 約1分

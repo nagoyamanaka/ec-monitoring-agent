@@ -13,13 +13,13 @@ describe("ForecastGenerationPendingBanner", () => {
   it("経過タイマー・処理ステップ・引用検証の説明を出す（初回生成）", () => {
     render(<ForecastGenerationPendingBanner regenerating={false} />);
 
-    expect(screen.getByRole("status")).toHaveTextContent("AI が突合中…");
+    expect(screen.getByRole("status")).toHaveTextContent("AI が調査中…");
     expect(screen.getByText("経過 0 秒 ・ 通常 約1分")).toBeInTheDocument();
 
     // 通過中の実ステップ（完了は偽点灯しない＝チップ表示のみ）
     for (const step of [
       "シグナル収集",
-      "AI 突合（Gemini）",
+      "突合",
       "引用検証（実在照合）",
       "予報カード",
     ]) {

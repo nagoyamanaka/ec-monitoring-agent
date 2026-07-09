@@ -54,6 +54,51 @@ export interface ReferencedEvidenceCardProps {
   href?: string;
   /** クリックで舞台に留まって選択を差し替える用途（RelatedAlertsPanel の onNavigate）。 */
   onClick?: () => void;
+  /**
+   * コンパクト表示（U1②a・引用チップの縦長解消）。
+   * chip＋title＋リンクを **1行** に畳む。生ID等の補足は `details` に隠す（下記）。
+   */
+  compact?: boolean;
+  /**
+   * 折り畳み（<details>）に格納する補足（生ID・生 subject 等の最小主張メタ）。
+   * compact のときだけ有効＝クリック本体（link）とは別の開閉として並べる（対話要素のネスト回避）。
+   */
+  details?: ReactNode;
+}
+
+/** link/button/anchor/div のいずれかで content を包む（優先度 onClick > to > href > 非操作）。 */
+function Clickable({
+  to,
+  href,
+  onClick,
+  className,
+  children,
+}: Pick<ReferencedEvidenceCardProps, "to" | "href" | "onClick"> & {
+  className: string;
+  children: ReactNode;
+}) {
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {children}
+      </button>
+    );
+  }
+  if (to) {
+    return (
+      <Link to={to} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className={className}>
+        {children}
+      </a>
+    );
+  }
+  return <div className={className}>{children}</div>;
 }
 
 function CardBody({
@@ -100,31 +145,68 @@ function CardBody({
 }
 
 export function ReferencedEvidenceCard(props: ReferencedEvidenceCardProps) {
-  const { to, href, onClick } = props;
-  const body: ReactNode = (
-    <CardBody {...props} hasLink={Boolean(onClick || to || href)} />
-  );
+  const { to, href, onClick, compact, details } = props;
+  const hasLink = Boolean(onClick || to || href);
 
-  if (onClick) {
+  if (compact) {
     return (
-      <button type="button" onClick={onClick} className={ROW_CLASS}>
-        {body}
-      </button>
+      <div className="rounded-md border border-slate-700/60 bg-slate-800/30 transition focus-within:border-cyan-500/40 hover:border-cyan-500/40">
+        <Clickable
+          to={to}
+          href={href}
+          onClick={onClick}
+          className="block w-full px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        >
+          {/* 1行目: チップ＋タイトル（全幅で折り返し・truncate しない＝全文を隠さず読ませる）。 */}
+          <div className="flex items-start gap-2">
+            <span className={cn("mt-0.5 shrink-0", CHIP_CLASS[props.chipTone])}>
+              {props.chipLabel}
+            </span>
+            {props.severity && <SeverityBadge level={props.severity} />}
+            {props.title && (
+              <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-100">
+                {props.title}
+              </span>
+            )}
+          </div>
+          {/* 2行目: 時刻（長文になりがち）と「証拠を開く」を降ろし、タイトルの幅を奪わせない。 */}
+          {(props.timestamp || hasLink) && (
+            <div className="mt-1 flex items-center gap-2">
+              {props.timestamp && (
+                <span className="text-[11px] text-slate-400">
+                  {props.timestamp}
+                </span>
+              )}
+              {hasLink && (
+                <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-cyan-300">
+                  <LinkIcon className="shrink-0" />
+                  {props.linkLabel ?? "詳細を開く"}
+                </span>
+              )}
+            </div>
+          )}
+        </Clickable>
+        {details && (
+          <details className="border-t border-slate-700/40 px-3 py-1.5">
+            <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-slate-300">
+              詳細
+            </summary>
+            <div className="mt-1.5">{details}</div>
+          </details>
+        )}
+      </div>
     );
   }
-  if (to) {
-    return (
-      <Link to={to} className={ROW_CLASS}>
-        {body}
-      </Link>
-    );
-  }
-  if (href) {
-    return (
-      <a href={href} target="_blank" rel="noreferrer" className={ROW_CLASS}>
-        {body}
-      </a>
-    );
-  }
-  return <div className={cn(STATIC_ROW_CLASS)}>{body}</div>;
+
+  const body: ReactNode = <CardBody {...props} hasLink={hasLink} />;
+  return (
+    <Clickable
+      to={to}
+      href={href}
+      onClick={onClick}
+      className={hasLink ? ROW_CLASS : cn(STATIC_ROW_CLASS)}
+    >
+      {body}
+    </Clickable>
+  );
 }

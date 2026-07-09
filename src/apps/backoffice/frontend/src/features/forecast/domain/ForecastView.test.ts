@@ -6,8 +6,10 @@ import type {
 } from "@monitoring/Forecast/domain/contracts/ForecastContract";
 import {
   citationKindCount,
+  convergenceLanes,
   groupCitationsByKind,
   incidentAlertId,
+  pastIncidentCount,
   signalKindLabel,
   toForecastBriefingView,
   type CitationView,
@@ -206,5 +208,29 @@ describe("groupCitationsByKind / citationKindCount", () => {
       ]),
     ).toBe(2);
     expect(citationKindCount([])).toBe(0);
+  });
+
+  it("convergenceLanes は語り順のレーンごとに件数を数える（収束ミニフロー入力）", () => {
+    const lanes = convergenceLanes([
+      citation({ id: "m-1", kind: "MEMORY", kindLabel: "過去の同型事例" }),
+      citation({ id: "f-1" }),
+      citation({ id: "f-2" }),
+    ]);
+    expect(lanes).toEqual([
+      { kind: "FUTURE_CHANGE", kindLabel: "未来の変更", count: 2 },
+      { kind: "MEMORY", kindLabel: "過去の同型事例", count: 1 },
+    ]);
+    expect(convergenceLanes([])).toEqual([]);
+  });
+
+  it("pastIncidentCount は MEMORY 引用（過去の同型事例）の件数だけを数える", () => {
+    expect(
+      pastIncidentCount([
+        citation({ id: "f-1" }),
+        citation({ id: "m-1", kind: "MEMORY" }),
+        citation({ id: "m-2", kind: "MEMORY" }),
+      ]),
+    ).toBe(2);
+    expect(pastIncidentCount([citation({ id: "f-1" })])).toBe(0);
   });
 });
