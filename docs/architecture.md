@@ -1,4 +1,4 @@
-# Kizashi（兆し）アーキテクチャ（コード準拠・2026-07-07 時点）
+# Kizashi（兆し）アーキテクチャ（コード準拠・2026-07-10 時点）
 
 > **本書はコードを正とした現状スナップショット**。設計の経緯・理由は [docs/steps/](steps/)（step 系設計書）と [docs/decisions/](decisions/) を参照。ここに書かれていることはすべて実装済み（未実装は明示）。
 
@@ -89,6 +89,45 @@ flowchart TD
 - **却下は分類を変えない（学習は承認のみ）**: `SubmitFeedbackUseCase` が SimilarIncident に index するのは `isCorrect=true`（承認）時だけ。却下（`isCorrect=false`）は、直前が承認だった場合にその学習を撤回する（`withdrawResolved`）のみで、新たな学習は積まない。却下時の operatorNote は当該 Alert に残るが将来の分類母集団には流れない＝二値学習シグナルを濁さない設計。オペレーターの「これは DB でなく X だった」を将来へ効かせる唯一の経路は **再調査（operatorNote で AI に該当 Alert の結論を訂正させる）→ その結果を承認（訂正が `resolvedNote` としてコーパスに入る）**。「却下理由そのものを負例／訂正シグナルとして学習に反映する」経路は現状なく、やるなら新規の設計判断。
 - **同型 eventName の判別限界（正直さ）**: 3/3b のように eventName・payload が近い別障害は、決定論の `SimilarPatternRule`（Jaccard [0,1]）では判別力が弱く、実質の分岐は AI 調査の判断に委ねられる。メモに新障害を特徴づける語（エラーメッセージ／リソース名）を残すほど次回の SIMILARITY と AI プロンプトの弁別が効く。なお InMemory コーパスは起動時 warmUp＝揮発（`/demo/reset` で全 DB 話の seed に戻る）で、訂正の永続は Elasticsearch 構成時のみ。
 
+### 3.1 時間軸ビュー（未知アラート1件の一生・シーケンス）
+
+上のフロー図では見えない**非同期の往復**（調査は fire-and-forget・結果は SSE 着弾・レビューは後刻）を時間軸で示す。
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant SRC as 検知ソース<br/>(EC / Cloud Monitoring / CI)
+  participant BE as backoffice backend<br/>(AnalyzeAlert)
+  participant INV as AI 調査<br/>(InvestigateAlert・ADK)
+  participant EV as 証拠ソース<br/>(Logging / TF差分 / GitHub / 類似DB)
+  participant UI as React UI<br/>(SSE 購読)
+  participant OP as オペレーター
+
+  SRC->>BE: ingest（webhook / MQ / POST）
+  BE->>BE: dedupKey 判定（同型は ×N 加算で終了）
+  BE->>BE: 分類（既知なら約1秒で OPEN・調査なし）
+  Note over BE,UI: 以下は「未知」の場合
+  BE-->>UI: ANALYZING（SSE）
+  BE--)INV: InvestigateAlertDomainEvent（非同期）
+  INV->>EV: read-only 横断収集（ツールコール）
+  EV-->>INV: ログ / IaC差分 / コミットdiff / 類似事例
+  INV--)UI: investigation-progress（実行イベントをライブ中継）
+  INV->>INV: 原因推定（相関 citation は実在照合・批判役検証）
+  INV-->>BE: InvestigationReport 添付 → OPEN
+  BE--)UI: レポート着弾（SSE push）
+  OP->>UI: レビュー（後刻・非同期）
+  alt 承認
+    UI->>BE: PATCH /alerts/:id/feedback (isCorrect=true)
+    BE->>BE: SimilarIncident.index()＝学習
+    OP->>BE: POST /alerts/:id/promote（または閾値で自動昇格）
+    Note over BE: KnownErrorPattern 生成<br/>→ 同型の再発は1秒・AI コストゼロで既知
+  else 却下 → 再調査
+    UI->>BE: POST /alerts/:id/reinvestigate（operatorNote 付き）
+    BE--)INV: 再調査（ノートがプロンプトに載る）
+    INV-->>BE: 新レポート差し替え → SSE 再着弾
+  end
+```
+
 ## 4. AI 調査の2経路（ポート DI 差し替え）
 
 ```mermaid
@@ -130,6 +169,20 @@ flowchart TD
 - 調査=read / 修正=write を構造分離。自動マージは一切しない。
 - 2モード（`REMEDIATION_MODE`）: **advisory**（in-process で方針テキスト→`SECURITY_REMEDIATION.md` 草案PR）／**dispatch**（`repository_dispatch` → `ai-remediation.yml` でランナー上の AI が実コード修正→Trivy 再スキャン＋テスト緑→draft PR→`POST /ingest/remediation-result` で結果確定）。
 - 自己修正ループは `REMEDIATION_MAX_ATTEMPTS`（既定2）で打ち切り（課金暴走の安全弁）。対象はシナリオ4（脆弱性）のみ（旧5/6=構成変更・アプリコード退行は自動修正見送りの[決定記録](decisions/decision-scenario67-remediation-dropped.md)を経て、2026-07-06 にシナリオ自体もデモ卓から撤退）。
+
+## 5.5 プロンプトインジェクションの脅威モデル（設計判断）
+
+LLM には外部由来テキストが渡る——直接系（ingest イベント本文・operatorNote／再調査ノート）と、間接系（証拠として取得するログ本文・コミット diff・PR 記述＝indirect prompt injection の面）。注入を入力境界で分類・遮断する専用ガードレール（Model Armor / Bedrock Guardrails 相当）は**現時点で未導入＝意図的な設計判断**。注入が成功した場合に到達できる範囲（blast radius）をアーキテクチャで既に絞っており、入力層ガード追加の限界 ROI が低いため。
+
+多層防御（すべて実装済みの既存機構）:
+
+- **調査は read-only**（§4）: AI 調査ツールは Cloud Logging / Terraform 差分 / GitHub / 類似 DB の読み取りのみ。注入に成功しても書き込み・破壊の権限をそもそも持たない。
+- **修正は write 隔離＋人間承認ゲート**（§5）: コード修正は別ワークフローに構造分離され、テストゲートを通っても draft PR 止まり・自動マージなし。「勝手に修正しろ」と誘導しても人間レビューを越えられない。
+- **機密はプロンプト外**: シークレットは Terraform 管理の Secret Manager から各コンテナへ環境注入され、LLM のコンテキストに載らない。会話内容を吐かせる注入が成功しても鍵・認証情報は露出しない。
+- **最小権限・サービス分離**: サブサービスごとのコンテナ分離＋SA 権限の絞り込みで、仮にプロセスが誤動作しても横移動を限定。
+- **構造化出力＋引用の実在照合**（§2・§10.3）: 出力は JSON 契約に固定して safeParse、citations は収集済みの実在証拠 id へ機械照合し偽引用は自動破棄。注入で捏造させた結論・因果が UI 上の断定として表示される経路を構造的に落とす。
+
+**限界の明示（正直さ）**: 上記は「注入が成功しても被害を絞る」防御であり、「注入そのものを入力境界で遮断する」ものではない。入力層での注入分類・ジェイルブレイク遮断（Model Armor 等のマネージドガード挿入）は将来の拡張点として本節に記録する（§6 の Cloud Trace API 見送りと同じ「ROI による意図的見送り＋復帰手順の明文化」の型）。
 
 ## 6. デプロイ構成
 
@@ -242,7 +295,7 @@ src/
 ```
 
 - ポート実装は `...Adapter`、ドメインサービスは `...DomainService`。driven ポートと wire DTO は infrastructure 配下。ワイヤ型は contracts に単一ソース化。
-- テスト: Vitest（BDD）unit 1017件・146ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
+- テスト: Vitest（BDD）unit 1103件・155ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
 
 ## 8. 主要 API（backoffice）
 
