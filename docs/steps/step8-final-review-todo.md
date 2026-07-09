@@ -170,11 +170,13 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 - 検証: `pnpm test`（ルート unit **1079件**全緑）／backoffice-frontend **389件**全緑＋`tsc --noEmit` 緑／backend integration（forecast/demo）緑。**実チェーン検証**（実 seed＋StubLLMClient＋InMemory 一式で ForecastRiskUseCase を駆動）で plan-1=backbone(url=#83)／plan-2=valkey(url無)／risks 2件／citations 期待どおりを確認済み。
 - **残（この環境では不可）**: 手順6=H4 実 draft PR（gh 認証不可）／検証2=ローカル実 Gemini 1回（課金・目視）／検証3=デプロイ後の本番 `POST /forecast`（edge 再起動＝キャッシュ消滅を伴うため U0 keepwarm 前提）。rollback 基準は本節検証2/3 で flagship 劣化時に seed コミット revert。
 
-**追補（2026-07-09・ユーザー判断=Valkey plan-2 も実 PR に紐づける／Option B）**:
+**追補（2026-07-09・PR証拠の設計を再検討→plan-2 は正直な合成 seed で確定）**:
 
-- **未マージ PR シグナルの仕組みを確認**: `PullRequestSignalSource` は repo の open PR を**全件ライブ read**（URL は GitHub API 由来・config 不要）。予報はキャッシュに凍結されるので、生成時に PR が open なら表示 URL は固定。**config で pin するのは合成 plan だけ**（ライブ PR が生成しないため）。pr-55 は本番で自動的に載る（stub/ローカルは GitHub 未設定＝PR 0件で想定内）。
-- **plan-2 も実 PR に解決させる wiring 追加**: `withPendingPlanEvidenceUrl(plans, url)` を **`withPendingPlanEvidenceUrls(plans, urlByAddress)`（address→URL 対応表）** に一般化。flagship address→#83／Valkey address→`config.forecast.valkeyPlanPrUrl`（env `FORECAST_VALKEY_PLAN_PR_URL`・**既定は空＝PR 起票後に設定**）。同一 URL の live open PR と dedup で1本に畳まれ、flagship #83 と同じ挙動。台帳の plan-2 バッジは「合成seed」のまま（terraform address は合成＝正直）だが説明は「証拠を開く→実 draft PR」に更新。
-- **人間が作る draft PR は2本**（下記 H4 更新）: ①cache TTL 短縮（app 設定）＝live 未マージ PR シグナル ②Valkey maxmemory 縮小（compose）＝plan-2 の解決先。**両ブランチ＋コミットは用意済み**（`chore/valkey-cache-ttl-shorten`＝`.env.example` +4／`chore/valkey-maxmemory-shrink`＝`docker-compose.prod.yml` valkey `--maxmemory 2gb`）。人間は push→draft PR 作成のみ。②の PR 番号を `FORECAST_VALKEY_PLAN_PR_URL` に設定（デプロイ前）。
+- **未マージ PR シグナルの仕組み**: `PullRequestSignalSource` は repo の open PR を**全件ライブ read**（URL は GitHub API 由来・config 不要）。予報はキャッシュに凍結されるので生成時に PR が open なら表示 URL は固定。**config で pin するのは合成 plan だけ**。pr-55 は本番で自動的に載る（stub/ローカルは GitHub 未設定＝PR 0件で想定内）。
+- **「plan-2 を実 PR に紐づける（Option B）」は取り下げ**: 一度 `withPendingPlanEvidenceUrls`（address→URL 対応表）+ env `FORECAST_VALKEY_PLAN_PR_URL` を入れたが、**Valkey は本物の terraform plan を作れない**と判明したため revert。
+  - 理由: Valkey は backbone VM 上の **compose プロセス**で terraform 単独リソースを持たない。terraform で触れる口は VM の `machine_type`/`boot_disk`（＝flagship の plan-1）か、`valkey_maxmemory` を **VM metadata** に出す route のみ。**どちらも plan の resource address が `google_compute_instance.backbone`（VM）になる**。forecast は plan の **address トークンで subject 突合**するので、VM address は valkey/cache トークンを持たず Valkey 記憶（inc-3/4）と突合せず、flagship と subject 衝突して scenario-2 が scenario-1 に融合する。CI は plan を backend へ自動 ingest（`INGEST_URL`）するため flagship 汚染リスクもある。→ **Valkey 固有 address を持つには Memorystore(`google_redis_instance`)へ移設が必要＝実コスト・範囲外**。
+- **確定（正直な合成）**: plan-2 は **合成 seed・非リンク**のまま（台帳バッジ「合成seed」・説明も「terraform 単独リソースが無く非リンク」と明示）。`withPendingPlanEvidenceUrls` は flagship #83 のみ付与（Valkey エントリなし）。config `valkeyPlanPrUrl`／env／`.env.example` の追記は撤去。**Valkey シナリオの実クリック証拠は過去インシデントチップ（inc-3/4→実 Alert）が担保**（全チップが PR である必要はない）。
+- **オプション（任意）**: Valkey memory 縮小の実 compose PR を **「未マージPR」チップ**として live 表示したい場合はブランチ `chore/valkey-maxmemory-shrink`（用意済＝`docker-compose.prod.yml` valkey `--maxmemory 2gb`）を push→draft PR 作成。これは plan ではなく **未マージ PR** として正直に出る（terraform plan とは名乗らない）。不要なら push しない（plan-2 合成＋記憶チップで scenario-2 は成立）。
 - **デモコンソール台帳を圧縮**（ユーザー要望「みやすく」）: 1材料=1行（ラベル＋本物度バッジ・説明は line-clamp+title ホバー）。3レーンの色（引用と統一）は不変。全テスト緑。
 
 **検証（この順で・省略禁止）**:
@@ -269,9 +271,8 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 | --- | ----------------------------- | -------------------------------------------------------------------------- |
 | H1  | repo variable 設定            | `FORECAST_EDGE_URL` を Actions variables に追加（U0/T1 の前提）            |
 | H2  | ~~YouTube アップロード~~      | 済（7/9報告）。U4実施時のみ新URL再アップ＋ProtoPedia更新                   |
-| H3  | 審査終了後の後始末            | forecast-keepwarm.yml の無効化・PR #83/H4a/H4b のPR クローズ可否判断        |
-| H4a | cache TTL 短縮 draft PR       | ブランチ `chore/valkey-cache-ttl-shorten`（用意済）を push→draft PR 作成（base develop・DO NOT MERGE）。live 未マージ PR シグナルになる |
-| H4b | Valkey maxmemory draft PR     | ブランチ `chore/valkey-maxmemory-shrink`（用意済）を push→draft PR 作成（base develop・DO NOT MERGE）。**その PR URL を repo/edge の env `FORECAST_VALKEY_PLAN_PR_URL` に設定**＝plan-2 の「証拠を開く」解決先（デプロイ前） |
+| H3  | 審査終了後の後始末            | forecast-keepwarm.yml の無効化・PR #83/（H4 実施時のみそのPR）クローズ可否判断 |
+| H4  | 【任意】Valkey maxmemory draft PR | plan-2 は合成 seed 非リンクで確定＝**必須ではない**。Valkey の未来変更を実 PR で見せたい場合のみ、ブランチ `chore/valkey-maxmemory-shrink`（用意済＝`docker-compose.prod.yml` valkey `--maxmemory 2gb`）を push→draft PR 作成（base develop・DO NOT MERGE）。**「未マージPR」チップ**として live 表示（terraform plan とは名乗らない・config 不要） |
 | H5  | U4 の編集・アップロード       | part1差し替え編集＋U4チェックリスト消化                                    |
 
 ## 完了の定義（優秀賞ラインの床・最終形）

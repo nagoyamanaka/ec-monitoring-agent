@@ -19,6 +19,8 @@ import { BACKOFFICE_BASE_URL, resetDemo } from "./support.js";
 const MEMORY_SEED_ALERT_IDS = [
   "5eed0000-0000-4000-8000-000000000002", // 過去のバックボーンVM縮小→枯渇（pending plan と同 subject）
   "5eed0000-0000-4000-8000-000000000003", // 週末セール checkout 負荷（schedule seed と同 subject）
+  "5eed0000-0000-4000-8000-000000000004", // 過去の Valkey TTL 短縮→枯渇（Valkey plan-2 と同 subject）
+  "5eed0000-0000-4000-8000-000000000005", // 過去の Valkey メモリ縮小→枯渇（Valkey plan-2 と同 subject）
 ];
 
 type ForecastSignal = {
@@ -60,12 +62,13 @@ describe("backoffice E2E: 予兆ブリーフィング（フラッグシップ se
     generated = await postForecast();
   });
 
-  it("フラッグシップ seed の3系統シグナル（plan / schedule / MEMORY）が収集される", () => {
+  it("2シナリオ分のシグナル（plan-1/plan-2 / schedule / MEMORY 4件）が収集される", () => {
     const ids = generated.signals.map((s) => s.id);
     expect(ids).toContain("plan-1"); // pending plan seed（バックボーンVM e2-standard-2→e2-small 縮小）
+    expect(ids).toContain("plan-2"); // U2: Valkey maxmemory 4GB→2GB 縮小（合成 seed）
     expect(ids).toContain("sch-1"); // schedule seed（土20:00 checkout 負荷x5）
 
-    // MEMORY: reset が seed した過去解決事例が subject 突合で記憶として載る
+    // MEMORY: reset が seed した過去解決事例が subject 突合で記憶として載る（backbone×2 + valkey×2）
     const memorySources = generated.signals
       .filter((s) => s.kind === "MEMORY")
       .map((s) => s.source);
@@ -76,15 +79,23 @@ describe("backoffice E2E: 予兆ブリーフィング（フラッグシップ se
 
   it("引用検証: 偽引用は落ち、裏付けゼロのリスクは破棄される（stub は ghost-* を混ぜて返す）", () => {
     expect(generated.forecast.isFallback).toBe(false);
-    // stub は2リスク返すが、ghost-2 のみのリスクは丸ごと破棄され1件になる
-    expect(generated.forecast.risks).toHaveLength(1);
-    const risk = generated.forecast.risks[0];
-    expect(risk.level).toBe("HIGH");
+    // stub は3リスク返すが、ghost-2 のみのリスクは丸ごと破棄され2件になる（flagship + Valkey）。
+    // 並びは level 降順→confidence 降順＝flagship(0.78) が先、Valkey(0.72) が後。
+    expect(generated.forecast.risks).toHaveLength(2);
+
+    const flagship = generated.forecast.risks[0];
+    expect(flagship.level).toBe("HIGH");
     // ghost-1（偽引用）だけが citations から落ち、実在シグナルの引用は残る。
     // inc-1（MEMORY 先頭）が残る＝記憶 seed が引けている検証を兼ねる（引けなければ偽引用扱いで落ちて赤くなる）。
-    expect(risk.citations).toEqual(["plan-1", "sch-1", "inc-1"]);
+    expect(flagship.citations).toEqual(["plan-1", "sch-1", "inc-1"]);
     // F11a: 先手1行が adapter → 引用検証 → wire 変換を通って配信まで届く
-    expect(risk.preventiveAction).toContain("[STUB]");
+    expect(flagship.preventiveAction).toContain("[STUB]");
+
+    // U2: Valkey カスケード。plan-2 と Valkey 記憶（inc-3/inc-4）が引けている検証を兼ねる。
+    const valkey = generated.forecast.risks[1];
+    expect(valkey.level).toBe("HIGH");
+    expect(valkey.citations).toEqual(["plan-2", "sch-1", "inc-3", "inc-4"]);
+    expect(valkey.preventiveAction).toContain("[STUB]");
   });
 
   it("MEMORY 引用は実在の解決済み Alert に解決できる（GET /alerts/:id が開ける）", async () => {

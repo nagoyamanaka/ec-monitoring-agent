@@ -28,12 +28,16 @@ export class StubLLMClient implements LLMTextClient {
   });
 
   // GeminiForecastAdapter（予兆・F8）から呼ばれたときの固定予報。実在する seed シグナル
-  // （plan-1=pending plan seed / sch-1=schedule seed / inc-1=ForecastMemory 先頭＝
-  // reset が seed した過去解決事例）への引用に、意図的な偽引用 ghost-* を混ぜてある:
-  // 1件目は ghost-1 だけが citations から落ち、2件目は裏付けゼロでリスクごと破棄される
+  // （plan-1=バックボーンVM縮小 / plan-2=Valkey 縮小 / sch-1=schedule seed /
+  // inc-1..inc-4=ForecastMemory＝reset が seed した過去解決事例）への引用に、意図的な偽引用
+  // ghost-* を混ぜてある:
+  //  - risk[0]（flagship・backbone）: ghost-1 だけ落ち plan-1/sch-1/inc-1 が残る
+  //  - risk[1]（Valkey カスケード・U2）: plan-2/sch-1/inc-3/inc-4 が残る（PR は stub 環境で
+  //    未取得＝本番の実 draft PR で 4系統目が載る。stub では 3系統でも成立）
+  //  - risk[2]: 裏付けゼロ（ghost-2 のみ）でリスクごと破棄される
   // ＝引用検証（ハルシネーション・ガード）を課金なしで決定論的に E2E 実演する。
-  // inc-1 を含めることで stub モードの UI にも3系統（変更予定/負荷予定/記憶）の引用が揃い、
-  // MEMORY seed が壊れた（記憶が引けない）場合は inc-1 が偽引用として落ちて E2E が赤くなる。
+  // inc-* を含めることで MEMORY seed が壊れた（記憶が引けない）場合は偽引用として落ちて E2E が赤くなる。
+  // risks は adapter 側で level 降順→confidence 降順にソートされる（flagship 0.78 > valkey 0.72）。
   private static readonly FORECAST_CANNED_OUTPUT = JSON.stringify({
     risks: [
       {
@@ -44,9 +48,20 @@ export class StubLLMClient implements LLMTextClient {
         citations: ["plan-1", "sch-1", "inc-1", "ghost-1"],
         reasoning:
           "[STUB] バックボーンVM 縮小予定（メモリ 8→2GB）で Mongo が接続を捌けず細り、週末セールの checkout 負荷・過去の同型枯渇が重なるため。",
-        // F11a: 先手1行の wire 到達を決定論検証する（2件目は敢えて省略＝欠落縮退の経路も固定）。
+        // F11a: 先手1行の wire 到達を決定論検証する（3件目は敢えて省略＝欠落縮退の経路も固定）。
         preventiveAction:
           "[STUB] VM を縮小する plan（plan-1）の適用を週末セール後へ延期することを推奨します。",
+      },
+      {
+        window: "土 20:00-23:00",
+        subject: "valkey_cache",
+        level: "HIGH",
+        confidence: 0.72,
+        citations: ["plan-2", "sch-1", "inc-3", "inc-4"],
+        reasoning:
+          "[STUB] Valkey の maxmemory 縮小予定でヒット率が低下し、週末セール負荷でキャッシュミスが DB を直撃、過去の同型（TTL短縮/メモリ縮小）と重なり接続プール枯渇に伝播するため。",
+        preventiveAction:
+          "[STUB] Valkey を縮小する plan（plan-2）の適用とキャッシュ設定 PR のマージを週末セール後へ延期することを推奨します。",
       },
       {
         window: "今週末",
