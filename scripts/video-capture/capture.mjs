@@ -142,8 +142,25 @@ async function sceneForecast() {
     await page.goto(`${FRONT_URL}/forecast`);
     const card = page.locator("article").first(); // RiskCard（aria-label="<レベル>: <subject>"）
     await card.waitFor({ timeout: 20_000 });
-    await dwell(8_000); // カット1: カード全景の静止尺（フック）
-    await stage.shot("forecast-card"); // ProtoPedia 画像1
+    await dwell(8_000); // カット1: カード全景の静止尺（フック・U1収束ミニフロー）
+    await stage.shot("forecast-card"); // ProtoPedia 画像1（poster-1-hero 候補）
+    // U7: poster-1 は「予報カード2枚＋収束フロー」を要求。スクロール可視域では1枚しか
+    // 入らないので、ページ全体を1枚に収めた fullPage を別途撮る（2枚のリスクが縦に並ぶ）。
+    await stage.page.screenshot({
+      path: `${(await takeDir())}/screens/part1-forecast/01b-forecast-fullpage.png`,
+      fullPage: true,
+    });
+    console.log("  📸 part1-forecast/01b-forecast-fullpage.png (2枚のリスク全景)");
+
+    // カット2前半: 「リスクは複数、同時に」＝2枚目のリスクカード（U2 Valkey）へ緩くスクロールして映す。
+    const secondCard = page.locator("article").nth(1);
+    if (await secondCard.count()) {
+      await secondCard.scrollIntoViewIfNeeded();
+      await dwell(4_000);
+      await stage.shot("forecast-card-2"); // 2枚目（Valkey カスケード）
+      await card.scrollIntoViewIfNeeded(); // 引用チップ操作のため先頭カードへ戻す
+      await dwell(1_500);
+    }
 
     // カット2: 引用チップの「証拠を開く」を順に開く。外部（plan-1→PR #83 / pr-55 draft）は
     // 本編と同一タブで遷移して PR を本編 mp4 に写す（別タブ popup だと本編に写らない）。開いたら
@@ -297,6 +314,28 @@ async function sceneLearning() {
   }
 }
 
+/** カット6.5（任意 B-roll）: Analytics「学習の軌跡」ヒーロー（U5）を 2〜3 秒の緩パンで映す */
+async function sceneAnalytics() {
+  const stage = await openStage("analytics");
+  const { page } = stage;
+  try {
+    await page.goto(`${FRONT_URL}/analytics`);
+    // ヒーロー見出し「1件の学習の軌跡」の描画を待つ（承認済みが1件も無いと empty state に落ちる）。
+    const hero = page.getByText("1件の学習の軌跡").first();
+    await hero.waitFor({ timeout: 15_000 }).catch(() => {
+      console.warn("  ⚠ 学習の軌跡ヒーロー未検出（approvedAlerts が空＝reset/学習未実施の可能性）");
+    });
+    await hero.scrollIntoViewIfNeeded().catch(() => {});
+    await dwell(3_000); // 静止/緩パンの B-roll 尺
+    await stage.shot("analytics-lifecycle"); // 学習の軌跡ヒーロー（B-roll 静止）
+    // [未知]→AI調査→[承認]→昇格→[既知] の横タイムラインをもう一拍見せる
+    await dwell(3_000);
+    await stage.shot("analytics-lifecycle-2");
+  } finally {
+    await stage.close();
+  }
+}
+
 /** part4（カット7素材）: 脆弱性検知（シナリオ4）→ 事前起票済みの実 draft PR（DRAFT_PR_URL） */
 async function sceneDogfooding() {
   const stage = await openStage("part4-dogfooding");
@@ -365,6 +404,7 @@ const SCENES = {
   forecast: sceneForecast, // part1 = カット1〜3前半（予報→引用→先手→ブリッジ遷移）
   investigation: sceneInvestigation, // part2 = カット3後半〜5（着弾→調査→レポート。実 Gemini 約2分を含む）
   learning: sceneLearning, // part3 = カット5承認〜6（investigation の直後に実行する前提）
+  analytics: sceneAnalytics, // カット6.5 = 学習の軌跡 B-roll（任意・learning の後に実行）
   dogfooding: sceneDogfooding, // part4 = カット7素材（CVE + draft PR）
 };
 

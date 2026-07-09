@@ -42,7 +42,7 @@ confidence ゲージ  低→高で #F43F5E → #F59E0B → #22C55E のグラデ�
 
 - **採用①: ダーク観測コンソール** — [Datadog](https://www.datadoghq.com/dashboards/) / [Grafana(play)](https://play.grafana.org/) / [Sentry](https://sentry.io/welcome/) / [shadcn/ui dashboard(dark)](https://ui.shadcn.com/examples/dashboard)
 - 不採用②: ライト・エンタープライズ — [Linear](https://linear.app/) / [Vercel](https://vercel.com/) / [shadcn/ui tasks](https://ui.shadcn.com/examples/tasks)（緊張感・没入感で①に劣る）
-- 部分採用③: ダーク＋ネオン — [Tremor](https://www.tremor.so/) / [Aceternity UI](https://ui.aceternity.com/)（録画映えは最強だが情報密度の高いP1/stretchⅢで可読性が不利。演出のみ採用）
+- 部分採用③: ダーク＋ネオン — [Tremor](https://www.tremor.so/) / [Aceternity UI](https://ui.aceternity.com/)（視覚的インパクトは強いが情報密度の高いP1/stretchⅢで可読性が不利。演出のみ採用）
 
 ---
 
@@ -249,7 +249,7 @@ useAlertStream():
 
 ## step1 との差分（要反映）
 
-step1 のフロント節は layer-first（`pages/ components/ hooks/ infrastructure/`）。本書の feature-sliced が正。step1 側のフロント構成図は本構成に合わせて更新する（TODO: `step4-4-backoffice-frontend-todo.md` のタスクに含む）。
+step1 のフロント節は layer-first（`pages/ components/ hooks/ infrastructure/`）。本書の feature-sliced が正。
 
 ---
 
