@@ -12,16 +12,19 @@ import { ResolvedIncident } from "../SimilarIncident/domain/SimilarIncidentRepos
 // 既知パターン（ec.payment.timeout）には eventName が一致しないが、この解決済み事例と
 // 字句類似（Jaccard）で一致し、SimilarPatternRule が source=SIMILARITY の「準・既知」分類を返す。
 //
+// 表示（resolvedNote）と突合（searchText）を分離する。UI の「次のアクション（前回の対応）」には
+// 人間可読な resolvedNote を出し、Jaccard には英語トークンの searchText を使う。
+//
 // Jaccard の計算（変更時は再計算すること・SimilarPatternRule.buildQueryText は
 // UUID/数値等の発生毎ノイズを除外する）:
 //   クエリ = "ec.payment.declined reason=PROVIDER_UNAVAILABLE"
 //          → {ec, payment, declined, reason, provider, unavailable}（6）
-//   文書   = eventName + resolvedNote
+//   文書   = eventName + searchText
 //          → {ec, payment, declined, provider, unavailable, failover}（6）
 //   交わり5 / 和7 = 0.714（しきい値 0.6 以上・完全一致 1.0 未満の「準・既知」帯）
 //
-// resolvedNote は英語の構造化短文にして Jaccard を安定させる（和文プローズは文字 bigram で
-// 過剰一致し score が飽和するため避ける）。
+// searchText は英語の構造化短文にして Jaccard を安定させる（和文プローズは文字 bigram で
+// 過剰一致し score が飽和するため避ける）。resolvedNote は可読性優先で自由に書ける（突合に効かない）。
 export const SIMILAR_INCIDENT_SEED_SOURCE_ALERT_ID =
   "5eed0000-0000-4000-8000-000000000004";
 
@@ -29,7 +32,9 @@ export const RESOLVED_INCIDENT_SEEDS: ResolvedIncident[] = [
   {
     eventName: "ec.payment.declined",
     occurredOn: new Date("2026-06-10T13:00:00.000Z"),
-    resolvedNote: "provider unavailable; payment declined; provider failover",
+    resolvedNote:
+      "決済プロバイダのステータスページで障害を確認し、復旧までセカンダリプロバイダへフェイルオーバー。拒否理由が PROVIDER_UNAVAILABLE に集中する場合は顧客都合でなくプロバイダ障害として一次切り分けする。",
+    searchText: "provider unavailable; payment declined; provider failover",
     severity: AlertSeverity.warning(),
     sourceAlertId: SIMILAR_INCIDENT_SEED_SOURCE_ALERT_ID,
   },

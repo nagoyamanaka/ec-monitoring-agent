@@ -40,6 +40,9 @@ export class InMemorySimilarIncidentRepository implements SimilarIncidentReposit
       eventName: incident.eventName,
       occurredOn: incident.occurredOn,
       resolvedNote: incident.resolvedNote,
+      ...(incident.searchText !== undefined
+        ? { searchText: incident.searchText }
+        : {}),
       resolvedAt: new Date(),
       severity: incident.severity,
       sourceAlertId: incident.sourceAlertId,
@@ -48,6 +51,11 @@ export class InMemorySimilarIncidentRepository implements SimilarIncidentReposit
     if (this.incidents.length > MAX_INCIDENTS) {
       this.incidents.pop();
     }
+  }
+
+  // コーパス全消去（demo reset のクリーンスレート用）。
+  async clear(): Promise<void> {
+    this.incidents = [];
   }
 
   // 指定 Alert 由来の解決済みインシデントを全削除する（承認の撤回で学習を残さない）。
@@ -71,5 +79,6 @@ export class InMemorySimilarIncidentRepository implements SimilarIncidentReposit
 }
 
 function documentText(incident: SimilarIncident): string {
-  return `${incident.eventName} ${incident.resolvedNote}`;
+  // 突合は searchText（トークン最適化）を優先し、無ければ resolvedNote へフォールバック。
+  return `${incident.eventName} ${incident.searchText ?? incident.resolvedNote}`;
 }

@@ -6,12 +6,15 @@ import { AlertCardExpanded } from "./AlertCardExpanded";
 import { makeAlert, makeReport } from "../../test-support/alertFixture";
 
 describe("AlertCardExpanded", () => {
-  it("full は サマリ・調査ステップ・推奨アクションを表示する", () => {
+  it("full は サマリ・調査ステップ・次のアクション（自責＝推奨アクション手順）を表示する", () => {
     render(<AlertCardExpanded alert={makeAlert()} variant="full" />);
     expect(screen.getByText("AI 推定パターン")).toBeInTheDocument();
     expect(screen.getByText("未知のレイテンシ急増を検知")).toBeInTheDocument();
     expect(screen.getByText("ログ確認")).toBeInTheDocument();
+    // 自責ルートの推奨アクションは「次のアクション」カードへ統合（remediation origin）。
+    expect(screen.getByText("次のアクション")).toBeInTheDocument();
     expect(screen.getByText("ロールバック")).toBeInTheDocument();
+    expect(screen.getByText("スケールアウト")).toBeInTheDocument();
   });
 
   it("AI 推定パターン名が機械 ID（UPPER_SNAKE）なら見出しは人間語・生IDはメタ行に降格（A3）", () => {
@@ -340,7 +343,7 @@ describe("AlertCardExpanded", () => {
     expect(screen.getByText(/AI 調査へフォールバック/)).toBeInTheDocument();
   });
 
-  it("類似既知に resolvedNote があれば「当時の対応メモ」を出す", () => {
+  it("既知/類似（AI 調査なし）に resolvedNote があれば「次のアクション」へ昇格する", () => {
     render(
       <AlertCardExpanded
         alert={makeAlert({
@@ -357,13 +360,16 @@ describe("AlertCardExpanded", () => {
         })}
       />,
     );
-    expect(screen.getByText(/当時の対応メモ/)).toBeInTheDocument();
+    expect(screen.getByText("次のアクション")).toBeInTheDocument();
     expect(
       screen.getByText(/接続プール上限を拡張して復旧/),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/前回の対応をなぞる/),
+    ).toBeInTheDocument();
   });
 
-  it("resolvedNote が無い既知分類では「当時の対応メモ」を出さない", () => {
+  it("resolvedNote が無い既知分類では「次のアクション」を出さない", () => {
     render(
       <AlertCardExpanded
         alert={makeAlert({
@@ -379,7 +385,7 @@ describe("AlertCardExpanded", () => {
         })}
       />,
     );
-    expect(screen.queryByText(/当時の対応メモ/)).not.toBeInTheDocument();
+    expect(screen.queryByText("次のアクション")).not.toBeInTheDocument();
   });
 
   it("既知パターンには「1秒未満・AI コストゼロ」の経済性対比 1 行を出す（タスク G1）", () => {
@@ -605,6 +611,11 @@ describe("AlertCardExpanded", () => {
         screen.queryByText("エスカレーション草案"),
       ).not.toBeInTheDocument();
       expect(screen.queryByText("修正PR 自動レビュー")).not.toBeInTheDocument();
+      // 「次のアクション」は要約（ドロワー）でも出す＝トリアージそのもの。重い草案本体だけ full 限定。
+      expect(screen.getByText("次のアクション")).toBeInTheDocument();
+      expect(
+        screen.getByText("リトライ間隔を延ばし二重課金を防ぐ"),
+      ).toBeInTheDocument();
     });
 
     it("full は報告用フル（impact 全項目・escalation・review を全表示）", () => {
@@ -620,9 +631,16 @@ describe("AlertCardExpanded", () => {
       expect(screen.getByText("決済導線の一部ユーザ")).toBeInTheDocument();
       expect(screen.getAllByText("約1,200件・15分継続")).toHaveLength(2);
       expect(screen.getByText("payment-api")).toBeInTheDocument();
-      // escalation
+      // 次のアクション（他責）: 暫定回避手順が結論直後へ昇格し、草案側では繰り返さない。
+      expect(screen.getByText("次のアクション")).toBeInTheDocument();
+      expect(
+        screen.getByText("リトライ間隔を延ばし二重課金を防ぐ"),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/一次対応（外部要因）/)).toBeInTheDocument();
+      // escalation（誰に渡すか）: 暫定回避手順ラベルはもう草案に出ない。
       expect(screen.getByText("エスカレーション草案")).toBeInTheDocument();
       expect(screen.getByText("external-vendor-liaison")).toBeInTheDocument();
+      expect(screen.queryByText("暫定回避手順")).not.toBeInTheDocument();
       // review
       expect(screen.getByText("修正PR 自動レビュー")).toBeInTheDocument();
       expect(screen.getByText(/concerns/)).toBeInTheDocument();

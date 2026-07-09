@@ -33,6 +33,10 @@ export const FORECAST_MEMORY_SEED_ALERT_IDS = {
   poolShrinkRegression: "5eed0000-0000-4000-8000-000000000002",
   // 週末セールの checkout 負荷で接続待ちが急増した事例（schedule seed と同 subject）
   weekendCheckoutPeak: "5eed0000-0000-4000-8000-000000000003",
+  // 過去に Valkey の TTL 短縮でヒット率が落ち DB 直撃→枯渇した事例（Valkey plan-2 と同 subject）
+  valkeyTtlRegression: "5eed0000-0000-4000-8000-000000000004",
+  // 過去に Valkey のメモリ縮小で eviction 急増→同型枯渇した事例（Valkey plan-2 と同 subject）
+  valkeyMemoryShrink: "5eed0000-0000-4000-8000-000000000005",
 } as const;
 
 function buildResolvedDbPoolAlert(): Alert {
@@ -236,9 +240,119 @@ function buildWeekendCheckoutPeakAlert(): Alert {
   });
 }
 
+// 前回の Valkey TTL 短縮がヒット率低下→DB 直撃→接続枯渇を招いた事例（Valkey カスケードの記憶①）。
+// report.subject は Valkey plan-2 の address（valkey/cache トークン）と2語以上重なる語彙にし、
+// 「同じキャッシュをまた縮める」未来シグナルと直接突合する。
+function buildValkeyTtlRegressionAlert(): Alert {
+  const pastEvent = new MonitoringEvent({
+    eventId: "5eed0000-0000-4000-8000-0000000000e5",
+    eventName: "ec.db.connection_pool_exhausted",
+    aggregateId: "5eed0000-0000-4000-8000-0000000000a5",
+    occurredOn: new Date("2026-05-18T21:10:00.000Z"),
+    category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.critical(),
+    source: "ec-backend",
+    payload: {
+      symptom: "cache hit rate dropped after valkey ttl shortening; db connection pool exhausted",
+    },
+  });
+
+  const report = new InvestigationReport({
+    summary:
+      "カタログキャッシュ（Valkey）の TTL 短縮後、キャッシュヒット率が急落しキャッシュミスが DB を直撃、ピーク帯に接続プールが枯渇。TTL を元に戻してヒット率を回復させ解消済み。",
+    confidence: 0.9,
+    severity: AlertSeverity.critical(),
+    investigationSteps: [
+      "Valkey のヒット率メトリクスと TTL 変更の適用時刻の一致を確認",
+      "キャッシュミス増加と DB 接続数・取得待ちの相関を確認",
+    ],
+    suggestedActions: [
+      "TTL 短縮をロールバックしヒット率を戻す",
+      "キャッシュ設定変更は高負荷ウィンドウ外に限定し、ヒット率を事前に実測する",
+    ],
+    suggestedPatternName: "DB_CONNECTION_POOL_EXHAUSTION",
+    reviewStatus: ReviewStatus.approved(),
+    investigatedAt: new Date("2026-05-18T21:35:00.000Z"),
+    isFallback: false,
+    subject: "valkey_cache_ttl",
+  });
+
+  const base = Alert.createAsUnknown({
+    id: new AlertId(FORECAST_MEMORY_SEED_ALERT_IDS.valkeyTtlRegression),
+    monitoringEvent: pastEvent,
+  }).attachInvestigationReport(report);
+
+  return Alert.fromPrimitives({
+    ...base.toPrimitives(),
+    status: "RESOLVED",
+    feedback: {
+      isCorrect: true,
+      operatorNote: "TTL を戻してヒット率回復で解消（キャッシュミス増が枯渇の直接原因）",
+    },
+    correctFeedbackCount: 1,
+  });
+}
+
+// 前回の Valkey メモリ縮小が eviction 急増→ヒット率低下→同型枯渇を招いた事例（Valkey カスケードの記憶②）。
+// report.subject は Valkey plan-2 の maxmemory 縮小と同語彙（valkey/cache）で突合する。
+function buildValkeyMemoryShrinkAlert(): Alert {
+  const pastEvent = new MonitoringEvent({
+    eventId: "5eed0000-0000-4000-8000-0000000000e6",
+    eventName: "ec.db.connection_pool_exhausted",
+    aggregateId: "5eed0000-0000-4000-8000-0000000000a6",
+    occurredOn: new Date("2026-04-27T20:40:00.000Z"),
+    category: MonitoringEventCategory.application(),
+    severity: AlertSeverity.warning(),
+    source: "ec-backend",
+    payload: {
+      symptom: "valkey eviction spike after memory downsize; cache miss flooded db pool",
+    },
+  });
+
+  const report = new InvestigationReport({
+    summary:
+      "カタログキャッシュ（Valkey）の maxmemory 縮小後、eviction が急増しヒット率が低下、キャッシュミスが DB へ流れ込み接続プールが枯渇。maxmemory を元に戻して解消済み。",
+    confidence: 0.88,
+    severity: AlertSeverity.warning(),
+    investigationSteps: [
+      "Valkey の eviction 数と maxmemory 変更の適用時刻の一致を確認",
+      "ヒット率低下と DB 接続待ちキューの伸びの相関を確認",
+    ],
+    suggestedActions: [
+      "maxmemory の縮小をロールバックする",
+      "キャッシュのメモリ縮小はワーキングセット実測とヒット率の事前確認をセットにする",
+    ],
+    suggestedPatternName: "DB_CONNECTION_POOL_EXHAUSTION",
+    reviewStatus: ReviewStatus.approved(),
+    investigatedAt: new Date("2026-04-27T21:05:00.000Z"),
+    isFallback: false,
+    subject: "valkey_cache_maxmemory",
+  });
+
+  const base = Alert.createAsUnknown({
+    id: new AlertId(FORECAST_MEMORY_SEED_ALERT_IDS.valkeyMemoryShrink),
+    monitoringEvent: pastEvent,
+  }).attachInvestigationReport(report);
+
+  return Alert.fromPrimitives({
+    ...base.toPrimitives(),
+    status: "RESOLVED",
+    feedback: {
+      isCorrect: true,
+      operatorNote: "maxmemory を戻して eviction を抑え解消（メモリ縮小によるヒット率低下が起点）",
+    },
+    correctFeedbackCount: 1,
+  });
+}
+
+// 配列順が MEMORY シグナルの id 連番（inc-1, inc-2…＝突合成立した順）を決める。
+// flagship（backbone / checkout）の記憶が先＝inc-1/inc-2 を占め、Valkey カスケードの
+// 記憶を末尾に足す＝inc-3/inc-4 になる（既存 E2E の inc-1 期待を壊さないための順序）。
 export const RESOLVED_ALERT_SEEDS: Alert[] = [
   buildResolvedPaymentDeclinedAlert(),
   buildResolvedDbPoolAlert(),
   buildPoolShrinkRegressionAlert(),
   buildWeekendCheckoutPeakAlert(),
+  buildValkeyTtlRegressionAlert(),
+  buildValkeyMemoryShrinkAlert(),
 ];

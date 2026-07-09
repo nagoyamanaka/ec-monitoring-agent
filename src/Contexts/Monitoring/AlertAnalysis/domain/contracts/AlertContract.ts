@@ -36,8 +36,10 @@ export type KnownAlertClassificationPrimitives = {
   // 「過去の同型障害をどう直したか」へ内部遷移（/alerts/:id）する動線に使う。
   // optional は EXACT_MATCH / INFERENCE では未設定・旧データ互換のため（dedupKey と同じ規約）。
   readonly sourceAlertId?: string;
-  // 類似既知（SIMILARITY）分類のとき、一致した解決済み事例の対応メモ（resolvedNote＝当時どう直したか）。
-  // deep link を開かずその場で「前回の対応」を提示する表示面に使う。optional は sourceAlertId と同じ規約。
+  // 既知分類の「当時どう直したか」。SIMILARITY は一致した解決済み事例の対応メモ、
+  // EXACT_MATCH は既知パターンに焼き付けた suggestedAction（結晶化時の推奨アクション）。
+  // AI 調査を起動しない既知ルートで、deep link を開かずその場に「次のアクション」を出す表示面に使う。
+  // optional は sourceAlertId と同じ規約（INFERENCE・旧データ・対応メモ空では未設定）。
   readonly resolvedNote?: string;
 };
 

@@ -155,27 +155,35 @@ export function ReferencedEvidenceCard(props: ReferencedEvidenceCardProps) {
           to={to}
           href={href}
           onClick={onClick}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+          className="block w-full px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
-          <span className={cn("shrink-0", CHIP_CLASS[props.chipTone])}>
-            {props.chipLabel}
-          </span>
-          {props.severity && <SeverityBadge level={props.severity} />}
-          {props.title && (
-            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-100">
-              {props.title}
+          {/* 1行目: チップ＋タイトル（全幅で折り返し・truncate しない＝全文を隠さず読ませる）。 */}
+          <div className="flex items-start gap-2">
+            <span className={cn("mt-0.5 shrink-0", CHIP_CLASS[props.chipTone])}>
+              {props.chipLabel}
             </span>
-          )}
-          {props.timestamp && (
-            <span className="shrink-0 text-[11px] text-slate-400">
-              {props.timestamp}
-            </span>
-          )}
-          {hasLink && (
-            <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-cyan-300">
-              <LinkIcon className="shrink-0" />
-              {props.linkLabel ?? "詳細を開く"}
-            </span>
+            {props.severity && <SeverityBadge level={props.severity} />}
+            {props.title && (
+              <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-100">
+                {props.title}
+              </span>
+            )}
+          </div>
+          {/* 2行目: 時刻（長文になりがち）と「証拠を開く」を降ろし、タイトルの幅を奪わせない。 */}
+          {(props.timestamp || hasLink) && (
+            <div className="mt-1 flex items-center gap-2">
+              {props.timestamp && (
+                <span className="text-[11px] text-slate-400">
+                  {props.timestamp}
+                </span>
+              )}
+              {hasLink && (
+                <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-cyan-300">
+                  <LinkIcon className="shrink-0" />
+                  {props.linkLabel ?? "詳細を開く"}
+                </span>
+              )}
+            </div>
           )}
         </Clickable>
         {details && (

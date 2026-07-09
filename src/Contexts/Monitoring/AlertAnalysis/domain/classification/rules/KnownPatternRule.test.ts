@@ -44,6 +44,7 @@ function makePattern(params: {
   eventNamePattern: string;
   payloadConditions?: { field: string; value: unknown }[];
   severity?: AlertSeverity;
+  suggestedAction?: string;
 }): KnownErrorPattern {
   return KnownErrorPattern.create({
     id: params.id ?? "pattern-001",
@@ -52,7 +53,7 @@ function makePattern(params: {
     eventNamePattern: params.eventNamePattern,
     payloadConditions: params.payloadConditions ?? [],
     severity: params.severity ?? AlertSeverity.warning(),
-    suggestedAction: "",
+    suggestedAction: params.suggestedAction ?? "",
   });
 }
 
@@ -106,6 +107,37 @@ describe("KnownPatternRule", () => {
         expectedValue: "INSUFFICIENT_STOCK",
         actualValue: "INSUFFICIENT_STOCK",
       });
+    });
+
+    it("suggestedAction を持つパターンは resolvedNote（次のアクション源）に載せる", async () => {
+      const event = makeEvent({ eventName: "ec.payment.timeout" });
+      const rule = makeRule([
+        makePattern({
+          name: "PAYMENT_TIMEOUT",
+          eventNamePattern: "ec.payment.timeout",
+          suggestedAction: "決済サービスのステータスを確認し、注文を手動で再処理してください。",
+        }),
+      ]);
+
+      const result = await rule.classify(event);
+
+      expect(result?.resolvedNote).toBe(
+        "決済サービスのステータスを確認し、注文を手動で再処理してください。",
+      );
+    });
+
+    it("suggestedAction が空のパターンは resolvedNote を載せない", async () => {
+      const event = makeEvent({ eventName: "ec.payment.timeout" });
+      const rule = makeRule([
+        makePattern({
+          name: "PAYMENT_TIMEOUT",
+          eventNamePattern: "ec.payment.timeout",
+        }),
+      ]);
+
+      const result = await rule.classify(event);
+
+      expect(result?.resolvedNote).toBeUndefined();
     });
 
     it("eventName不一致の場合はnullを返す", async () => {

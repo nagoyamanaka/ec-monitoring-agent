@@ -1,6 +1,6 @@
 # video-capture — 提出動画の素材テイク自動撮影
 
-台本 [docs/protopedia/video/script.md](../../docs/protopedia/video/script.md)（2分・7カット）に対応する
+台本 `docs/protopedia/video/script.md`（ローカル管理・リポジトリ外）に対応する
 **パート単位の動画（編集用 H.264 mp4）と画面遷移ごとのスクリーンショット**を Playwright で自動採取する。
 ナレーション・テロップ・倍速加工は撮影後の編集工程で行う＝**尺合わせは録画側でやらない**。
 
@@ -9,11 +9,10 @@ Playwright の録画は VP8 in webm 固定で編集ソフト（DaVinci / Premier
 変換に使う ffmpeg は `pnpm run setup` で入る `ffmpeg-static`（root不要）。`FFMPEG_PATH` で自前の
 ffmpeg を指定してもよい。ffmpeg が見つからない環境では変換をスキップし webm のまま出す（警告付き）。
 
-撮り直しの定型運用は **[docs/protopedia/video/retake-prompt.md](../../docs/protopedia/video/retake-prompt.md)**
-（AI エージェントに貼り付けるランブック）を参照。
+撮り直しの定型運用は `docs/protopedia/video/retake-prompt.md`（ローカル管理・リポジトリ外）を参照。
 
 本体 pnpm workspace には属さない独立パッケージ（`pnpm-workspace.yaml` 対象外）。
-出力 `output/` は .gitignore 済み。**採用スクショのみ** `docs/protopedia/assets/` へコピーしてコミットする。
+出力 `output/` は .gitignore 済み。採用スクショは `docs/protopedia/assets/`（ローカル管理・リポジトリ外）へコピーする。
 
 ## セットアップ
 

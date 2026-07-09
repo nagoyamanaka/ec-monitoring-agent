@@ -9,7 +9,10 @@ out/
 GCP_MIGRATION_RUNBOOK.md
 temp/
 
-# 動画撮影の生成物（生テイク webm・全量スクショ。採用分のみ docs/protopedia/assets/ へコミット）
+# 提出資料・動画関連（ローカル管理・リポジトリには載せない）
+docs/protopedia/
+
+# 動画撮影の生成物（生テイク webm・全量スクショ）
 scripts/video-capture/output/
 
 

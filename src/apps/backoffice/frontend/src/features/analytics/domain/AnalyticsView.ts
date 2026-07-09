@@ -53,6 +53,51 @@ export type AnalyticsView = {
   readonly promotedPatternCount: number;
 };
 
+/**
+ * 「学習の軌跡」ヒーローの代表1件を選ぶ純関数（U5）。
+ * ライフサイクル物語（未知→AI調査→承認→既知昇格→再一致）の主人公は、
+ * **未知として調査され AI 推定パターン名を持ち、人間が承認した**アラート。
+ * approvedAlerts は承認（＝正解フィードバック）済みのみなので「承認」は満たされている前提。
+ *
+ * 優先順位（memory: 実装前に seed で代表存在確認）:
+ *   1. 再発済み（occurrenceCount>1）＝「昇格後に再一致した」痕跡が最も物語に合う。
+ *   2. 無ければ AI 推定 patternName を持つ unknown（seed 直後はこちら＝再発はまだ無い）。
+ * どちらも無ければ null（ヒーローは empty state に劣化）。
+ * 入力は新しい順で来る前提なので、条件一致のうち先頭＝最新を返す。
+ */
+export function selectLifecycleAlert(
+  approvedAlerts: readonly ApprovedAlertSummaryDto[],
+): ApprovedAlertSummaryDto | null {
+  const candidates = approvedAlerts.filter(
+    (a) => a.classificationType === "unknown" && !!a.patternName?.trim(),
+  );
+  if (candidates.length === 0) return null;
+  return candidates.find((a) => a.occurrenceCount > 1) ?? candidates[0];
+}
+
+/**
+ * AI 推定パターン名（機械 ID）を審査員が一読で分かる人間語ラベルへ写す（U5・表示専用）。
+ * eventCatalog が eventName→日本語タイトルを引くのと同じ発想＝ID のローカライズであって
+ * データの捏造ではない。デモの既知パターンは辞書で日本語化し、未登録の UPPER_SNAKE_CASE は
+ * AlertCardExpanded と同じハウススタイル（`_`→空白・小文字）へ、それ以外は原文のまま返す。
+ */
+const PATTERN_LABELS: Record<string, string> = {
+  DB_CONNECTION_POOL_EXHAUSTION: "DB接続プールの枯渇",
+  PAYMENT_PROVIDER_OUTAGE: "決済プロバイダ障害",
+  PAYMENT_TIMEOUT: "決済タイムアウト",
+  INVENTORY_INSUFFICIENT: "在庫引当の不足",
+};
+
+const RAW_ID_PATTERN = /^[A-Z0-9]+(?:_[A-Z0-9]+)+$/;
+
+export function patternLabel(raw: string | null): string | null {
+  const name = raw?.trim();
+  if (!name) return null;
+  if (PATTERN_LABELS[name]) return PATTERN_LABELS[name];
+  if (RAW_ID_PATTERN.test(name)) return name.replace(/_/g, " ").toLowerCase();
+  return name;
+}
+
 export function toAnalyticsView(dto: AnalyticsDto): AnalyticsView {
   const accuracyPercent =
     dto.accuracy === null ? null : Math.round(dto.accuracy * 100);

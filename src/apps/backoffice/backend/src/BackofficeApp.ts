@@ -76,8 +76,9 @@ import { ScheduleSignalSource } from "../../../../Contexts/Monitoring/Forecast/i
 import { SeedScheduleSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/SeedScheduleSource.js";
 import { FORECAST_SCHEDULE_SEED } from "../../../../Contexts/Monitoring/seeds/ForecastScheduleSeed.js";
 import {
+  FORECAST_FLAGSHIP_PLAN_ADDRESS,
   FORECAST_PENDING_PLAN_SEED,
-  withPendingPlanEvidenceUrl,
+  withPendingPlanEvidenceUrls,
 } from "../../../../Contexts/Monitoring/seeds/ForecastPendingPlanSeed.js";
 import { EventEmitterSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/EventEmitterSSEAlertNotifier.js";
 import { RedisSSEAlertNotifier } from "../../../../Contexts/Monitoring/AlertNotification/infrastructure/RedisSSEAlertNotifier.js";
@@ -211,10 +212,11 @@ export class BackofficeApp {
     // 引用チップ「証拠を開く」の解決先 PR（#83＝この plan を CI が本物の plan にした PR）を env で後付けする。
     const pendingInfraPlanStore = new InMemoryPendingInfraPlanStore();
     if (config.demo.enabled) {
-      const seededPlans = withPendingPlanEvidenceUrl(
-        FORECAST_PENDING_PLAN_SEED,
-        config.forecast.pendingPlanPrUrl,
-      );
+      // flagship（backbone VM 縮小）の plan にだけ実 PR #83 を後付けする。Valkey plan-2 は
+      // terraform 単独リソースを持たず本物の plan を作れないため非リンクの合成 seed のまま。
+      const seededPlans = withPendingPlanEvidenceUrls(FORECAST_PENDING_PLAN_SEED, {
+        [FORECAST_FLAGSHIP_PLAN_ADDRESS]: config.forecast.pendingPlanPrUrl,
+      });
       for (const plan of seededPlans) {
         await pendingInfraPlanStore.record(plan);
       }

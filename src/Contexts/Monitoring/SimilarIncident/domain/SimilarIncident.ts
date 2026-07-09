@@ -4,7 +4,9 @@ export type SimilarIncident = {
   readonly id: string;
   readonly eventName: string;
   readonly occurredOn: Date;
-  readonly resolvedNote: string; // オペレーターのメモまたはAI分析summary
+  readonly resolvedNote: string; // オペレーターのメモまたはAI分析summary（人間可読・表示用）
+  // 字句類似（Jaccard）のインデックス本文。未指定は resolvedNote にフォールバック（表示と突合の分離）。
+  readonly searchText?: string;
   readonly resolvedAt: Date;
   readonly severity: AlertSeverity;
   // 元になった解決済み Alert への back-link（UI からのディープリンク用）。

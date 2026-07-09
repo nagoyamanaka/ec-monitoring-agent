@@ -6,12 +6,12 @@
 >
 > **Step4 ファミリー（進める順番＝ファイル番号順）**
 >
-> | 順  | スコープ            | 設計ドキュメント                      | TODO                                       |
-> | --- | ------------------- | ------------------------------------- | ------------------------------------------ |
-> | 1   | 戦略設計            | `docs/steps/step4-1-strategy.md`            | `docs/steps/step4-1-strategy-todo.md`            |
-> | 2   | context/Monitoring  | `docs/steps/step4-2-monitoring-context.md`  | `docs/steps/step4-2-monitoring-context-todo.md`  |
-> | 3   | backoffice/backend  | `docs/steps/step4-3-backoffice-backend.md`  | `docs/steps/step4-3-backoffice-backend-todo.md`  |
-> | 4   | backoffice/frontend | `docs/steps/step4-4-backoffice-frontend.md` | `docs/steps/step4-4-backoffice-frontend-todo.md` |
+> | 順  | スコープ            | 設計ドキュメント                      |
+> | --- | ------------------- | ------------------------------------- |
+> | 1   | 戦略設計            | `docs/steps/step4-1-strategy.md`            |
+> | 2   | context/Monitoring  | `docs/steps/step4-2-monitoring-context.md`  |
+> | 3   | backoffice/backend  | `docs/steps/step4-3-backoffice-backend.md`  |
+> | 4   | backoffice/frontend | `docs/steps/step4-4-backoffice-frontend.md` |
 >
 > 前提となる設計:
 >
@@ -19,15 +19,14 @@
 > - ドメインモデル: `docs/steps/step2-domain-model.md`
 > - アプリケーション層: `docs/steps/step3-application-layer.md`
 > - 戦略・スコープ・優先度: `docs/steps/step4-1-strategy.md`
-> - プロジェクト全体方針: `docs/steps/project-prompt.md`
 >
 > **整合性メモ（v12時点）**: 本ドキュメントは以下をリポジトリのコード・上位ドキュメントに整合させて更新済み。
 >
 > - ECイベントの実フィールド（`OrderPlacedDomainEvent` 等）に合わせて変換規則表を修正
 > - `InvestigationReport` に調査ステップ・レビューステータス（`reviewStatus`）を追加（step1 の「AIが調査し人間がレビューする」体験価値に整合）
-> - `AIInvestigationPort` の段階移行（Gemini直接 → Vertex AI → ADK）を明記（project-prompt v10）
-> - `AlertClassifier` の段階強化（InMemory → Elastic → Scoring/A2A）を明記（project-prompt v11）
-> - インフラ横断調査パイプライン（`InfraInvestigationPort` / 各Gateway / `InfraEvidence`）を追加（project-prompt v12）
+> - `AIInvestigationPort` の段階移行（Gemini直接 → Vertex AI → ADK）を明記
+> - `AlertClassifier` の段階強化（InMemory → Elastic → Scoring/A2A）を明記
+> - インフラ横断調査パイプライン（`InfraInvestigationPort` / 各Gateway / `InfraEvidence`）を追加
 > - `MonitoringEvent.category`（APPLICATION/INFRASTRUCTURE/CAPACITY/SECURITY）の弁別子を追加（a2a非依存のルーティングキー）
 > - ADKマルチエージェント実装（Coordinator + 専門agent + 自律証拠ループ）を追加（a2aは使わない方針）
 > - CI/CD連携のセキュリティインシデント＋自律リメディエーション（`RemediationPort` / 人間承認ゲート付きPR起票）を追加（v13）
@@ -529,7 +528,7 @@ class ClassificationRuleSorter {
 - **配列順に依存しない**のがポイント。DI でどの順に Rule を渡しても、Sorter が kind 優先順位で確定的に並べるため「暗黙の配列順で優先度が決まる」事故が起きない。
 - **組み立て（依存注入＋分類器グラフ生成）は Sorter ではなく composition root（step4-3 の DI）の責務**。そこで `new KnownPatternRule(repo)` / 将来の `new SimilarPatternRule(elasticClient)` を生成し、`ApplicationClassificationPolicy` に Sorter とともに渡す。`AlertClassifier` IF も Handler もノータッチで P1 拡張できる。
 
-**段階強化ロードマップ（project-prompt v11 準拠）**: 強化は「Classifier 丸ごと差し替え」ではなく「**Policy に Rule を足す / 差し替える**」で行う。
+**段階強化ロードマップ**: 強化は「Classifier 丸ごと差し替え」ではなく「**Policy に Rule を足す / 差し替える**」で行う。
 
 ```
 PolicyBasedAlertClassifier
@@ -908,7 +907,7 @@ interface InvestigationContext {
 }
 ```
 
-### AIInvestigationPort の段階移行（project-prompt v10 準拠）
+### AIInvestigationPort の段階移行
 
 ポート名にプロダクト名を含めないことで、Application層（`InvestigateAlertOnAlertClassifiedUnknown`）をノータッチにしたまま実装をDI差し替えできる。
 
@@ -1062,7 +1061,7 @@ interface InfraEvidence {
   AI推定: "Terraform変更による接続設定不整合の可能性 82%"
 ```
 
-関連APIエンドポイント（project-prompt v12）:
+関連APIエンドポイント:
 
 ```
 GET /alerts/:id/evidence              ← 収集済みInfraEvidenceの取得（重い外部収集＝pull on-demand）
@@ -1078,7 +1077,7 @@ GET /alerts/:id/evidence              ← 収集済みInfraEvidenceの取得（�
 
 ### マルチエージェントである必然性
 
-固定パイプラインではなく、以下2点で「自律的な判断・実行」を満たす（審査基準1の核心）。
+固定パイプラインではなく、以下2点で「自律的な判断・実行」を満たす。
 
 1. **専門エージェントの並列調査**: `category` でルーティングし、各レイヤーの analyst が**絞った文脈**で並走。競合する部分仮説をオーケストレータが突き合わせる（単なる要約ではなく複数の見立ての統合）。
 2. **自律的な証拠追加収集ループ**: analyst が「次にこの証拠が要る」と*自分で判断*して `EvidenceCollector` を再起動する。固定手順ではなくエージェントが収集対象を決める点が agentic 価値の中心。
@@ -1141,7 +1140,7 @@ src/Contexts/Monitoring/AIInvestigation/infrastructure/
     └── RemediationPlannerAgent.ts
 ```
 
-> **段階方針**: フェーズ0（単一Gemini）で提出可能状態を確保し、ADK版は `ADKAgentInvestigationAdapter` を DI差し替えで載せる。途中で締切が来てもフェーズ0で提出できる。
+> **段階方針**: フェーズ0（単一Gemini）で常に動く状態を確保し、ADK版は `ADKAgentInvestigationAdapter` を DI差し替えで載せる。フェーズ0時点でもリリース可能な状態を保てる。
 
 ---
 
@@ -1582,8 +1581,8 @@ SubmitFeedbackCommandHandler
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SSEAlertNotifier`                     | EventEmitterオンメモリ                                                                                                                                                | `RedisSSEAlertNotifier`（プロセス複数化時）。インターフェースは維持                                                                                                                                                                                                                                                                                                                                                       |
 | `SimilarIncidentRepository`            | InMemory + InMemoryCriteriaConverter                                                                                                                                  | `ElasticSearchSimilarIncidentRepository`（大規模化時）。Criteria共通インターフェースは維持                                                                                                                                                                                                                                                                                                                                |
-| `AIInvestigationPort`                  | LLMInvestigationAdapter ＋ GeminiLLMClient（gemini-2.0-flash系・Gemini API直接）                                                                                      | `LLMTextClient` を `VertexLLMClient`（Vertex AI SDK経由・推奨）へ差し替え → `ADKAgentInvestigationAdapter`（ADK/A2A構成・Port直接実装）への段階移行。DI差し替え1箇所のみでApplication層・アダプタノータッチ（project-prompt v10）                                                                                                                                                                                         |
-| `InfraInvestigationPort`               | CloudLogging/Terraform/GitHub の3Gateway（読み取り専用）                                                                                                              | `CloudMonitoringGateway` / `CloudTraceGateway` を追加（次フェーズ）。`InfraEvidence` の正規化スキーマは維持（project-prompt v12）                                                                                                                                                                                                                                                                                         |
+| `AIInvestigationPort`                  | LLMInvestigationAdapter ＋ GeminiLLMClient（gemini-2.0-flash系・Gemini API直接）                                                                                      | `LLMTextClient` を `VertexLLMClient`（Vertex AI SDK経由・推奨）へ差し替え → `ADKAgentInvestigationAdapter`（ADK/A2A構成・Port直接実装）への段階移行。DI差し替え1箇所のみでApplication層・アダプタノータッチ                                                                                                                                                                                         |
+| `InfraInvestigationPort`               | CloudLogging/Terraform/GitHub の3Gateway（読み取り専用）                                                                                                              | `CloudMonitoringGateway` / `CloudTraceGateway` を追加（次フェーズ）。`InfraEvidence` の正規化スキーマは維持                                                                                                                                                                                                                                                                                         |
 | `AlertClassifier`                      | `PolicyBasedAlertClassifier`（`ApplicationClassificationPolicy` + `KnownPatternRule`、first-match・confidence 1.0固定）。組み立ては step4-3 の DI（composition root） | `ApplicationClassificationPolicy` に `SimilarPatternRule`（Elastic hybrid search・kind=SIMILARITY）→ `AiInferenceRule`（kind=INFERENCE）を追加。`ClassificationRuleSorter` が kind 優先順位で並べる。`AlertClassificationResult` の型は変わらず、`KnownAlertClassification` VOに `unmatchedConditions` の反証情報が入るようになる。移行トリガー: 自動昇格パターンが10件超 or 誤分類率が計測可能になった時点（ADR Step 5） |
 | `recentEvents` in InvestigationContext | 省略（将来拡張ポイント）                                                                                                                                              | AlertRepository.findByCriteria で直近30分のAlertを収集し追加                                                                                                                                                                                                                                                                                                                                                              |
 
@@ -1834,7 +1833,7 @@ Forecast BC（タスク19–29）は設計のみでコード0。時間制約か�
 
 - **本数**: 多くて2つまで。まずは1つ。転用でなく新枠で足す（6/7 は現状維持）。
 - **予兆の種別**（`step4-1` 7章）:
-  - (a) 会社イベントカレンダー（例: セール→トラフィック3倍予測）。**最も具体的でデモ映えする**ので第一候補。schedule シグナル＋過去インシデント引用（`SimilarIncident.sourceAlertId` → citation で**実在 Alert id**に解決）で「来週のセール→過去の類似スパイク障害を引用してDBメモリ逼迫を予報」が語れる。
+  - (a) 会社イベントカレンダー（例: セール→トラフィック3倍予測）。**最も具体的で説明しやすい**ので第一候補。schedule シグナル＋過去インシデント引用（`SimilarIncident.sourceAlertId` → citation で**実在 Alert id**に解決）で「来週のセール→過去の類似スパイク障害を引用してDBメモリ逼迫を予報」が語れる。
   - (b) インフラ定量アラート（**CPU/メモリに限定**＝『詳細システムパフォーマンス』の範囲）。単体では閾値アラートに近く"予測"として弱い。
   - (c) a+b 複合。物語は最強だが工数大。時間があれば (a) か (c)-lite（schedule＋過去1件引用）。
 - **概念的支柱**: ベイトソン「起きていないことも情報」＝時間経過で"起きていない"ことが因果の結果になる。予報は「まだ起きていないが起こりうる」を引用付きで提示する。
