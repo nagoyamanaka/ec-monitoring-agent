@@ -47,10 +47,10 @@ export class StubLLMClient implements LLMTextClient {
         confidence: 0.78,
         citations: ["plan-1", "sch-1", "inc-1", "ghost-1"],
         reasoning:
-          "[STUB] バックボーンVM 縮小予定（メモリ 8→2GB）で Mongo が接続を捌けず細り、週末セールの checkout 負荷・過去の同型枯渇が重なるため。",
+          "[STUB] バックボーンVM を 8→2GB に縮小する予定で Mongo の接続上限が細るところに、週末セールの checkout 負荷が重なって接続が急増し、過去も同じ経路で枯渇した実績がある。未来の変更・高負荷・過去の同型という独立した根拠がいずれも接続プール枯渇を指すため HIGH。",
         // F11a: 先手1行の wire 到達を決定論検証する（3件目は敢えて省略＝欠落縮退の経路も固定）。
         preventiveAction:
-          "[STUB] VM を縮小する plan（plan-1）の適用を週末セール後へ延期することを推奨します。",
+          "[STUB] VM を縮小する plan（plan-1）の適用を週末セール（土20:00-23:00）後へ延期することを推奨します。これにより同型の接続プール枯渇の再発を高負荷窓の外へ外せます。",
       },
       {
         window: "土 20:00-23:00",
@@ -59,9 +59,9 @@ export class StubLLMClient implements LLMTextClient {
         confidence: 0.72,
         citations: ["plan-2", "sch-1", "inc-3", "inc-4"],
         reasoning:
-          "[STUB] Valkey の maxmemory 縮小予定でヒット率が低下し、週末セール負荷でキャッシュミスが DB を直撃、過去の同型（TTL短縮/メモリ縮小）と重なり接続プール枯渇に伝播するため。",
+          "[STUB] Valkey の maxmemory を縮小する予定でキャッシュのヒット率が下がると、週末セール負荷でキャッシュミスが DB を直撃し、過去も TTL短縮/メモリ縮小で同じ枯渇に至った実績がある。未来の変更・高負荷・過去の同型という独立した根拠がいずれも接続プール枯渇を指すため HIGH。",
         preventiveAction:
-          "[STUB] Valkey を縮小する plan（plan-2）の適用とキャッシュ設定 PR のマージを週末セール後へ延期することを推奨します。",
+          "[STUB] Valkey を縮小する plan（plan-2）の適用とキャッシュ設定 PR のマージを週末セール（土20:00-23:00）後へ延期することを推奨します。これによりヒット率低下起因の接続プール枯渇の再発を高負荷窓の外へ外せます。",
       },
       {
         window: "今週末",
