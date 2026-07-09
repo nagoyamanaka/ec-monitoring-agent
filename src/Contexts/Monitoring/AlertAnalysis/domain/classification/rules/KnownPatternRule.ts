@@ -60,6 +60,12 @@ export class KnownPatternRule implements ClassificationRule {
         confidence: ClassificationConfidence.certain(),
         matchedConditions,
         unmatchedConditions: [],
+        // 既知パターンの対応（結晶化時に焼き付けた suggestedAction＝当時どう直したか）を
+        // resolvedNote に載せる。EXACT_MATCH は AI 調査を起動しないので、フロントは
+        // これを「次のアクション」に昇格して行動指示を欠かさない（空文字は載せない）。
+        ...(pattern.suggestedAction !== ""
+          ? { resolvedNote: pattern.suggestedAction }
+          : {}),
       };
     }
 

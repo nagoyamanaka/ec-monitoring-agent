@@ -7,8 +7,9 @@ export interface EscalationPanelProps {
 
 /**
  * エスカレーション草案パネル（報告用フル・詳細ページのみ）。
- * 他責/運用案件のとき RunbookEscalationAgent が起案した宛先・理由・暫定回避手順・
- * 重大度根拠・添付証拠を全表示する（タスク35/37）。起案までで送信・起票はしない（人間承認の前段）。
+ * 他責/運用案件のとき RunbookEscalationAgent が起案した宛先・理由・重大度根拠・添付証拠を表示する
+ * （タスク35/37）。暫定回避手順は結論直後の「次のアクション」（NextActionCard・U6）へ昇格済みで、
+ * この草案は「誰に渡すか」に徹する。起案までで送信・起票はしない（人間承認の前段）。
  */
 export function EscalationPanel({ escalation }: EscalationPanelProps) {
   return (
@@ -44,12 +45,8 @@ export function EscalationPanel({ escalation }: EscalationPanelProps) {
           </span>
           <p className="text-slate-100">{escalation.reason}</p>
         </div>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-            暫定回避手順
-          </span>
-          <p className="text-slate-100">{escalation.interimWorkaround}</p>
-        </div>
+        {/* 暫定回避手順（interimWorkaround）は結論直後の「次のアクション」（NextActionCard）へ
+            昇格したのでここでは繰り返さない。この草案は「誰に渡すか」の従属情報に徹する。 */}
         <div className="flex flex-col gap-0.5">
           <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
             重大度の根拠
