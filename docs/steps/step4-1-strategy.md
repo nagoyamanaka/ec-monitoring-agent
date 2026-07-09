@@ -3,12 +3,12 @@
 > **Step4 を4分割したうちの「戦略設計」担当。最初に読む。**
 > 技術詳細は下記を参照。本書は「何を・なぜ・どの順で・どこまで」を決める。
 >
-> | 順  | スコープ            | 設計ドキュメント                      | TODO                                       |
-> | --- | ------------------- | ------------------------------------- | ------------------------------------------ |
-> | 1   | 戦略設計            | `docs/steps/step4-1-strategy.md`（本書）    | `docs/steps/step4-1-strategy-todo.md`            |
-> | 2   | context/Monitoring  | `docs/steps/step4-2-monitoring-context.md`  | `docs/steps/step4-2-monitoring-context-todo.md`  |
-> | 3   | backoffice/backend  | `docs/steps/step4-3-backoffice-backend.md`  | `docs/steps/step4-3-backoffice-backend-todo.md`  |
-> | 4   | backoffice/frontend | `docs/steps/step4-4-backoffice-frontend.md` | `docs/steps/step4-4-backoffice-frontend-todo.md` |
+> | 順  | スコープ            | 設計ドキュメント                      |
+> | --- | ------------------- | ------------------------------------- |
+> | 1   | 戦略設計            | `docs/steps/step4-1-strategy.md`（本書）    |
+> | 2   | context/Monitoring  | `docs/steps/step4-2-monitoring-context.md`  |
+> | 3   | backoffice/backend  | `docs/steps/step4-3-backoffice-backend.md`  |
+> | 4   | backoffice/frontend | `docs/steps/step4-4-backoffice-frontend.md` |
 
 ---
 
@@ -18,7 +18,7 @@
 
 分類ツールではなく、複数ソース（Cloud Logging / Terraform差分 / GitHub）を**自律的に横断して証拠を積み上げ、根拠付きで原因を推定し、人間がレビュー・承認する**——この一連を1ループで体現する。
 
-> **検知基盤は Cloud Monitoring を採用（Datadog ではない）**。理由は §2.5。Datadog は有料で本ハッカソンに乗せると物語が「使っていない」と矛盾する。Cloud Monitoring は **無料枠があり・Google 主催ハッカソンの GCP 活用要件に加点され・既に次フェーズ Gateway として設計済み**。「Alerting Policy が発火 → その上に乗る」が文字通り成立する。
+> **検知基盤は Cloud Monitoring を採用（Datadog ではない）**。理由は §2.5。Datadog は有料で、採用しても実際に使わない構成になり「その上に乗る」という物語と矛盾する。Cloud Monitoring は **無料枠があり・GCP 中心の技術方針に合致し・既に次フェーズ Gateway として設計済み**。「Alerting Policy が発火 → その上に乗る」が文字通り成立する。
 
 ---
 
@@ -120,21 +120,9 @@
 
 ---
 
-## 3. ハッカソン審査基準への対応
-
-| 審査基準                              | 本プロダクトの当て方                                                                                      |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| 1. AIエージェントが価値の中心／自律性 | **自律的な証拠追加収集ループ**（analystが次に取る証拠を自分で判断）＋ADKマルチエージェント。"必然性" の核 |
-| 2. 課題へのアプローチ・ストーリー     | AI-SRE（調査→レビュー圧縮）。旬で一貫性のある物語                                                         |
-| 3. ユーザビリティ                     | バックオフィスで「証拠が積み上がる過程」を可視化。承認ボタン1つ                                           |
-| 4. 実用性・体験価値                   | MTTR短縮の実感。CI連携でPR起票まで自動                                                                    |
-| 5. 実装力                             | DDD/Clean/CQRS/EDA＋ポート段階移行。GCP（Gemini/ADK/Cloud Run）＋Elastic活用                              |
-
-> 「つくる（調査エージェント）・まわす（GitHub Actions/CI）・とどける（Cloud Runデプロイ）」を**シナリオ5で1ループに**収める。
-
----
-
 ## 4. 重要な技術方針の決定
+
+> 「つくる（調査エージェント）・まわす（GitHub Actions/CI）・とどける（Cloud Runデプロイ）」を**脆弱性シナリオで1ループに**収める。
 
 ### a2a は使わない
 
@@ -154,7 +142,7 @@
 
 ### 検知ソースは Cloud Monitoring・検知境界は外（ADR種）
 
-- 検知基盤に **Cloud Monitoring を採用**（Datadog は有料・物語と矛盾／Cloud Monitoring は無料枠・GCP 要件加点・設計済み）。
+- 検知基盤に **Cloud Monitoring を採用**（Datadog は有料・物語と矛盾／Cloud Monitoring は無料枠・GCP 中心の方針に合致・設計済み）。
 - 検知（dedup/相関/grouping/閾値発火）は**上流の責務＝境界の外**。`MonitoringEvent` は発火済みアラートを受ける。1 ingest = 1 Alert は「手抜き」でなく**境界を引いた結果として正しい**（§2.5）。
 - 検知ソースは peer な ingest アダプタ（Cloud Monitoring / CI / EC 自前イベント）。EC 自前イベントは Datadog 不在の**デモ stand-in** と正直に位置づける。
 - 被りは **(a) category オーナーシップ（主防御）＋ (b) dedupKey＋occurrenceCount（実装）＋ (c) 異症状・同一根本原因は AI 相関に委譲（エンジン化しない）** の3層。詳細は §2.5。
@@ -172,7 +160,7 @@
 
 ---
 
-## 5. インシデントのスコープと優先度（7/10締切）
+## 5. インシデントのスコープと優先度
 
 > 種類を増やして見せる発想は捨てる。**深さ優先**。a2a/Elastic/カテゴリの価値はインシデント種別と直交するので、新カテゴリをむやみに増やさない。
 
@@ -193,19 +181,19 @@
 
 ```
 進める順番（ファイル番号順）:
-  1. step4-1-strategy        ← 本書。前提セットアップ・意思決定（step4-1-strategy-todo）
+  1. step4-1-strategy        ← 本書。前提セットアップ・意思決定
   2. step4-2-monitoring-context ← Monitoringコンテキスト本体（最重要・最大）
   3. step4-3-backoffice-backend ← Express配線・SSE・ingest
   4. step4-4-backoffice-frontend ← UI（証拠パネル・承認・SSE）
 ```
 
-> 各スコープ内で「P0だけ先に全部 → P1 → stretch」と進めれば、途中で止まっても**常に提出可能な状態**を保てる。
+> 各スコープ内で「P0だけ先に全部 → P1 → stretch」と進めれば、途中で止まっても**常にリリース可能な状態**を保てる。
 
 ---
 
 ## 7. 予兆ブリーフィング（stretchⅡ・reactive → proactive）
 
-> **位置づけ**: P0 ＋ P1 ＋ 既存stretch（ADK in-process）が**全部着地した後**にのみ着手する capstone。設計は本書で今固め、実装は最後。間に合わなければ設計書とADRで語る。
+> **位置づけ**: P0 ＋ P1 ＋ 既存stretch（ADK in-process）が**全部着地した後**にのみ着手する capstone。設計は本書で今固め、実装は最後。
 
 > **2段階の予知（stretchⅡ→Ⅲ）**: 「予知」には粒度の違う2段がある。**stretchⅡ＝既知の未来シグナル × 蓄積記憶の LLM 突合**（本章の主題）、**stretchⅢ＝ログベース・イベントソーシング基盤の上に立つ予知ビュー**（§7.10）。Ⅱは小さく見せられ、Ⅲは moat を構造として獲得する。**Ⅱを Ⅲ の足掛かりになる形（§7.9 の `ForecastSignalSource` 継ぎ目）で作れば、Ⅱ→Ⅲ は再設計でなく「源を1個足す」追加**になる。だから**最初からイベントソーシングに倒さない**（薄い／障害寄りの現行 DomainEvent では予兆の母集団が足りずデモ価値が出ない）。
 >
@@ -227,7 +215,7 @@
 ### 7.2 なぜ差別化として強いか（既存への上乗せ価値）
 
 - **既存投資の伏線回収**: P1（InfraEvidence Gateway群）と P0（SimilarIncident記憶）を**再利用**するだけで成立。先行投資が「目的的」に見える構造。
-- **差別化軸が直交**: 既存stretch（ADK）は「どれだけ高度に作ったか」、予兆は「どんな独自価値か」。審査基準（自律性・必然性・体験）への効きは **予兆 > ADK**。
+- **差別化軸が直交**: 既存stretch（ADK）は「どれだけ高度に作ったか」、予兆は「どんな独自価値か」。プロダクト価値（自律性・必然性・体験）への効きは **予兆 > ADK**。
 - **統計MLでない**: フォージャストはレッドオーシャン＆データ大量要。本機能は **LLMによる"既知シグナルの突合推論"** なのでデモ規模でも成立する（→ ADR）。
 - **設計だけでも効く**: 「P0パイプラインを一切触らず、read-only Gateway＋記憶の再利用で予報能力を**追加的に**載せられる」＝アーキテクチャ拡張性の証明。
 
@@ -266,7 +254,7 @@
 
 ### 7.6 デモ方針（録画前提）
 
-- ハッカソンはデモ動画提出が通る。**ライブ安定動作のコストは不要**。「実際に動いた1回を録る」（捏造はNG）。
+- デモは録画前提。**ライブ安定動作のコストは掛けない**。「実際に動いた1回を録る」（捏造はNG）。
 - seed: 過去インシデント2〜3件＋ステージした未マージPR＋スケジュール。`/forecast` 起動でライブ生成 → 引用付きリスクをデモシナリオ6として収録。
 
 ### 7.7 見積もり（P1完了を前提とした増分・(B)採用）
@@ -485,7 +473,7 @@ stretchⅡ の予兆は「既知の未来シグナル × 過去インシデン�
 
 ### 8.1.2 ADK 調査エージェントの役割分担と既知/未知ルート分岐（v20 追加）
 
-> **位置づけ**: マルチエージェント（タスク18）の「**なぜ分割が必然か**」を構造で示す節。審査基準1（AIエージェントの自律性・必然性）の核。要点は **「エージェントを並べた」ではなく「ルートごとに必要なエージェントの部分集合だけを起動する」**——分割しているからこそ既知/未知で別ルートを引ける、という因果。
+> **位置づけ**: マルチエージェント（タスク18）の「**なぜ分割が必然か**」＝AIエージェントの自律性・必然性を構造で示す節。要点は **「エージェントを並べた」ではなく「ルートごとに必要なエージェントの部分集合だけを起動する」**——分割しているからこそ既知/未知で別ルートを引ける、という因果。
 
 #### (1) エージェント台帳（役割と read/write 境界）
 
@@ -727,7 +715,7 @@ infra/terraform/
 └── README.md
 ```
 
-- GitHub Actions に `terraform-plan`(PR時) / `terraform-apply`(main・手動承認) を追加。**WIF（Workload Identity Federation・GitHub OIDC）でキーレス認証**にし、長期 SA キーを排除（DevOps 面の加点）。
+- GitHub Actions に `terraform-plan`(PR時) / `terraform-apply`(main・手動承認) を追加。**WIF（Workload Identity Federation・GitHub OIDC）でキーレス認証**にし、長期 SA キーを排除。
 - Gemini は Terraform では「API 有効化＋SA(`aiplatform.user`)＋Secret Manager にキー」を作るのみ（モデルは provision 対象外）。
 - Cloud Function module は初手では作らない（§11.2・§11.3 のとおり webhook 直結＋worker write-through で不要）。
 

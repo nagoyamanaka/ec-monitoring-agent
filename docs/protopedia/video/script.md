@@ -1,7 +1,7 @@
 # 提出動画 台本（完成版 as-built・1:54.70）
 
 > **正（2026-07-08 確定）**: リポジトリ直下の完成編集版 **`ハッカソンtake003.mp4`**（1:54.70・1920×1080/30fps・H.264＋AAC）を台本の正とする。本書のカット表はその実内容（as-built）に全面更新済み。ナレーション文言は本編に焼き込まれた字幕（＝ナレ全文をテロップ表示するサブタイトル方式）から復元したもの。
-> 素材の由来: タイトルカードPNG＋`output/take004/part1`（予兆・Option B 反映）＋`output/take003/part2`（調査）＋`output/take003/part3`（学習）＋`output/take004/part4`（ドッグフーディング）。撮影は `scripts/video-capture/`（経緯・撮り直し手順は `docs/steps/step7-final-review-todo.md` §C/§D）。
+> 素材の由来: タイトルカードPNG＋`output/take004/part1`（予兆・Option B 反映）＋`output/take003/part2`（調査）＋`output/take003/part3`（学習）＋`output/take004/part4`（ドッグフーディング）。撮影は `scripts/video-capture/`。
 > 旧版の設計経緯（take002 豆腐事故→take003→Option B→take004 部分再撮影）は git 履歴参照。本書は「完成版に何が映っているか」を一次資料として保持する——ProtoPedia 文言・ピッチ台本・再編集はここに合わせる。
 
 > 話速実測: 全編で約470字/1:55（合成音声・ゆっくりめ）。

@@ -560,7 +560,7 @@ backoffice-backend.collect_monitoring_event_on_e_c_event_published
 
 e2-medium（vCPU×2, RAM×4GB）でRabbitMQ・MongoDB・EC backend・backoffice backend・frontendを同居させる構成。デモ時の留意点：
 
-- SSE接続はデモ審査員1〜2名分のみを想定。多数接続時はメモリ使用量に注意する
+- SSE接続はデモ閲覧者1〜2名分のみを想定。多数接続時はメモリ使用量に注意する
 - RabbitMQのprefetch数は低めに設定（推奨: 1〜5）。メッセージ処理の積み上がりを防ぐ
 - 本番構成ではプロセスをコンテナ分離しスケールアウト可能な設計になっている（Step 1のプロセス分割設計参照）
 
