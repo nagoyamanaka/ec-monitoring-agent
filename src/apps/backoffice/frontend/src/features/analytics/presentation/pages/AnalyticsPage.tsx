@@ -1,11 +1,13 @@
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
 import { useForecastNav } from "@features/forecast/presentation/ForecastProvider";
 import type { AnalyticsApi } from "../../infrastructure/analyticsApi";
-import type {
-  AnalyticsView,
-  ApprovedAlertSummaryDto,
+import {
+  selectLifecycleAlert,
+  type AnalyticsView,
+  type ApprovedAlertSummaryDto,
 } from "../../domain/AnalyticsView";
 import { eventInfo, eventTitle } from "@features/alerts/domain/eventCatalog";
 import { useAnalytics } from "../hooks/useAnalytics";
@@ -15,9 +17,12 @@ export interface AnalyticsPageProps {
 }
 
 /**
- * AI 分類の精度トラッキング（タスク11）。
- * backend `GET /analytics` の集計を Tremor で可視化する: 正答率ゲージ＋既知/未知ドーナツ＋件数カード。
- * 集計は read モデル（pull on-demand）。SSE には乗せない（step4-1 §10）。
+ * 学習の軌跡（Knowledge Lifecycle・U5）。
+ * 3幕 予防(Forecast)→対応(Alerts)→**学習(Analytics)** の締め。集計ダッシュボードを主役から降ろし、
+ * 「未知→AI調査→承認→既知昇格→再一致」の1本のライフサイクル物語を先頭に据える。
+ * データは既存 `GET /analytics`（approvedAlerts＋known/unknownCount）のみ＝新API・新contractsゼロ。
+ * 調査の実測（92秒/62件）は /analytics に無いので数値化せず、「AI調査」段から既存アラート詳細
+ * （証拠フロー）へ深リンクしてそこで見せる。
  */
 export function AnalyticsPage({ api }: AnalyticsPageProps) {
   const { analytics, status, error, refresh } = useAnalytics(api);
@@ -33,11 +38,11 @@ export function AnalyticsPage({ api }: AnalyticsPageProps) {
         <header className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-slate-100">
-              AI 分類の精度
+              学習の軌跡
             </h2>
             <p className="text-sm text-slate-300">
-              オペレーターの承認/却下フィードバックを母数に、AI
-              分類の正答率と既知/未知の内訳を集計します。
+              未知の障害を AI が調査し、人間が承認して既知パターンへ。
+              一度学べば次からは AI を呼ばず即確定します。使うほど調査は減り、対応は速くなります。
             </p>
           </div>
           <button
@@ -69,6 +74,221 @@ export function AnalyticsPage({ api }: AnalyticsPageProps) {
 }
 
 function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
+  const lifecycle = selectLifecycleAlert(analytics.approvedAlerts);
+  // 集計はチャート（recharts）を含むので、開いたときだけマウントする（初期描画を軽く保つ）。
+  const [aggregateOpen, setAggregateOpen] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      {/* ヒーロー: 1件の学習の軌跡（主役） */}
+      {lifecycle ? (
+        <KnowledgeLifecycleHero
+          alert={lifecycle}
+          knownCount={analytics.knownCount}
+        />
+      ) : (
+        <Card className="!bg-slate-900/40 !ring-slate-700/60">
+          <p className="py-10 text-center text-sm text-slate-400">
+            まだ学習の軌跡がありません。
+            <br />
+            未知のアラートを調査・承認すると、ここに「未知 → 承認 → 既知」の軌跡が現れます。
+          </p>
+        </Card>
+      )}
+
+      {/* 集計（内訳）は主役から降ろして折りたたみに従属化。 */}
+      <details
+        className="group rounded-tremor-default bg-slate-900/40 ring-1 ring-inset ring-slate-700/60"
+        onToggle={(e) => setAggregateOpen(e.currentTarget.open)}
+      >
+        <summary className="cursor-pointer list-none px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-300 transition hover:text-slate-100">
+          <span className="inline-flex items-center gap-2">
+            <span className="text-slate-500 transition group-open:rotate-90">
+              ›
+            </span>
+            集計で確かめる（正答率・既知/未知の内訳・件数）
+          </span>
+        </summary>
+        {aggregateOpen && (
+          <div className="border-t border-slate-700/60 p-4">
+            <AggregateBlock analytics={analytics} />
+          </div>
+        )}
+      </details>
+
+      {/* 蓄積された知識＝承認してクローズした過去の判断。深リンクは維持。 */}
+      <ApprovedAlertsSection alerts={analytics.approvedAlerts} />
+    </div>
+  );
+}
+
+/**
+ * ライフサイクル・ヒーロー。approvedAlerts の代表1件を横タイムラインで:
+ *   [未知] → AI調査（← ここだけ実測を既存アラート詳細へ深リンク） → [承認] → 昇格 → [既知]
+ * 具象LLM名は出さず「AI」で統一（設計＝ポートで具象非依存）。
+ */
+function KnowledgeLifecycleHero({
+  alert,
+  knownCount,
+}: {
+  alert: ApprovedAlertSummaryDto;
+  knownCount: number;
+}) {
+  const patternName = alert.patternName?.trim() || "（パターン未特定）";
+  const detailHref = `/alerts?focus=${encodeURIComponent(alert.id)}`;
+
+  return (
+    <Card className="!bg-slate-900/40 !ring-slate-700/60">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+        1件の学習の軌跡
+      </h3>
+      <p className="mt-1 text-xs text-slate-400">
+        未知の障害が、AI 調査と人間の承認を経て「既知パターン」になるまで。
+      </p>
+
+      <div className="mt-4 flex flex-col items-stretch gap-2 md:flex-row md:items-stretch md:gap-0">
+        {/* [未知] 入口 */}
+        <LifecycleStage tone="cyan" badge="未知" grow>
+          <p className="truncate text-sm font-medium text-slate-100">
+            {eventTitle(alert.eventName)}
+          </p>
+          {eventInfo(alert.eventName) && (
+            <code
+              className="mt-0.5 block truncate text-[11px] text-slate-500"
+              title={alert.eventName}
+            >
+              {alert.eventName}
+            </code>
+          )}
+          <p className="mt-1.5 truncate text-xs text-cyan-300" title={patternName}>
+            AI 推定: {patternName}
+          </p>
+        </LifecycleStage>
+
+        {/* AI調査コネクタ（唯一の深リンク＝実測はここ） */}
+        <LifecycleConnector />
+        <Link
+          to={detailHref}
+          aria-label={`${eventTitle(alert.eventName)} の AI 調査の実測（証拠フロー）を開く`}
+          className="shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/20 hover:ring-cyan-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        >
+          <p className="text-sm font-semibold text-cyan-200">AI 調査</p>
+          <p className="mt-0.5 text-[11px] text-cyan-100/80">
+            実測を開く →
+          </p>
+        </Link>
+        <LifecycleConnector />
+
+        {/* [承認] 知識化の瞬間 */}
+        <LifecycleStage tone="amber" badge="承認" grow>
+          <p className="text-xs text-slate-400">人間の判断＝知識化の瞬間</p>
+          <p className="mt-1 line-clamp-3 text-sm text-slate-100">
+            {alert.operatorNote?.trim() || "承認済み"}
+          </p>
+        </LifecycleStage>
+
+        {/* 昇格コネクタ */}
+        <div
+          aria-hidden
+          className="flex shrink-0 flex-col items-center justify-center self-center px-1.5 text-emerald-400/70"
+        >
+          <span className="md:hidden">▼ 既知パターンへ昇格</span>
+          <span className="hidden md:block">▶</span>
+          <span className="hidden text-[10px] text-emerald-400/60 md:block">
+            昇格
+          </span>
+        </div>
+
+        {/* [既知] 結論＝以後は調査ゼロで即確定 */}
+        <LifecycleStage tone="emerald" badge="既知" grow>
+          <p className="text-sm font-medium text-emerald-100">
+            再発は即確定（AI 調査なし）
+          </p>
+          {alert.occurrenceCount > 1 ? (
+            <p className="mt-1 text-xs text-slate-400">
+              このアラートは既に {alert.occurrenceCount} 回再一致
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-400">
+              次に同型が来たら調査せず即確定
+            </p>
+          )}
+        </LifecycleStage>
+      </div>
+
+      {/* 支えの数字は1つだけ＝knownCount を「AIを呼ばず即確定した件数」として提示。
+          既知一致は InvestigationReport 自体が無い＝「1秒未満」ではなく「調査ゼロ」で honest に。
+          vanity% は大書きしない（seed 依存＝数字のハルシネーション批判の的）。 */}
+      <div className="mt-4 flex items-baseline gap-3 rounded-tremor-default bg-slate-800/40 px-4 py-3 ring-1 ring-inset ring-slate-700/60">
+        <span className="text-2xl font-semibold tabular-nums text-emerald-300">
+          {knownCount}
+        </span>
+        <p className="text-xs text-slate-400">
+          <span className="text-slate-200">件</span>
+          が既知パターン一致で
+          <span className="text-emerald-300">
+            AI を呼ばず即確定
+          </span>
+          （調査ゼロ）。未知だけを AI エージェントが調査します。
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+const STAGE_TONE: Record<string, string> = {
+  cyan: "ring-cyan-500/30 bg-cyan-500/5",
+  amber: "ring-amber-500/30 bg-amber-500/5",
+  emerald: "ring-emerald-500/30 bg-emerald-500/5",
+};
+
+const BADGE_TONE: Record<string, string> = {
+  cyan: "bg-cyan-500/15 text-cyan-200 ring-cyan-500/30",
+  amber: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
+  emerald: "bg-emerald-500/15 text-emerald-200 ring-emerald-500/30",
+};
+
+function LifecycleStage({
+  tone,
+  badge,
+  grow,
+  children,
+}: {
+  tone: keyof typeof STAGE_TONE;
+  badge: string;
+  grow?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`min-w-0 self-stretch rounded-lg p-3 ring-1 ring-inset ${
+        STAGE_TONE[tone]
+      } ${grow ? "flex-1" : ""}`}
+    >
+      <span
+        className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${BADGE_TONE[tone]}`}
+      >
+        {badge}
+      </span>
+      <div className="mt-2 min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function LifecycleConnector() {
+  return (
+    <div
+      aria-hidden
+      className="flex shrink-0 items-center justify-center self-center px-1.5 text-cyan-500/70"
+    >
+      <span className="md:hidden">▼</span>
+      <span className="hidden md:block">▶</span>
+    </div>
+  );
+}
+
+/** 従属化した集計ブロック（旧トップ画面＝正答率ゲージ＋既知/未知ドーナツ＋件数カード）。 */
+function AggregateBlock({ analytics }: { analytics: AnalyticsView }) {
   const classificationData = [
     { name: "既知パターン一致", value: analytics.knownCount },
     { name: "未知（AI 調査）", value: analytics.unknownCount },
@@ -76,7 +296,6 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
 
   return (
     <div className="space-y-6">
-      {/* 上段: 正答率ゲージ ＋ 既知/未知ドーナツ */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="!bg-slate-900/40 !ring-slate-700/60">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
@@ -132,7 +351,6 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
         </Card>
       </div>
 
-      {/* 下段: 件数カード */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard label="総アラート" value={analytics.totalAlerts} />
         <StatCard
@@ -156,9 +374,6 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
           tone="rose"
         />
       </div>
-
-      {/* 承認済みアラート（過去の判断）。現役一覧＝要対処／ここ＝クローズ済みの判断記録。 */}
-      <ApprovedAlertsSection alerts={analytics.approvedAlerts} />
     </div>
   );
 }
@@ -191,7 +406,7 @@ function ApprovedAlertsSection({
     <Card className="!bg-slate-900/40 !ring-slate-700/60">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-          承認済みアラート（過去の判断）
+          蓄積された知識（承認済みアラート）
         </h3>
         <span className="text-xs text-slate-400">{alerts.length} 件</span>
       </div>
