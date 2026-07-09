@@ -81,7 +81,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
       {
         label: "未マージ PR",
         description:
-          "実リポジトリの open PR を全件 read（VM 縮小・キャッシュ TTL 短縮の draft PR ほか）",
+          "実リポジトリの open PR を全件 read（未マージの変更予定を実 URL 付きで拾う・台帳に無い PR が予報に出ても実在）",
         realness: "real",
       },
     ],
