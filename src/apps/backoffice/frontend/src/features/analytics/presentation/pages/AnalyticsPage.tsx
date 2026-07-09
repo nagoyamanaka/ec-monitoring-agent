@@ -5,6 +5,7 @@ import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
 import { useForecastNav } from "@features/forecast/presentation/ForecastProvider";
 import type { AnalyticsApi } from "../../infrastructure/analyticsApi";
 import {
+  patternLabel,
   selectLifecycleAlert,
   type AnalyticsView,
   type ApprovedAlertSummaryDto,
@@ -134,7 +135,7 @@ function KnowledgeLifecycleHero({
   alert: ApprovedAlertSummaryDto;
   knownCount: number;
 }) {
-  const patternName = alert.patternName?.trim() || "（パターン未特定）";
+  const cause = patternLabel(alert.patternName) ?? "（原因は調査中）";
   const detailHref = `/alerts?focus=${encodeURIComponent(alert.id)}`;
 
   return (
@@ -143,25 +144,23 @@ function KnowledgeLifecycleHero({
         1件の学習の軌跡
       </h3>
       <p className="mt-1 text-xs text-slate-400">
-        未知の障害が、AI 調査と人間の承認を経て「既知パターン」になるまで。
+        初めて見る障害が、AI の調査と人の承認を経て「次から即わかる知識」になるまで。
       </p>
 
       <div className="mt-4 flex flex-col items-stretch gap-2 md:flex-row md:items-stretch md:gap-0">
-        {/* [未知] 入口 */}
+        {/* [未知] 入口＝役割（初めて見る障害）を主役に、具体例は補足で */}
         <LifecycleStage tone="cyan" badge="未知" grow>
-          <p className="truncate text-sm font-medium text-slate-100">
-            {eventTitle(alert.eventName)}
+          <p className="text-sm font-semibold text-slate-100">
+            初めて見る障害
           </p>
-          {eventInfo(alert.eventName) && (
-            <code
-              className="mt-0.5 block truncate text-[11px] text-slate-500"
-              title={alert.eventName}
-            >
-              {alert.eventName}
-            </code>
-          )}
-          <p className="mt-1.5 truncate text-xs text-cyan-300" title={patternName}>
-            AI 推定: {patternName}
+          <p className="mt-1.5 text-xs text-slate-400">
+            既知パターンに無く、AI が一から調査
+          </p>
+          <p
+            className="mt-1 truncate text-xs text-slate-500"
+            title={alert.eventName}
+          >
+            例: {eventTitle(alert.eventName)}
           </p>
         </LifecycleStage>
 
@@ -179,12 +178,22 @@ function KnowledgeLifecycleHero({
         </Link>
         <LifecycleConnector />
 
-        {/* [承認] 知識化の瞬間 */}
+        {/* [承認] 知識化の瞬間＝役割（人が原因を確定）主役、原因ラベル＋承認メモは補足 */}
         <LifecycleStage tone="amber" badge="承認" grow>
-          <p className="text-xs text-slate-400">人間の判断＝知識化の瞬間</p>
-          <p className="mt-1 line-clamp-3 text-sm text-slate-100">
-            {alert.operatorNote?.trim() || "承認済み"}
+          <p className="text-sm font-semibold text-slate-100">
+            人が原因を確定
           </p>
+          <p className="mt-1.5 text-xs">
+            <span className="text-slate-400">原因例: </span>
+            <span className="text-amber-200" title={alert.patternName ?? cause}>
+              {cause}
+            </span>
+          </p>
+          {alert.operatorNote?.trim() && (
+            <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">
+              承認メモ: {alert.operatorNote.trim()}
+            </p>
+          )}
         </LifecycleStage>
 
         {/* 昇格コネクタ */}
@@ -192,25 +201,24 @@ function KnowledgeLifecycleHero({
           aria-hidden
           className="flex shrink-0 flex-col items-center justify-center self-center px-1.5 text-emerald-400/70"
         >
-          <span className="md:hidden">▼ 既知パターンへ昇格</span>
+          <span className="md:hidden">▼ 知識に昇格</span>
           <span className="hidden md:block">▶</span>
           <span className="hidden text-[10px] text-emerald-400/60 md:block">
             昇格
           </span>
         </div>
 
-        {/* [既知] 結論＝以後は調査ゼロで即確定 */}
+        {/* [既知] 結論＝役割（次回から即わかる）主役、調査ゼロを補足 */}
         <LifecycleStage tone="emerald" badge="既知" grow>
-          <p className="text-sm font-medium text-emerald-100">
-            再発は即確定（AI 調査なし）
+          <p className="text-sm font-semibold text-emerald-100">
+            次回から即わかる
           </p>
-          {alert.occurrenceCount > 1 ? (
-            <p className="mt-1 text-xs text-slate-400">
-              このアラートは既に {alert.occurrenceCount} 回再一致
-            </p>
-          ) : (
-            <p className="mt-1 text-xs text-slate-400">
-              次に同型が来たら調査せず即確定
+          <p className="mt-1.5 text-xs text-slate-400">
+            同じ障害は AI 調査なしで即確定
+          </p>
+          {alert.occurrenceCount > 1 && (
+            <p className="mt-1 text-[11px] text-emerald-300/80">
+              このパターンは既に {alert.occurrenceCount} 回再一致
             </p>
           )}
         </LifecycleStage>

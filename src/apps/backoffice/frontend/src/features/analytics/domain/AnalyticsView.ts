@@ -75,6 +75,29 @@ export function selectLifecycleAlert(
   return candidates.find((a) => a.occurrenceCount > 1) ?? candidates[0];
 }
 
+/**
+ * AI 推定パターン名（機械 ID）を審査員が一読で分かる人間語ラベルへ写す（U5・表示専用）。
+ * eventCatalog が eventName→日本語タイトルを引くのと同じ発想＝ID のローカライズであって
+ * データの捏造ではない。デモの既知パターンは辞書で日本語化し、未登録の UPPER_SNAKE_CASE は
+ * AlertCardExpanded と同じハウススタイル（`_`→空白・小文字）へ、それ以外は原文のまま返す。
+ */
+const PATTERN_LABELS: Record<string, string> = {
+  DB_CONNECTION_POOL_EXHAUSTION: "DB接続プールの枯渇",
+  PAYMENT_PROVIDER_OUTAGE: "決済プロバイダ障害",
+  PAYMENT_TIMEOUT: "決済タイムアウト",
+  INVENTORY_INSUFFICIENT: "在庫引当の不足",
+};
+
+const RAW_ID_PATTERN = /^[A-Z0-9]+(?:_[A-Z0-9]+)+$/;
+
+export function patternLabel(raw: string | null): string | null {
+  const name = raw?.trim();
+  if (!name) return null;
+  if (PATTERN_LABELS[name]) return PATTERN_LABELS[name];
+  if (RAW_ID_PATTERN.test(name)) return name.replace(/_/g, " ").toLowerCase();
+  return name;
+}
+
 export function toAnalyticsView(dto: AnalyticsDto): AnalyticsView {
   const accuracyPercent =
     dto.accuracy === null ? null : Math.round(dto.accuracy * 100);
