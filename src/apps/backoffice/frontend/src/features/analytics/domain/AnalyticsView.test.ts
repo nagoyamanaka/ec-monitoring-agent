@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AnalyticsDto,
   type ApprovedAlertSummaryDto,
+  patternLabel,
   selectLifecycleAlert,
   toAnalyticsView,
 } from "./AnalyticsView";
@@ -94,5 +95,27 @@ describe("selectLifecycleAlert", () => {
     expect(
       selectLifecycleAlert([approved({ classificationType: "known" })]),
     ).toBeNull();
+  });
+});
+
+describe("patternLabel", () => {
+  it("デモの既知パターンIDは日本語ラベルへ写す", () => {
+    expect(patternLabel("DB_CONNECTION_POOL_EXHAUSTION")).toBe(
+      "DB接続プールの枯渇",
+    );
+    expect(patternLabel("PAYMENT_PROVIDER_OUTAGE")).toBe("決済プロバイダ障害");
+  });
+
+  it("辞書外の UPPER_SNAKE は `_`→空白・小文字のハウススタイルへ", () => {
+    expect(patternLabel("SOME_UNKNOWN_PATTERN")).toBe("some unknown pattern");
+  });
+
+  it("機械IDでない文章はそのまま返す", () => {
+    expect(patternLabel("決済の一時的な失敗")).toBe("決済の一時的な失敗");
+  });
+
+  it("空・null は null（呼び出し側で placeholder に倒す）", () => {
+    expect(patternLabel(null)).toBeNull();
+    expect(patternLabel("  ")).toBeNull();
   });
 });

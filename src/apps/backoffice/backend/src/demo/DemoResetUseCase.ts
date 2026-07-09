@@ -35,12 +35,19 @@ export class DemoResetUseCase {
       await this.knownErrorPatternRepository.save(pattern);
     }
 
-    // 「類似・準既知」シナリオ用の解決済み事例を再seed。idempotent にするため、同じ由来 id の
-    // 過去 seed を先に撤回してから index する（reset を何度押しても1件に保つ）。
+    // 「類似・準既知」シナリオ用の解決済み事例を再seed。まずコーパスを全消去してクリーンスレートにする
+    // （removeByAlertId は seed 由来 id しか消せず、過去セッションで承認学習された別 id の事例が蓄積して
+    // 類似検索を汚す＝古い語彙の resolvedNote が表示に勝つ）。clear 未実装の fake backend では
+    // seed 由来 id の撤回にフォールバックして従来の冪等性を保つ。
+    if (this.similarIncidentRepository.clear) {
+      await this.similarIncidentRepository.clear();
+    }
     for (const incident of RESOLVED_INCIDENT_SEEDS) {
-      await this.similarIncidentRepository.removeByAlertId(
-        incident.sourceAlertId ?? SIMILAR_INCIDENT_SEED_SOURCE_ALERT_ID,
-      );
+      if (!this.similarIncidentRepository.clear) {
+        await this.similarIncidentRepository.removeByAlertId(
+          incident.sourceAlertId ?? SIMILAR_INCIDENT_SEED_SOURCE_ALERT_ID,
+        );
+      }
       await this.similarIncidentRepository.index(incident);
     }
 

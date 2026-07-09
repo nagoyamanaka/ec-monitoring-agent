@@ -6,7 +6,9 @@ import { ImpactPanel, FaultBadge } from "./ImpactPanel";
 import { EscalationPanel } from "./EscalationPanel";
 import { EvidenceFlowDiagram } from "./EvidenceFlowDiagram";
 import { RemediationReviewPanel } from "./RemediationReviewPanel";
+import { NextActionCard } from "./NextActionCard";
 import { alertReason } from "../../domain/alertReason";
+import { nextAction } from "../../domain/nextAction";
 import {
   documentationRows,
   isCloudMonitoringAutoSummary,
@@ -66,6 +68,9 @@ export function AlertCardExpanded({
   const report = alert.report;
   const reason = alertReason(alert);
   const known = alert.classification.type === "known";
+  // 「次のアクション」（対応フェーズの行動指示・タスク U6）: 他責＝暫定回避手順、既知/類似＝
+  // 当時の対応をなぞる。自責は既存の「推奨アクション」ブロックが担うため null（二重表示しない）。
+  const next = nextAction(alert);
   // 分類根拠の表示射影: 等価一致は1つの値に畳み、similarity の条件式はゲートとして分離する。
   const evidence = known
     ? classificationEvidence(alert.classification.matchedConditions)
@@ -310,17 +315,6 @@ export function AlertCardExpanded({
               {reason.crystallized && "（初回 AI 調査の結晶化を再利用）"}
             </p>
           )}
-          {/* 類似既知（SIMILARITY）が引いた解決済み事例の対応メモ＝「前回どう直したか」。
-              deep link（過去の同型事例）を開かずその場で想起できる学習の表示面。 */}
-          {alert.classification.type === "known" &&
-            alert.classification.resolvedNote && (
-              <p className="rounded-md bg-slate-800/60 px-3 py-2 text-xs leading-relaxed text-slate-200 ring-1 ring-inset ring-slate-700/60">
-                <span className="font-semibold text-slate-400">
-                  当時の対応メモ:{" "}
-                </span>
-                {alert.classification.resolvedNote}
-              </p>
-            )}
           {/* 判断材料のヒーロー行（タスク E8-C）: 自責/他責と障害規模を報告書の冒頭へ昇格
               ＝開いて5秒で「誰の責任で・どの規模か」が揃う。詳細（影響範囲・主体・引用）は
               下の影響評価パネルが担う（重複を許すのは fault/scale の2項目のみ）。 */}
@@ -403,6 +397,11 @@ export function AlertCardExpanded({
         </section>
       )}
 
+      {/* 次のアクション（既知/類似ルート）: AI 調査を起動しない既知は「結論＝該当パターン」の
+          直後に、過去/類似事例 or 既知パターンの対応（resolvedNote）を行動指示として昇格する。
+          他責（report あり）ルートはレポート本体側の結論直後に別配置する（origin で出し分け）。 */}
+      {next?.origin === "memory" && <NextActionCard next={next} />}
+
       {/* AI 調査レポート（未知パターン）。summary は要約（原因候補＋障害規模）のみ、
           full は報告用フル（調査ステップ・推奨アクション・影響評価・escalation・review）。 */}
       {report && (
@@ -474,29 +473,14 @@ export function AlertCardExpanded({
             </section>
           )}
 
-          {/* 「どうする」（推奨アクション）を根拠の直後・調査の道筋より先に置く（タスク E8-C:
-              読む順でなく判断する順）。 */}
-          {full && report.suggestedActions.length > 0 && (
-            <section className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                  推奨アクション
-                </h4>
-                {/* AI が「コードで直せる」と判定した場合のみ提示。remediate 実行の判断材料。 */}
-                {report.remediable && (
-                  <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
-                    コードで修正可能（AI 判定）
-                  </span>
-                )}
-              </div>
-              <ul className="list-disc space-y-1 pl-5 marker:text-cyan-500/70">
-                {report.suggestedActions.map((action, i) => (
-                  <li key={i}>
-                    <InvestigationItem item={action} />
-                  </li>
-                ))}
-              </ul>
-            </section>
+          {/* 次のアクション（タスク U6）: 結論（証拠の流れ／要約）の直後に「で、次にこれをやる」を出す。
+              自責＝推奨アクション手順（remediation・コード修正可能なら下の自動修正へ橋渡し）、
+              他責＝暫定回避手順（escalation・宛先/理由/根拠は下の EscalationPanel に従属）。origin で排他。
+              予兆の「今打てる先手」と対の視覚言語で全ルート共通の顔にする。
+              **要約（ドロワー）でも出す**＝「次に何をやるか」はトリアージそのもの（memory と同じく非 full）。
+              重い草案本体（宛先/影響全項目/レビュー）は full 限定のまま＝カードは行動指示に絞る。 */}
+          {(next?.origin === "remediation" || next?.origin === "escalation") && (
+            <NextActionCard next={next} />
           )}
 
           {/* 調査ステップは縦タイムライン（タスク E8-B）＝AI がたどった道筋を構造で見せる。 */}

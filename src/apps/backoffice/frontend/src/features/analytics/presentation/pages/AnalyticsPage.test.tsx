@@ -57,12 +57,18 @@ describe("AnalyticsPage 学習の軌跡ヒーロー", () => {
     const card = hero.closest("div");
     expect(card).not.toBeNull();
     const scope = within(card as HTMLElement);
+    // 各ステージは「役割の平易文」を主役に出す（生の技術文字列を主役にしない）。
     expect(scope.getByText("未知")).toBeInTheDocument();
+    expect(scope.getByText("初めて見る障害")).toBeInTheDocument();
     expect(scope.getByText("承認")).toBeInTheDocument();
+    expect(scope.getByText("人が原因を確定")).toBeInTheDocument();
     expect(scope.getByText("既知")).toBeInTheDocument();
+    expect(scope.getByText("次回から即わかる")).toBeInTheDocument();
+    // AI 推定パターンID は日本語ラベルへ人間語化して出す（機械IDを露出させない）。
+    expect(scope.getByText("DB接続プールの枯渇")).toBeInTheDocument();
     expect(
-      scope.getByText(/AI 推定: DB_CONNECTION_POOL_EXHAUSTION/),
-    ).toBeInTheDocument();
+      scope.queryByText(/DB_CONNECTION_POOL_EXHAUSTION/),
+    ).toBeNull();
   });
 
   it("AI調査ステップが該当アラート詳細へ深リンクする（唯一の深リンク）", async () => {

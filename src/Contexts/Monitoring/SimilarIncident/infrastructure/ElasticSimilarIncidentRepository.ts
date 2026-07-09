@@ -24,6 +24,7 @@ export const SIMILAR_INCIDENTS_INDEX_CONFIG = {
       },
       occurredOn: { type: "date" },
       resolvedNote: { type: "text" },
+      searchText: { type: "text" },
       resolvedAt: { type: "date" },
       severity: { type: "keyword" },
       sourceAlertId: { type: "keyword" },
@@ -36,6 +37,7 @@ type IncidentDoc = {
   eventName: string;
   occurredOn: string;
   resolvedNote: string;
+  searchText?: string;
   resolvedAt: string;
   severity: string;
   sourceAlertId?: string;
@@ -76,6 +78,9 @@ export class ElasticSimilarIncidentRepository
       eventName: incident.eventName,
       occurredOn: incident.occurredOn.toISOString(),
       resolvedNote: incident.resolvedNote,
+      ...(incident.searchText !== undefined
+        ? { searchText: incident.searchText }
+        : {}),
       resolvedAt: new Date().toISOString(),
       severity: incident.severity.value,
       ...(incident.sourceAlertId
@@ -83,6 +88,18 @@ export class ElasticSimilarIncidentRepository
         : {}),
     };
     await client.index({ index: this.indexName, id, body: doc, refresh: true });
+  }
+
+  // コーパス全消去（demo reset のクリーンスレート用）。過去セッションで承認学習された別 id の事例が
+  // 蓄積して類似検索を汚す（reset は seed 由来 id しか消せない removeByAlertId では足りない）ため、
+  // match_all の delete_by_query で index を空にしてから seed を index し直す。
+  async clear(): Promise<void> {
+    const client = await this.client;
+    await client.deleteByQuery({
+      index: this.indexName,
+      refresh: true,
+      body: { query: { match_all: {} } },
+    });
   }
 
   // 指定 Alert 由来の解決済みインシデントを撤回する（sourceAlertId 一致を delete_by_query）。
@@ -143,7 +160,8 @@ export class ElasticSimilarIncidentRepository
           incident,
           score: lexicalSimilarity(
             query.text,
-            `${incident.eventName} ${incident.resolvedNote}`,
+            // 突合は searchText（トークン最適化）優先・無ければ resolvedNote（InMemory と同義）。
+            `${incident.eventName} ${incident.searchText ?? incident.resolvedNote}`,
           ),
         };
       })
@@ -165,6 +183,9 @@ export class ElasticSimilarIncidentRepository
       eventName: incident.eventName,
       occurredOn: incident.occurredOn.toISOString(),
       resolvedNote: incident.resolvedNote,
+      ...(incident.searchText !== undefined
+        ? { searchText: incident.searchText }
+        : {}),
       resolvedAt: incident.resolvedAt.toISOString(),
       severity: incident.severity.value,
       ...(incident.sourceAlertId
@@ -179,6 +200,7 @@ export class ElasticSimilarIncidentRepository
       eventName: doc.eventName,
       occurredOn: new Date(doc.occurredOn),
       resolvedNote: doc.resolvedNote,
+      ...(doc.searchText !== undefined ? { searchText: doc.searchText } : {}),
       resolvedAt: new Date(doc.resolvedAt),
       severity: AlertSeverity.fromString(doc.severity),
       ...(doc.sourceAlertId ? { sourceAlertId: doc.sourceAlertId } : {}),

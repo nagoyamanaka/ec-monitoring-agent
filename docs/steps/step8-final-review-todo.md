@@ -12,8 +12,10 @@
 | U1  | Forecast UI: 収束ミニフロー＋引用コンパクト化（③＋②a） | ★★★★☆ | エージェント                    | **実装済（7/9・フロントのみ・contracts/edge 不変）／残=ローカル compose 目視＋フロントのみデプロイ（GET /forecast 200 維持）**                          |
 | U2  | 予兆シナリオ2本目: Valkeyキャッシュ・カスケード（①）   | ★★★★☆ | エージェント＋人間(PR)          | **実装済（7/9・seed+stub+台帳・全テスト緑）／残=H4 実draft PR＋ローカル実Gemini検証＋デプロイ（edge再起動→POST /forecast）**                            |
 | U3  | 推論説明のプロンプト強化（②b・U2と同一再生成に同乗）   | ★★★☆☆ | エージェント                    | **実装済（7/9・プロンプト＋stubのみ・contracts不変・全テスト緑）／残=U2と同一の実Gemini再生成で文面目視**                                               |
-| U4  | 【任意・U2着地後のみ】動画part1差し替え＋素材更新      | ★★★☆☆ | エージェント＋人間(編集/アップ) | 未                                                                                                                                                      |
+| U4  | ~~動画part1差し替え~~ → **U7へ吸収（撤回）**            | —     | —                               | 撤回（7/9）                                                                                                                                             |
 | U5  | Analytics を「学習の軌跡」へ転回（デプロイURL上積み）  | ★★★☆☆ | エージェント                    | **実装済（7/9・フロントのみ・contracts/AnalyticsResponse 不変・全テスト緑）／残=ローカル compose 目視＋フロントのみデプロイ（GET /forecast 200 維持）** |
+| U6  | アラート調査に「次のアクション」を全ルート統合         | ★★★★☆ | エージェント                    | **実装済（7/9・backend1行＋フロント・全緑411）／残=目視＋デプロイ**                                                                                     |
+| U7  | 動画を全編撮り直し（U1〜U6の到達点を反映）             | ★★★★☆ | 人間主体＋エージェント(撮影補助) | ⏳ 未（7/12締切・U4を吸収・要デプロイ前提）／**A台本改訂・B素材取り直し・C submission改訂・D撮影に分解済み（7/9）・字幕はハイブリッド確定**            |
 | T1  | 予報キャッシュの維持機構（審査期間の床）→ U0 に統合    | ★★★★★ | —                               | **済（7/9・`.github/workflows/forecast-keepwarm.yml` 新設）**                                                                                           |
 | T2  | 動画末尾にタイトルカード追記（締めの回収）             | ★★★★☆ | —                               | **済（7/9 ユーザー報告・outro追加済）**                                                                                                                 |
 | T3  | 数値ドリフト修正（1017→実測値）＋原稿の素材注記更新    | ★★★☆☆ | エージェント                    | 済                                                                                                                                                      |
@@ -204,7 +206,9 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 - **contracts 不変**（reasoning/preventiveAction のフィールドは既存のまま・文章品質のみ）。
 - 検証: `pnpm vitest run Forecast`（43件緑）／backend integration forecast（4件緑）／`tsc --noEmit` 緑。**残＝U2 の実 Gemini 再生成と同乗して文面目視**（この環境では実 Gemini 課金・不可）。
 
-## U4 【任意】動画 part1 差し替え＋素材更新 ★★★☆☆ — U2が7/10中に本番着地した場合のみ
+## U4 【撤回・U7へ吸収】動画 part1 差し替え＋素材更新 ~~★★★☆☆~~
+
+> **2026-07-09 撤回**: U6（次のアクション全ルート統合）まででアプリの「顔」が part1 外にも広がったため、部分差し替えでは不整合が残る。**全編撮り直し（U7）に一本化**。以下は U7 の part1 撮影手順として参照可（+α の Analytics B-roll は U7 に統合）。
 
 **価値**: 凍結素材（動画・ポスター・サムネ）側にも「予兆は複数シナリオ」が映る＝①〜③の効果を審査の主戦場に露出させる。ナレ・字幕はシナリオ固有名を言わないため**音声そのまま・映像だけ差し替え**が成立する。
 
@@ -264,9 +268,113 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 - 代表選定は純関数 `selectLifecycleAlert`（`AnalyticsView.ts`）に切り出し＝approvedAlerts から「unknown＋AI推定 patternName あり」を候補にし、**再発済み（occurrenceCount>1）を最優先→無ければ最新**を返す（seed 直後は再発ゼロなので最新の unknown を採用）。null なら empty state に劣化。UT4件で写像固定。**seed 検証（静的）**: reset 後の approvedAlerts は RESOLVED seed 6件すべて unknown＋patternName なので代表は非 null（最新＝`ec.checkout.latency_degraded`/2026-06-20）＝ヒーローは空にならない。
 - `AnalyticsPage.tsx` を再構成: ①ヒーロー「1件の学習の軌跡」＝**[未知]→AI調査→[承認]→昇格→[既知]** の横タイムライン（cyan/amber/emerald＝ポスター連続性）。**AI調査ステップだけ**が `/alerts?focus=<id>` へ深リンク（実測92秒/62件は既存アラート詳細の証拠フローで見せる＝盛らない）。②支えの数字は `knownCount` 1つだけ＝「**AIを呼ばず即確定（調査ゼロ）**」と honest 表現（「1秒未満」不採用・vanity% は出さない）。③正答率ゲージ/ドーナツ/件数5枚は `<details>`「集計で確かめる」に**従属化**（開いたときだけ recharts をマウント＝初期描画軽量化）。④承認済み一覧は「蓄積された知識」として下段に残し既存深リンク維持。
 - 具象LLM名（Gemini）は UI に出さず「AI」で統一（U1 と同じ規律＝ポートで具象非依存）。装飾コネクタは aria-hidden・唯一の操作リンクは aria-label 付きで支援技術に残す。
-- 検証: `backoffice-frontend` **397件**全緑（追加 selectLifecycleAlert 4＋AnalyticsPage ヒーロー 4）＋frontend `tsc --noEmit` 緑。**残＝ローカル compose 目視スクショ／フロントのみデプロイ後 GET /forecast 200 維持（edge 非再起動＝キャッシュ無傷）＋ `/analytics` 目視**。**contracts/edge/AnalyticsResponse 不変・新APIゼロ**。
+- **平易化（2026-07-09 追補・ユーザー指摘「具体すぎて何？ってならん？」）**: 各ステージを**「役割の平易文」主役・技術文字列は従属**へ。[未知]=「初めて見る障害／既知に無くAIが一から調査（例: チェックアウト遅延）」・[承認]=「人が原因を確定／原因: <日本語ラベル>／承認メモ: …(2行clamp)」・[既知]=「次回から即わかる／AI調査なしで即確定」。生 eventName の code 行はヒーローから撤去（下段の承認済み一覧には温存）。**AI推定パターンID（`DB_CONNECTION_POOL_EXHAUSTION` 等）は `patternLabel` 純関数で日本語ラベル化**（`DB接続プールの枯渇`・辞書外 UPPER_SNAKE は `_`→空白小文字・文章はそのまま＝eventCatalog と同じ ID ローカライズで捏造でない・生IDは title ホバーに退避）。
+- 検証: `backoffice-frontend` **401件**全緑（selectLifecycleAlert 4＋patternLabel 4＋AnalyticsPage ヒーロー 4）＋frontend `tsc --noEmit` 緑。**残＝ローカル compose 目視スクショ／フロントのみデプロイ後 GET /forecast 200 維持（edge 非再起動＝キャッシュ無傷）＋ `/analytics` 目視**。**contracts/edge/AnalyticsResponse 不変・新APIゼロ**。
 
 **動画側（任意・U4同梱時のみ）**: 台本 `video/script.md` の改善メモに**任意カット**として追記済み。**単独では動画を触らない**（カット6が学習を担保・再編集は U4 の part1 差し替えと同時のときだけ、outro 直前に Analytics ライフラインを2〜3秒 B-roll で足す選択肢）。
+
+## U6 アラート調査に「次のアクション」を全ルート統合 ★★★★☆ — フロント＋1行backend ✅
+
+**なぜやるか**: 調査レポートは「何が起きたか（原因・影響）」は語るが、作業者/AI審査員が最も欲しい「**で、次に何をやるか**」が読みにくい（自責は推奨アクション、他責は暫定回避手順が草案の底、既知は行動指示なし）。予兆は「今打てる先手」を主役に据えているのに、対応（アラート）側に対の行動指示が揃っていなかった。**全ルートで「何が起きた → 次にこれをやる → 誰に渡す」の読み順**にし、予兆と対の視覚言語で統一する。
+
+**設計方針**: `nextAction(alert)` 純関数で供給源を1つに決め、予兆「今打てる先手」と対の視覚言語（cyan・盾）の `NextActionCard` で結論直後に出す。origin で排他（各ルートは排他なので実質は分類）:
+- **remediation**（自責・report.suggestedActions あり）: 推奨アクション手順（リンク付きリスト）。`remediable` なら「コードで修正可能（AI判定）」バッジ＋下の**自動修正（シナリオ4）への橋渡し1行**。
+- **escalation**（他責・report.escalation あり）: 暫定回避手順を昇格。エスカレーション草案は「宛先/理由/重大度根拠＝誰に渡すか」に従属化（暫定回避手順は草案から除去＝二重表示しない）。
+- **memory**（既知/類似・AI 調査レポートなし）: `resolvedNote`（当時の対応）をなぞる。SIMILARITY は一致事例の対応、**EXACT_MATCH は既知パターンの `suggestedAction`**。
+
+**シナリオ4リメディエーションとの役割分担（両立・非競合）**: 「次のアクション」＝**何をやるべきかの助言（全ルート・常に出す）**。自動修正パネル（シナリオ4の `RemediationPanel`「修正を起票」）＝**コードで直せる部分だけの自動実行（ドラフトPR起票）**。前者が方針、後者がその実装レイヤ。`remediable` バッジ＋footnote が両者を橋渡しする（助言→「コードで直せるものは下の自動修正から」）。
+
+**実装（2026-07-09・実装済・全緑）**:
+- backend 1行: `KnownPatternRule` が EXACT_MATCH でも `pattern.suggestedAction`（空でなければ）を既存の `resolvedNote` フィールドへ載せる＝**contracts 変更ゼロ**（`resolvedNote` は KnownAlertClassificationPrimitives に既存・toPrimitives/toClassificationView とも generic 通過）。決済タイムアウト（EXACT_MATCH）にも「決済サービスのステータス確認→手動再処理」が出るように。契約コメントを SIMILARITY 限定→既知全般に更新。
+- frontend: `domain/nextAction.ts`（純関数＋判別ユニオン＝remediation は steps、escalation/memory は text）／`presentation/components/NextActionCard.tsx`（新設）。`AlertCardExpanded` に配線＝memory は分類結論の直後（report 有無に依らず）、remediation/escalation は report 本体の結論直後（full 限定・旧「推奨アクション」セクションを置換）。インライン「当時の対応メモ」は撤去し card へ昇格。`EscalationPanel` から「暫定回避手順」行を除去。
+- 検証: backend unit **1101件**全緑（KnownPatternRule +2）／`backoffice-frontend` **411件**全緑（nextAction 6・NextActionCard 4・AlertCardExpanded 更新）＋`tsc --noEmit` 緑。**残＝ローカル compose 目視（自責=DBプール・他責=決済拒否/タイムアウト・既知の4画面）／フロントのみ＋backend 1行のためデプロイは edge 再起動を伴う（U0 keepwarm 前提）**。
+
+**動画影響**: **あり**＝全ルートのレポート「顔」が変わる（自責の推奨アクションも card 化）。→ **U7 で全編撮り直し**（ユーザー合意 2026-07-09・動画は全て取り直す方針）。
+
+**追補（2026-07-09・2件の指摘対応・全緑）**:
+- **ドロワー（要約）にも次のアクションを表示**: remediation/escalation カードを `full` ゲートしていたため、初回・未知（自責3b/4・他責）のドロワーに出ず、既知化（memory・非ゲート）した時だけ出る非対称があった。→ ゲートを外し要約でも出す（「次に何をやるか」はトリアージそのもの）。重い草案本体（EscalationPanel/ImpactPanel/Review）は full 限定のまま。
+- **シナリオ2の次のアクションが意味不明（トークン羅列）を seed＋reset で修正**: 2段の原因があった。
+  - (a) **表示と突合の相乗り**: `ResolvedIncidentSeed` の `resolvedNote` が Jaccard(0.714) 用の英語トークン（"provider unavailable; payment declined; provider failover"）を兼ねていた。→**分離**＝`ResolvedIncident`/`SimilarIncident` に `searchText?`(突合トークン) を追加し `documentText` は `searchText ?? resolvedNote`（InMemory/Elastic 両方）。seed の resolvedNote を可読な対応文へ戻し tokens は searchText へ＝**0.714 数値不変**（seed テスト緑）。
+  - (b) **ES コーパス汚染で seed 修正が効かない（真因）**: ローカル ES `similar-incidents` に過去セッションの承認学習事例が **34件（うち別 sourceAlertId 30件）** 蓄積。reset は seed 由来 id しか消せない `removeByAlertId` だったため古いトークン事例が残り、同点0.714でタイ→表示に勝っていた。→**`SimilarIncidentRepository.clear?()` を新設（InMemory/Elastic）し DemoResetUseCase が seed 前に全消去**（fake は未実装で removeByAlertId フォールバック）。**ライブ検証**: 再起動→reset で declined 事例 34→**1件（可読）**、シナリオ2実注入の SIMILARITY 分類 resolvedNote が可読文になることを API で確認済み。過去の同型事例「当時の対応」も同時に可読化。
+
+## U7 動画を全編撮り直し（U1〜U6 の到達点を映像へ反映）★★★★☆ — 人間主体・締切7/12 ⏳
+
+**方針転換（2026-07-09 ユーザー合意）**: U4 の「part1だけ差し替え」は**撤回**。U1（予報カード収束フロー）・U2（予兆2枚目）・U5（Analytics学習）・U6（次のアクション全ルート統合）で**アプリの「顔」が広範に更新**されたため、凍結素材（動画take003/004）とのドリフトが part1 に留まらない。**全編を新規撮影**して as-built を一致させる。→ **U4 はこの U7 に吸収（superseded）**。
+
+**字幕方針の確定（2026-07-09 ユーザー合意）＝ハイブリッド**: 全文ナレ複写字幕は撤去し「見る動画」へ。ただし**キーワード名札＋信頼性フレーズだけ短文テロップで残す**（全削除はしない）。根拠＝審査員は無音・倍速・非同期でまとめ見するため、音声一本化はミュート視聴で最大の差別化（実在照合・偽引用ドロップ・批判役・次のアクション）を失う。字幕は「今どの画面（Forecast/Alerts/Analytics）か」の名札とUIモーションで自明にならない信頼性主張に限定し、UIを隠さない（画面端・小さめ・1〜2語）。
+
+**このU7タスクの構成**: 撮影自体の前に、まず(A)台本改訂・(B)素材取り直しTODO・(C)submission改訂を仕上げ、その上で(D)撮影〜差し替えを実行する。A〜Cはエージェント可、Dは人間主体。
+
+**前提**: U1/U2/U5/U6 が**本番デプロイ済み**であること（撮影は本番URL or ローカル compose の最新ビルド）。U0 keepwarm 稼働下で `POST /forecast` 再生成→ `GET /forecast` 200 を確認してから撮る。
+
+### U7-A 台本改訂（撮影台本を新設・script.md は as-built 温存）✅（2026-07-09）
+
+> **実施済**: `docs/protopedia/video/script-u7-shoot.md` を新設（take005 撮影台本＝ハイブリッド字幕＋新アプリ状態）。現行 `video/script.md` は**公開中 take003 の as-built（一次資料）として温存**し、上書きしない——撮影・差し替え（U7-D）完了時に script.md を take005 で全面更新して初めて置き換える（新動画が存在する前に as-built を壊さないため）。テロップ割り当て11行・信頼性フレーズ2本固定・撮影手順・撮影後チェックリストを撮影台本側に収録。以下は改訂の設計根拠（参照用）。
+
+**改訂点**:
+1. **字幕トラックの全面書き換え**: 各カットの「字幕（全文）」欄を撤去し、代わりに**キーワードテロップ欄**を新設。ナレーション欄はそのまま残す（音声は据置＝シナリオ固有名を言わない設計なので流用可）。テロップの割り当ては下表:
+
+   | 位置 | 画面 | テロップ（大・画面端） | 種別 |
+   | --- | --- | --- | --- |
+   | 0:00-0:05 | タイトルカード（既存） | 既存Heroコピー | ブランド |
+   | 予防 | 予報カード（U1収束フロー） | 障害を、起きる前に予報 | 名札 |
+   | 予防 | リスク2枚（U2） | リスクは複数、同時に | 名札 |
+   | 予防 | 引用チップ | 根拠は実在シグナルだけ | **信頼性** |
+   | 対応 | ライブ調査（8エージェント） | 未知はAIが自律調査 | 名札 |
+   | 対応 | 証拠パネル | 結論には、実在する証拠だけ | **信頼性** |
+   | 対応 | 次のアクション（U6） | 原因だけでなく、次の一手まで | 名札 |
+   | 学習 | 承認→既知 | 人が承認して学習／次はAI不要 | 名札 |
+   | 学習 | Analytics（U5） | 学習の軌跡 | 名札 |
+   | ドッグ | CVE→PR #29 | 自分自身も、直す | 名札 |
+   | outro | タイトルカード（T2） | ブランド回収 | ブランド |
+
+2. **新アプリ状態の反映**（カット記述＝on-screenの見え）: 予報カードに収束ミニフロー＋コンパクト引用＋**2枚のリスクカード**（flagship＋Valkey）／アラート調査の結論直後に**「次のアクション」カード**／Analyticsは「学習の軌跡」ヒーロー。
+3. **ナレの微修正（該当カットのみ・任意）**: 「次のアクション」に触れるなら1文だけ再録（例: 「原因だけでなく、次にやるべき対処と引き継ぎ先まで提示します」）。触れないなら音声は完全据置。
+4. **撮影対象3ルートの明記**（次のアクションを1本ずつ映す価値）: ①自責（DBプール＝手順＋「コードで修正可能」→自動修正PR）②他責（決済拒否/タイムアウト＝暫定回避＋エスカレーション草案が従属）③既知/類似（AI調査なしで前回の対応を即提示＝学習の速さ）。
+
+**受け入れ条件（A）**: ✅ 撮影台本 `script-u7-shoot.md` の全カットに「キーワードテロップ」欄が入り全文字幕欄が無い・信頼性フレーズ（「根拠は実在シグナルだけ」「結論には、実在する証拠だけ」）が2箇所テロップで残る・新アプリ状態（予報2枚・収束フロー・次のアクション・Analytics学習）がカット記述に反映されている・script.md（as-built）は温存。
+
+### U7-B 素材取り直しTODO（poster/thumbnail・撮影後に実行）
+
+U1/U2/U5/U6 で「顔」が変わったため take003/004 由来のポスター・サムネは陳腐化。**take005 撮影後に再生成**する。
+
+| 素材 | 変化理由 | 取り直し | 生成元 |
+| --- | --- | --- | --- |
+| `poster-1-hero.png`（予報カード） | U1収束フロー＋U2の2枚 | **必須** | take005 part1 `01-forecast-card` |
+| `video-thumbnail.png`（予報クローズアップ） | 同上 | **必須** | take005 part1 |
+| `poster-5-known.png`（既知即決） | U6「次のアクション」card追加で画面変化 | **要** | take005 part3 `01-known-instant` |
+| `poster-3-live-agents.png`（ライブ調査） | SSEタイムライン自体は不変だが take統一のため | 推奨 | take005 part2 |
+| `poster-4-evidence.png`（証拠パネル） | パネル自体は不変・周辺のみ変・take統一のため | 推奨 | take005 part2 |
+| `architecture.png`（B1） | 不変 | **据置** | — |
+
+**手順**: `TAKE=take005 node scripts/video-capture/make-posters.mjs`（poster全面）＋ `TAKE=take005 node scripts/video-capture/make-thumbnail.mjs`。焼き込みコピーは step7 B2 の表を踏襲。**受け入れ条件（B）**: 5枚とも 16:9・ダーク・豆腐なし・コピー可読・**予報カードが2枚＋収束フロー**で映る（poster-1）。
+
+### U7-C submission 改訂（`protopedia-submission.md` を現状へ）✅（2026-07-09・L116のみD待ち）
+
+- ✅ **L100/README 数値ドリフト再発**: 「ユニットテスト 1070件」→ `pnpm test`（ルート vitest workspace）実測 **1103件・155ファイル全緑** へ更新（submission:100・README:14 の両方）。
+- ✅ **L87 引用リンク主張**: U2 で Valkey plan は合成seed・非リンク。「いずれも実在リンク」を撤去し「リンクは実在するものだけで、合成の監視対象シグナルはバッジで明示」へ緩和＋「リスクは1つとは限らず複数を同時に予報」を追記（2枚構成と一致）。
+- ✅ **特徴2 に U6「次のアクション」を追記**: 「何が起きたかだけでなく、次にやるべき対処と引き継ぎ先まで提示（自責=修正手順／他責=暫定回避＋エスカレーション／既知=前回の対応）」。
+- ✅ **特徴3 に U5「学習の軌跡」を反映**: Analytics で「Unknown→AI調査→承認→Known→再一致」を1本の物語として可視化する旨を追記。
+- ⏳ **L116 動画の正**: `ハッカソンtake003.mp4` → 撮影後 take005 版へ更新（**U7-D 完了時**・現時点は take003 が公開中なので温存）。
+- 据置: システム構成の「Gemini 2.5 Pro/Flash」表記はピッチ文脈なので残す（UI からの具象LLM名排除は UI 限定の規律・submission/アーキ図は言及可）。
+
+**受け入れ条件（C）**: ✅ `grep -rn "1070\|1017" README.md docs/protopedia/` が 0 件（実測一致）・引用リンク主張が2枚構成と矛盾しない・次のアクション/学習の軌跡が特徴に載る。残＝L116 の動画参照更新（U7-D）。
+
+### U7-D 撮影・編集・アップロード（人間主体＝H5）
+
+1. `POST /demo/reset` → 予報再生成確認 → シーン別に `RESET=1 TAKE=take005 node scripts/video-capture/capture.mjs <scene>`（forecast/investigation/learning/analytics/dogfooding）。capture.mjs にシーン不足があれば既存に倣い追加。C2 の落とし穴（dedup・`POST /demo/reset` 先行）に注意。
+2. 編集（人間）: 新カットで通しを再構成・**字幕はU7-Aのキーワードテロップのみ焼き込み**（全文字幕は入れない）・outro タイトルカード（T2）は末尾に維持・×N倍速バッジは実測区間に合わせて再計算。総尺 2:00 以内。
+3. U7-B（素材再生成）を実行。
+4. アップロード差し替え（人間・**チェックリスト＝差し替え漏れが失点源**）:
+   - [ ] YouTube 新版アップ（動画差し替え不可＝**新URL**）・サムネ設定
+   - [ ] ProtoPedia の動画URL・poster・サムネを新版へ更新
+   - [ ] 旧YouTube動画を非公開化（審査員が旧版に迷い込まない）
+   - [ ] `video/script.md` の as-built（カット表・素材構成表・完成版チェック）を take005 で全面更新
+   - [ ] U7-C（submission/README の数値・動画参照）を反映
+
+**中止/縮退基準**: 7/12 に間に合わない場合は、最低限 part1（予報2枚）＋investigation（次のアクション1ルート）だけでも新規に差し替え、learning/dogfooding は旧素材流用の**部分差し替え**に縮退（全編断念より、更新の主戦場＝予報と次のアクションを優先）。字幕のハイブリッド化（全文撤去＋キーワード）は縮退時も**全カットに適用**（編集作業のみで撮り直し不要のため）。
+
+**受け入れ条件（U7全体）**: 完成版の本編に「予報2枚」「次のアクション（最低1ルート・できれば3ルート）」「Analytics学習」が映り、**全文字幕が無くキーワードテロップ＋信頼性フレーズのみ**、最終フレームがブランド（T2）で終わる。ProtoPedia/YouTube が新版で差し替わっている。
 
 ## T5 提出直前の最終疎通リハ（人間・7/12 提出直前）★★★☆☆
 
@@ -289,7 +397,7 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 | H2  | ~~YouTube アップロード~~          | 済（7/9報告）。U4実施時のみ新URL再アップ＋ProtoPedia更新                                                                                                                                                                                                                                                                                            |
 | H3  | 審査終了後の後始末                | forecast-keepwarm.yml の無効化・PR #83/（H4 実施時のみそのPR）クローズ可否判断                                                                                                                                                                                                                                                                      |
 | H4  | 【任意】Valkey maxmemory draft PR | plan-2 は合成 seed 非リンクで確定＝**必須ではない**。Valkey の未来変更を実 PR で見せたい場合のみ、ブランチ `chore/valkey-maxmemory-shrink`（用意済＝`docker-compose.prod.yml` valkey `--maxmemory 2gb`）を push→draft PR 作成（base develop・DO NOT MERGE）。**「未マージPR」チップ**として live 表示（terraform plan とは名乗らない・config 不要） |
-| H5  | U4 の編集・アップロード           | part1差し替え編集＋U4チェックリスト消化                                                                                                                                                                                                                                                                                                             |
+| H5  | U7-D 撮影・編集・アップロード     | 全編撮り直し（U4吸収）＝**U7-A台本改訂/U7-C submission改訂を先に仕上げてから**新カット撮影→編集（**ハイブリッド字幕＝全文撤去＋キーワードテロップのみ**）→U7-B素材再生成→YouTube新URL＋ProtoPedia差し替え＋旧版非公開＋script.md as-built更新。**要 U1/U2/U5/U6 デプロイ済み**                                                                                                                                                                                                       |
 
 ## 完了の定義（優秀賞ラインの床・最終形）
 
@@ -301,4 +409,5 @@ Terraform plan（Valkey メモリ縮小・合成seed） × 未マージPR（cach
 - [ ] 【上積み】予報カードが「入力→推論→結論→先手」で読める（U1）
 - [ ] 【上積み】本番 `/forecast` に2本目のシナリオ（U2・flagship 無傷が条件）
 - [x] 【上積み】デプロイURLの `/analytics` が学習の軌跡物語で締まる（U5・フロントのみ・新APIゼロ）＝実装済（7/9・全テスト緑）／残=目視＋フロントのみデプロイ
-- [ ] 【任意】動画 part1 に2カードが映る（U4・チェックリスト完走が条件）
+- [x] 【上積み】アラート調査が「何が起きた→次にこれをやる→誰に渡す」で全ルート読める（U6・自責/他責/既知に次のアクション統合）＝実装済（7/9・backend1行＋フロント・全緑411）／残=目視＋デプロイ
+- [ ] 【天井】動画を全編撮り直し（U7・予報2枚＋次のアクション＋Analytics学習を映す・U4吸収）＝要デプロイ前提・7/12締切
