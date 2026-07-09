@@ -77,6 +77,10 @@ export const config = {
     pendingPlanPrUrl:
       process.env.FORECAST_PENDING_PLAN_PR_URL ??
       "https://github.com/nagoyamanaka/ec-monitoring-agent/pull/83",
+    // U2 plan-2（Valkey maxmemory 縮小）は**合成 seed のまま非リンク**にする。Valkey は VM 上の
+    // compose プロセスで terraform 単独リソースを持たず、本物の terraform plan を作れない
+    // （VM metadata 経由にすると address が backbone VM になり flagship と subject 衝突するため不採用）。
+    // Valkey シナリオの実クリック証拠は過去インシデント（inc-3/4→実 Alert）が担保する。
   },
   demo: {
     enabled: process.env.DEMO_ENABLED === "true",

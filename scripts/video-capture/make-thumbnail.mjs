@@ -7,8 +7,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-// Option B（VM 予報）反映のため既定を take004 に（TAKE env で上書き可）。
-const TAKE = process.env.TAKE ?? "take004";
+// 最新テイク（U1 収束フロー＋U2 予報2枚）を既定に（TAKE env で上書き可）。
+const TAKE = process.env.TAKE ?? "take005";
 const SRC = resolve(HERE, `output/${TAKE}/screens/part1-forecast/01-forecast-card.png`);
 const OUT = resolve(HERE, "../../docs/protopedia/assets/video-thumbnail.png");
 

@@ -30,17 +30,22 @@ describe("ForecastDemoConsole", () => {
     expect(screen.getByText("いつ負荷が来るか")).toBeInTheDocument();
     expect(screen.getByText("過去の同型事例")).toBeInTheDocument();
     expect(screen.getByText("過去に何が起きたか")).toBeInTheDocument();
-    // 種類の中に材料行が並ぶ
-    expect(screen.getByText("未適用の Terraform plan")).toBeInTheDocument();
+    // 種類の中に材料行が並ぶ（U2: 未来の変更に Valkey plan 行が加わり計2 plan＋PR）
+    expect(
+      screen.getByText("未適用の Terraform plan（VM 縮小）"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("未適用の Terraform plan（Valkey 縮小）"),
+    ).toBeInTheDocument();
     expect(screen.getByText("未マージ PR")).toBeInTheDocument();
     expect(screen.getByText("負荷スケジュール")).toBeInTheDocument();
     expect(screen.getByText("過去の解決済み事例")).toBeInTheDocument();
-    // 正直さ: 未来の変更は実データ（open PR）＋実plan（実 PR #83 の CI plan を固定投入）＝実在。
-    // スケジュール・過去事例の2つだけが合成 seed。open PR は全件 read＝台帳に無い PR が予報に
-    // 現れても嘘にならない文言。
+    // 正直さ: 実データ（open PR）＋実plan（実 PR #83 の CI plan を固定投入）は実在。
+    // Valkey plan・スケジュール・過去事例の3つが合成 seed（Valkey plan は実 PR を持たない）。
+    // open PR は全件 read＝台帳に無い PR が予報に現れても嘘にならない文言。
     expect(screen.getAllByText("実データ")).toHaveLength(1);
     expect(screen.getAllByText("実plan")).toHaveLength(1);
-    expect(screen.getAllByText("合成seed")).toHaveLength(2);
+    expect(screen.getAllByText("合成seed")).toHaveLength(3);
     expect(screen.getByText(/open PR を全件 read/)).toBeInTheDocument();
   });
 

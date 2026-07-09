@@ -6,7 +6,12 @@ import { SimilarIncident } from "./SimilarIncident.js";
 export type ResolvedIncident = {
   readonly eventName: string;
   readonly occurredOn: Date;
+  // 人間が読む「当時どう直したか」＝ UI の「次のアクション（前回の対応）」に出す本文。
   readonly resolvedNote: string;
+  // 字句類似（Jaccard）のインデックス本文。表示と突合を分離するための任意フィールド＝
+  // 未指定なら resolvedNote にフォールバック（後方互換）。可読な resolvedNote では和文 bigram や
+  // 英文の機能語でトークンが膨れてスコアが動くため、突合に効かせる語彙はここに固定する。
+  readonly searchText?: string;
   readonly severity: AlertSeverity;
   // 元になった解決済み Alert の id（UI ディープリンク用の back-link）。
   readonly sourceAlertId?: string;
@@ -35,6 +40,10 @@ export interface SimilarIncidentRepository {
   // 指定 Alert 由来の解決済みインシデントを撤回する（sourceAlertId 一致を全削除）。
   // 承認のやり直し（承認→却下/取消）で誤った学習を残さないために使う。該当なしは no-op。
   removeByAlertId(sourceAlertId: string): Promise<void>;
+  // コーパス全消去（demo reset のクリーンスレート用・任意実装）。removeByAlertId は seed 由来 id しか
+  // 消せず、過去セッションで承認学習された別 id の事例が蓄積して類似検索を汚す。reset は clear で全消去
+  // してから seed を index し直す。永続 backend を持たない fake は未実装でよい（optional）。
+  clear?(): Promise<void>;
   // graded confidence 分類用のスコア付き検索（SimilarPatternRule が利用）。
   search(query: SimilarSearchQuery): Promise<ScoredIncident[]>;
 }

@@ -14,8 +14,9 @@ const screensDir = (take) => resolve(HERE, `output/${take}/screens`);
 
 // #（Hero を除く連番）, 元スクショ, 焼き込みコピー, 出力名, take（省略時は BASE_TAKE）
 const POSTERS = [
-  // Hero は Option B（VM 予報＋plan-1→#83）の take004 から。3/4/5 は part2/part3 由来で据置。
-  { n: 1, src: "part1-forecast/01-forecast-card.png", copy: "障害は、起きる前に終わらせる。", out: "poster-1-hero.png", hero: true, take: "take004" },
+  // Hero は最新テイク（U1 収束フロー＋U2 の予報2枚）から＝BASE_TAKE（TAKE env）に追従。
+  // U7: take004 のハードコードを撤去し、TAKE=take005 で hero も take005 に更新されるようにした。
+  { n: 1, src: "part1-forecast/01-forecast-card.png", copy: "障害は、起きる前に終わらせる。", out: "poster-1-hero.png", hero: true },
   { n: 3, src: "part2-investigation/03-live-timeline.png", copy: "8つのAIエージェントが、ライブで調査する。", out: "poster-3-live-agents.png" },
   { n: 4, src: "part2-investigation/06-evidence-panel.png", copy: "結論には、実在する証拠だけ。", out: "poster-4-evidence.png" },
   { n: 5, src: "part3-learning/01-known-instant.png", copy: "二度目の同じ障害は、1秒で終わる。", out: "poster-5-known.png" },

@@ -1,23 +1,19 @@
 # 設計書（step 系）索引
 
-> ここは**設計の経緯・理由を残す歴史的ドキュメント**の置き場。実装が進んでおり、記述が現状と食い違う箇所がある。**現状の正はコードと [docs/architecture.md](../architecture.md)**。
+> ここは**設計の経緯・理由を残す歴史的ドキュメント**の置き場。実装が進んでおり、記述が現状と食い違う箇所がある。**現状の正はコードと [docs/architecture.md](../architecture.md)**。意思決定の要約は [docs/decisions/ADR.md](../decisions/ADR.md) を参照。
 
 | ファイル | 内容 | 状態 |
 | --- | --- | --- |
-| [project-prompt.md](project-prompt.md) | 設計エージェント向けマスタープロンプト（全体像・v19系） | 歴史的（ドリフトあり・下記） |
-| [step1-directory-structure.md](step1-directory-structure.md) | ディレクトリ構成 | 確定 |
+| [step1-directory-structure.md](step1-directory-structure.md) | ディレクトリ構成（DDD + Clean Architecture + CQRS + EDA） | 確定 |
 | [step2-domain-model.md](step2-domain-model.md) | EC ドメインモデル | 確定 |
-| [step3-application-layer.md](step3-application-layer.md) / [todo](step3-application-todo.md) | EC アプリケーション層 | 確定 |
-| [step4-1-strategy.md](step4-1-strategy.md) / [todo](step4-1-strategy-todo.md) | 戦略（差別化・検知境界・予兆構想 §7） | 確定・現役参照 |
-| [step4-2-monitoring-context.md](step4-2-monitoring-context.md) / [todo](step4-2-monitoring-context-todo.md) | Monitoring コンテキスト本体 | 実装済み（予兆タスクは step6 へ移動） |
-| [step4-3-backoffice-backend.md](step4-3-backoffice-backend.md) / [todo](step4-3-backoffice-backend-todo.md) | Express 配線・SSE・ingest | 実装済み（同上） |
-| [step4-4-backoffice-frontend.md](step4-4-backoffice-frontend.md) / [todo](step4-4-backoffice-frontend-todo.md) | フロントエンド | 実装済み（同上） |
-| [step4-5-backoffice-infra.md](step4-5-backoffice-infra.md) / [todo](step4-5-backoffice-infra.todo.md) | インフラ（GCP/Terraform/CI） | 実装済み |
-| [step6-final-sprint-strategy.md](step6-final-sprint-strategy.md) / [todo](step6-final-sprint-todo.md) | 7/10 締切スプリント（予兆×デモ防御） | 実装着地（残作業は step7 へ） |
-| [step6-submission-prompt.md](step6-submission-prompt.md) | 提出資料作成用プロンプト（ブラウザ Claude 用） | 役目終了（提出原稿は protopedia 配下が正） |
-| [step7-final-review-strategy.md](step7-final-review-strategy.md) / [todo](step7-final-review-todo.md) | **現役**: 最終レビュー委員会の戦術（採点・ブランド戦略・Heroコピー）と提出前TODO | 進行中 |
+| [step3-application-layer.md](step3-application-layer.md) | EC アプリケーション層 | 確定 |
+| [step4-1-strategy.md](step4-1-strategy.md) | 戦略設計（差別化・検知境界 §2.5・技術方針 §4・予兆構想 §7・SSE/pull 境界 §10・デプロイトポロジ §11・モジュール境界 §12） | 確定・現役参照 |
+| [step4-2-monitoring-context.md](step4-2-monitoring-context.md) | Monitoring コンテキスト本体（分類・AI 調査・学習ループ・ADK） | 実装済み |
+| [step4-3-backoffice-backend.md](step4-3-backoffice-backend.md) | Express 配線・SSE・ingest | 実装済み |
+| [step4-4-backoffice-frontend.md](step4-4-backoffice-frontend.md) | フロントエンド（feature-sliced・観測コンソール） | 実装済み |
+| [step4-5-backoffice-infra.md](step4-5-backoffice-infra.md) | インフラ（GCP/Terraform/CI・GCP 完結型可観測性） | 実装済み |
 
-決定記録は [docs/decisions/](../decisions/) を参照。
+決定記録・ADR は [docs/decisions/](../decisions/) を参照。
 
 ## 既知のドリフト（コードが正・主なもの）
 
@@ -27,5 +23,5 @@
 - **シナリオ6/7 の自動修正は見送り**（調査まで）。[決定記録](../decisions/decision-scenario67-remediation-dropped.md) が正。その後 2026-07-06 に旧5（構成変更）・旧6（アプリコード退行）はシナリオ自体もデモ卓から撤退（実装は git 履歴に残置）。
 - **デモ操作卓は 5 ボタン**（1/2/3/3b/4）。旧「在庫競合」廃止で -1 繰り上げ済み・旧5/6 は撤退済み。「8 ボタン」等の古い記述は無効（現行一覧は [architecture.md §9](../architecture.md#9-デモシナリオ5ボタンリアルさバッジ付き)）。
 - **承認済みアラートは dedup 窓から除外**され、Analytics ページに承認済み一覧がある（2026-07 追加）。承認→昇格→再発1秒既知→却下→再調査の一生と、訂正が次回 SIMILARITY 分類の正になる学習一周は `e2e/backoffice/feedback-lifecycle.e2e.test.ts` が担保。
-- **予兆（Forecast）は実装済み**（F1〜F12 着地・`GET/POST/DELETE /forecast`・E2E あり）。残りは実 PR ステージングと録画の人間タスクのみ。「未実装」と読める古い記述は無効。
-- **テスト実測は 2026-07-06 時点で unit 1017件/146ファイル＋ HTTP API E2E 22件/7ファイル**。step 系に散在する「694件」等はその時点のスナップショット。
+- **予兆（Forecast）は実装済み**（`GET/POST/DELETE /forecast`・引用検証・E2E あり）。「未実装・stretch」と読める古い記述は無効（現状は [architecture.md §10](../architecture.md#10-予兆ブリーフィングforecast実装済み)）。
+- **テスト実測は 2026-07-10 時点で unit 1,103件/155ファイル＋ HTTP API E2E 22件/7ファイル**。step 系に散在する古い件数はその時点のスナップショット。

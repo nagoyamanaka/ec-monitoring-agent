@@ -298,13 +298,15 @@ describe("parseForecastOutput / buildForecastPrompt（境界）", () => {
 // SYSTEM_INSTRUCTION を判別して固定予報 JSON を返す。ここで adapter 経由の契約
 // （parse 可能・偽引用 ghost-* 入り＝引用検証の実演素材）を固定し、stub とパーサの乖離を防ぐ。
 describe("GeminiForecastAdapter × StubLLMClient（E2E 決定論経路の契約）", () => {
-  it("stub の固定予報を parse でき、偽引用 ghost-* を含む2リスクが得られる", async () => {
+  it("stub の固定予報を parse でき、偽引用 ghost-* を含む3リスクが得られる（引用検証前）", async () => {
     const adapter = new GeminiForecastAdapter(new StubLLMClient());
 
     const forecast = await adapter.forecast(context);
 
+    // adapter は parse とソートのみ（引用検証＝ghost drop は useCase の責務）。
+    // level 降順→confidence 降順: flagship(HIGH 0.78) → Valkey(HIGH 0.72) → uncited(MEDIUM 0.4)。
     expect(forecast.isFallback).toBe(false);
-    expect(forecast.risks).toHaveLength(2);
+    expect(forecast.risks).toHaveLength(3);
     expect(forecast.risks[0].level).toBe("HIGH");
     expect(forecast.risks[0].citations).toEqual([
       "plan-1",
@@ -312,10 +314,20 @@ describe("GeminiForecastAdapter × StubLLMClient（E2E 決定論経路の契約�
       "inc-1",
       "ghost-1",
     ]);
-    expect(forecast.risks[1].citations).toEqual(["ghost-2"]);
-    // F11a: 1件目は先手つき・2件目は敢えて欠落＝両縮退経路を stub で固定。
+    // U2: 2本目の Valkey カスケード（plan-2＋Valkey 記憶）。
+    expect(forecast.risks[1].level).toBe("HIGH");
+    expect(forecast.risks[1].citations).toEqual([
+      "plan-2",
+      "sch-1",
+      "inc-3",
+      "inc-4",
+    ]);
+    // 裏付けゼロ（ghost-2 のみ）＝後段の引用検証で丸ごと破棄される素材。
+    expect(forecast.risks[2].citations).toEqual(["ghost-2"]);
+    // F11a: flagship/Valkey は先手つき・uncited は敢えて欠落＝両縮退経路を stub で固定。
     expect(forecast.risks[0].preventiveAction).toContain("[STUB]");
-    expect(forecast.risks[1].preventiveAction).toBeUndefined();
+    expect(forecast.risks[1].preventiveAction).toContain("[STUB]");
+    expect(forecast.risks[2].preventiveAction).toBeUndefined();
   });
 
   it("予兆以外の instruction には調査用の固定出力を返す（既存経路を汚さない）", async () => {

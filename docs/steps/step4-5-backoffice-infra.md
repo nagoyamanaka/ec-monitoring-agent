@@ -1,6 +1,5 @@
 # Step 4-5: GCP 完結型デプロイ＆可観測性（設計・コンテキスト）
 
-> 対応 TODO: `docs/steps/step4-5-backoffice-infra.todo.md`
 > 上位設計: `docs/steps/step4-1-strategy.md` §11（ハイブリッド構成 / webhook / OTel）
 > 関連: `infra/terraform/`（IaC 一式・実装済み）/ `.github/workflows/terraform.yml`（plan/apply・WIF）
 >
