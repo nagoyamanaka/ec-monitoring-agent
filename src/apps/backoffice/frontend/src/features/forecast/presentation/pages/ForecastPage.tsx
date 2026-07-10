@@ -166,7 +166,7 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
             (generating ? (
               // 再生成中: 前回分を暗転して残す（空白にしない・新旧の取り違えも防ぐ）。
               <div aria-busy className="space-y-2">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
                   前回の予報（再生成が完成すると置き換わります）
                 </p>
                 <div className="pointer-events-none opacity-40">

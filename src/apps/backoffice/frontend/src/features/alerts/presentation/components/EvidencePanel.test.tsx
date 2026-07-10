@@ -255,6 +255,49 @@ describe("EvidencePanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("過去事例は検索でヒットしても「過去の同型事例」節へ出ない（引用なし）ならグレー格下げ", async () => {
+    const empty: EvidenceView = {
+      appLogs: [],
+      terraformDiff: null,
+      recentCommits: [],
+      metrics: [],
+      collectedAt: "2026-01-01T00:00:01.000Z",
+    };
+    render(
+      <EvidencePanel
+        api={fakeApi(empty)}
+        // 未知分類・corpus 空＝collectPastIncidentRefs が実物ゼロ。台帳の 1 は
+        // 「類似事例DBを調べてヒットしたが原因へ引用しなかった」の実測として残す。
+        alert={makeAlert({
+          id: "a-1",
+          status: "OPEN",
+          report: makeReport({
+            metrics: {
+              elapsedMs: 92000,
+              evidenceCounts: {
+                logs: 0,
+                metrics: 0,
+                terraformChanges: 0,
+                commits: 0,
+                similarIncidents: 1,
+              },
+            },
+          }),
+        })}
+        corpus={[]}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText("過去事例")).toBeInTheDocument());
+    // 実物が本パネル外にも出ない＝コミットと同じ引用規律でグレー・クリック不可。
+    expect(
+      screen.queryByRole("button", { name: /過去事例/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("1")).toHaveClass("text-slate-400");
+    expect(
+      screen.getByText("収集しても原因に引用しなかった証拠は表示しません"),
+    ).toBeInTheDocument();
+  });
+
   it("コミット証拠は既定3件に畳み、「残り N 件を表示」で全件展開する", async () => {
     const manyCommits: EvidenceView = {
       ...FULL_EVIDENCE,

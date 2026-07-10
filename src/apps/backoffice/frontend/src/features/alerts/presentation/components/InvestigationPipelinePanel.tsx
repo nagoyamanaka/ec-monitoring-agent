@@ -181,7 +181,7 @@ export function InvestigationPipelinePanel({
                     {agentLabel(e.agent)}
                   </span>
                   <span className="min-w-0 truncate">{tool.label}</span>
-                  <span className="ml-auto shrink-0 text-slate-500">
+                  <span className="ml-auto shrink-0 text-slate-400">
                     {formatTimeJa(e.at)}
                   </span>
                 </li>

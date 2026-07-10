@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 /** 一度閉じたら再表示しないための localStorage キー。 */
 const DISMISS_KEY = "ec-monitoring-agent:first-run-guide:dismissed";
@@ -43,18 +43,35 @@ const STEPS = [
 ] as const;
 
 /**
+ * ガイドの可視状態（localStorage 永続）をページ側でも使えるように切り出したフック。
+ * ファーストビューはガイドと常設ヘッダで価値説明が重複するため、ページが
+ * 「ガイド表示中はヘッダの価値段落を出さない」判断に使う（say it once）。
+ */
+export function useFirstRunGuide(): { visible: boolean; dismiss: () => void } {
+  const [dismissed, setDismissed] = useState(readDismissed);
+  const dismiss = useCallback(() => {
+    writeDismissed();
+    setDismissed(true);
+  }, []);
+  return { visible: !dismissed, dismiss };
+}
+
+export interface FirstRunGuideProps {
+  /** 省略時は自己管理（従来挙動）。ページで可視状態を共有するときは useFirstRunGuide を渡す。 */
+  visible?: boolean;
+  onDismiss?: () => void;
+}
+
+/**
  * 審査員ファーストラン向けの3ステップガイド（初回訪問のみ・dismissible）。
  * デプロイURLを開いた初見の人に「まず何をすれば体験できるか」を示す。
  * 閉じたら localStorage に記録して以後は描画しない。
  */
-export function FirstRunGuide() {
-  const [dismissed, setDismissed] = useState(readDismissed);
-  if (dismissed) return null;
-
-  const dismiss = () => {
-    writeDismissed();
-    setDismissed(true);
-  };
+export function FirstRunGuide({ visible, onDismiss }: FirstRunGuideProps = {}) {
+  const own = useFirstRunGuide();
+  const shown = visible ?? own.visible;
+  const dismiss = onDismiss ?? own.dismiss;
+  if (!shown) return null;
 
   return (
     <section

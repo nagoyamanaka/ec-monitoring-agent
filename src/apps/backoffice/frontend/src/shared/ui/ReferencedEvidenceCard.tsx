@@ -130,7 +130,7 @@ function CardBody({
         <p className="mt-1 text-xs leading-snug text-slate-300">{description}</p>
       )}
       {meta && (
-        <p className="mt-1 truncate font-mono text-[11px] text-slate-500">
+        <p className="mt-1 truncate font-mono text-[11px] text-slate-400">
           {meta}
         </p>
       )}
