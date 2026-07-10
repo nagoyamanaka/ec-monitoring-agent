@@ -188,7 +188,7 @@ export function ReferencedEvidenceCard(props: ReferencedEvidenceCardProps) {
         </Clickable>
         {details && (
           <details className="border-t border-slate-700/40 px-3 py-1.5">
-            <summary className="cursor-pointer text-[11px] text-slate-400 hover:text-slate-300">
+            <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-300">
               詳細
             </summary>
             <div className="mt-1.5">{details}</div>

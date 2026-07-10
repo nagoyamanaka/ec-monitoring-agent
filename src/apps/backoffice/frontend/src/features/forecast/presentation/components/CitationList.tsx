@@ -29,7 +29,7 @@ export function CitationList({ citations }: CitationListProps) {
         <span className="rounded-full bg-slate-700/40 px-1.5 text-[11px] font-medium text-slate-300">
           {lanes.length}種類・{citations.length}件
         </span>
-        <span className="text-[11px] text-slate-400">
+        <span className="text-xs text-slate-400">
           実在シグナルと照合済み＝裏付けの無い推定は表示前に破棄されます
         </span>
       </div>

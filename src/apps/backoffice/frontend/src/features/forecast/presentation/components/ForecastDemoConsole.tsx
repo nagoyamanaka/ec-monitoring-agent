@@ -153,7 +153,7 @@ export function ForecastDemoConsole({
         <h3 className="text-sm font-semibold text-slate-100">
           投入シグナル（予報の材料）
         </h3>
-        <p className="text-[11px] leading-relaxed text-slate-400">
+        <p className="text-xs leading-relaxed text-slate-400">
           予報はこの3種類の突合だけから作られます（色＝予報カードの引用レーン、バッジ＝入力の本物度）。
         </p>
         <div className="space-y-2">
@@ -168,7 +168,7 @@ export function ForecastDemoConsole({
                 >
                   {lane.kindLabel}
                 </span>
-                <span className="text-[11px] text-slate-400">{lane.role}</span>
+                <span className="text-xs text-slate-400">{lane.role}</span>
               </div>
               {/* 1 材料 = 1 行に圧縮（ラベル＋本物度バッジ）。長い説明は title ホバーへ逃がして縦長を解消。 */}
               <ul className="mt-1 divide-y divide-slate-800/60">
@@ -185,7 +185,7 @@ export function ForecastDemoConsole({
                         </span>
                         <p
                           title={row.description}
-                          className="text-[11px] leading-snug text-slate-500 line-clamp-1"
+                          className="text-xs leading-snug text-slate-400 line-clamp-1"
                         >
                           {row.description}
                         </p>
@@ -222,7 +222,7 @@ export function ForecastDemoConsole({
         </button>
         {/* 結果が出る場所を指し示す（視線誘導）。押下はここだが、進行状況と着地は本文側。 */}
         {generating && (
-          <p className="text-[11px] text-cyan-200/80">
+          <p className="text-xs text-cyan-200/80">
             進行状況は予報本文の側に表示しています。完成すると予報カードに置き換わります。
           </p>
         )}
@@ -236,7 +236,7 @@ export function ForecastDemoConsole({
           {resetting ? "リセット中…" : "予報をリセット"}
         </button>
         {actionError && (
-          <p role="alert" className="text-[11px] text-rose-300">
+          <p role="alert" className="text-xs text-rose-300">
             {actionError}
           </p>
         )}

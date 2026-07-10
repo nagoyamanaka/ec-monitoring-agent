@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ConfidenceGauge } from "@shared/ui/tremor";
+import { ConfidenceGauge, confidenceBrandColor } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { formatDateTimeJa, formatTimeJa } from "@shared/format/dateTime";
 import {
@@ -234,7 +234,7 @@ export function AlertDetailDrawer({
                 confidence={confidence.value}
                 size="lg"
                 label="AI 確信度"
-                color="cyan"
+                color={confidenceBrandColor(confidence.value)}
                 animate
               />
               {/* キャリブレーション記録があれば「なぜこの値か」（裏付け・上限・補正）を併記する。 */}

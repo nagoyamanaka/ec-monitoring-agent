@@ -96,7 +96,7 @@ export function DemoDrawer({
           デモをリセット
         </button>
         {error && (
-          <p className="text-[11px] text-rose-300">
+          <p className="text-xs text-rose-300">
             操作に失敗しました。{error.message}
           </p>
         )}

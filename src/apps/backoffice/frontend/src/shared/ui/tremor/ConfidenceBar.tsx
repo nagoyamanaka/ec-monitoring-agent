@@ -1,5 +1,5 @@
 import { ProgressBar } from "@tremor/react";
-import { confidenceColor } from "./colors";
+import { confidenceBrandColor } from "./colors";
 import { cn } from "../cn";
 
 export interface ConfidenceBarProps {
@@ -13,7 +13,8 @@ export interface ConfidenceBarProps {
 /**
  * AI 確信度を「ラベル＋横バー＋%」で示す一覧向けウィジェット。
  * 一覧スキャンで浮きやすいドーナツゲージ（ConfidenceGauge）に対し、
- * 行内で割合を読ませる用途。色は confidenceColor（rose→amber→emerald）を共用。
+ * 行内で割合を読ませる用途。色はブランドトーン（confidenceBrandColor: cyan/低確信は slate）
+ * ＝隣の重大度バッジ（HIGH=rose）と意味が衝突しない。
  */
 export function ConfidenceBar({
   confidence,
@@ -29,7 +30,7 @@ export function ConfidenceBar({
       ) : null}
       <ProgressBar
         value={percent}
-        color={confidenceColor(clamped)}
+        color={confidenceBrandColor(clamped)}
         className="min-w-0 flex-1"
       />
       <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-300">

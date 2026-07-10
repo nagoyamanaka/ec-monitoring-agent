@@ -135,7 +135,7 @@ function RemediationBody({
             {submitting ? "起票中…" : "修正を起票"}
           </button>
           {!remediable && (
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-slate-400">
               このアラートは AI が「コードでの自動修正は不適」と判定しています。
             </p>
           )}
@@ -161,7 +161,7 @@ function RemediationBody({
               修正 PR 作成済み
             </span>
             {remediation.vulnerabilityCount > 0 && (
-              <span className="text-[11px] text-emerald-200/80">
+              <span className="text-xs text-emerald-200/80">
                 対象脆弱性 {remediation.vulnerabilityCount} 件
               </span>
             )}

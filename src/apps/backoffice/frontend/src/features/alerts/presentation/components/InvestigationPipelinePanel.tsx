@@ -190,7 +190,7 @@ export function InvestigationPipelinePanel({
           </ol>
         )}
 
-        <p className="text-[11px] leading-relaxed text-slate-400">
+        <p className="text-xs leading-relaxed text-slate-400">
           表示は実際のエージェント実行イベントのみ（実測 およそ
           2 分前後）。調査ステップの内容はレポート完成時に確定します。
         </p>

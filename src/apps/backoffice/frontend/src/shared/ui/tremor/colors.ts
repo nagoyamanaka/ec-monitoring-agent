@@ -23,10 +23,21 @@ export function rankColor(level: SeverityLevel): Color {
 
 /**
  * confidence(0..1) → Tremor 色。低→高で rose → amber → emerald。
- * confidence ゲージ・AI 精度トラッキング（analytics）で共用する。
+ * 「正解/不正解」の評価セマンティクス（analytics の正答率ゲージ）専用。
+ * AI 確信度には使わない（confidenceBrandColor を使う）。
  */
 export function confidenceColor(confidence: number): Color {
   if (confidence < 0.4) return "rose";
   if (confidence < 0.7) return "amber";
   return "emerald";
+}
+
+/**
+ * AI 確信度(0..1) → ブランドトーン色。
+ * 確信度は良し悪しの評価ではないため emerald/rose の評価色を使わず cyan に統一する
+ * （HIGH リスク×緑90%の意味衝突を避け、緑は承認/既知/正解の完了セマンティクスへ温存）。
+ * 裏付けなし上限（40%）近傍の弱い数字は slate に落とし、視覚強度でも弱さを語る。
+ */
+export function confidenceBrandColor(confidence: number): Color {
+  return confidence < 0.5 ? "slate" : "cyan";
 }

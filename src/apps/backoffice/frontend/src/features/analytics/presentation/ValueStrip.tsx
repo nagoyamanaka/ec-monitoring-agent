@@ -49,6 +49,19 @@ export function ValueStrip({ api, refreshKey }: ValueStripProps) {
     { label: "AI調査", value: analytics.unknownCount },
   ];
 
+  // 学習ループの成果表示: 昇格ゲート未通過で 0 のとき「学習パターン化 0」と出すと
+  // 「学習が動いていない」と読み違えられる（実際は承認済み知識が昇格待ち）。
+  // 0 時は前向き語彙「承認済み N・昇格待ち」へ切替え、承認済みも 0 なら項目ごと出さない
+  // （analytics 側の学習の軌跡ヒーローが物語を担うため欠けても成立する）。
+  const promoted = analytics.promotedPatternCount;
+  const approvedCount = analytics.approvedAlerts.length;
+  const learning =
+    promoted > 0
+      ? { label: "学習パターン化", value: promoted, note: null }
+      : approvedCount > 0
+        ? { label: "承認済み", value: approvedCount, note: "昇格待ち" }
+        : null;
+
   return (
     <button
       type="button"
@@ -76,16 +89,23 @@ export function ValueStrip({ api, refreshKey }: ValueStripProps) {
           </span>
         </span>
       ))}
-      <span className="text-slate-600" aria-hidden>
-        ｜
-      </span>
-      <span className="inline-flex items-baseline gap-1.5">
-        <span className="text-slate-400">学習パターン化</span>
-        <span className="text-sm font-semibold tabular-nums text-slate-100">
-          {analytics.promotedPatternCount}
-        </span>
-      </span>
-      <span className="text-[10px] text-slate-500">※過去実績含む</span>
+      {learning && (
+        <>
+          <span className="text-slate-600" aria-hidden>
+            ｜
+          </span>
+          <span className="inline-flex items-baseline gap-1.5">
+            <span className="text-slate-400">{learning.label}</span>
+            <span className="text-sm font-semibold tabular-nums text-slate-100">
+              {learning.value}
+            </span>
+            {learning.note && (
+              <span className="text-slate-400">・{learning.note}</span>
+            )}
+          </span>
+        </>
+      )}
+      <span className="text-xs text-slate-400">※過去実績含む</span>
       <span className="ml-auto text-cyan-300/80" aria-hidden>
         Analytics →
       </span>

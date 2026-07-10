@@ -75,7 +75,7 @@ export function ForecastGenerationPendingBanner({
       </p>
 
       {/* 通過中の実ステップ（不定進捗＝完了を偽点灯しない・3b と同じ規律）。 */}
-      <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-sky-200/90">
+      <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-sky-200/90">
         {GENERATION_STEPS.map((step, i) => (
           <li key={step} className="flex items-center gap-1.5">
             <span className="rounded bg-sky-500/15 px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/25">

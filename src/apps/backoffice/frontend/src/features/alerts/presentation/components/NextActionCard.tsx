@@ -64,7 +64,7 @@ export function NextActionCard({ next }: NextActionCardProps) {
         </p>
       )}
       {meta.footnote && (
-        <p className="mt-2 border-t border-cyan-500/20 pt-2 text-[11px] leading-relaxed text-cyan-200/80">
+        <p className="mt-2 border-t border-cyan-500/20 pt-2 text-xs leading-relaxed text-cyan-200/80">
           {meta.footnote}
         </p>
       )}

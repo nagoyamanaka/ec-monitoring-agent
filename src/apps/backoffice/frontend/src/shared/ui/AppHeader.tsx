@@ -15,16 +15,19 @@ export interface AppHeaderProps {
   forecastBadge?: string;
 }
 
-const BASE_NAV: ReadonlyArray<{ to: string; label: string }> = [
-  { to: "/alerts", label: "Alerts" },
-  { to: "/analytics", label: "Analytics" },
+// ナビは日本語主ラベル＋英語サブラベル（E3）: ページ見出しが日本語
+// （アラート一覧/学習の軌跡/予兆ブリーフィング）のため、クリック前後で語が接続するよう
+// 主語彙を日本語に揃える。英字は Kizashi AI-SRE ブランドと共存する小さな添えに降格。
+const BASE_NAV: ReadonlyArray<{ to: string; label: string; sub: string }> = [
+  { to: "/alerts", label: "アラート", sub: "Alerts" },
+  { to: "/analytics", label: "学習", sub: "Analytics" },
 ];
 
 /**
  * 全画面共通のグローバルヘッダー（ブランド＋ナビタブ＋右スロット）。
- * 観測コンソールの定石どおり上タブで Alerts / Analytics（/ Forecast）を切替える。
+ * 観測コンソールの定石どおり上タブで アラート / 学習（/ 予兆）を切替える。
  * shared に置き features を import しないため、ライブ状態などは rightSlot で受け取る。
- * NavLink の active を cyan ピルで示し、/alerts/:id 詳細でも "Alerts" を点灯させる（end 指定なし）。
+ * NavLink の active を cyan ピルで示し、/alerts/:id 詳細でも「アラート」を点灯させる（end 指定なし）。
  */
 export function AppHeader({
   rightSlot,
@@ -32,7 +35,7 @@ export function AppHeader({
   forecastBadge,
 }: AppHeaderProps) {
   const items = forecastEnabled
-    ? [...BASE_NAV, { to: "/forecast", label: "Forecast" }]
+    ? [...BASE_NAV, { to: "/forecast", label: "予兆", sub: "Forecast" }]
     : BASE_NAV;
 
   return (
@@ -64,6 +67,11 @@ export function AppHeader({
               }
             >
               {it.label}
+              {/* 英語サブラベルは accessible name にも含める（テスト/読み上げが
+                  従来の英語名 Alerts/Analytics/Forecast でも到達できる互換）。 */}
+              <span className="ml-1 text-[10px] font-normal tracking-wide opacity-60">
+                {it.sub}
+              </span>
               {it.to === "/forecast" && forecastBadge && (
                 <span className="ml-1.5 rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30">
                   {forecastBadge}

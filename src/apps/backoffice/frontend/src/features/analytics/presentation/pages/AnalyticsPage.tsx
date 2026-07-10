@@ -172,7 +172,7 @@ function KnowledgeLifecycleHero({
           className="shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/20 hover:ring-cyan-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
           <p className="text-sm font-semibold text-cyan-200">AI 調査</p>
-          <p className="mt-0.5 text-[11px] text-cyan-100/80">
+          <p className="mt-0.5 text-xs text-cyan-100/80">
             実測を開く →
           </p>
         </Link>
@@ -190,7 +190,7 @@ function KnowledgeLifecycleHero({
             </span>
           </p>
           {alert.operatorNote?.trim() && (
-            <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">
+            <p className="mt-1 line-clamp-2 text-xs text-slate-400">
               承認メモ: {alert.operatorNote.trim()}
             </p>
           )}
@@ -217,7 +217,7 @@ function KnowledgeLifecycleHero({
             同じ障害は AI 調査なしで即確定
           </p>
           {alert.occurrenceCount > 1 && (
-            <p className="mt-1 text-[11px] text-emerald-300/80">
+            <p className="mt-1 text-xs text-emerald-300/80">
               このパターンは既に {alert.occurrenceCount} 回再一致
             </p>
           )}

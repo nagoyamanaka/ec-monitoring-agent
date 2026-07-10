@@ -52,6 +52,64 @@ describe("ValueStrip", () => {
     expect(screen.getByText("学習パターン化")).toBeInTheDocument();
   });
 
+  it("昇格 0 かつ承認済みありは「承認済み N・昇格待ち」へ切替える＝学習停止と読ませない", async () => {
+    const api = fakeApi({
+      getAnalytics: vi.fn().mockResolvedValue(
+        toAnalyticsView({
+          totalAlerts: 8,
+          knownCount: 1,
+          unknownCount: 7,
+          withFeedbackCount: 5,
+          correctCount: 5,
+          incorrectCount: 0,
+          accuracy: 1,
+          promotedPatternCount: 0,
+          approvedAlerts: Array.from({ length: 5 }, (_, i) => ({
+            id: `a-${i}`,
+            eventName: "db.pool.exhausted",
+            category: "infrastructure",
+            severity: "CRITICAL",
+            classificationType: "unknown" as const,
+            patternName: "DB_CONNECTION_POOL_EXHAUSTION",
+            occurredOn: "2026-07-09T00:00:00Z",
+            occurrenceCount: 1,
+            operatorNote: null,
+          })),
+        }),
+      ),
+    });
+    renderStrip(api);
+    await waitFor(() =>
+      expect(screen.getByText("承認済み")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("・昇格待ち")).toBeInTheDocument();
+    expect(screen.queryByText("学習パターン化")).not.toBeInTheDocument();
+  });
+
+  it("昇格 0 かつ承認済みも 0 なら学習項目ごと出さない（0 を見せない）", async () => {
+    const api = fakeApi({
+      getAnalytics: vi.fn().mockResolvedValue(
+        toAnalyticsView({
+          totalAlerts: 3,
+          knownCount: 1,
+          unknownCount: 2,
+          withFeedbackCount: 0,
+          correctCount: 0,
+          incorrectCount: 0,
+          accuracy: null,
+          promotedPatternCount: 0,
+        }),
+      ),
+    });
+    renderStrip(api);
+    await waitFor(() =>
+      expect(screen.getByText("総アラート")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("学習パターン化")).not.toBeInTheDocument();
+    expect(screen.queryByText("承認済み")).not.toBeInTheDocument();
+  });
+
   it("累計であることの注記（過去実績含む）を出す＝リセット直後の空一覧と矛盾して見せない", async () => {
     renderStrip(fakeApi());
     await waitFor(() =>

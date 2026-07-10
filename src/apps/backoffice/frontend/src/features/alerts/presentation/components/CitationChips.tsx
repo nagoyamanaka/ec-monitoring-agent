@@ -65,7 +65,7 @@ export function CitationChips({ heading, citations, refs }: CitationChipsProps) 
       {open &&
         (resolved ? (
           <div className="space-y-2">
-            <p className="text-[10px] leading-relaxed text-slate-500">
+            <p className="text-xs leading-relaxed text-slate-400">
               各引用は収集済み証拠カタログと自動突合しています（✓＝実在を確認済み・未照合も隠さず表示）。
             </p>
             {groupCitationRefs(resolved).map((group) => (
@@ -143,7 +143,7 @@ function CitationRefChip({ citation }: { citation: CitationRefView }) {
           ✓ 照合済み
         </span>
       ) : (
-        <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-500">
+        <span className="ml-auto shrink-0 text-[10px] font-medium text-slate-400">
           未照合
         </span>
       )}

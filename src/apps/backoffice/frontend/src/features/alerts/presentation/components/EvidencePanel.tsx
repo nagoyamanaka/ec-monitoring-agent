@@ -408,7 +408,7 @@ export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
           <p className="text-xs text-slate-300">
             原因の根拠として引用されたインフラ証拠（ログ・メトリクス・Terraform・コミット）はありませんでした。
           </p>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-xs text-slate-400">
             根拠が関連アラートや過去の同型事例にある場合は、それぞれのセクションに表示されます。
           </p>
         </div>
