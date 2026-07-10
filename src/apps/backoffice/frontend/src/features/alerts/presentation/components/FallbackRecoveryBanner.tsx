@@ -49,11 +49,11 @@ export function FallbackRecoveryBanner({
   return (
     <div
       className={cn(
-        "rounded-tremor-default bg-amber-500/10 px-4 py-3 text-amber-200 ring-1 ring-inset ring-amber-500/25",
+        "rounded-tremor-default bg-amber-500/10 px-4 py-3 text-amber-200",
         className,
       )}
     >
-      <p className="flex items-center gap-2 text-sm font-semibold">
+      <p className="flex items-center gap-2 text-sm font-medium">
         <span aria-hidden>⚠</span>
         AI 調査に失敗・暫定表示
       </p>
@@ -66,7 +66,7 @@ export function FallbackRecoveryBanner({
           disabled={submitting}
           onClick={reinvestigate}
           title="収集済みの証拠を使って AI 調査をもう一度実行します。結果は完了次第この画面に反映されます。"
-          className="mt-2 min-w-[8.5rem] rounded-md bg-amber-500/20 px-3 py-1.5 text-center text-xs font-semibold text-amber-100 ring-1 ring-inset ring-amber-400/40 transition hover:bg-amber-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+          className="mt-2 min-w-[8.5rem] rounded-md bg-amber-500/20 px-3 py-1.5 text-center text-xs font-medium text-amber-100 ring-1 ring-inset ring-amber-400/40 transition hover:bg-amber-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
         >
           {submitting ? "再調査を依頼中…" : "⟳ 再調査を実行"}
         </button>

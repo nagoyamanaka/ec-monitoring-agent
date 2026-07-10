@@ -24,7 +24,7 @@ import { LiveStreamStatus } from "../components/LiveStreamStatus";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 
 /** 報告書の各ブロックをカードで括る共通スタイル（グルーピングで視線の止め所を作る）。 */
-const PANEL = "rounded-lg border border-slate-800/80 bg-slate-900/40 p-5";
+const PANEL = "rounded-lg bg-slate-800/40 p-5";
 
 /**
  * アラート詳細ページ（DefaultLayout＝デモUI非侵食・ディープリンク/別タブ用）。
@@ -146,19 +146,19 @@ export function AlertDetailPage() {
         )}
 
         {status === "error" && (
-          <div className="rounded-tremor-default bg-rose-500/10 px-4 py-3 text-sm text-rose-300 ring-1 ring-inset ring-rose-500/30">
+          <div className="rounded-tremor-default bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
             アラートの取得に失敗しました。{error?.message}
           </div>
         )}
 
         {status === "notfound" && (
-          <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-400 ring-1 ring-inset ring-slate-700/50">
+          <div className="rounded-tremor-default bg-slate-800/40 px-4 py-10 text-center text-sm text-slate-400">
             指定されたアラートは見つかりませんでした。
           </div>
         )}
 
         {status === "ready" && alert && (
-          <article className="space-y-4">
+          <article className="space-y-6">
             <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800/80 pb-4">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -167,7 +167,7 @@ export function AlertDetailPage() {
                     {alert.category}
                   </span>
                 </div>
-                <h2 className="text-xl font-semibold text-slate-50">
+                <h2 className="text-xl font-bold text-slate-50">
                   {eventTitle(alert.eventName)}
                 </h2>
                 <p className="text-xs text-slate-400">

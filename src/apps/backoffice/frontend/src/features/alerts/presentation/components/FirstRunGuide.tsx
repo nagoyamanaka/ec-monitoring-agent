@@ -59,10 +59,10 @@ export function FirstRunGuide() {
   return (
     <section
       aria-label="はじめてのガイド"
-      className="w-full max-w-4xl rounded-tremor-default bg-cyan-500/10 px-4 py-3 ring-1 ring-inset ring-cyan-500/30"
+      className="w-full max-w-4xl rounded-tremor-default bg-cyan-500/10 px-4 py-3"
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-sm font-semibold text-cyan-200">
+        <h2 className="text-sm font-medium text-cyan-200">
           3ステップで学習ループを体験できます
         </h2>
         <button
@@ -77,9 +77,9 @@ export function FirstRunGuide() {
         {STEPS.map((step) => (
           <li
             key={step.title}
-            className="rounded-md bg-slate-900/40 px-3 py-2 ring-1 ring-inset ring-slate-700/50"
+            className="rounded-md bg-slate-900/40 px-3 py-2"
           >
-            <div className="font-semibold text-slate-100">{step.title}</div>
+            <div className="font-medium text-slate-100">{step.title}</div>
             <div className="mt-0.5 leading-relaxed text-slate-300">
               {step.body}
             </div>

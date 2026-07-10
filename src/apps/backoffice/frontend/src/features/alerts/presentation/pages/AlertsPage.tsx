@@ -195,7 +195,7 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
           />
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-6">
           <FirstRunGuide />
           <ValueStrip
             api={analyticsApi}

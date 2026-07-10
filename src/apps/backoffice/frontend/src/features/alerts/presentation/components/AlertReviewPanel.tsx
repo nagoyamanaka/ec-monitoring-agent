@@ -187,11 +187,11 @@ export function AlertReviewPanel({
 
   return (
     <Card
-      className={cn("space-y-2 !bg-slate-800/40 !p-3 !ring-slate-700/60", className)}
+      className={cn("space-y-2 !bg-slate-800/40 !p-3 !ring-0", className)}
     >
       {/* 間延び対策：両端寄せ（justify-between）をやめ、ラベル＋ボタンを左に詰める。 */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="text-xs font-semibold text-slate-200">
+        <span className="text-xs font-medium text-slate-200">
           AI の分類をレビュー
         </span>
         <div
@@ -205,7 +205,7 @@ export function AlertReviewPanel({
             disabled={submitting !== null || reviewState === "APPROVED"}
             onClick={() => decide("approve")}
             className={cn(
-              "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
+              "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
               reviewState === "APPROVED"
                 ? "bg-emerald-500/25 text-emerald-200 ring-2 ring-inset ring-emerald-400/60 disabled:opacity-100"
                 : "bg-emerald-500/10 text-emerald-300/90 ring-1 ring-inset ring-emerald-500/25 hover:bg-emerald-500/20 disabled:opacity-50",
@@ -237,7 +237,7 @@ export function AlertReviewPanel({
             disabled={submitting !== null || reviewState === "REJECTED"}
             onClick={() => (rejecting ? cancelReject() : openReject())}
             className={cn(
-              "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:active:scale-100",
+              "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:active:scale-100",
               reviewState === "REJECTED"
                 ? "bg-rose-500/25 text-rose-200 ring-2 ring-inset ring-rose-400/60 disabled:opacity-100"
                 : rejecting
@@ -265,7 +265,7 @@ export function AlertReviewPanel({
           <div className="space-y-1">
             <label
               htmlFor={`reject-note-${alert.id}`}
-              className="text-xs font-semibold text-slate-300"
+              className="text-xs font-medium text-slate-300"
             >
               何が違うか・どう直すか（AI へ返す指摘）
             </label>
@@ -304,7 +304,7 @@ export function AlertReviewPanel({
                   type="button"
                   disabled={submitting !== null || trimmedNote === ""}
                   onClick={requestReinvestigation}
-                  className="min-w-[10rem] rounded-md bg-cyan-500/20 px-4 py-1.5 text-center text-xs font-semibold text-cyan-200 ring-1 ring-inset ring-cyan-400/40 transition hover:bg-cyan-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                  className="min-w-[10rem] rounded-md bg-cyan-500/20 px-4 py-1.5 text-center text-xs font-medium text-cyan-200 ring-1 ring-inset ring-cyan-400/40 transition hover:bg-cyan-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
                 >
                   {submitting === "reinvestigate"
                     ? "再調査を依頼中…"
@@ -316,7 +316,7 @@ export function AlertReviewPanel({
                 type="button"
                 disabled={submitting !== null || trimmedNote === ""}
                 onClick={() => decide("reject", trimmedNote)}
-                className="min-w-[6rem] rounded-md bg-rose-500/15 px-3 py-1.5 text-center text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                className="min-w-[6rem] rounded-md bg-rose-500/15 px-3 py-1.5 text-center text-xs font-medium text-rose-300 ring-1 ring-inset ring-rose-500/30 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
                 {submitting === "reject" ? "送信中…" : "却下する"}
               </button>
@@ -357,7 +357,7 @@ export function AlertReviewPanel({
               disabled={submitting !== null}
               onClick={generateReport}
               title="既知分類は即確定（AI 自動起動なし）。今回の値に合わせた調査レポートを AI に生成させます。"
-              className="min-w-[9rem] rounded-md bg-cyan-500/15 px-3 py-1.5 text-center text-xs font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+              className="min-w-[9rem] rounded-md bg-cyan-500/15 px-3 py-1.5 text-center text-xs font-medium text-cyan-300 ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
             >
               {submitting === "generate-report"
                 ? "AIレポート生成中…"
@@ -371,7 +371,7 @@ export function AlertReviewPanel({
               onClick={promote}
               title="この障害を既知パターンへ焼き付けます。以後の同型障害は完全一致の高速パスで即・無料・決定論に既知分類されます。"
               className={cn(
-                "min-w-[9rem] rounded-md px-3 py-1.5 text-center text-xs font-semibold ring-1 ring-inset transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
+                "min-w-[9rem] rounded-md px-3 py-1.5 text-center text-xs font-medium ring-1 ring-inset transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
                 promoted
                   ? "bg-emerald-500/25 text-emerald-200 ring-emerald-400/60 disabled:opacity-100"
                   : "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30 hover:bg-emerald-500/25 disabled:opacity-50",

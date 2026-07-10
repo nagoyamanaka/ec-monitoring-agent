@@ -40,8 +40,8 @@ function metaOf(next: NextActionView): { badge: string; footnote: string | null 
 export function NextActionCard({ next }: NextActionCardProps) {
   const meta = metaOf(next);
   return (
-    <section className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-3">
-      <p className="flex flex-wrap items-center justify-between gap-x-3 text-[11px] font-semibold uppercase tracking-wide text-cyan-300">
+    <section className="rounded-lg bg-cyan-500/10 px-4 py-3">
+      <p className="flex flex-wrap items-center justify-between gap-x-3 text-[11px] font-medium uppercase tracking-wide text-cyan-300">
         <span className="inline-flex items-center gap-1">
           <ShieldIcon className="shrink-0" />
           次のアクション

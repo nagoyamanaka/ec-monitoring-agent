@@ -171,7 +171,7 @@ export function AlertDetailDrawer({
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               {analyzing ? (
-                <span className="inline-flex items-center rounded-full bg-slate-600/20 px-2.5 py-0.5 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-500/30">
+                <span className="inline-flex items-center rounded-full bg-slate-600/20 px-2.5 py-0.5 text-xs font-medium text-slate-300">
                   重要度 判定中
                 </span>
               ) : (
@@ -185,7 +185,7 @@ export function AlertDetailDrawer({
               </span>
               <AlertStatusBadge alert={alert} />
             </div>
-            <h2 className="truncate text-lg font-semibold text-slate-50">
+            <h2 className="truncate text-lg font-bold text-slate-50">
               {title}
             </h2>
             {info && (
@@ -308,7 +308,7 @@ export function AlertDetailDrawer({
               to={`/alerts/${encodeURIComponent(alert.id)}`}
               className="group block rounded-lg bg-slate-800/40 px-4 py-3 ring-1 ring-inset ring-slate-700/60 transition hover:bg-slate-800/70 hover:ring-cyan-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
             >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
                 AI レポート全文
               </p>
               {teaser.headline && (
@@ -323,7 +323,7 @@ export function AlertDetailDrawer({
                 {teaser.chips.map((chip) => (
                   <span
                     key={chip}
-                    className="rounded-md bg-slate-700/50 px-1.5 py-0.5 text-[11px] font-medium text-slate-300 ring-1 ring-inset ring-slate-600/50"
+                    className="rounded-md bg-slate-700/50 px-1.5 py-0.5 text-[11px] font-medium text-slate-300"
                   >
                     {chip}
                   </span>

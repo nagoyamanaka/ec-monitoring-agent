@@ -28,12 +28,12 @@ export function RiskCard({ risk }: RiskCardProps) {
   const subjectLabel = riskSubjectLabel(risk.subject);
   return (
     <article
-      className="space-y-3 rounded-lg border border-slate-800/80 bg-slate-900/40 p-5"
+      className="space-y-3 rounded-lg bg-slate-800/40 p-5"
       aria-label={`${riskLevelLabel(risk.level)}: ${subjectLabel}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <h3 className="flex items-center gap-1.5 text-lg font-semibold text-slate-50">
+          <h3 className="flex items-center gap-1.5 text-lg font-bold text-slate-50">
             <ClockIcon className="shrink-0 text-slate-400" />
             {risk.window}
           </h3>
@@ -67,8 +67,8 @@ export function RiskCard({ risk }: RiskCardProps) {
           実行先（PR/plan/過去事例）への動線は下の CitationList の実リンクが担う。
           LLM が出さなければフィールドごと欠落＝このブロックが消えるだけの縮退。 */}
       {risk.preventiveAction && (
-        <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-3">
-          <p className="flex flex-wrap items-center justify-between gap-x-3 text-[11px] font-semibold tracking-wide text-cyan-300">
+        <div className="rounded-lg bg-cyan-500/10 px-4 py-3">
+          <p className="flex flex-wrap items-center justify-between gap-x-3 text-[11px] font-medium tracking-wide text-cyan-300">
             <span className="inline-flex items-center gap-1">
               <ShieldIcon className="shrink-0" />
               今打てる先手

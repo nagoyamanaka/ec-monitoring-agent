@@ -15,13 +15,13 @@ export type SeverityLevel =
   | "PENDING";
 
 const RANK_STYLE: Record<SeverityLevel, string> = {
-  CRITICAL: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
-  HIGH: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
-  WARNING: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  MEDIUM: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  INFO: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  LOW: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  PENDING: "bg-slate-500/15 text-slate-300 ring-slate-500/30",
+  CRITICAL: "bg-rose-500/15 text-rose-300",
+  HIGH: "bg-rose-500/15 text-rose-300",
+  WARNING: "bg-amber-500/15 text-amber-300",
+  MEDIUM: "bg-amber-500/15 text-amber-300",
+  INFO: "bg-sky-500/15 text-sky-300",
+  LOW: "bg-sky-500/15 text-sky-300",
+  PENDING: "bg-slate-500/15 text-slate-300",
 };
 
 export interface SeverityBadgeProps {
@@ -35,7 +35,7 @@ export function SeverityBadge({ level, label, className }: SeverityBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ring-1 ring-inset",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide",
         RANK_STYLE[level],
         className,
       )}

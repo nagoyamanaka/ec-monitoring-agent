@@ -38,9 +38,9 @@ const STRIPE_COLOR: Record<AlertSeverity, string> = {
  * 回数が増えるほど視覚的重みを上げる（嵐の規模を色でも伝える）。
  */
 function occurrenceTone(count: number): string {
-  if (count >= 10) return "bg-rose-500/15 text-rose-300 ring-rose-500/30";
-  if (count >= 3) return "bg-amber-500/15 text-amber-300 ring-amber-500/30";
-  return "bg-slate-600/30 text-slate-200 ring-slate-500/40";
+  if (count >= 10) return "bg-rose-500/15 text-rose-300";
+  if (count >= 3) return "bg-amber-500/15 text-amber-300";
+  return "bg-slate-600/30 text-slate-200";
 }
 
 function formatRelativeTime(iso: string): string {

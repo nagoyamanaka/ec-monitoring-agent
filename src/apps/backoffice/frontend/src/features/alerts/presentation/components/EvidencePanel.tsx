@@ -38,16 +38,16 @@ function formatMetric(value: number | null, unit: string | null): string {
 }
 
 const LOG_LEVEL_CLASS: Record<EvidenceLogLevel, string> = {
-  ERROR: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
-  WARNING: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
-  INFO: "bg-slate-600/20 text-slate-300 ring-slate-500/30",
+  ERROR: "bg-rose-500/15 text-rose-300",
+  WARNING: "bg-amber-500/15 text-amber-200",
+  INFO: "bg-slate-600/20 text-slate-300",
 };
 
 const TF_ACTION_CLASS: Record<EvidenceTerraformAction, string> = {
-  create: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
-  update: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
+  create: "bg-emerald-500/15 text-emerald-300",
+  update: "bg-amber-500/15 text-amber-200",
   replace: "bg-orange-500/15 text-orange-300 ring-orange-500/30",
-  delete: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+  delete: "bg-rose-500/15 text-rose-300",
 };
 
 /** stagger 1 ステップの遅延（秒）。証拠を 1 行ずつ積み上げる体感を作る。 */
@@ -76,7 +76,7 @@ function Rise({
 function SectionHeader({ kind }: { kind: EvidenceSection["kind"] }) {
   const meta = SOURCE_META[kind];
   return (
-    <h5 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
+    <h5 className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-300">
       <span aria-hidden className="text-cyan-300">
         {meta.icon}
       </span>
@@ -102,8 +102,8 @@ function sectionSlotCount(section: EvidenceSection): number {
  */
 /** CVE 深刻度バッジの色。スキャナ語彙（CRITICAL/HIGH/…）に無い値は控えめ表示に落とす。 */
 const CVE_SEVERITY_CLASS: Record<string, string> = {
-  CRITICAL: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
-  HIGH: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
+  CRITICAL: "bg-rose-500/15 text-rose-300",
+  HIGH: "bg-amber-500/15 text-amber-200",
 };
 
 function EvidenceSectionView({
@@ -124,14 +124,14 @@ function EvidenceSectionView({
             <Rise
               key={f.cveId}
               index={baseIndex + 1 + i}
-              className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+              className="rounded-md bg-slate-800/40 px-3 py-2"
             >
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
-                    "rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                    "rounded-md px-1.5 py-0.5 text-[11px] font-medium",
                     CVE_SEVERITY_CLASS[f.severity] ??
-                      "bg-slate-600/20 text-slate-300 ring-slate-500/30",
+                      "bg-slate-600/20 text-slate-300",
                   )}
                 >
                   {f.severity}
@@ -175,12 +175,12 @@ function EvidenceSectionView({
             <Rise
               key={i}
               index={baseIndex + 1 + i}
-              className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+              className="rounded-md bg-slate-800/40 px-3 py-2"
             >
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
-                    "rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                    "rounded-md px-1.5 py-0.5 text-[11px] font-medium",
                     LOG_LEVEL_CLASS[log.severity],
                   )}
                 >
@@ -214,7 +214,7 @@ function EvidenceSectionView({
             <Rise
               key={m.metricType}
               index={baseIndex + 1 + i}
-              className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+              className="rounded-md bg-slate-800/40 px-3 py-2"
             >
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-slate-100">
@@ -253,7 +253,7 @@ function EvidenceSectionView({
         </Rise>
         <Rise
           index={baseIndex + 1}
-          className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+          className="rounded-md bg-slate-800/40 px-3 py-2"
         >
           <p className="text-xs text-slate-100">{diff.summary}</p>
           <p className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
@@ -280,12 +280,12 @@ function EvidenceSectionView({
               <Rise
                 key={change.address}
                 index={baseIndex + 2 + i}
-                className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+                className="rounded-md bg-slate-800/40 px-3 py-2"
               >
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      "rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase ring-1 ring-inset",
+                      "rounded-md px-1.5 py-0.5 text-[11px] font-medium uppercase",
                       TF_ACTION_CLASS[change.action],
                     )}
                   >
@@ -312,7 +312,7 @@ function EvidenceSectionView({
           : diff.changedResources.length > 0 && (
               <Rise
                 index={baseIndex + 2}
-                className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+                className="rounded-md bg-slate-800/40 px-3 py-2"
               >
                 <ul className="flex flex-wrap gap-1.5">
                   {diff.changedResources.map((r, i) => (
@@ -340,7 +340,7 @@ function EvidenceSectionView({
           <Rise
             key={c.sha}
             index={baseIndex + 1 + i}
-            className="rounded-md bg-slate-800/40 px-3 py-2 ring-1 ring-inset ring-slate-700/60"
+            className="rounded-md bg-slate-800/40 px-3 py-2"
           >
             <div className="flex items-center gap-2">
               {c.url ? (
@@ -387,16 +387,16 @@ export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
 
   return (
     <section className={cn("space-y-3", className)} aria-label="収集した証拠">
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+      <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
         収集した証拠
       </h4>
 
       {phase === "error" ? (
-        <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-300 ring-1 ring-inset ring-rose-500/30">
+        <div className="rounded-md bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
           証拠の取得に失敗しました。{error?.message}
         </div>
       ) : phase === "analyzing" ? (
-        <div className="flex items-center gap-2 rounded-md bg-slate-800/40 px-3 py-3 text-xs text-slate-300 ring-1 ring-inset ring-slate-700/60">
+        <div className="flex items-center gap-2 rounded-md bg-slate-800/40 px-3 py-3 text-xs text-slate-300">
           <span
             aria-hidden
             className="h-2 w-2 animate-pulse rounded-full bg-cyan-400"

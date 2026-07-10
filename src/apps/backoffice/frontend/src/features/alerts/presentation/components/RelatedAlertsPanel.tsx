@@ -88,7 +88,7 @@ function RowSection({
   return (
     <section className="space-y-2" aria-label={label}>
       <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+        <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
           {label}
         </h4>
         <span className="rounded-full bg-slate-700/40 px-1.5 text-[11px] font-medium text-slate-300">

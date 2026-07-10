@@ -19,7 +19,7 @@ export function ExactMatchBadge({
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-500/30",
+          "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300",
           className,
         )}
         title="既知の過去障害パターンと完全一致（AI 推定ではなく確定分類）"
@@ -32,7 +32,7 @@ export function ExactMatchBadge({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-lg bg-emerald-500/10 px-4 py-3 ring-1 ring-inset ring-emerald-500/25",
+        "flex items-center gap-3 rounded-lg bg-emerald-500/10 px-4 py-3",
         className,
       )}
     >
@@ -43,7 +43,7 @@ export function ExactMatchBadge({
         ✓
       </span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-emerald-200">過去障害と完全一致</p>
+        <p className="text-sm font-medium text-emerald-200">過去障害と完全一致</p>
         <p className="text-xs leading-relaxed text-emerald-300/70">
           既知パターンに一致したため、AI 推定ではなく確定分類です。
         </p>

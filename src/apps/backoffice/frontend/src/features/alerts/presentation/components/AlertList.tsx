@@ -96,7 +96,7 @@ function AlertListBody({
 }: AlertListProps & { filtered?: boolean }) {
   if (status === "loading") {
     return (
-      <div className="space-y-3" aria-busy>
+      <div className="space-y-5" aria-busy>
         {[0, 1, 2].map((i) => (
           <div
             key={i}
@@ -111,7 +111,7 @@ function AlertListBody({
     if (retrying) {
       return (
         <div
-          className="rounded-tremor-default bg-amber-500/10 px-4 py-3 text-sm text-amber-200 ring-1 ring-inset ring-amber-500/30"
+          className="rounded-tremor-default bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
           role="status"
         >
           <p className="flex items-center gap-2">
@@ -126,13 +126,13 @@ function AlertListBody({
       );
     }
     return (
-      <div className="rounded-tremor-default bg-rose-500/10 px-4 py-3 text-sm text-rose-300 ring-1 ring-inset ring-rose-500/30">
+      <div className="rounded-tremor-default bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
         <p>アラートの取得に失敗しました。</p>
         {onRetry && (
           <button
             type="button"
             onClick={onRetry}
-            className="mt-2 rounded-md bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-200 ring-1 ring-inset ring-rose-500/40 hover:bg-rose-500/30"
+            className="mt-2 rounded-md bg-rose-500/20 px-3 py-1 text-xs font-medium text-rose-200 ring-1 ring-inset ring-rose-500/40 hover:bg-rose-500/30"
           >
             再試行
           </button>
@@ -146,13 +146,13 @@ function AlertListBody({
     // 絞り込み中の 0 件は「アクティブ無し」ではない（解除導線はヘッダのチップ ✕ が担う）。
     if (filtered) {
       return (
-        <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-400 ring-1 ring-inset ring-slate-700/50">
+        <div className="rounded-tremor-default bg-slate-800/40 px-4 py-10 text-center text-sm text-slate-400">
           絞り込み条件に一致するアラートはありません。
         </div>
       );
     }
     return (
-      <div className="space-y-2 rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm ring-1 ring-inset ring-slate-700/50">
+      <div className="space-y-2 rounded-tremor-default bg-slate-800/40 px-4 py-10 text-center text-sm">
         <p className="text-slate-300">現在アクティブなアラートはありません。</p>
         <p className="font-medium text-cyan-300">
           → 右のデモ操作卓からシナリオを注入すると、AI の検知・分類・調査が始まります。
@@ -166,7 +166,7 @@ function AlertListBody({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {sortAlerts(alerts).map((alert) => (
         <AlertCard
           key={alert.id}

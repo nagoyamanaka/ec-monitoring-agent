@@ -18,11 +18,11 @@ import { SeverityBadge, type SeverityLevel } from "./SeverityBadge";
 export type ReferencedChipTone = "cyan" | "emerald" | "amber";
 
 const CHIP_CLASS: Record<ReferencedChipTone, string> = {
-  cyan: "rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-500/30",
+  cyan: "rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-medium text-cyan-300",
   emerald:
-    "rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-500/30",
+    "rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-300",
   amber:
-    "rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300 ring-1 ring-inset ring-amber-500/30",
+    "rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300",
 };
 
 const ROW_CLASS =

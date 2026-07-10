@@ -73,19 +73,19 @@ const REALNESS_META: Record<
 > = {
   live: {
     label: "実トリガ",
-    className: "bg-emerald-500/15 text-emerald-200 ring-emerald-500/30",
+    className: "bg-emerald-500/15 text-emerald-200",
     short: "EC へ実注文 → Alert 化まで実経路",
     note: "EC へ実際に注文を投入し、業務障害イベントから Alert 化まで実経路で流す。main も外部も汚さない。",
   },
   cloud: {
     label: "クラウド実検知",
-    className: "bg-sky-500/15 text-sky-200 ring-sky-500/30",
+    className: "bg-sky-500/15 text-sky-200",
     short: "GCP Cloud Monitoring が実発報（GCP のみ）",
     note: "GCP に CRITICAL ログ + HTTP 500 を注入し、Cloud Monitoring 経由で発報する実検知経路（GCP デプロイ時のみ）。",
   },
   synthetic: {
     label: "合成入力",
-    className: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
+    className: "bg-amber-500/15 text-amber-200",
     short: "入口のみ合成・以降のパイプラインは実経路・実 AI",
     note: "障害の入口だけを合成（本番では実 CI／実 apply／実ログが同じ入口に入る）。変換→分類→AI 調査→修正提案のパイプラインはすべて実経路・実 AI。",
   },
@@ -169,7 +169,7 @@ function ScenarioRow({
   const anyBusy = busy !== null;
 
   return (
-    <li className="overflow-hidden rounded-md bg-slate-800/50 ring-1 ring-inset ring-slate-700/60">
+    <li className="overflow-hidden rounded-md bg-slate-800/50">
       <button
         type="button"
         aria-expanded={open}
@@ -185,13 +185,13 @@ function ScenarioRow({
             ▶
           </span>
           {/* 「インフラ障害（実 Cl...」のような尻切れを避けるため truncate せず2行まで許容（E7）。 */}
-          <span className="line-clamp-2 text-sm font-semibold leading-snug text-slate-50">
+          <span className="line-clamp-2 text-sm font-medium leading-snug text-slate-50">
             {scenario.label}
           </span>
         </span>
         <span
           title={realness.note}
-          className={`shrink-0 cursor-help rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
+          className={`shrink-0 cursor-help rounded-md px-2 py-0.5 text-[11px] font-medium ${realness.className}`}
         >
           {realness.label}
         </span>
@@ -204,14 +204,14 @@ function ScenarioRow({
         >
           <p className="text-slate-100">{scenario.description}</p>
           <p className="text-slate-300">
-            <span className="font-semibold text-slate-200">AI の動き:</span>{" "}
+            <span className="font-medium text-slate-200">AI の動き:</span>{" "}
             {aiRole}
           </p>
           {/* 凡例の全文はバッジホバー（title）へ退避し、常時表示は1行だけ（D2 認知負荷トリム）。 */}
           <p className="text-slate-400">
             <span
               title={realness.note}
-              className={`mr-1.5 cursor-help rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
+              className={`mr-1.5 cursor-help rounded-md px-1.5 py-0.5 text-[11px] font-medium ${realness.className}`}
             >
               {realness.label}
             </span>
@@ -237,7 +237,7 @@ function ScenarioRow({
                   : undefined,
               )
             }
-            className="w-full rounded-md bg-cyan-500/15 px-3 py-2 text-sm font-semibold text-cyan-100 ring-1 ring-inset ring-cyan-500/40 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
+            className="w-full rounded-md bg-cyan-500/15 px-3 py-2 text-sm font-medium text-cyan-100 ring-1 ring-inset ring-cyan-500/40 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
           >
             {running ? "注入中…" : "▶ この障害を注入する"}
           </button>
@@ -258,12 +258,12 @@ export function ScenarioControls({
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-slate-100">デモシナリオ</h3>
+      <h3 className="text-sm font-medium text-slate-100">デモシナリオ</h3>
 
       <div className="space-y-3">
         {SCENARIO_GROUPS.map((group) => (
           <div key={group.chip} className="space-y-1.5">
-            <h4 className="text-xs font-semibold text-slate-300">
+            <h4 className="text-xs font-medium text-slate-300">
               {group.chip}
             </h4>
             <ul className="space-y-1.5">

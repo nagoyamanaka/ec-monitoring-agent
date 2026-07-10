@@ -9,15 +9,15 @@ export interface ImpactPanelProps {
 const FAULT_STYLE: Record<ImpactFault, { label: string; className: string }> = {
   own: {
     label: "自責（自社コード/IaC 起因）",
-    className: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+    className: "bg-rose-500/15 text-rose-300",
   },
   external: {
     label: "他責（外部API/ベンダー起因）",
-    className: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+    className: "bg-amber-500/15 text-amber-300",
   },
   unknown: {
     label: "断定不能（証拠不足）",
-    className: "bg-slate-500/15 text-slate-300 ring-slate-500/30",
+    className: "bg-slate-500/15 text-slate-300",
   },
 };
 
@@ -26,7 +26,7 @@ export function FaultBadge({ fault }: { fault: ImpactFault }) {
   const style = FAULT_STYLE[fault];
   return (
     <span
-      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${style.className}`}
+      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${style.className}`}
     >
       {style.label}
     </span>
@@ -42,7 +42,7 @@ export function ImpactPanel({ impact }: ImpactPanelProps) {
   return (
     <section className="space-y-2">
       <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+        <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
           影響評価
         </h4>
         <FaultBadge fault={impact.fault} />
@@ -72,7 +72,7 @@ export function ImpactPanel({ impact }: ImpactPanelProps) {
             {impact.affectedSubjects.map((subject, i) => (
               <li
                 key={i}
-                className="rounded-md bg-slate-800/60 px-2 py-0.5 text-xs text-slate-200 ring-1 ring-inset ring-slate-700/60"
+                className="rounded-md bg-slate-800/60 px-2 py-0.5 text-xs text-slate-200"
               >
                 {subject}
               </li>

@@ -11,7 +11,7 @@ import { ForecastBridgeCta } from "../components/ForecastBridgeCta";
 import { ForecastDemoConsole } from "../components/ForecastDemoConsole";
 import { ForecastGenerationPendingBanner } from "../components/ForecastGenerationPendingBanner";
 
-const PANEL = "rounded-lg border border-slate-800/80 bg-slate-900/40 p-5";
+const PANEL = "rounded-lg bg-slate-800/40 p-5";
 
 /**
  * 予兆ブリーフィングページ（step6 F7/F11/F12）。リスク一覧を level 降順で出す。
@@ -103,7 +103,7 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
         <div className="space-y-6">
           <header>
             <div className="max-w-2xl space-y-1">
-              <h2 className="text-lg font-semibold text-slate-100">
+              <h2 className="text-lg font-bold text-slate-100">
                 予兆ブリーフィング
               </h2>
               <p className="text-sm text-slate-300">
@@ -166,7 +166,7 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
             (generating ? (
               // 再生成中: 前回分を暗転して残す（空白にしない・新旧の取り違えも防ぐ）。
               <div aria-busy className="space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
                   前回の予報（再生成が完成すると置き換わります）
                 </p>
                 <div className="pointer-events-none opacity-40">
@@ -209,14 +209,14 @@ function BriefingBody({ briefing }: { briefing: ForecastBriefingView }) {
       {briefing.isFallback && (
         <div
           role="alert"
-          className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+          className="rounded-md bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
         >
           予報の生成に失敗したため、リスク評価を表示できません。「予報を再生成」をお試しください。
         </div>
       )}
 
       {!briefing.isFallback && briefing.risks.length === 0 && (
-        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+        <div className="rounded-md bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
           現時点で予兆リスクは検出されていません（シグナル {briefing.signalCount}{" "}
           件を評価済み）。
         </div>
@@ -224,7 +224,7 @@ function BriefingBody({ briefing }: { briefing: ForecastBriefingView }) {
 
       {briefing.risks.length > 0 && (
         <>
-          <div className="space-y-4" aria-label="予兆リスク一覧">
+          <div className="space-y-5" aria-label="予兆リスク一覧">
             {briefing.risks.map((risk, i) => (
               <RiskCard key={`${risk.subject}-${i}`} risk={risk} />
             ))}

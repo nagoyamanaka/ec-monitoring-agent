@@ -23,7 +23,7 @@ export function CitationList({ citations }: CitationListProps) {
   return (
     <section className="space-y-2" aria-label="引用">
       <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+        <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
           根拠（引用）
         </h4>
         <span className="rounded-full bg-slate-700/40 px-1.5 text-[11px] font-medium text-slate-300">
@@ -33,7 +33,7 @@ export function CitationList({ citations }: CitationListProps) {
           実在シグナルと照合済み＝裏付けの無い推定は表示前に破棄されます
         </span>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {lanes.map((lane) => (
           <div
             key={lane.kind}

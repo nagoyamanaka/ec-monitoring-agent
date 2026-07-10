@@ -76,7 +76,7 @@ export function AppHeader({
                 {it.sub}
               </span>
               {it.to === "/forecast" && forecastBadge && (
-                <span className="ml-1.5 rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30">
+                <span className="ml-1.5 rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
                   {forecastBadge}
                 </span>
               )}

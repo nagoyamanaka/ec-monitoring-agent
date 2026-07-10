@@ -16,9 +16,9 @@ export function ForecastBridgeCta() {
   return (
     <aside
       aria-label="反応的パイプラインへの案内"
-      className="space-y-2 rounded-lg border border-dashed border-slate-800 bg-slate-900/20 p-4"
+      className="space-y-2 rounded-lg bg-slate-800/30 p-4"
     >
-      <h3 className="text-xs font-semibold text-slate-300">
+      <h3 className="text-xs font-medium text-slate-300">
         もし防ぎきれずに発火したら？
       </h3>
       <p className="max-w-prose text-xs leading-relaxed text-slate-400">

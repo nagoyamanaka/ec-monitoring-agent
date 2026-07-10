@@ -29,7 +29,7 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
   return (
     <section
       aria-label="収束のミニフロー"
-      className="space-y-2 rounded-lg bg-slate-800/30 p-3 ring-1 ring-inset ring-slate-700/50"
+      className="space-y-2 rounded-lg bg-slate-800/40 p-3"
     >
       <p className="sr-only">{ariaSummary}</p>
       <div
@@ -41,7 +41,7 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
           {lanes.map((lane) => (
             <li key={lane.kind} className="flex items-center">
               <span
-                className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs ring-1 ring-inset ${
+                className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs ${
                   LANE_TILE_CLASS[laneTone(lane.kind)]
                 }`}
               >
@@ -60,8 +60,8 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
         {/* 調査ノード（収束点）＝AI が独立した根拠を突合して束ねる。見出し「AI 調査」は
             アラート詳細の証拠フロー（EvidenceFlowDiagram）と同一語彙で統一。
             具象LLM（Gemini/Vertex）はポートの向こう＝UI では名指しせず "AI" で統一。 */}
-        <div className="shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30">
-          <p className="text-sm font-semibold text-cyan-200">AI 調査</p>
+        <div className="shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center">
+          <p className="text-sm font-medium text-cyan-200">AI 調査</p>
           <p className="mt-0.5 text-xs text-cyan-100/80">独立した根拠を突合</p>
         </div>
 
@@ -72,8 +72,8 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
 
         {/* 結論ノード（レベル＋確信度%）。subject はカード見出し（この直上）が担うため
             ここでは重複表示せず、収束の帰結＝深刻度に焦点を当てる。 */}
-        <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 self-center rounded-lg bg-slate-800/50 px-4 py-3 text-center ring-1 ring-inset ring-slate-700/60">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 self-center rounded-lg bg-slate-800/50 px-4 py-3 text-center">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
             結論に収束
           </p>
           <div className="flex items-center gap-2">

@@ -55,10 +55,10 @@ export function ForecastGenerationPendingBanner({
     <div
       role="status"
       aria-live="polite"
-      className="space-y-2 rounded-md bg-sky-500/10 px-3 py-3 text-[13px] ring-1 ring-inset ring-sky-500/30"
+      className="space-y-2 rounded-md bg-sky-500/10 px-3 py-3 text-[13px]"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 font-semibold text-sky-100">
+        <span className="flex items-center gap-2 font-medium text-sky-100">
           <span
             aria-hidden
             className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-300"
@@ -78,7 +78,7 @@ export function ForecastGenerationPendingBanner({
       <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-sky-200/90">
         {GENERATION_STEPS.map((step, i) => (
           <li key={step} className="flex items-center gap-1.5">
-            <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/25">
+            <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5">
               {step}
             </span>
             {i < GENERATION_STEPS.length - 1 && (

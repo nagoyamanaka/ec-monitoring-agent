@@ -51,12 +51,12 @@ export function CitationChips({ heading, citations, refs }: CitationChipsProps) 
           ▶
         </span>
         {heading}
-        <span className="rounded-md bg-slate-800/70 px-1.5 py-0.5 font-semibold normal-case tracking-normal text-slate-300 ring-1 ring-inset ring-slate-700/60">
+        <span className="rounded-md bg-slate-800/70 px-1.5 py-0.5 font-medium normal-case tracking-normal text-slate-300">
           {citations.length}件
         </span>
         {/* 照合サマリは畳んだままでも見える＝「引用は実在確認済み」が一目で伝わる。 */}
         {resolved && verifiedCount > 0 && (
-          <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 font-semibold normal-case tracking-normal text-emerald-300 ring-1 ring-inset ring-emerald-500/30">
+          <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 font-medium normal-case tracking-normal text-emerald-300">
             ✓ {verifiedCount}/{resolved.length} 実在照合済み
           </span>
         )}
@@ -73,7 +73,7 @@ export function CitationChips({ heading, citations, refs }: CitationChipsProps) 
                 key={group.key}
                 className={cn("space-y-1 border-l-2 pl-2.5", group.borderClass)}
               >
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
                   {group.label}
                 </p>
                 <ul className="space-y-1">
@@ -91,14 +91,14 @@ export function CitationChips({ heading, citations, refs }: CitationChipsProps) 
                 key={group.key}
                 className={cn("space-y-1 border-l-2 pl-2.5", group.borderClass)}
               >
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
                   {group.label}
                 </p>
                 <ul className="space-y-1">
                   {group.items.map((citation, i) => (
                     <li
                       key={i}
-                      className="break-all rounded-md bg-slate-800/70 px-2 py-1 font-mono text-[11px] leading-relaxed text-slate-300 ring-1 ring-inset ring-slate-700/60"
+                      className="break-all rounded-md bg-slate-800/70 px-2 py-1 font-mono text-[11px] leading-relaxed text-slate-300"
                     >
                       {citation}
                     </li>
@@ -116,7 +116,7 @@ export function CitationChips({ heading, citations, refs }: CitationChipsProps) 
 function CitationRefChip({ citation }: { citation: CitationRefView }) {
   const verified = citation.kind !== undefined;
   return (
-    <li className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md bg-slate-800/70 px-2 py-1 ring-1 ring-inset ring-slate-700/60">
+    <li className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-md bg-slate-800/70 px-2 py-1">
       {verified && (
         <span className="shrink-0 rounded-md bg-slate-700/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-300">
           {CITATION_KIND_LABEL[citation.kind!]}
@@ -139,7 +139,7 @@ function CitationRefChip({ citation }: { citation: CitationRefView }) {
         </span>
       )}
       {verified ? (
-        <span className="ml-auto shrink-0 text-[10px] font-semibold text-emerald-300">
+        <span className="ml-auto shrink-0 text-[10px] font-medium text-emerald-300">
           ✓ 照合済み
         </span>
       ) : (
