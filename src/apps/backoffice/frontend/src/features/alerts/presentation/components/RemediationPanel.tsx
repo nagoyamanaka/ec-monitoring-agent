@@ -130,7 +130,7 @@ function RemediationBody({
             type="button"
             disabled={!remediable || submitting}
             onClick={() => onDraft()}
-            className="min-w-[8rem] rounded-md bg-cyan-500/15 px-3 py-1.5 text-center text-xs font-medium text-cyan-200 ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95 disabled:opacity-40 disabled:active:scale-100"
+            className="min-w-[8rem] rounded-md bg-cyan-500 px-4 py-2 text-center text-xs font-semibold text-slate-950 shadow-sm shadow-cyan-500/20 ring-1 ring-inset ring-cyan-400/50 transition hover:bg-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 active:scale-95 disabled:bg-cyan-500/15 disabled:text-cyan-200/60 disabled:shadow-none disabled:opacity-70 disabled:active:scale-100"
           >
             {submitting ? "起票中…" : "修正を起票"}
           </button>
