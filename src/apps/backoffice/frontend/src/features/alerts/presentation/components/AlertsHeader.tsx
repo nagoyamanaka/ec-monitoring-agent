@@ -23,6 +23,11 @@ export interface AlertsHeaderProps {
   activeFilter?: AlertListFilter | null;
   /** チップクリックでフィルタをトグルする。未指定ならチップは表示のみ。 */
   onFilterToggle?: (filter: AlertListFilter) => void;
+  /**
+   * 価値説明の段落を出さない（FirstRunGuide 表示中）。ファーストビューで
+   * ガイド・段落と価値説明が二重になるのを避ける＝説明は常に1枚だけ（say it once）。
+   */
+  hideIntro?: boolean;
 }
 
 /** 絞り込みチップ群の導線ラベルに使う漏斗（フィルタ）アイコン。 */
@@ -106,6 +111,7 @@ export function AlertsHeader({
   status,
   activeFilter = null,
   onFilterToggle,
+  hideIntro = false,
 }: AlertsHeaderProps) {
   const critical = alerts.filter((a) =>
     matchesAlertFilter(a, "critical"),
@@ -117,12 +123,14 @@ export function AlertsHeader({
 
   return (
     <div className="space-y-3">
-      <p className="text-[15px] leading-relaxed text-slate-200">
-        アラートの
-        <span className="font-medium text-cyan-300">調査・評価・報告</span>
-        を AI エージェントが肩代わり — 未知の障害は証拠つきで原因を提示し、
-        承認するとその判断を学習して次回から1秒未満で確定します。
-      </p>
+      {!hideIntro && (
+        <p className="text-[15px] leading-relaxed text-slate-200">
+          アラートの
+          <span className="font-medium text-cyan-300">調査・評価・報告</span>
+          を AI エージェントが肩代わり — 未知の障害は証拠つきで原因を提示し、
+          承認するとその判断を学習して次回から1秒未満で確定します。
+        </p>
+      )}
 
       {/* 作業指標になる数だけ出す（総件数は出さない）。
           絞り込みチップは導線ラベル（漏斗＋「クリックで絞り込み」）でグルーピングし、

@@ -21,6 +21,8 @@ export interface AlertListProps {
   selectedId?: string | null;
   /** 行クリック。親が詳細ドロワーを開く。 */
   onSelect?: (alertId: string) => void;
+  /** FirstRunGuide 表示中はヘッダの価値段落を出さない（AlertsHeader.hideIntro に委譲）。 */
+  hideIntro?: boolean;
 }
 
 /**
@@ -39,6 +41,7 @@ export function AlertList({
   onRetry,
   selectedId,
   onSelect,
+  hideIntro,
 }: AlertListProps) {
   // ヘッダチップ（レビュー待ち/CRITICAL）による絞り込み。同じチップの再クリックで解除。
   const [filter, setFilter] = useState<AlertListFilter | null>(null);
@@ -55,6 +58,7 @@ export function AlertList({
         status={status}
         activeFilter={filter}
         onFilterToggle={toggleFilter}
+        hideIntro={hideIntro}
       />
       {/* 絞り込み状態の表現はチップの ✓/✕ に一本化する（E8: 「のみ表示中」行＋解除リンクは同じ状態の三重表示で冗長だった）。 */}
       <AlertListBody
@@ -77,7 +81,7 @@ function ErrorDetails({ error }: { error: Error | null }) {
   return (
     <details className="mt-2 text-xs text-slate-400">
       <summary className="cursor-pointer select-none">技術詳細</summary>
-      <code className="mt-1 block break-all text-slate-500">
+      <code className="mt-1 block break-all text-slate-400">
         {error.message}
       </code>
     </details>

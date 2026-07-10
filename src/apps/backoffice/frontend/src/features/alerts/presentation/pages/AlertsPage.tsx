@@ -15,7 +15,7 @@ import {
 import { reinvestigate } from "../../application/reinvestigate";
 import { AlertList } from "../components/AlertList";
 import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
-import { FirstRunGuide } from "../components/FirstRunGuide";
+import { FirstRunGuide, useFirstRunGuide } from "../components/FirstRunGuide";
 import { LiveStreamStatus } from "../components/LiveStreamStatus";
 
 export interface AlertsPageProps {
@@ -181,6 +181,9 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
   // Forecast タブの表示可否＋HIGH バッジ（FORECAST_ENABLED off なら非表示・F7）。
   const forecastNav = useForecastNav();
 
+  // ガイド表示中はヘッダの価値段落を隠す＝ファーストビューの説明を1枚に保つ（say it once）。
+  const guide = useFirstRunGuide();
+
   return (
     <>
       <AlertsLayout
@@ -196,7 +199,7 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
         }
       >
         <div className="space-y-6">
-          <FirstRunGuide />
+          <FirstRunGuide visible={guide.visible} onDismiss={guide.dismiss} />
           <ValueStrip
             api={analyticsApi}
             refreshKey={lastUpdatedAt?.getTime() ?? null}
@@ -209,6 +212,7 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
             onRetry={refreshAlerts}
             selectedId={selectedId}
             onSelect={openFocus}
+            hideIntro={guide.visible}
           />
         </div>
       </AlertsLayout>
