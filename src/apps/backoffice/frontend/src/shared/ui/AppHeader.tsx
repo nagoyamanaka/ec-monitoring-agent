@@ -20,7 +20,10 @@ export interface AppHeaderProps {
 // 主語彙を日本語に揃える。英字は Kizashi AI-SRE ブランドと共存する小さな添えに降格。
 const BASE_NAV: ReadonlyArray<{ to: string; label: string; sub: string }> = [
   { to: "/alerts", label: "アラート", sub: "Alerts" },
-  { to: "/analytics", label: "学習", sub: "Analytics" },
+  // サブラベルは主ラベル「学習」の英訳＝Learning。旧 Analytics は集計ダッシュボード
+  // 時代の名残で、U5 で主役を「学習の軌跡」に据えた現状の実態（集計は details 従属）と
+  // 語が接続しない。URL /analytics と API GET /analytics は据え置き（表示語彙のみ変更）。
+  { to: "/analytics", label: "学習", sub: "Learning" },
 ];
 
 /**
