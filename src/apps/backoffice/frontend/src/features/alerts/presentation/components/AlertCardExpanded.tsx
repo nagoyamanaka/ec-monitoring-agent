@@ -356,7 +356,7 @@ export function AlertCardExpanded({
                 >
                   <span className="text-slate-400">{row.label}</span>
                   {row.raw && (
-                    <code className="text-[10px] text-cyan-300/80">
+                    <code className="text-[10px] text-slate-400">
                       {row.raw}
                     </code>
                   )}
@@ -379,7 +379,7 @@ export function AlertCardExpanded({
             <p className="text-xs leading-relaxed text-slate-300">
               <span aria-hidden>⚖ </span>
               確定条件: 類似度
-              <code className="mx-1 text-[10px] text-cyan-300/80">
+              <code className="mx-1 text-[10px] text-slate-400">
                 {evidence.similarityGate.raw}
               </code>
               <span className="font-medium text-emerald-300">
@@ -405,16 +405,16 @@ export function AlertCardExpanded({
               数字は全て backend が記録した事実（InvestigationMetrics）＝人間換算はしない。
               full で証拠フローダイアグラム（E8-A）が描けるときは図に吸収し、この行は出さない。 */}
           {workload && !flow && (
-            <p className="rounded-md bg-cyan-500/10 px-3 py-2 text-xs leading-relaxed text-cyan-100">
+            <p className="rounded-md bg-slate-800/40 px-3 py-2 text-xs leading-relaxed text-slate-400">
               <span aria-hidden>⏱ </span>
-              <span className="font-medium text-cyan-300">
+              <span className="font-medium text-slate-200">
                 {workload.elapsedLabel}
               </span>
               で
               {workload.evidenceTotal > 0 ? (
                 <>
                   {workload.sources.join("・")} を横断し、
-                  <span className="font-medium text-cyan-300">
+                  <span className="font-medium text-slate-200">
                     証拠 {workload.evidenceTotal} 件
                   </span>
                   を収集して原因を推定

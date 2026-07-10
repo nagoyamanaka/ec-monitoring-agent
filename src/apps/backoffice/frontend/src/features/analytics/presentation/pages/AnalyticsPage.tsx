@@ -171,10 +171,11 @@ function KnowledgeLifecycleHero({
         <Link
           to={detailHref}
           aria-label={`${eventTitle(alert.eventName)} の AI 調査の実測（証拠フロー）を開く`}
-          className="shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/20 hover:ring-cyan-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+          className="shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/10 hover:ring-cyan-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
-          <p className="text-sm font-medium text-cyan-200">AI 調査</p>
-          <p className="mt-0.5 text-xs text-cyan-100/80">
+          <p className="text-sm font-medium text-slate-200">AI 調査</p>
+          {/* リンク可能性（Tier2）だけ cyan を残す＝ノード全体は他の AI 調査ノードと同じ中立面。 */}
+          <p className="mt-0.5 text-xs text-cyan-300">
             実測を開く →
           </p>
         </Link>
@@ -187,7 +188,7 @@ function KnowledgeLifecycleHero({
           </p>
           <p className="mt-1.5 text-xs">
             <span className="text-slate-400">原因例: </span>
-            <span className="text-amber-200" title={alert.patternName ?? cause}>
+            <span className="text-slate-200" title={alert.patternName ?? cause}>
               {cause}
             </span>
           </p>
@@ -212,14 +213,14 @@ function KnowledgeLifecycleHero({
 
         {/* [既知] 結論＝役割（次回から即わかる）主役、調査ゼロを補足 */}
         <LifecycleStage tone="emerald" badge="既知" grow>
-          <p className="text-sm font-medium text-emerald-100">
+          <p className="text-sm font-medium text-slate-100">
             次回から即わかる
           </p>
           <p className="mt-1.5 text-xs text-slate-400">
             同じ障害は AI 調査なしで即確定
           </p>
           {alert.occurrenceCount > 1 && (
-            <p className="mt-1 text-xs text-emerald-300/80">
+            <p className="mt-1 text-xs text-slate-400">
               このパターンは既に {alert.occurrenceCount} 回再一致
             </p>
           )}
@@ -252,10 +253,11 @@ const STAGE_TONE: Record<string, string> = {
   emerald: "bg-emerald-500/10",
 };
 
+/** 段階バッジは Tier3（分類タグ）＝色相は面だけ・文字は中立（顕著性設計）。 */
 const BADGE_TONE: Record<string, string> = {
-  cyan: "bg-cyan-500/15 text-cyan-200",
-  amber: "bg-amber-500/15 text-amber-200",
-  emerald: "bg-emerald-500/15 text-emerald-200",
+  cyan: "bg-cyan-500/15 text-slate-200",
+  amber: "bg-amber-500/15 text-slate-200",
+  emerald: "bg-emerald-500/15 text-slate-200",
 };
 
 function LifecycleStage({
@@ -477,11 +479,12 @@ function ApprovedAlertsSection({
                     )}
                   </div>
                   <p className="truncate text-xs text-slate-400">
+                    {/* 「既知」だけ emerald＝学習成果の報酬色。候補（未確定）は中立に沈める。 */}
                     <span
                       className={
                         alert.classificationType === "known"
                           ? "text-emerald-300"
-                          : "text-cyan-300"
+                          : "text-slate-400"
                       }
                     >
                       {alert.classificationType === "known"

@@ -41,7 +41,7 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
           {lanes.map((lane) => (
             <li key={lane.kind} className="flex items-center">
               <span
-                className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs ${
+                className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs ring-1 ring-inset ${
                   LANE_TILE_CLASS[laneTone(lane.kind)]
                 }`}
               >
@@ -50,23 +50,24 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
                   {lane.count}件
                 </span>
               </span>
-              <span className="hidden h-px w-6 shrink-0 rounded-full bg-cyan-500/50 md:block" />
+              <span className="hidden h-px w-6 shrink-0 rounded-full bg-slate-600 md:block" />
             </li>
           ))}
         </ul>
 
-        <span className="text-center text-cyan-500/70 md:hidden">▼</span>
+        <span className="text-center text-slate-500 md:hidden">▼</span>
 
         {/* 調査ノード（収束点）＝AI が独立した根拠を突合して束ねる。見出し「AI 調査」は
             アラート詳細の証拠フロー（EvidenceFlowDiagram）と同一語彙で統一。
-            具象LLM（Gemini/Vertex）はポートの向こう＝UI では名指しせず "AI" で統一。 */}
-        <div className="shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center">
-          <p className="text-sm font-medium text-cyan-200">AI 調査</p>
-          <p className="mt-0.5 text-xs text-cyan-100/80">独立した根拠を突合</p>
+            具象LLM（Gemini/Vertex）はポートの向こう＝UI では名指しせず "AI" で統一。
+            配色は中間工程＝中立面＋cyan の枠だけ（発光は結論ノードの確信度に譲る）。 */}
+        <div className="shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30">
+          <p className="text-sm font-medium text-slate-200">AI 調査</p>
+          <p className="mt-0.5 text-xs text-slate-400">独立した根拠を突合</p>
         </div>
 
-        <span className="text-center text-cyan-500/70 md:hidden">▼</span>
-        <span className="hidden shrink-0 px-1.5 text-cyan-500/70 md:block">
+        <span className="text-center text-slate-500 md:hidden">▼</span>
+        <span className="hidden shrink-0 px-1.5 text-slate-500 md:block">
           ▶
         </span>
 

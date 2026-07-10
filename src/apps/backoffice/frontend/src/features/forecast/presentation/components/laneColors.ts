@@ -24,9 +24,10 @@ export const LANE_BORDERS: Record<string, string> = {
   MEMORY: "border-emerald-500/40",
 };
 
-/** 収束ミニフローの入力タイル配色（tone と同軸）。 */
+/** 収束ミニフローの入力タイル配色（tone と同軸）。
+ *  Tier3（分類タグ）＝色相は面/枠で示し文字は中立 slate（顕著性は結論ノードに譲る）。 */
 export const LANE_TILE_CLASS: Record<ReferencedChipTone, string> = {
-  cyan: "bg-cyan-500/10 text-cyan-200 ring-cyan-500/30",
-  emerald: "bg-emerald-500/10 text-emerald-200 ring-emerald-500/30",
-  amber: "bg-amber-500/10 text-amber-200 ring-amber-500/30",
+  cyan: "bg-cyan-500/10 text-slate-200 ring-cyan-500/30",
+  emerald: "bg-emerald-500/10 text-slate-200 ring-emerald-500/30",
+  amber: "bg-amber-500/10 text-slate-200 ring-amber-500/30",
 };

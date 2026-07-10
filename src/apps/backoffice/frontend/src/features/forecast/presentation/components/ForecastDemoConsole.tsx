@@ -21,21 +21,23 @@ const REALNESS_META: Record<
   SignalRealness,
   { label: string; className: string; note: string }
 > = {
+  // 顕著性設計: 「実」系は emerald 面で静かに褒め、「合成」は無彩色＝正直さの階層を色でも語る。
+  // 旧 amber は時限（スケジュール）レーンと同色で無関係の二重意味になっていたため廃止。
   real: {
     label: "実データ",
-    className: "bg-emerald-500/15 text-emerald-200",
+    className: "bg-emerald-500/15 text-slate-200",
     note: "実 GitHub リポジトリの未マージ PR を read-only で取得する実経路。",
   },
   // 実在の証拠（実 PR の CI plan）だが、予報の決定論のため同内容を固定投入している行。
   // 「合成seed」と区別する＝差分もリンクも実在で、合成なのは注入経路ではない。
   pinnedReal: {
     label: "実plan",
-    className: "bg-teal-500/15 text-teal-200",
+    className: "bg-emerald-500/15 text-slate-200",
     note: "実 PR #83 が CI の terraform plan で生成した本物の差分と同一。予報の決定論のため同内容を固定投入しているが、差分もリンクも実在し、引用チップ「証拠を開く」は実 PR に解決する。",
   },
   seed: {
     label: "合成seed",
-    className: "bg-amber-500/15 text-amber-200",
+    className: "bg-slate-700/40 text-slate-400",
     note: "デモ用に投入した合成シグナル（本番では実スケジュール / 実インシデント履歴が同じ入口に入る）。突合 → AI 予報 → 引用検証は実経路・実 AI。",
   },
 };
@@ -68,7 +70,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     role: "何が変わる予定か",
     border: "border-cyan-500/40",
     chipClassName:
-      "bg-cyan-500/15 text-cyan-300",
+      "bg-cyan-500/15 text-slate-200",
     rows: [
       {
         label: "未適用の Terraform plan（VM 縮小）",
@@ -98,7 +100,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     role: "いつ負荷が来るか",
     border: "border-amber-500/40",
     chipClassName:
-      "bg-amber-500/15 text-amber-300",
+      "bg-amber-500/15 text-slate-200",
     rows: [
       {
         label: "負荷スケジュール",
@@ -113,7 +115,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     role: "過去に何が起きたか",
     border: "border-emerald-500/40",
     chipClassName:
-      "bg-emerald-500/15 text-emerald-300",
+      "bg-emerald-500/15 text-slate-200",
     rows: [
       {
         label: "過去の解決済み事例",
@@ -229,7 +231,7 @@ export function ForecastDemoConsole({
         </button>
         {/* 結果が出る場所を指し示す（視線誘導）。押下はここだが、進行状況と着地は本文側。 */}
         {generating && (
-          <p className="text-xs text-cyan-200/80">
+          <p className="text-xs text-slate-400">
             進行状況は予報本文の側に表示しています。完成すると予報カードに置き換わります。
           </p>
         )}

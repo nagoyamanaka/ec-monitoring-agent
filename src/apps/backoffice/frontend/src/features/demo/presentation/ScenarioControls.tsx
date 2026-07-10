@@ -71,21 +71,22 @@ const REALNESS_META: Record<
   Realness,
   { label: string; className: string; short: string; note: string }
 > = {
+  // 顕著性設計（予兆コンソールと同一規約）: 「実」系は emerald/sky 面＋中立文字、「合成」は無彩色。
   live: {
     label: "実トリガ",
-    className: "bg-emerald-500/15 text-emerald-200",
+    className: "bg-emerald-500/15 text-slate-200",
     short: "EC へ実注文 → Alert 化まで実経路",
     note: "EC へ実際に注文を投入し、業務障害イベントから Alert 化まで実経路で流す。main も外部も汚さない。",
   },
   cloud: {
     label: "クラウド実検知",
-    className: "bg-sky-500/15 text-sky-200",
+    className: "bg-sky-500/15 text-slate-200",
     short: "GCP Cloud Monitoring が実発報（GCP のみ）",
     note: "GCP に CRITICAL ログ + HTTP 500 を注入し、Cloud Monitoring 経由で発報する実検知経路（GCP デプロイ時のみ）。",
   },
   synthetic: {
     label: "合成入力",
-    className: "bg-amber-500/15 text-amber-200",
+    className: "bg-slate-700/40 text-slate-400",
     short: "入口のみ合成・以降のパイプラインは実経路・実 AI",
     note: "障害の入口だけを合成（本番では実 CI／実 apply／実ログが同じ入口に入る）。変換→分類→AI 調査→修正提案のパイプラインはすべて実経路・実 AI。",
   },

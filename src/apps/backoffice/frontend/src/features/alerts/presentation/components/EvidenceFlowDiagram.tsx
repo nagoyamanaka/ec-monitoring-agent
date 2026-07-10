@@ -56,13 +56,13 @@ export function EvidenceFlowDiagram({
         <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
           証拠の流れ
         </h4>
-        <p className="text-xs text-cyan-100">
+        <p className="text-xs text-slate-400">
           <span aria-hidden>⏱ </span>
-          <span className="font-medium text-cyan-300">
+          <span className="font-medium text-slate-200">
             {model.elapsedLabel}
           </span>
           ・証拠{" "}
-          <span className="font-medium text-cyan-300">
+          <span className="font-medium text-slate-200">
             {model.evidenceTotal} 件
           </span>
           を収集
@@ -86,16 +86,16 @@ export function EvidenceFlowDiagram({
           {model.sources.map((source) => (
             <li key={source.key} className="flex items-center">
               <span className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-slate-800/60 px-2.5 py-1.5 text-xs">
-                <span className="shrink-0 text-cyan-300">{source.icon}</span>
+                <span className="shrink-0 text-slate-400">{source.icon}</span>
                 <span className="truncate text-slate-200">{source.label}</span>
-                <span className="ml-auto shrink-0 font-semibold tabular-nums text-cyan-300">
+                <span className="ml-auto shrink-0 font-semibold tabular-nums text-slate-200">
                   {source.count}件
                 </span>
               </span>
               {/* コネクタ: 太さ＝件数の離散段階（多いソースほど太い流れ） */}
               <span
                 className={cn(
-                  "hidden w-6 shrink-0 rounded-full bg-cyan-500/50 md:block",
+                  "hidden w-6 shrink-0 rounded-full bg-slate-600 md:block",
                   WEIGHT_CLASS[source.weight],
                 )}
               />
@@ -103,15 +103,16 @@ export function EvidenceFlowDiagram({
           ))}
         </ul>
 
-        <span className="text-center text-cyan-500/70 md:hidden">▼</span>
+        <span className="text-center text-slate-500 md:hidden">▼</span>
 
         {/* AI 調査ノード（収束点）。ホバー/フォーカスで8エージェント台帳を出す
-            （常時表示は図の邪魔＝要求時にだけ・D2 の段階開示と同方針）。 */}
-        <div className="group relative shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center">
-          <p className="text-sm font-medium text-cyan-200">AI 調査</p>
+            （常時表示は図の邪魔＝要求時にだけ・D2 の段階開示と同方針）。
+            配色は中間工程＝中立面＋cyan の枠だけ（発光は結論の確信度ゲージに譲る）。 */}
+        <div className="group relative shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30">
+          <p className="text-sm font-medium text-slate-200">AI 調査</p>
           <p
             tabIndex={0}
-            className="mt-0.5 cursor-help text-xs text-cyan-100/80 underline decoration-dotted decoration-cyan-400/50 underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
+            className="mt-0.5 cursor-help text-xs text-slate-400 underline decoration-dotted decoration-slate-500 underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
           >
             8エージェントが
             <br className="hidden md:block" />
@@ -151,8 +152,8 @@ export function EvidenceFlowDiagram({
           </div>
         </div>
 
-        <span className="text-center text-cyan-500/70 md:hidden">▼</span>
-        <span className="hidden shrink-0 px-1.5 text-cyan-500/70 md:block">
+        <span className="text-center text-slate-500 md:hidden">▼</span>
+        <span className="hidden shrink-0 px-1.5 text-slate-500 md:block">
           ▶
         </span>
 
