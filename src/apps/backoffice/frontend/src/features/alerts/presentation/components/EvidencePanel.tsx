@@ -89,7 +89,7 @@ function SectionHeader({ kind }: { kind: EvidenceSection["kind"] }) {
   const meta = SOURCE_META[kind];
   return (
     <h5 className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-300">
-      <span aria-hidden className="text-cyan-300">
+      <span aria-hidden className="text-slate-400">
         {meta.icon}
       </span>
       {meta.label}
@@ -237,13 +237,13 @@ function EvidenceSectionView({
               <div className="mt-1 flex items-center gap-4 text-[11px] text-slate-300">
                 <span>
                   latest{" "}
-                  <span className="font-mono text-cyan-300">
+                  <span className="font-mono text-slate-100">
                     {formatMetric(m.latest, m.unit)}
                   </span>
                 </span>
                 <span>
                   max{" "}
-                  <span className="font-mono text-amber-200">
+                  <span className="font-mono text-slate-100">
                     {formatMetric(m.max, m.unit)}
                   </span>
                 </span>
@@ -303,7 +303,7 @@ function EvidenceSectionView({
                   >
                     {change.action}
                   </span>
-                  <code className="font-mono text-[11px] text-amber-200">
+                  <code className="font-mono text-[11px] text-slate-300">
                     {change.address}
                   </code>
                 </div>
@@ -330,7 +330,7 @@ function EvidenceSectionView({
                   {diff.changedResources.map((r, i) => (
                     <li
                       key={i}
-                      className="rounded-md bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-amber-200"
+                      className="rounded-md bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-slate-300"
                     >
                       {r}
                     </li>
@@ -388,7 +388,7 @@ function CommitsSectionView({
                   {c.shortSha}
                 </a>
               ) : (
-                <code className="rounded-md bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300">
+                <code className="rounded-md bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-slate-300">
                   {c.shortSha}
                 </code>
               )}

@@ -17,12 +17,14 @@ import { SeverityBadge, type SeverityLevel } from "./SeverityBadge";
 /** チップ色。cyan=進行中の相関/変更、emerald=過去事例（既知・類似度ゲージと同系色）、amber=時限。 */
 export type ReferencedChipTone = "cyan" | "emerald" | "amber";
 
+/** 分類タグは Tier3（顕著性設計）: 色相は面（tint 背景）だけに残し、文字は中立 slate。
+ *  彩色文字は深刻度/先手/リンクの Tier1-2 専用＝チップが本文と輝度で張り合わない。 */
 const CHIP_CLASS: Record<ReferencedChipTone, string> = {
-  cyan: "rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-medium text-cyan-300",
+  cyan: "rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-medium text-slate-200",
   emerald:
-    "rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-300",
+    "rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-slate-200",
   amber:
-    "rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300",
+    "rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-slate-200",
 };
 
 const ROW_CLASS =

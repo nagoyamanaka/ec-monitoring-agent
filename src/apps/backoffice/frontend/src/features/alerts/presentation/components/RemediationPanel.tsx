@@ -64,7 +64,7 @@ export function RemediationPanel({
           自動修正（リメディエーション）
         </h4>
         {remediable && !skipped && (
-          <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-medium text-cyan-300">
+          <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-[11px] font-medium text-slate-200">
             コードで修正可能（AI 判定）
           </span>
         )}

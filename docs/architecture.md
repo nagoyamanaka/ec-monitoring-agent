@@ -1,4 +1,4 @@
-# Kizashi（兆し）アーキテクチャ（コード準拠・2026-07-10 時点）
+# Kizashi（兆し）アーキテクチャ（コード準拠・2026-07-11 時点）
 
 > **本書はコードを正とした現状スナップショット**。設計の経緯・理由は [docs/steps/](steps/)（step 系設計書）と [docs/decisions/](decisions/) を参照。ここに書かれていることはすべて実装済み（未実装は明示）。
 
@@ -295,7 +295,7 @@ src/
 ```
 
 - ポート実装は `...Adapter`、ドメインサービスは `...DomainService`。driven ポートと wire DTO は infrastructure 配下。ワイヤ型は contracts に単一ソース化。
-- テスト: Vitest（BDD）unit 1103件・155ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
+- テスト: Vitest（BDD）unit 1156件・160ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
 
 ## 8. 主要 API（backoffice）
 
