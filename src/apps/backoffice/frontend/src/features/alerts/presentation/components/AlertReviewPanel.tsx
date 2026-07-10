@@ -191,7 +191,7 @@ export function AlertReviewPanel({
     >
       {/* 間延び対策：両端寄せ（justify-between）をやめ、ラベル＋ボタンを左に詰める。 */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="text-xs font-medium text-slate-200">
+        <span className="text-sm font-medium text-slate-200">
           AI の分類をレビュー
         </span>
         <div
@@ -205,7 +205,8 @@ export function AlertReviewPanel({
             disabled={submitting !== null || reviewState === "APPROVED"}
             onClick={() => decide("approve")}
             className={cn(
-              "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
+              // 学習ループの結論の操作＝周辺の secondary ボタン（xs）より半段大きく（sm・py-2）。
+              "min-w-[6.5rem] rounded-md px-4 py-2 text-center text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95 disabled:active:scale-100",
               reviewState === "APPROVED"
                 ? "bg-emerald-500/25 text-emerald-200 ring-2 ring-inset ring-emerald-400/60 disabled:opacity-100"
                 : "bg-emerald-500/10 text-emerald-300/90 ring-1 ring-inset ring-emerald-500/25 hover:bg-emerald-500/20 disabled:opacity-50",
@@ -237,7 +238,7 @@ export function AlertReviewPanel({
             disabled={submitting !== null || reviewState === "REJECTED"}
             onClick={() => (rejecting ? cancelReject() : openReject())}
             className={cn(
-              "min-w-[5.5rem] rounded-md px-3 py-1.5 text-center text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:active:scale-100",
+              "min-w-[6.5rem] rounded-md px-4 py-2 text-center text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-95 disabled:active:scale-100",
               reviewState === "REJECTED"
                 ? "bg-rose-500/25 text-rose-200 ring-2 ring-inset ring-rose-400/60 disabled:opacity-100"
                 : rejecting
