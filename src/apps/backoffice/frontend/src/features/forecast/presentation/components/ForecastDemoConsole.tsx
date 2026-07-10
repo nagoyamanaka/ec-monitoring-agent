@@ -13,6 +13,7 @@
  * open PR を**全件** read するため、台帳に無い PR が予報に現れても嘘にならない文言にしている。
  */
 import { GamepadIcon } from "@shared/ui/icons";
+import { DemoConsoleFrame } from "@shared/ui/DemoConsoleFrame";
 
 type SignalRealness = "real" | "pinnedReal" | "seed";
 
@@ -138,10 +139,7 @@ export function ForecastDemoConsole({
 }: ForecastDemoConsoleProps) {
   const busy = generating || resetting;
   return (
-    <section
-      aria-label="予兆デモコンソール"
-      className="space-y-4 rounded-tremor-default bg-slate-800/40 p-4"
-    >
+    <DemoConsoleFrame ariaLabel="予兆デモコンソール">
       <div className="flex items-center gap-2">
         <span className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-fuchsia-300">
           <GamepadIcon className="shrink-0" />
@@ -241,6 +239,6 @@ export function ForecastDemoConsole({
           </p>
         )}
       </div>
-    </section>
+    </DemoConsoleFrame>
   );
 }

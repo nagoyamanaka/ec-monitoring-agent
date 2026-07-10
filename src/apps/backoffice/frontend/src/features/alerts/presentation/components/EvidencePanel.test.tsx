@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { EvidencePanel } from "./EvidencePanel";
 import type { EvidenceApi } from "../../infrastructure/evidenceApi";
 import type { EvidenceView } from "../../domain/EvidenceView";
-import { makeAlert } from "../../test-support/alertFixture";
+import { makeAlert, makeReport } from "../../test-support/alertFixture";
 
 const FULL_EVIDENCE: EvidenceView = {
   appLogs: [
@@ -118,6 +118,169 @@ describe("EvidencePanel", () => {
         ),
       ).toBeInTheDocument(),
     );
+  });
+
+  it("件数記録があれば台帳グリッドを出し、空でも文の言い訳に落ちない（C-3）", async () => {
+    const empty: EvidenceView = {
+      appLogs: [],
+      terraformDiff: null,
+      recentCommits: [],
+      metrics: [],
+      collectedAt: "2026-01-01T00:00:01.000Z",
+    };
+    render(
+      <EvidencePanel
+        api={fakeApi(empty)}
+        alert={makeAlert({
+          id: "a-1",
+          status: "OPEN",
+          report: makeReport({
+            metrics: {
+              elapsedMs: 92000,
+              evidenceCounts: {
+                logs: 0,
+                metrics: 0,
+                terraformChanges: 0,
+                commits: 0,
+                similarIncidents: 0,
+              },
+            },
+          }),
+        })}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText("過去事例")).toBeInTheDocument());
+    // APPLICATION の調査対象（ログ・コミット・過去事例）が 0 のまま見えている
+    // （探した結果ゼロ＝情報）。調査しないメトリクス/Terraform はセル自体を出さない。
+    expect(screen.getAllByText("0")).toHaveLength(3);
+    expect(screen.queryByText("メトリクス")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("0 のカテゴリも調査済み（該当証拠なし）"),
+    ).toBeInTheDocument();
+    // 旧来の2文フォールバックはグリッドに置き換わる。
+    expect(
+      screen.queryByText(/引用されたインフラ証拠/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("グリッドの >0 セルはクリックで該当セクションへスクロールする", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(
+      <EvidencePanel
+        api={fakeApi()}
+        alert={makeAlert({
+          id: "a-1",
+          status: "OPEN",
+          report: makeReport({
+            metrics: {
+              elapsedMs: 92000,
+              evidenceCounts: {
+                logs: 1,
+                metrics: 1,
+                terraformChanges: 1,
+                commits: 1,
+                similarIncidents: 0,
+              },
+            },
+          }),
+        })}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Cloud Logging")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Terraform/ }));
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("SECURITY は Trivy 件数をスキャンセルで台帳に載せ、クリックで CVE セクションへスクロールする", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const empty: EvidenceView = {
+      appLogs: [],
+      terraformDiff: null,
+      recentCommits: [],
+      metrics: [],
+      collectedAt: "2026-01-01T00:00:01.000Z",
+    };
+    render(
+      <EvidencePanel
+        api={fakeApi(empty)}
+        alert={makeAlert({
+          id: "a-1",
+          status: "OPEN",
+          category: "SECURITY",
+          securityFindings: [
+            {
+              cveId: "CVE-2021-3807",
+              severity: "CRITICAL",
+              package: "ansi-regex",
+              version: "3.0.0",
+              fixedVersion: "5.0.1",
+              nvdUrl: "https://nvd.nist.gov/vuln/detail/CVE-2021-3807",
+            },
+          ],
+          report: makeReport({
+            metrics: {
+              elapsedMs: 92000,
+              evidenceCounts: {
+                logs: 0,
+                metrics: 0,
+                terraformChanges: 0,
+                commits: 10,
+                similarIncidents: 0,
+              },
+            },
+          }),
+        })}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText("スキャン")).toBeInTheDocument());
+    // SECURITY で調査しないメトリクス/Terraform のセルは出さない。
+    expect(screen.queryByText("メトリクス")).not.toBeInTheDocument();
+    expect(screen.queryByText("Terraform")).not.toBeInTheDocument();
+    // スキャンセルは検知 payload の CVE 実測件数を出し、クリックで実物へ飛べる。
+    fireEvent.click(screen.getByRole("button", { name: /スキャン/ }));
+    expect(scrollIntoView).toHaveBeenCalled();
+    // コミット10件は収集済みだが引用ゼロ（CitedCommitFilter で実物なし）＝
+    // グレー格下げ・クリック不可・引用規律の但し書きを出す。
+    expect(
+      screen.queryByRole("button", { name: /コミット/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("10")).toHaveClass("text-slate-400");
+    expect(
+      screen.getByText("収集しても原因に引用しなかった証拠は表示しません"),
+    ).toBeInTheDocument();
+  });
+
+  it("コミット証拠は既定3件に畳み、「残り N 件を表示」で全件展開する", async () => {
+    const manyCommits: EvidenceView = {
+      ...FULL_EVIDENCE,
+      recentCommits: Array.from({ length: 5 }, (_, i) => ({
+        sha: `sha-${i}`,
+        shortSha: `sha-${i}`,
+        message: `commit ${i}`,
+        author: "alice",
+        committedAt: "2026-01-01T00:00:00.000Z",
+      })),
+    };
+    render(
+      <EvidencePanel
+        api={fakeApi(manyCommits)}
+        alert={makeAlert({ id: "a-1", status: "OPEN" })}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText("GitHub")).toBeInTheDocument());
+    expect(screen.getByText("commit 2")).toBeInTheDocument();
+    expect(screen.queryByText("commit 3")).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "残り 2 件のコミットを表示" }),
+    );
+    expect(screen.getByText("commit 3")).toBeInTheDocument();
+    expect(screen.getByText("commit 4")).toBeInTheDocument();
   });
 
   it("SECURITY 検知の CVE を先頭セクションで出し、NVD への実在リンクを張る", async () => {

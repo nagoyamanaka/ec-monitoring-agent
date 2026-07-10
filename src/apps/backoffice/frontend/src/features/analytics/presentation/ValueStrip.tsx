@@ -107,7 +107,7 @@ export function ValueStrip({ api, refreshKey }: ValueStripProps) {
       )}
       <span className="text-xs text-slate-400">※過去実績含む</span>
       <span className="ml-auto text-cyan-300/80" aria-hidden>
-        Analytics →
+        Learning →
       </span>
     </button>
   );
