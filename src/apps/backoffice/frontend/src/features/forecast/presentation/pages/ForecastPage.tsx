@@ -3,6 +3,7 @@ import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { HttpError } from "@shared/api/HttpClient";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 import type { DemoApi } from "@features/demo/infrastructure/demoApi";
+import { LiveStreamStatus } from "@features/alerts/presentation/components/LiveStreamStatus";
 import { useForecastData, useForecastNav } from "../ForecastProvider";
 import type { ForecastBriefingView } from "../../domain/ForecastView";
 import { RiskCard } from "../components/RiskCard";
@@ -87,7 +88,11 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
     demoAvailable && snapshot !== null && snapshot.kind !== "disabled";
 
   return (
-    <DefaultLayout forecastEnabled={nav.enabled} forecastBadge={nav.badge}>
+    <DefaultLayout
+      forecastEnabled={nav.enabled}
+      forecastBadge={nav.badge}
+      headerSlot={<LiveStreamStatus />}
+    >
       <div
         className={
           showConsole

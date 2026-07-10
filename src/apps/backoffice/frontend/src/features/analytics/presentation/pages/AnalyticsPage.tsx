@@ -11,6 +11,7 @@ import {
   type ApprovedAlertSummaryDto,
 } from "../../domain/AnalyticsView";
 import { eventInfo, eventTitle } from "@features/alerts/domain/eventCatalog";
+import { LiveStreamStatus } from "@features/alerts/presentation/components/LiveStreamStatus";
 import { useAnalytics } from "../hooks/useAnalytics";
 
 export interface AnalyticsPageProps {
@@ -34,6 +35,7 @@ export function AnalyticsPage({ api }: AnalyticsPageProps) {
     <DefaultLayout
       forecastEnabled={forecastNav.enabled}
       forecastBadge={forecastNav.badge}
+      headerSlot={<LiveStreamStatus />}
     >
       <div className="space-y-6">
         <header className="flex items-start justify-between gap-4">
