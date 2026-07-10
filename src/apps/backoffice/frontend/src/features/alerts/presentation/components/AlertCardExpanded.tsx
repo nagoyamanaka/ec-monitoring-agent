@@ -367,7 +367,7 @@ export function AlertCardExpanded({
                         </span>
                         <span className="text-slate-100">{row.value}</span>
                         {row.expected && (
-                          <span className="block pl-4 text-[10px] text-slate-400">
+                          <span className="block pl-4 text-xs text-slate-400">
                             照合相手（期待値）: {row.expected}
                           </span>
                         )}

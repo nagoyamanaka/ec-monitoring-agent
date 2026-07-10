@@ -32,4 +32,4 @@ export {
 export { ConfidenceGauge } from "./ConfidenceGauge";
 export { ConfidenceBar } from "./ConfidenceBar";
 export { ConfidenceChip } from "./ConfidenceChip";
-export { rankColor, confidenceColor } from "./colors";
+export { rankColor, confidenceColor, confidenceBrandColor } from "./colors";

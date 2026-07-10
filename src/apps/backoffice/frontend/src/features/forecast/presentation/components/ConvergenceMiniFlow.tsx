@@ -62,7 +62,7 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
             具象LLM（Gemini/Vertex）はポートの向こう＝UI では名指しせず "AI" で統一。 */}
         <div className="shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30">
           <p className="text-sm font-semibold text-cyan-200">AI 調査</p>
-          <p className="mt-0.5 text-[11px] text-cyan-100/80">独立した根拠を突合</p>
+          <p className="mt-0.5 text-xs text-cyan-100/80">独立した根拠を突合</p>
         </div>
 
         <span className="text-center text-cyan-500/70 md:hidden">▼</span>

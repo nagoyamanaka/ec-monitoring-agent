@@ -22,11 +22,18 @@ const TEXT_BY_COLOR: Record<string, string> = {
   emerald: "text-emerald-300",
 };
 
-/** tone → チップの数値テキスト色（由来トーン優先時）。 */
-const TEXT_BY_TONE: Record<NonNullable<ConfidenceChipProps["tone"]>, string> = {
-  ai: "text-cyan-300",
-  match: "text-emerald-300",
-};
+/**
+ * tone → チップの数値テキスト色（由来トーン優先時）。
+ * "ai" は低確信（裏付けなし上限40%近傍）を slate に落とし、リング/バーの
+ * confidenceBrandColor と同じ「弱い数字は視覚強度も弱く」を行内でも守る。
+ */
+function toneTextColor(
+  tone: NonNullable<ConfidenceChipProps["tone"]>,
+  confidence: number,
+): string {
+  if (tone === "match") return "text-emerald-300";
+  return confidence < 0.5 ? "text-slate-300" : "text-cyan-300";
+}
 
 /**
  * 一覧行向けのコンパクトな確信度表示（「確信度 90%」）。
@@ -42,7 +49,7 @@ export function ConfidenceChip({
   const clamped = Math.min(1, Math.max(0, confidence));
   const percent = Math.round(clamped * 100);
   const valueColor = tone
-    ? TEXT_BY_TONE[tone]
+    ? toneTextColor(tone, clamped)
     : TEXT_BY_COLOR[confidenceColor(clamped)];
   return (
     <span className={cn("inline-flex items-center gap-1 text-sm", className)}>

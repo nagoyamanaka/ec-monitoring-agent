@@ -71,7 +71,7 @@ export function RiskCard({ risk }: RiskCardProps) {
           {/* U1③: 先手の効果1行（決定論テンプレ・引用の past 件数から生成）。
               ②b の LLM 文（preventiveAction）を上書きせず別行で共存する（0件なら出さない）。 */}
           {pastCount > 0 && (
-            <p className="mt-2 border-t border-cyan-500/20 pt-2 text-[11px] leading-relaxed text-cyan-200/80">
+            <p className="mt-2 border-t border-cyan-500/20 pt-2 text-xs leading-relaxed text-cyan-200/80">
               この先手で、過去の同型事例（{pastCount}件）と同じ経路の再発を高負荷窓の外へ外します。
             </p>
           )}

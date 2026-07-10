@@ -325,7 +325,7 @@ export function AlertReviewPanel({
         </div>
       )}
       {approved && reviewState !== "REJECTED" && !rejecting && (
-        <p className="flex items-start gap-1.5 border-t border-slate-700/40 pt-2 text-[11px] leading-snug text-emerald-300">
+        <p className="flex items-start gap-1.5 border-t border-slate-700/40 pt-2 text-xs leading-snug text-emerald-300">
           <CheckCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             承認を記録しました。AI の分類が正しかったことが学習シグナルとして残ります。
@@ -338,7 +338,7 @@ export function AlertReviewPanel({
           decide() が判定のたびにセット/クリアするため reviewState での追加ガードは持たない
           （承認→却下の訂正直後は refetch まで reviewState が APPROVED のままの窓がある）。 */}
       {rejectedNotice && !rejecting && (
-        <p className="flex items-start gap-1.5 border-t border-slate-700/40 pt-2 text-[11px] leading-snug text-rose-300">
+        <p className="flex items-start gap-1.5 border-t border-slate-700/40 pt-2 text-xs leading-snug text-rose-300">
           <XCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             却下を記録しました。AI
@@ -392,7 +392,7 @@ export function AlertReviewPanel({
         </div>
       )}
       {promoted && (
-        <p className="flex items-start gap-1.5 border-t border-slate-700/40 pt-2 text-[11px] leading-snug text-emerald-300">
+        <p className="flex items-start gap-1.5 border-t border-slate-700/40 pt-2 text-xs leading-snug text-emerald-300">
           <CheckCircleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           この障害を既知パターンへ焼き付けました。次回の同型障害は完全一致の高速パスで即・既知に分類されます。
         </p>
@@ -400,7 +400,7 @@ export function AlertReviewPanel({
       {error && (
         <p
           role="alert"
-          className="border-t border-slate-700/40 pt-2 text-[11px] leading-snug text-rose-300"
+          className="border-t border-slate-700/40 pt-2 text-xs leading-snug text-rose-300"
         >
           {error}
         </p>
@@ -408,7 +408,7 @@ export function AlertReviewPanel({
       {/* 過去に却下済みの状態表示（セッション通知が出ている間は重複させない）。
           裸の理由 echo でなく「記録が何に効いているか」のラベルを添える。 */}
       {reviewState === "REJECTED" && !rejectedNotice && (
-        <div className="space-y-0.5 border-t border-slate-700/40 pt-2 text-[11px] leading-snug">
+        <div className="space-y-0.5 border-t border-slate-700/40 pt-2 text-xs leading-snug">
           <p className="flex items-center gap-1.5 font-medium text-rose-300/90">
             <XCircleIcon />
             却下済み — 誤分類として記録されています（Analytics の分類正答率に反映）

@@ -95,7 +95,7 @@ function RowSection({
           {rows.length}
         </span>
       </div>
-      <p className="text-[11px] text-slate-400">{description}</p>
+      <p className="text-xs text-slate-400">{description}</p>
       <div className="space-y-2">
         {rows.map((row) => (
           <AlertRow key={row.alertId} row={row} onNavigate={onNavigate} />

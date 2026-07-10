@@ -17,9 +17,9 @@ export function ConfidenceCalibrationNote({
   const note = calibrationNote(calibration, confidence);
   return (
     <div className="max-w-xs text-center">
-      <p className="text-[11px] text-slate-400">{note.basis}</p>
+      <p className="text-xs text-slate-400">{note.basis}</p>
       {note.adjustment && (
-        <p className="mt-0.5 text-[11px] text-slate-500">{note.adjustment}</p>
+        <p className="mt-0.5 text-xs text-slate-400">{note.adjustment}</p>
       )}
     </div>
   );

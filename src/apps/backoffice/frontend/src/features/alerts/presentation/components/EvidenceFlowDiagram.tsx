@@ -1,4 +1,4 @@
-import { ConfidenceGauge } from "@shared/ui/tremor";
+import { ConfidenceGauge, confidenceBrandColor } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
 import type { EvidenceFlowModel } from "../../domain/evidenceFlow";
 import type {
@@ -111,7 +111,7 @@ export function EvidenceFlowDiagram({
           <p className="text-sm font-semibold text-cyan-200">AI 調査</p>
           <p
             tabIndex={0}
-            className="mt-0.5 cursor-help text-[11px] text-cyan-100/80 underline decoration-dotted decoration-cyan-400/50 underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
+            className="mt-0.5 cursor-help text-xs text-cyan-100/80 underline decoration-dotted decoration-cyan-400/50 underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
           >
             8エージェントが
             <br className="hidden md:block" />
@@ -133,7 +133,7 @@ export function EvidenceFlowDiagram({
                     key={agent.name}
                     data-mentioned={active}
                     className={cn(
-                      "flex gap-1.5 text-[11px] leading-snug",
+                      "flex gap-1.5 text-xs leading-snug",
                       active ? "text-cyan-200" : "text-slate-400",
                     )}
                   >
@@ -165,7 +165,7 @@ export function EvidenceFlowDiagram({
             confidence={model.confidence}
             size="sm"
             label="AI 確信度"
-            color="cyan"
+            color={confidenceBrandColor(model.confidence)}
           />
           {calibration && (
             <ConfidenceCalibrationNote
