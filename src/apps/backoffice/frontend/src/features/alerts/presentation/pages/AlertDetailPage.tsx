@@ -230,7 +230,12 @@ export function AlertDetailPage() {
               />
             )}
             {hasAiInvestigation(alert) && (
-              <EvidencePanel api={evidenceApi} alert={alert} className={PANEL} />
+              <EvidencePanel
+                api={evidenceApi}
+                alert={alert}
+                corpus={alerts}
+                className={PANEL}
+              />
             )}
             {/* 判定は報告書の締めアクションとして末尾に置く（一覧ドロワーと配置統一）。 */}
             <AlertReviewPanel
