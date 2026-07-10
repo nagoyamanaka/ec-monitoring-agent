@@ -28,6 +28,11 @@ Findy **DevOps × AI Agent Hackathon 2026** 出展作品。
 
 ## 全体像
 
+![Kizashi システム全体の処理フロー — 検知（既存基盤）→ ingest 3系統 → 分類（既知1秒/類似/未知）→ AI 調査（ADK 8エージェント・read-only）→ 人間レビュー→学習ループ、起きる前の予兆ブリーフィング、write 隔離の AI 修正 draft PR](docs/assets/architecture.png)
+
+<details>
+<summary>テキスト版（Mermaid）</summary>
+
 ```mermaid
 flowchart LR
   subgraph future["未来シグナル（起きる前）"]
@@ -56,6 +61,8 @@ flowchart LR
   CLS --> UI --> FB -->|既知化| CLS
   ADK -->|SECURITY| REM
 ```
+
+</details>
 
 詳細図（調査フロー・エージェントグラフ・デプロイ構成）は **[docs/architecture.md](docs/architecture.md)** へ。
 
