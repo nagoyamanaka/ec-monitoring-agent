@@ -159,7 +159,7 @@ function KnowledgeLifecycleHero({
             既知パターンに無く、AI が一から調査
           </p>
           <p
-            className="mt-1 truncate text-xs text-slate-500"
+            className="mt-1 truncate text-xs text-slate-400"
             title={alert.eventName}
           >
             例: {eventTitle(alert.eventName)}
@@ -418,7 +418,20 @@ function ApprovedAlertsSection({
         <h3 className="text-xs font-medium uppercase tracking-wide text-slate-300">
           蓄積された知識（承認済みアラート）
         </h3>
-        <span className="text-xs text-slate-400">{alerts.length} 件</span>
+        <span className="flex items-baseline gap-3 text-xs text-slate-400">
+          {/* 行頭ドットの意味（severity）。色だけの未定義記号にしない＝静止画でも読める凡例。 */}
+          <span className="hidden items-baseline gap-2 text-[10px] sm:flex" aria-hidden>
+            {(["CRITICAL", "WARNING", "INFO"] as const).map((sev) => (
+              <span key={sev} className="inline-flex items-center gap-1">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${SEVERITY_DOT[sev]}`}
+                />
+                {sev}
+              </span>
+            ))}
+          </span>
+          <span>{alerts.length} 件</span>
+        </span>
       </div>
       <p className="mt-1 text-xs text-slate-400">
         承認してクローズしたアラートの記録です。行をクリックすると詳細を開けます（既知パターンへの昇格もここから辿れます）。
@@ -440,6 +453,7 @@ function ApprovedAlertsSection({
                   className={`h-2 w-2 shrink-0 rounded-full ${
                     SEVERITY_DOT[alert.severity] ?? "bg-slate-500"
                   }`}
+                  title={`重大度: ${alert.severity}`}
                   aria-hidden
                 />
                 <div className="min-w-0 flex-1">
@@ -483,7 +497,7 @@ function ApprovedAlertsSection({
                     {alert.operatorNote ? ` — ${alert.operatorNote}` : ""}
                   </p>
                 </div>
-                <span className="shrink-0 text-xs text-slate-500">
+                <span className="shrink-0 text-xs text-slate-400">
                   {formatRelativeTime(alert.occurredOn)}
                 </span>
                 <span className="shrink-0 text-slate-600" aria-hidden>
