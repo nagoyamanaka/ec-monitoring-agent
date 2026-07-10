@@ -13,6 +13,7 @@ import {
   evidenceLedgerKeys,
   type EvidenceLedgerKey,
 } from "../../domain/evidenceLedger";
+import { collectPastIncidentRefs } from "../../domain/relatedAlerts";
 import { useEvidence } from "../hooks/useEvidence";
 import { EvidenceCountsGrid } from "./EvidenceCountsGrid";
 
@@ -20,6 +21,12 @@ export interface EvidencePanelProps {
   api: EvidenceApi;
   /** SSE ライブの alert。status から証拠の取得タイミング（done）を導出する。 */
   alert: AlertView;
+  /**
+   * 一覧のアラート集合。台帳の「過去事例」セルが実際に「過去の同型事例」節へ
+   * 出たか（＝引用されたか）を collectPastIncidentRefs で突合するのに使う。
+   * 未指定なら back-link/AI 相関のみで判定する。
+   */
+  corpus?: readonly AlertView[];
   className?: string;
 }
 
@@ -424,7 +431,12 @@ const COUNT_KEY_TO_KIND: Partial<
   commits: "commits",
 };
 
-export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
+export function EvidencePanel({
+  api,
+  alert,
+  corpus,
+  className,
+}: EvidencePanelProps) {
   const { phase, evidence, error } = useEvidence(api, alert);
 
   // SECURITY 検知の CVE（検知イベント payload 由来）は調査収集の証拠と並べて1枚のパネルにする。
@@ -457,10 +469,17 @@ export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
   // 収集したが原因へ引用されず、実物セクションが出ない証拠源（現状は CitedCommitFilter で
   // 引用 sha だけに絞られるコミットが該当）。台帳の数字は「調査の広さ」の実測として残しつつ、
   // 「結論の裏付け」ではないことをグレー格下げ+但し書きで明示する（隠蔽でなく引用規律）。
+  // 過去事例の実物は本パネル外（「過去の同型事例」節）が担うので、そこに実際に出たか
+  // （back-link/AI 相関/同 eventName の対処済み）を collectPastIncidentRefs で突合し、
+  // 検索でヒットしても節へ出ない＝引用なしなら他の証拠源と同じ規律でグレー格下げする。
+  const pastRefCount = collectPastIncidentRefs(alert, corpus ?? []).length;
   const uncited = new Set(
     ledgerKeys.filter((key) => {
+      if (key === "similarIncidents") {
+        return (counts?.similarIncidents ?? 0) > 0 && pastRefCount === 0;
+      }
       const kind = COUNT_KEY_TO_KIND[key];
-      if (!kind) return false; // 過去事例は実物が本パネル外＝対象外（tooltip 案内）
+      if (!kind) return false;
       const count = key === "security" ? securityCount : counts?.[key] ?? 0;
       return count > 0 && !sections.some((s) => s.kind === kind);
     }),

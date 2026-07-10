@@ -289,7 +289,7 @@ export function AlertDetailDrawer({
           )}
           {/* 分析中の証拠プレースホルダはパイプラインビュー（上）が代替するため完了後のみ出す。 */}
           {evidenceApi && hasAiInvestigation(alert) && !analyzing && (
-            <EvidencePanel api={evidenceApi} alert={alert} />
+            <EvidencePanel api={evidenceApi} alert={alert} corpus={alerts} />
           )}
           {/* 判定は末尾に統一配置（詳細ページと同じ）。 */}
           <AlertReviewPanel
