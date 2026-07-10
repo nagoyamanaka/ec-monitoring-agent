@@ -22,22 +22,22 @@ function toneOf(alert: AlertView): Tone {
     case "ANALYZING":
       return {
         label: "分析中",
-        cls: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
+        cls: "bg-cyan-500/15 text-cyan-300",
       };
     case "APPROVED":
       return {
         label: "承認済み",
-        cls: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+        cls: "bg-emerald-500/15 text-emerald-300",
       };
     case "REJECTED":
       return {
         label: "却下済み",
-        cls: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+        cls: "bg-rose-500/15 text-rose-300",
       };
     case "PENDING":
       return {
         label: "レビュー待ち",
-        cls: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+        cls: "bg-amber-500/15 text-amber-300",
       };
   }
 }
@@ -62,7 +62,7 @@ export function AlertStatusBadge({ alert, className }: AlertStatusBadgeProps) {
       key={state}
       onAnimationEnd={() => setTransitioned(false)}
       className={cn(
-        "inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset",
+        "inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium",
         transitioned && "badge-fade-in",
         cls,
         className,

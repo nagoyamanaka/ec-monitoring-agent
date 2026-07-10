@@ -8,6 +8,7 @@ import { EvidenceFlowDiagram } from "./EvidenceFlowDiagram";
 import { RemediationReviewPanel } from "./RemediationReviewPanel";
 import { NextActionCard } from "./NextActionCard";
 import { alertReason } from "../../domain/alertReason";
+import { patternLabel } from "../../domain/patternLabel";
 import { nextAction } from "../../domain/nextAction";
 import {
   documentationRows,
@@ -26,17 +27,6 @@ import { evidenceFlowModel } from "../../domain/evidenceFlow";
  * データは二重持ちせず、同じ AlertView から表示時に射影する。
  */
 export type AlertReportVariant = "summary" | "full";
-
-/** AI 推定パターン名が機械 ID（UPPER_SNAKE_CASE）のときだけ人間語化して見出し行に出す対象と判定する。 */
-const RAW_ID_PATTERN = /^[A-Z0-9]+(?:_[A-Z0-9]+)+$/;
-
-function isRawId(patternName: string): boolean {
-  return RAW_ID_PATTERN.test(patternName);
-}
-
-function humanizeRawId(patternName: string): string {
-  return patternName.replace(/_/g, " ").toLowerCase();
-}
 
 export interface AlertCardExpandedProps {
   alert: AlertView;
@@ -123,7 +113,7 @@ export function AlertCardExpanded({
       {/* AI 調査中（オンデマンドのレポート生成 or 人間の指摘を反映した再調査）。
           既存内容は下に残したまま、進行中であることを明示する。 */}
       {analyzingNow && analyzingNotice && (
-        <div className="flex items-center gap-2 rounded-md bg-cyan-500/10 px-3 py-2.5 text-sm font-medium text-cyan-200 ring-1 ring-inset ring-cyan-500/30">
+        <div className="flex items-center gap-2 rounded-md bg-cyan-500/10 px-3 py-2.5 text-sm font-medium text-cyan-200">
           <span
             className="h-2.5 w-2.5 animate-pulse rounded-full bg-cyan-400"
             aria-hidden
@@ -138,7 +128,7 @@ export function AlertCardExpanded({
           該当フィールドを持たない Alert では出ない。 */}
       {detection && (
         <section className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+          <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
             発報内容
           </h4>
           {/* リード文（人間語 summary）。CM 自動生成の英文は下の details（原文）へ降格済み。 */}
@@ -151,10 +141,10 @@ export function AlertCardExpanded({
               「ラベル: 値」の行構成なら検知ログを主役の引用に・残りを定義リストに構造化し、
               形が違う documentation は従来どおり改行保持の生テキストで出す。 */}
           {docRows ? (
-            <div className="rounded-md bg-slate-800/60 px-3.5 py-3 ring-1 ring-inset ring-slate-700/60">
+            <div className="rounded-md bg-slate-800/60 px-3.5 py-3">
               {logRow && (
                 <div className="border-l-2 border-cyan-500/50 pl-2.5">
-                  <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                  <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
                     検知ログ
                   </p>
                   <p className="text-sm leading-relaxed text-slate-100">
@@ -186,7 +176,7 @@ export function AlertCardExpanded({
             </div>
           ) : (
             detection.documentation && (
-              <p className="whitespace-pre-line rounded-md bg-slate-800/60 px-3 py-2 text-xs leading-relaxed text-slate-200 ring-1 ring-inset ring-slate-700/60">
+              <p className="whitespace-pre-line rounded-md bg-slate-800/60 px-3 py-2 text-xs leading-relaxed text-slate-200">
                 {detection.documentation}
               </p>
             )
@@ -234,7 +224,7 @@ export function AlertCardExpanded({
                   {detectionResource.labels.map((label) => (
                     <code
                       key={label.key}
-                      className="rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[10px] text-slate-300 ring-1 ring-inset ring-slate-700/60"
+                      className="rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[10px] text-slate-300"
                     >
                       {label.key}={label.value}
                     </code>
@@ -272,12 +262,13 @@ export function AlertCardExpanded({
         </section>
       )}
 
-      {/* 推定原因（該当パターン / AI 推定パターン）。
-          結晶化パターンは人間語＋◈で出し、生ID（PROMOTED_...）は詳細の従属行へ降格。 */}
+      {/* 推定原因（該当パターン / 原因候補=AI推定）。
+          結晶化パターンは人間語＋◈で出し、生ID（PROMOTED_...）は詳細の従属行へ降格。
+          それ以外も patternLabel（G4）で人間語化し、写像が起きたときだけ生IDを従属行へ残す。 */}
       {reason.kind !== "analyzing" && (
         <section className="space-y-1">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-            {known ? "該当パターン（既知）" : "AI 推定パターン"}
+          <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
+            {known ? "該当パターン（既知）" : "原因候補（AI 推定）"}
           </h4>
           {reason.kind === "known" && reason.crystallized ? (
             <>
@@ -286,7 +277,7 @@ export function AlertCardExpanded({
                   ◈{" "}
                 </span>
                 {reason.patternName}
-                <span className="ml-2 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/25">
+                <span className="ml-2 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-300">
                   結晶化（承認により学習）
                 </span>
               </p>
@@ -294,9 +285,9 @@ export function AlertCardExpanded({
                 パターンID: <code>{reason.rawPatternName}</code>
               </p>
             </>
-          ) : isRawId(reason.patternName) ? (
+          ) : patternLabel(reason.patternName) !== reason.patternName ? (
             <>
-              <p className="text-slate-100">{humanizeRawId(reason.patternName)}</p>
+              <p className="text-slate-100">{patternLabel(reason.patternName)}</p>
               <p className="text-xs text-slate-400">
                 パターンID: <code>{reason.patternName}</code>
               </p>
@@ -304,13 +295,24 @@ export function AlertCardExpanded({
           ) : (
             <p className="text-slate-100">{reason.patternName}</p>
           )}
+          {/* 何が原因だったか（G4b）: 既知はパターン名だけでは原因を語らないため、
+              seed の定義文 or 結晶化の承認時 AI summary を1行で添える。
+              類似（SIMILARITY）は確定でないため候補調。 */}
+          {reason.kind === "known" && reason.cause !== undefined && (
+            <p className="text-slate-300">
+              <span className="text-slate-400">
+                {reason.source === "EXACT_MATCH" ? "原因: " : "原因候補: "}
+              </span>
+              {reason.cause}
+            </p>
+          )}
           {/* 学習ループの経済性の対比（タスク G1）: 既知一致は AI を起動せず即・無料で確定する事実を
               毎回 1 行で想起させる（AI 調査の実測サマリと対になる）。 */}
           {reason.kind === "known" && (
             <p className="text-xs text-emerald-300/90">
               <span aria-hidden>⚡ </span>
               既知パターン一致＝
-              <span className="font-semibold">1秒未満・AI コストゼロ</span>
+              <span className="font-medium">1秒未満・AI コストゼロ</span>
               で確定
               {reason.crystallized && "（初回 AI 調査の結晶化を再利用）"}
             </p>
@@ -337,11 +339,11 @@ export function AlertCardExpanded({
           similarity のしきい値は「一致」でなく確定の条件式＝テーブルに混ぜずゲート行で見せる。 */}
       {evidence && (evidence.rows.length > 0 || evidence.similarityGate) && (
         <section className="space-y-1.5">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+          <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
             一致した根拠
           </h4>
           {evidence.rows.length > 0 && (
-            <div className="inline-block max-w-full overflow-x-auto rounded-md ring-1 ring-inset ring-slate-700/60">
+            <div className="inline-block max-w-full overflow-x-auto rounded-md bg-slate-800/40">
               <table className="text-left text-xs">
                 <thead>
                   <tr className="bg-slate-800/50 text-slate-300">
@@ -387,7 +389,7 @@ export function AlertCardExpanded({
               <code className="mx-1 text-[10px] text-cyan-300/80">
                 {evidence.similarityGate.raw}
               </code>
-              <span className="font-semibold text-emerald-300">
+              <span className="font-medium text-emerald-300">
                 {evidence.similarityGate.actualLabel}
               </span>{" "}
               ≧ しきい値 {evidence.similarityGate.thresholdLabel}{" "}
@@ -410,16 +412,16 @@ export function AlertCardExpanded({
               数字は全て backend が記録した事実（InvestigationMetrics）＝人間換算はしない。
               full で証拠フローダイアグラム（E8-A）が描けるときは図に吸収し、この行は出さない。 */}
           {workload && !flow && (
-            <p className="rounded-md bg-cyan-500/10 px-3 py-2 text-xs leading-relaxed text-cyan-100 ring-1 ring-inset ring-cyan-500/25">
+            <p className="rounded-md bg-cyan-500/10 px-3 py-2 text-xs leading-relaxed text-cyan-100">
               <span aria-hidden>⏱ </span>
-              <span className="font-semibold text-cyan-300">
+              <span className="font-medium text-cyan-300">
                 {workload.elapsedLabel}
               </span>
               で
               {workload.evidenceTotal > 0 ? (
                 <>
                   {workload.sources.join("・")} を横断し、
-                  <span className="font-semibold text-cyan-300">
+                  <span className="font-medium text-cyan-300">
                     証拠 {workload.evidenceTotal} 件
                   </span>
                   を収集して原因を推定
@@ -457,7 +459,7 @@ export function AlertCardExpanded({
               コミット/ログへの一次情報リンク）＝行き止まりにしない（タスク E3）。要約射影でも出す。 */}
           {report.isFallback && report.investigationSteps.length > 0 && (
             <section className="space-y-1">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
                 収集済みの証拠リンク
               </h4>
               <p className="text-xs text-slate-400">
@@ -486,7 +488,7 @@ export function AlertCardExpanded({
           {/* 調査ステップは縦タイムライン（タスク E8-B）＝AI がたどった道筋を構造で見せる。 */}
           {full && !report.isFallback && report.investigationSteps.length > 0 && (
             <section className="space-y-1.5">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
                 調査ステップ
               </h4>
               <InvestigationTimeline steps={report.investigationSteps} />

@@ -1,5 +1,10 @@
-import { type AlertView, isAnalyzing } from "./AlertView";
+import {
+  type AlertView,
+  type ClassificationSource,
+  isAnalyzing,
+} from "./AlertView";
 import { eventTitle } from "./eventCatalog";
+import { patternCause } from "./patternLabel";
 
 /**
  * 「何が起きたと推定したか」を分類/調査から導く純関数。
@@ -19,10 +24,17 @@ export type AlertReason =
   | {
       readonly kind: "known";
       readonly patternName: string;
+      /** どの分類ルールが当てたか。完全一致は原因を確定調（原因:）、類似は候補調（原因候補:）で出す。 */
+      readonly source: ClassificationSource;
       /** 昇格（結晶化）由来の自動生成パターンか。UI は結晶化アイコンを添える。 */
       readonly crystallized: boolean;
       /** crystallized のときの生パターン ID（例: PROMOTED_EC.DB...）。表示は tooltip/詳細のみ。 */
       readonly rawPatternName?: string;
+      /**
+       * 何が原因だったか（G4b・あれば③行はパターン名でなくこちらを出す）。
+       * seed 既知＝要約辞書／結晶化＝承認時の AI 調査 summary（wire patternDescription）。
+       */
+      readonly cause?: string;
     }
   | { readonly kind: "ai"; readonly patternName: string }
   | { readonly kind: "analyzing" };
@@ -33,15 +45,24 @@ export function alertReason(alert: AlertView): AlertReason {
   if (isAnalyzing(alert)) return { kind: "analyzing" };
   if (alert.classification.type === "known") {
     const raw = alert.classification.patternName;
+    const cause = patternCause(raw, alert.classification.patternDescription);
     if (PROMOTED_PREFIX.test(raw)) {
       return {
         kind: "known",
         patternName: eventTitle(alert.eventName),
+        source: alert.classification.source,
         crystallized: true,
         rawPatternName: raw,
+        ...(cause !== undefined ? { cause } : {}),
       };
     }
-    return { kind: "known", patternName: raw, crystallized: false };
+    return {
+      kind: "known",
+      patternName: raw,
+      source: alert.classification.source,
+      crystallized: false,
+      ...(cause !== undefined ? { cause } : {}),
+    };
   }
   if (alert.report) {
     // fallback レポートは suggestedPatternName が空＝「AI推定: 」と空文字が並ぶため、

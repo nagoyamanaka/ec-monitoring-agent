@@ -80,7 +80,7 @@ function FilterChip({
       }
     >
       {active && (
-        <span aria-hidden className="font-semibold">
+        <span aria-hidden className="font-medium">
           ✓
         </span>
       )}
@@ -119,7 +119,7 @@ export function AlertsHeader({
     <div className="space-y-3">
       <p className="text-[15px] leading-relaxed text-slate-200">
         アラートの
-        <span className="font-semibold text-cyan-300">調査・評価・報告</span>
+        <span className="font-medium text-cyan-300">調査・評価・報告</span>
         を AI エージェントが肩代わり — 未知の障害は証拠つきで原因を提示し、
         承認するとその判断を学習して次回から1秒未満で確定します。
       </p>
@@ -156,7 +156,7 @@ export function AlertsHeader({
           {analyzing > 0 && (
             <>
               <span aria-hidden className="h-3.5 w-px bg-slate-700" />
-              <span className="rounded-full bg-cyan-500/15 px-2.5 py-0.5 font-medium text-cyan-300 ring-1 ring-inset ring-cyan-500/30">
+              <span className="rounded-full bg-cyan-500/15 px-2.5 py-0.5 font-medium text-cyan-300">
                 分析中 {analyzing}件
               </span>
             </>

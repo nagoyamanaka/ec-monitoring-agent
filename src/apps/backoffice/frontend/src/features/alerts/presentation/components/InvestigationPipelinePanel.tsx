@@ -104,7 +104,7 @@ export function InvestigationPipelinePanel({
     return (
       <section
         className={cn(
-          "space-y-3 rounded-tremor-default bg-cyan-500/5 px-4 py-3 ring-1 ring-inset ring-cyan-500/25",
+          "space-y-3 rounded-tremor-default bg-cyan-500/10 px-4 py-3",
           className,
         )}
         aria-label="AI 調査パイプライン"
@@ -114,7 +114,7 @@ export function InvestigationPipelinePanel({
             aria-hidden
             className="h-2.5 w-2.5 animate-pulse rounded-full bg-cyan-400"
           />
-          <h4 className="text-sm font-semibold text-cyan-200">
+          <h4 className="text-sm font-medium text-cyan-200">
             AI エージェントが自律調査中
           </h4>
           <span
@@ -145,7 +145,7 @@ export function InvestigationPipelinePanel({
                 className={cn(
                   "flex items-baseline gap-2 rounded-md px-2 py-1 text-xs transition",
                   isCurrent
-                    ? "bg-cyan-500/10 text-cyan-200 ring-1 ring-inset ring-cyan-500/30"
+                    ? "bg-cyan-500/10 text-cyan-200"
                     : wasActive
                       ? "text-slate-200"
                       : "text-slate-400",
@@ -154,7 +154,7 @@ export function InvestigationPipelinePanel({
                 <span aria-hidden className="w-3 shrink-0 text-center">
                   {isCurrent ? "▸" : wasActive ? "✓" : "·"}
                 </span>
-                <span className="shrink-0 font-semibold">{agent.label}</span>
+                <span className="shrink-0 font-medium">{agent.label}</span>
                 <span className="min-w-0 truncate">{agent.role}</span>
                 {isCurrent && (
                   <span className="ml-auto shrink-0 font-medium">実行中</span>
@@ -206,12 +206,12 @@ export function InvestigationPipelinePanel({
   return (
     <section
       className={cn(
-        "space-y-2 rounded-tremor-default bg-slate-800/30 px-4 py-3 ring-1 ring-inset ring-slate-700/60",
+        "space-y-2 rounded-tremor-default bg-slate-800/40 px-4 py-3",
         className,
       )}
       aria-label="AI 調査タイムライン"
     >
-      <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
+      <h4 className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-300">
         <span aria-hidden className="text-emerald-300">
           ✓
         </span>

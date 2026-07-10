@@ -66,6 +66,11 @@ export class KnownPatternRule implements ClassificationRule {
         ...(pattern.suggestedAction !== ""
           ? { resolvedNote: pattern.suggestedAction }
           : {}),
+        // 何が原因か（seed=定義文/結晶化=承認時の AI summary）。patternName がタイトルの
+        // 復唱になる既知ルートで、一覧が原因1行を出せるようにする（空文字は載せない）。
+        ...(pattern.description !== ""
+          ? { patternDescription: pattern.description }
+          : {}),
       };
     }
 

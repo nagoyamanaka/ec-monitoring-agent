@@ -67,6 +67,8 @@ export type KnownAlertClassification = {
   readonly sourceAlertId?: string;
   // 類似既知（SIMILARITY）分類のとき、一致した解決済み事例の対応メモ（当時どう直したか・任意）。
   readonly resolvedNote?: string;
+  // 一致した KnownErrorPattern.description＝何が原因か（seed=定義文/結晶化=承認時AI summary・任意）。
+  readonly patternDescription?: string;
 };
 
 export type UnknownAlertClassification = {
@@ -97,6 +99,9 @@ export function alertClassificationToPrimitives(
       ...(classification.resolvedNote !== undefined
         ? { resolvedNote: classification.resolvedNote }
         : {}),
+      ...(classification.patternDescription !== undefined
+        ? { patternDescription: classification.patternDescription }
+        : {}),
     };
   }
   return { type: "unknown", confidence: null };
@@ -120,6 +125,9 @@ export function alertClassificationFromPrimitives(
         : {}),
       ...(primitives.resolvedNote !== undefined
         ? { resolvedNote: primitives.resolvedNote }
+        : {}),
+      ...(primitives.patternDescription !== undefined
+        ? { patternDescription: primitives.patternDescription }
         : {}),
     };
   }

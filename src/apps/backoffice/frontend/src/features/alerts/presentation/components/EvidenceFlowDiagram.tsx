@@ -48,21 +48,21 @@ export function EvidenceFlowDiagram({
     <section
       aria-label="証拠の流れ"
       className={cn(
-        "space-y-3 rounded-lg bg-slate-800/30 p-3 ring-1 ring-inset ring-slate-700/50",
+        "space-y-3 rounded-lg bg-slate-800/40 p-3",
         className,
       )}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+        <h4 className="text-xs font-medium uppercase tracking-wide text-slate-300">
           証拠の流れ
         </h4>
         <p className="text-xs text-cyan-100">
           <span aria-hidden>⏱ </span>
-          <span className="font-semibold text-cyan-300">
+          <span className="font-medium text-cyan-300">
             {model.elapsedLabel}
           </span>
           ・証拠{" "}
-          <span className="font-semibold text-cyan-300">
+          <span className="font-medium text-cyan-300">
             {model.evidenceTotal} 件
           </span>
           を収集
@@ -85,7 +85,7 @@ export function EvidenceFlowDiagram({
         <ul className="min-w-0 flex-1 space-y-1.5">
           {model.sources.map((source) => (
             <li key={source.key} className="flex items-center">
-              <span className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-slate-800/60 px-2.5 py-1.5 text-xs ring-1 ring-inset ring-slate-700/60">
+              <span className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-slate-800/60 px-2.5 py-1.5 text-xs">
                 <span className="shrink-0 text-cyan-300">{source.icon}</span>
                 <span className="truncate text-slate-200">{source.label}</span>
                 <span className="ml-auto shrink-0 font-semibold tabular-nums text-cyan-300">
@@ -107,8 +107,8 @@ export function EvidenceFlowDiagram({
 
         {/* AI 調査ノード（収束点）。ホバー/フォーカスで8エージェント台帳を出す
             （常時表示は図の邪魔＝要求時にだけ・D2 の段階開示と同方針）。 */}
-        <div className="group relative shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30">
-          <p className="text-sm font-semibold text-cyan-200">AI 調査</p>
+        <div className="group relative shrink-0 self-center rounded-lg bg-cyan-500/10 px-4 py-3 text-center">
+          <p className="text-sm font-medium text-cyan-200">AI 調査</p>
           <p
             tabIndex={0}
             className="mt-0.5 cursor-help text-xs text-cyan-100/80 underline decoration-dotted decoration-cyan-400/50 underline-offset-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400"
@@ -121,7 +121,7 @@ export function EvidenceFlowDiagram({
             role="tooltip"
             className="pointer-events-none invisible absolute left-1/2 top-full z-10 mt-2 w-72 -translate-x-1/2 rounded-lg border border-slate-700 bg-slate-900 p-3 text-left opacity-0 shadow-xl transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
           >
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
               エージェント台帳
               {mentioned.size > 0 && "（✓＝この調査のステップに登場）"}
             </p>
@@ -141,7 +141,7 @@ export function EvidenceFlowDiagram({
                       {active ? "✓" : "·"}
                     </span>
                     <span>
-                      <span className="font-semibold">{agent.label}</span> —{" "}
+                      <span className="font-medium">{agent.label}</span> —{" "}
                       {agent.role}
                     </span>
                   </li>
@@ -157,8 +157,8 @@ export function EvidenceFlowDiagram({
         </span>
 
         {/* 結論ノード（確信度＝キャリブレーション済みの記録値） */}
-        <div className="flex min-w-0 flex-1 flex-col items-center gap-1 self-center rounded-lg bg-slate-800/50 px-4 py-3 ring-1 ring-inset ring-slate-700/60">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-1 self-center rounded-lg bg-slate-800/50 px-4 py-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
             結論に収束
           </p>
           <ConfidenceGauge

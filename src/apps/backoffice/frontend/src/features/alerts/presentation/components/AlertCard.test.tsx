@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AlertCard } from "./AlertCard";
-import { makeAlert } from "../../test-support/alertFixture";
+import { makeAlert, makeReport } from "../../test-support/alertFixture";
 
 describe("AlertCard", () => {
   it("カタログ未登録の eventName は主役にそのまま出す（フォールバック）", () => {
     render(<AlertCard alert={makeAlert()} />);
     expect(screen.getByText("latency.spike")).toBeInTheDocument();
-    // 未知（report あり）は AI 推定パターン名を出す（summary ではなく patternName）
-    expect(screen.getByText(/AI推定/)).toBeInTheDocument();
+    // 未知（report あり）は AI 推定パターン名を「原因候補」ラベルで出す（summary ではなく patternName）
+    expect(screen.getByText(/原因候補/)).toBeInTheDocument();
     expect(screen.getByText(/latency-spike/)).toBeInTheDocument();
   });
 
@@ -64,14 +64,14 @@ describe("AlertCard", () => {
     expect(screen.getByText("82%")).toBeInTheDocument();
   });
 
-  it("未知障害バッジは出さない（分類根拠は「AI推定:」行と確信度チップに一本化・バッジ軸分離）", () => {
+  it("未知障害バッジは出さない（分類根拠は「原因候補:」行と確信度チップに一本化・バッジ軸分離）", () => {
     render(
       <AlertCard
         alert={makeAlert({ classification: { type: "unknown", confidence: null } })}
       />,
     );
     expect(screen.queryByText("未知障害")).not.toBeInTheDocument();
-    expect(screen.getByText(/AI推定/)).toBeInTheDocument();
+    expect(screen.getByText(/原因候補/)).toBeInTheDocument();
   });
 
   it("いま着弾した新規アラート（createdAt が直近）はスライドイン演出を付ける（E5）", () => {
@@ -132,5 +132,119 @@ describe("AlertCard", () => {
     expect(screen.getByTitle(/PROMOTED_EC\.PAYMENT\.TIMEOUT/)).toHaveTextContent(
       "決済タイムアウト",
     );
+  });
+
+  it("AI 推定の生 enum は人間語で出し、生IDは tooltip へ降格する（G4）", () => {
+    render(
+      <AlertCard
+        alert={makeAlert({
+          report: makeReport({
+            suggestedPatternName: "PAYMENT_PROVIDER_OUTAGE",
+          }),
+        })}
+      />,
+    );
+    expect(
+      screen.queryByText(/PAYMENT_PROVIDER_OUTAGE/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTitle("PAYMENT_PROVIDER_OUTAGE")).toHaveTextContent(
+      "決済プロバイダ障害",
+    );
+  });
+
+  it("seed 既知はパターン名（タイトル復唱）でなく原因を出し、パターン名は tooltip へ（G4b）", () => {
+    render(
+      <AlertCard
+        alert={makeAlert({
+          eventName: "ec.payment.timeout",
+          report: null,
+          classification: {
+            type: "known",
+            source: "EXACT_MATCH",
+            patternId: "p-1",
+            patternName: "PAYMENT_TIMEOUT",
+            confidence: 1,
+            matchedConditions: [],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/原因:/)).toBeInTheDocument();
+    expect(
+      screen.getByTitle("該当パターン: PAYMENT_TIMEOUT"),
+    ).toHaveTextContent("外部決済サービスへの接続不良の可能性");
+    expect(screen.queryByText(/該当:/)).not.toBeInTheDocument();
+  });
+
+  it("結晶化＋patternDescription は ◈＋承認時の原因（AI summary）を出す（G4b）", () => {
+    render(
+      <AlertCard
+        alert={makeAlert({
+          eventName: "gcp.monitoring.critical_log_entries",
+          report: null,
+          classification: {
+            type: "known",
+            source: "EXACT_MATCH",
+            patternId: "p-2",
+            patternName: "PROMOTED_GCP.MONITORING.CRITICAL_LOG_ENTRIES",
+            confidence: 1,
+            matchedConditions: [],
+            patternDescription: "Terraform 変更で DB 接続が枯渇した",
+          },
+        })}
+      />,
+    );
+    expect(
+      screen.getByTitle(/PROMOTED_GCP\.MONITORING\.CRITICAL_LOG_ENTRIES/),
+    ).toHaveTextContent("Terraform 変更で DB 接続が枯渇した");
+    // タイトルの復唱（パターン名）は③行に出さない
+    expect(screen.getAllByText(/インフラ障害/)).toHaveLength(1);
+  });
+
+  it("seed 類似既知（シナリオ2）は辞書の原因を候補調で出し、類似既知表記は tooltip へ（G4b）", () => {
+    render(
+      <AlertCard
+        alert={makeAlert({
+          report: null,
+          classification: {
+            type: "known",
+            source: "SIMILARITY",
+            patternId: "p-2",
+            patternName: "類似既知: ec.payment.declined",
+            confidence: 0.71,
+            matchedConditions: [],
+          },
+        })}
+      />,
+    );
+    // 類似は確定でないため「原因: 」でなく「原因候補: 」（類似度チップと整合）
+    expect(screen.getByText(/原因候補:/)).toBeInTheDocument();
+    expect(
+      screen.getByTitle("該当パターン: 類似既知: ec.payment.declined"),
+    ).toHaveTextContent(
+      "決済プロバイダ側の障害の可能性（拒否が PROVIDER_UNAVAILABLE に集中）",
+    );
+  });
+
+  it("辞書に無い類似既知は従来表示＝eventName を人間語タイトルへ写像して出す（G4）", () => {
+    render(
+      <AlertCard
+        alert={makeAlert({
+          report: null,
+          classification: {
+            type: "known",
+            source: "SIMILARITY",
+            patternId: "p-3",
+            patternName: "類似既知: ec.db.connection_pool_exhausted",
+            confidence: 0.71,
+            matchedConditions: [],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText(/該当:/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/類似既知: DBコネクションプール枯渇/),
+    ).toBeInTheDocument();
   });
 });

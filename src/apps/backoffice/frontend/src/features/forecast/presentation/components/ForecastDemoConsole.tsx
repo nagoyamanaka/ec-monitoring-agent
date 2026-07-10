@@ -22,19 +22,19 @@ const REALNESS_META: Record<
 > = {
   real: {
     label: "実データ",
-    className: "bg-emerald-500/15 text-emerald-200 ring-emerald-500/30",
+    className: "bg-emerald-500/15 text-emerald-200",
     note: "実 GitHub リポジトリの未マージ PR を read-only で取得する実経路。",
   },
   // 実在の証拠（実 PR の CI plan）だが、予報の決定論のため同内容を固定投入している行。
   // 「合成seed」と区別する＝差分もリンクも実在で、合成なのは注入経路ではない。
   pinnedReal: {
     label: "実plan",
-    className: "bg-teal-500/15 text-teal-200 ring-teal-500/30",
+    className: "bg-teal-500/15 text-teal-200",
     note: "実 PR #83 が CI の terraform plan で生成した本物の差分と同一。予報の決定論のため同内容を固定投入しているが、差分もリンクも実在し、引用チップ「証拠を開く」は実 PR に解決する。",
   },
   seed: {
     label: "合成seed",
-    className: "bg-amber-500/15 text-amber-200 ring-amber-500/30",
+    className: "bg-amber-500/15 text-amber-200",
     note: "デモ用に投入した合成シグナル（本番では実スケジュール / 実インシデント履歴が同じ入口に入る）。突合 → AI 予報 → 引用検証は実経路・実 AI。",
   },
 };
@@ -64,7 +64,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     role: "何が変わる予定か",
     border: "border-cyan-500/40",
     chipClassName:
-      "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
+      "bg-cyan-500/15 text-cyan-300",
     rows: [
       {
         label: "未適用の Terraform plan（VM 縮小）",
@@ -91,7 +91,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     role: "いつ負荷が来るか",
     border: "border-amber-500/40",
     chipClassName:
-      "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+      "bg-amber-500/15 text-amber-300",
     rows: [
       {
         label: "負荷スケジュール",
@@ -105,7 +105,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     role: "過去に何が起きたか",
     border: "border-emerald-500/40",
     chipClassName:
-      "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+      "bg-emerald-500/15 text-emerald-300",
     rows: [
       {
         label: "過去の解決済み事例",
@@ -140,17 +140,17 @@ export function ForecastDemoConsole({
   return (
     <section
       aria-label="予兆デモコンソール"
-      className="space-y-4 rounded-tremor-default bg-slate-900/40 p-4 ring-1 ring-inset ring-slate-700/60"
+      className="space-y-4 rounded-tremor-default bg-slate-800/40 p-4"
     >
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-fuchsia-300 ring-1 ring-inset ring-fuchsia-500/30">
+        <span className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-fuchsia-300">
           <GamepadIcon className="shrink-0" />
           デモコンソール
         </span>
       </div>
 
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-slate-100">
+        <h3 className="text-sm font-medium text-slate-100">
           投入シグナル（予報の材料）
         </h3>
         <p className="text-xs leading-relaxed text-slate-400">
@@ -164,7 +164,7 @@ export function ForecastDemoConsole({
             >
               <div className="flex items-baseline gap-1.5">
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${lane.chipClassName}`}
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${lane.chipClassName}`}
                 >
                   {lane.kindLabel}
                 </span>
@@ -192,7 +192,7 @@ export function ForecastDemoConsole({
                       </div>
                       <span
                         title={realness.note}
-                        className={`mt-0.5 shrink-0 cursor-help rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${realness.className}`}
+                        className={`mt-0.5 shrink-0 cursor-help rounded-md px-1.5 py-0.5 text-[10px] font-medium ${realness.className}`}
                       >
                         {realness.label}
                       </span>
@@ -206,13 +206,13 @@ export function ForecastDemoConsole({
       </div>
 
       <div className="space-y-2 border-t border-slate-700/50 pt-3">
-        <h3 className="text-sm font-semibold text-slate-100">デモ操作</h3>
+        <h3 className="text-sm font-medium text-slate-100">デモ操作</h3>
         <button
           type="button"
           disabled={busy}
           onClick={onGenerate}
           title="上記シグナルを AI が突合し、リスク・確信度・根拠（引用）・今打てる先手を1ショット生成する"
-          className="w-full rounded-md bg-cyan-500/15 px-3 py-2 text-sm font-semibold text-cyan-100 ring-1 ring-inset ring-cyan-500/40 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
+          className="w-full rounded-md bg-cyan-500/15 px-3 py-2 text-sm font-medium text-cyan-100 ring-1 ring-inset ring-cyan-500/40 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
         >
           {generating
             ? "AI が調査中…（約1分）"
@@ -231,7 +231,7 @@ export function ForecastDemoConsole({
           disabled={busy}
           onClick={onReset}
           title="生成済みの予報を破棄して未生成状態に戻す（投入シグナルは残る＝もう一度生成できる）"
-          className="w-full rounded-md bg-slate-800/50 px-3 py-2 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-700/60 transition hover:bg-rose-500/10 hover:text-rose-200 hover:ring-rose-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
+          className="w-full rounded-md bg-slate-800/50 px-3 py-2 text-xs font-medium text-slate-300 ring-1 ring-inset ring-slate-700/60 transition hover:bg-rose-500/10 hover:text-rose-200 hover:ring-rose-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
         >
           {resetting ? "リセット中…" : "予報をリセット"}
         </button>

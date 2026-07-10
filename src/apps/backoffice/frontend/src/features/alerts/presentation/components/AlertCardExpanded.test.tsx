@@ -8,7 +8,7 @@ import { makeAlert, makeReport } from "../../test-support/alertFixture";
 describe("AlertCardExpanded", () => {
   it("full は サマリ・調査ステップ・次のアクション（自責＝推奨アクション手順）を表示する", () => {
     render(<AlertCardExpanded alert={makeAlert()} variant="full" />);
-    expect(screen.getByText("AI 推定パターン")).toBeInTheDocument();
+    expect(screen.getByText("原因候補（AI 推定）")).toBeInTheDocument();
     expect(screen.getByText("未知のレイテンシ急増を検知")).toBeInTheDocument();
     expect(screen.getByText("ログ確認")).toBeInTheDocument();
     // 自責ルートの推奨アクションは「次のアクション」カードへ統合（remediation origin）。

@@ -59,10 +59,10 @@ export function DetectionPendingBanner({
     <div
       role="status"
       aria-live="polite"
-      className="space-y-2 rounded-md bg-sky-500/10 px-3 py-3 text-[13px] ring-1 ring-inset ring-sky-500/30"
+      className="space-y-2 rounded-md bg-sky-500/10 px-3 py-3 text-[13px]"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 font-semibold text-sky-100">
+        <span className="flex items-center gap-2 font-medium text-sky-100">
           <span
             aria-hidden
             className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-300"
@@ -88,7 +88,7 @@ export function DetectionPendingBanner({
       </div>
 
       <p className="text-slate-300">
-        <span className="font-semibold text-slate-200">{pending.label}</span>{" "}
+        <span className="font-medium text-slate-200">{pending.label}</span>{" "}
         を本番と同じ実検知経路で処理中:
       </p>
 
@@ -96,7 +96,7 @@ export function DetectionPendingBanner({
       <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-sky-200/90">
         {PIPELINE_HOPS.map((hop, i) => (
           <li key={hop} className="flex items-center gap-1.5">
-            <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/25">
+            <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5">
               {hop}
             </span>
             {i < PIPELINE_HOPS.length - 1 && (

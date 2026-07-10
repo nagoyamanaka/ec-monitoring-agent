@@ -87,6 +87,7 @@ describe("alertClassificationToPrimitives / alertClassificationFromPrimitives", 
       unmatchedConditions: [],
       sourceAlertId: "alert-past-1",
       resolvedNote: "在庫引当リトライで復旧",
+      patternDescription: "在庫不足により商品の予約に失敗しました。",
     };
 
     const restored = alertClassificationToPrimitives(
@@ -114,6 +115,7 @@ describe("alertClassificationToPrimitives / alertClassificationFromPrimitives", 
 
     expect("sourceAlertId" in restored).toBe(false);
     expect("resolvedNote" in restored).toBe(false);
+    expect("patternDescription" in restored).toBe(false);
   });
 
   it("unknownのラウンドトリップで同じ値が復元される", () => {

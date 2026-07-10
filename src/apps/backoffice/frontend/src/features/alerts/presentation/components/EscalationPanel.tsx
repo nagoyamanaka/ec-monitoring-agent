@@ -13,12 +13,12 @@ export interface EscalationPanelProps {
  */
 export function EscalationPanel({ escalation }: EscalationPanelProps) {
   return (
-    <section className="space-y-2 rounded-md bg-amber-500/5 p-3 ring-1 ring-inset ring-amber-500/20">
+    <section className="space-y-2 rounded-md bg-amber-500/10 p-3">
       <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-200">
+        <h4 className="text-xs font-medium uppercase tracking-wide text-amber-200">
           エスカレーション草案
         </h4>
-        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300 ring-1 ring-inset ring-amber-500/30">
+        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-300">
           人間承認の前段（送信はしない）
         </span>
       </div>
