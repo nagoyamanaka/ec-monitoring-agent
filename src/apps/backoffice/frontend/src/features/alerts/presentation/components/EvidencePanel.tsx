@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { cn } from "@shared/ui/cn";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 import type { AlertView } from "../../domain/AlertView";
@@ -9,7 +9,12 @@ import {
   evidenceSections,
 } from "../../domain/EvidenceView";
 import type { EvidenceApi } from "../../infrastructure/evidenceApi";
+import {
+  evidenceLedgerKeys,
+  type EvidenceLedgerKey,
+} from "../../domain/evidenceLedger";
 import { useEvidence } from "../hooks/useEvidence";
+import { EvidenceCountsGrid } from "./EvidenceCountsGrid";
 
 export interface EvidencePanelProps {
   api: EvidenceApi;
@@ -330,13 +335,35 @@ function EvidenceSectionView({
     );
   }
 
+  return <CommitsSectionView section={section} baseIndex={baseIndex} />;
+}
+
+/** 折りたたみ前に見せる直近コミット数。 */
+const COMMITS_PREVIEW = 3;
+
+/**
+ * コミット証拠のセクション。直近コミットは「原因の周辺文脈」で1件ずつの証拠力は弱いため、
+ * 既定は先頭 3 件に畳み「残り N 件を表示」で展開する（実在性は展開で担保・壁のように積まない）。
+ */
+function CommitsSectionView({
+  section,
+  baseIndex,
+}: {
+  section: Extract<EvidenceSection, { kind: "commits" }>;
+  baseIndex: number;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const hiddenCount = section.commits.length - COMMITS_PREVIEW;
+  const visible = showAll
+    ? section.commits
+    : section.commits.slice(0, COMMITS_PREVIEW);
   return (
     <div className="space-y-2">
       <Rise index={baseIndex}>
         <SectionHeader kind="commits" />
       </Rise>
       <ul className="space-y-1.5">
-        {section.commits.map((c, i) => (
+        {visible.map((c, i) => (
           <Rise
             key={c.sha}
             index={baseIndex + 1 + i}
@@ -367,6 +394,15 @@ function EvidenceSectionView({
           </Rise>
         ))}
       </ul>
+      {!showAll && hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="w-full rounded-md bg-slate-800/40 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-slate-700/50 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        >
+          残り {hiddenCount} 件のコミットを表示
+        </button>
+      )}
     </div>
   );
 }
@@ -377,6 +413,17 @@ function EvidenceSectionView({
  * 各ソースのセクションを 1 つずつ stagger フェードイン（`evidence-rise`・reduced-motion 尊重）させ、
  * 「AI が調べている過程」を演出する。
  */
+/** 件数グリッドのキー → 本パネル内セクション kind（過去事例は本パネル外＝対応なし）。 */
+const COUNT_KEY_TO_KIND: Partial<
+  Record<EvidenceLedgerKey, EvidenceSection["kind"]>
+> = {
+  security: "security",
+  logs: "logs",
+  metrics: "metrics",
+  terraformChanges: "terraform",
+  commits: "commits",
+};
+
 export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
   const { phase, evidence, error } = useEvidence(api, alert);
 
@@ -384,6 +431,47 @@ export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
   const sections = evidence
     ? evidenceSections(evidence, alert.securityFindings)
     : [];
+
+  // 証拠件数の実測（backend 記録）。あれば台帳グリッドを先頭に出す（C-3）。
+  // 「探した結果ゼロ」も情報なので 0 のカテゴリを隠さない。旧 Alert・fallback は未記録＝出さない。
+  const counts = alert.report?.metrics?.evidenceCounts;
+
+  // 台帳セルは category オーナーシップで調査した証拠源に絞る（0=調べたが無し、を嘘にしない）。
+  // Trivy（CI スキャン）は調査収集でなく検知 payload 由来＝件数がある時だけセルが立つ。
+  const securityCount = alert.securityFindings.length;
+  const ledgerKeys = counts
+    ? evidenceLedgerKeys(alert.category, counts, securityCount)
+    : [];
+
+  // グリッド＝件数の台帳、直下のセクション＝実物。>0 セルのクリックで該当セクションへ
+  // スクロールし、台帳と実物の対応を指で確認できるようにする（ドロワーでも迷わない）。
+  const sectionRefs = useRef<
+    Partial<Record<EvidenceSection["kind"], HTMLDivElement | null>>
+  >({});
+  const navigable = new Set(
+    (Object.keys(COUNT_KEY_TO_KIND) as EvidenceLedgerKey[]).filter((key) =>
+      sections.some((s) => s.kind === COUNT_KEY_TO_KIND[key]),
+    ),
+  );
+
+  // 収集したが原因へ引用されず、実物セクションが出ない証拠源（現状は CitedCommitFilter で
+  // 引用 sha だけに絞られるコミットが該当）。台帳の数字は「調査の広さ」の実測として残しつつ、
+  // 「結論の裏付け」ではないことをグレー格下げ+但し書きで明示する（隠蔽でなく引用規律）。
+  const uncited = new Set(
+    ledgerKeys.filter((key) => {
+      const kind = COUNT_KEY_TO_KIND[key];
+      if (!kind) return false; // 過去事例は実物が本パネル外＝対象外（tooltip 案内）
+      const count = key === "security" ? securityCount : counts?.[key] ?? 0;
+      return count > 0 && !sections.some((s) => s.kind === kind);
+    }),
+  );
+  const scrollToSection = (key: EvidenceLedgerKey) => {
+    const kind = COUNT_KEY_TO_KIND[key];
+    const el = kind ? sectionRefs.current[kind] : undefined;
+    const reduce = !!window.matchMedia?.("(prefers-reduced-motion: reduce)")
+      .matches;
+    el?.scrollIntoView?.({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  };
 
   return (
     <section className={cn("space-y-3", className)} aria-label="収集した証拠">
@@ -403,28 +491,48 @@ export function EvidencePanel({ api, alert, className }: EvidencePanelProps) {
           />
           AI が証拠を解析しています…
         </div>
-      ) : sections.length === 0 ? (
-        <div className="space-y-1">
-          <p className="text-xs text-slate-300">
-            原因の根拠として引用されたインフラ証拠（ログ・メトリクス・Terraform・コミット）はありませんでした。
-          </p>
-          <p className="text-xs text-slate-400">
-            根拠が関連アラートや過去の同型事例にある場合は、それぞれのセクションに表示されます。
-          </p>
-        </div>
       ) : (
         <div className="space-y-3">
+          {counts ? (
+            // 件数記録があれば台帳グリッドを要約として先頭に出す（C-3）。
+            // 全カテゴリ 0 でもグレーの 0 が並ぶ画がそのまま「探した結果ゼロ」を語る
+            // （長文の言い訳より正直で速い）。
+            <EvidenceCountsGrid
+              counts={counts}
+              securityCount={securityCount}
+              keys={ledgerKeys}
+              navigable={navigable}
+              uncited={uncited}
+              onSelect={scrollToSection}
+            />
+          ) : (
+            sections.length === 0 && (
+              // 件数未記録の旧 Alert・fallback だけ従来の文フォールバック。
+              <div className="space-y-1">
+                <p className="text-xs text-slate-300">
+                  原因の根拠として引用されたインフラ証拠（ログ・メトリクス・Terraform・コミット）はありませんでした。
+                </p>
+                <p className="text-xs text-slate-400">
+                  根拠が関連アラートや過去の同型事例にある場合は、それぞれのセクションに表示されます。
+                </p>
+              </div>
+            )
+          )}
           {sections.map((section, i) => {
             // 前セクションまでの累積スロット数を基点に、行単位で連続 stagger させる。
             const baseIndex = sections
               .slice(0, i)
               .reduce((sum, s) => sum + sectionSlotCount(s), 0);
             return (
-              <EvidenceSectionView
+              <div
                 key={section.kind}
-                section={section}
-                baseIndex={baseIndex}
-              />
+                ref={(el) => {
+                  sectionRefs.current[section.kind] = el;
+                }}
+                className="scroll-mt-2"
+              >
+                <EvidenceSectionView section={section} baseIndex={baseIndex} />
+              </div>
             );
           })}
         </div>

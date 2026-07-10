@@ -7,7 +7,7 @@ import type {
 } from "../../domain/InvestigationReportView";
 import { INVESTIGATION_AGENTS } from "../../domain/investigationProgress";
 import { mentionedAgents } from "../../domain/investigationStepText";
-import { ConfidenceCalibrationNote } from "./ConfidenceCalibrationNote";
+import { CalibratedConfidence } from "./CalibratedConfidence";
 
 export interface EvidenceFlowDiagramProps {
   model: EvidenceFlowModel;
@@ -168,9 +168,10 @@ export function EvidenceFlowDiagram({
             color={confidenceBrandColor(model.confidence)}
           />
           {calibration && (
-            <ConfidenceCalibrationNote
+            <CalibratedConfidence
               calibration={calibration}
               confidence={model.confidence}
+              className="text-center"
             />
           )}
         </div>

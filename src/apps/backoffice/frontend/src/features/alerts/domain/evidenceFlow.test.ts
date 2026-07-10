@@ -54,6 +54,34 @@ describe("evidenceFlowModel", () => {
     expect(model!.confidence).toBe(0.7);
   });
 
+  it("Trivy CVE（検知 payload 実測）は先頭の流入源として載り、合計・読み上げにも入る", () => {
+    const model = evidenceFlowModel(
+      makeReport({ metrics: metrics({ commits: 10 }) }),
+      2,
+    );
+
+    expect(model).not.toBeNull();
+    expect(model!.sources.map((s) => [s.key, s.count])).toEqual([
+      ["security", 2],
+      ["commits", 10],
+    ]);
+    expect(model!.evidenceTotal).toBe(12);
+    expect(model!.ariaSummary).toContain("Trivy (CI スキャン) 2件");
+  });
+
+  it("CVE 0 件（省略）では従来どおり security ソースを出さない", () => {
+    const model = evidenceFlowModel(
+      makeReport({ metrics: metrics({ logs: 3 }) }),
+    );
+    expect(model!.sources.map((s) => s.key)).toEqual(["logs"]);
+  });
+
+  it("調査収集ゼロでも CVE があれば図を描く（SECURITY の主証拠を欠かさない）", () => {
+    const model = evidenceFlowModel(makeReport({ metrics: metrics() }), 2);
+    expect(model).not.toBeNull();
+    expect(model!.sources.map((s) => s.key)).toEqual(["security"]);
+  });
+
   it("コネクタ太さは離散3段階（1-2件 / 3-5件 / 6件以上）", () => {
     const model = evidenceFlowModel(
       makeReport({

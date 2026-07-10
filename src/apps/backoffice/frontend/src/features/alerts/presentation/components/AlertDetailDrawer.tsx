@@ -20,7 +20,7 @@ import type { RemediationView } from "../../domain/RemediationView";
 import { AlertCardExpanded } from "./AlertCardExpanded";
 import { AlertReviewPanel } from "./AlertReviewPanel";
 import { AlertStatusBadge } from "./AlertStatusBadge";
-import { ConfidenceCalibrationNote } from "./ConfidenceCalibrationNote";
+import { CalibratedConfidence } from "./CalibratedConfidence";
 import { EvidencePanel } from "./EvidencePanel";
 import { FallbackRecoveryBanner } from "./FallbackRecoveryBanner";
 import { InvestigationPipelinePanel } from "./InvestigationPipelinePanel";
@@ -237,11 +237,13 @@ export function AlertDetailDrawer({
                 color={confidenceBrandColor(confidence.value)}
                 animate
               />
-              {/* キャリブレーション記録があれば「なぜこの値か」（裏付け・上限・補正）を併記する。 */}
+              {/* キャリブレーション記録があれば「なぜこの値か」（裏付け・上限・補正）を
+                  署名的な補正バー（自己申告ゴースト→補正後へ削られる・C-4）で併記する。 */}
               {alert.report?.confidenceCalibration && (
-                <ConfidenceCalibrationNote
+                <CalibratedConfidence
                   calibration={alert.report.confidenceCalibration}
                   confidence={confidence.value}
+                  className="text-center"
                 />
               )}
             </div>

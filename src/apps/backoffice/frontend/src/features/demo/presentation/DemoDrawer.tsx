@@ -3,6 +3,7 @@ import type { DemoApi } from "../infrastructure/demoApi";
 import { useDemoControls } from "./hooks/useDemoControls";
 import { ScenarioControls } from "./ScenarioControls";
 import { GamepadIcon } from "@shared/ui/icons";
+import { DemoConsoleFrame } from "@shared/ui/DemoConsoleFrame";
 
 export interface DemoDrawerProps {
   api: DemoApi;
@@ -67,10 +68,7 @@ export function DemoDrawer({
   if (!available) return null;
 
   return (
-    <section
-      aria-label="デモコンソール"
-      className="space-y-4 rounded-tremor-default bg-slate-800/40 p-4"
-    >
+    <DemoConsoleFrame ariaLabel="デモコンソール">
       <div className="flex items-center gap-2">
         <span className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-fuchsia-300">
           <GamepadIcon className="shrink-0" />
@@ -101,6 +99,6 @@ export function DemoDrawer({
           </p>
         )}
       </div>
-    </section>
+    </DemoConsoleFrame>
   );
 }

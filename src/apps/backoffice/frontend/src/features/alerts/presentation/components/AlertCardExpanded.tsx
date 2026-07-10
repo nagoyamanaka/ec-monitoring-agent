@@ -69,7 +69,10 @@ export function AlertCardExpanded({
   const workload = report && !report.isFallback ? workloadSummary(report.metrics) : null;
   // 証拠フローダイアグラム（タスク E8-A・full のみ）。図が描けるときは ⏱ 1行を図に吸収する
   //（同じ実測を二度出さない）。描けない条件（旧データ・fallback・証拠0件）はテキスト1行へ劣化。
-  const flow = full ? evidenceFlowModel(report) : null;
+  // Trivy CVE（検知 payload 実測）も流入源として渡す（SECURITY では確信度を支える主証拠）。
+  const flow = full
+    ? evidenceFlowModel(report, alert.securityFindings.length)
+    : null;
   // 状態が ANALYZING に戻っている＝AI が（再）調査中。既存の内容を持つときは再調査の最中。
   const analyzingNow = alert.status === "ANALYZING";
   // 発報内容の表示射影（可読性・タスク E 系）: documentation が「ラベル: 値」行構成なら
