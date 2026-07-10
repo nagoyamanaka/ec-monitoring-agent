@@ -1,7 +1,11 @@
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { ClockIcon, ShieldIcon } from "@shared/ui/icons";
 import { ConfidenceBar } from "@shared/ui/tremor";
-import { citationKindCount, pastIncidentCount } from "../../domain/ForecastView";
+import {
+  citationKindCount,
+  pastIncidentCount,
+  riskSubjectLabel,
+} from "../../domain/ForecastView";
 import type { RiskCardView } from "../../domain/ForecastView";
 import { riskLevelLabel } from "../../domain/RiskLevel";
 import { CitationList } from "./CitationList";
@@ -11,6 +15,8 @@ import { ConvergenceMiniFlow } from "./ConvergenceMiniFlow";
  * 予兆リスク1件のカード（step6 F7）: 「いつ危ないか」が予報の答えなので **window を主見出し**、
  * subject は補足行に置く（horizon「今週末」はページ側のメタ情報）。level 色は SeverityBadge
  * （HIGH/MEDIUM/LOW 転用）が担い、根拠の種類数（収束の強さ）を level の隣にチップで示す。
+ * subject は表示時のみ人間語化（E9・riskSubjectLabel）し、生の突合キーは tooltip へ降格する
+ * （引用チップの <details> メタ行が生IDの本文を担うため、カード面から機械語を消せる）。
  */
 export interface RiskCardProps {
   risk: RiskCardView;
@@ -19,10 +25,11 @@ export interface RiskCardProps {
 export function RiskCard({ risk }: RiskCardProps) {
   const kindCount = citationKindCount(risk.citations);
   const pastCount = pastIncidentCount(risk.citations);
+  const subjectLabel = riskSubjectLabel(risk.subject);
   return (
     <article
       className="space-y-3 rounded-lg border border-slate-800/80 bg-slate-900/40 p-5"
-      aria-label={`${riskLevelLabel(risk.level)}: ${risk.subject}`}
+      aria-label={`${riskLevelLabel(risk.level)}: ${subjectLabel}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
@@ -30,7 +37,12 @@ export function RiskCard({ risk }: RiskCardProps) {
             <ClockIcon className="shrink-0 text-slate-400" />
             {risk.window}
           </h3>
-          <p className="text-sm font-medium text-slate-300">{risk.subject}</p>
+          <p
+            className="text-sm font-medium text-slate-300"
+            {...(subjectLabel !== risk.subject ? { title: risk.subject } : {})}
+          >
+            {subjectLabel}
+          </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
           <div className="flex items-center gap-2">

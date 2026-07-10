@@ -30,6 +30,44 @@ export function signalKindLabel(kind: string): string {
 }
 
 /**
+ * risk.subject（突合キー＝terraform アドレス等の正規化生ID）の表示専用人間語化（E9）。
+ * subject は plan address ↔ report.subject のペア語彙なので wire・保存値・突合は不変のまま、
+ * 表示だけ既知語彙を人間語へ写像する。トークン包含で判定し、どのルールにも一致しなければ
+ * 原文をそのまま返す（防御＝A3「生ID人間語化」と同じ方針）。生IDは呼び出し側で
+ * tooltip 等のメタへ降格する（引用チップの <details> メタ行が突合キーの本文を担う）。
+ */
+const SUBJECT_LABEL_RULES: ReadonlyArray<{
+  readonly tokens: readonly string[];
+  readonly label: string;
+}> = [
+  // plan-1（module.gce_backbone.google_compute_instance.backbone）・過去事例の同 VM
+  {
+    tokens: ["google", "compute", "instance", "backbone"],
+    label: "バックボーンVM（Mongo 同居・GCE）",
+  },
+  // plan-2（module.valkey_cache.google_redis_instance.catalog_cache）・Valkey 過去事例
+  { tokens: ["valkey", "cache"], label: "カタログキャッシュ（Valkey）" },
+  // stub 予報・過去事例（db_connection_pool 系）。checkout との複合語彙もこちらへ倒す
+  { tokens: ["db", "connection", "pool"], label: "DB接続プール" },
+  // schedule シグナル（checkout）
+  { tokens: ["checkout"], label: "チェックアウト（購入導線）" },
+];
+
+export function riskSubjectLabel(subject: string): string {
+  const tokens = new Set(
+    subject
+      .trim()
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((t) => t !== ""),
+  );
+  const rule = SUBJECT_LABEL_RULES.find((r) =>
+    r.tokens.every((t) => tokens.has(t)),
+  );
+  return rule ? rule.label : subject;
+}
+
+/**
  * MEMORY シグナルの source は `incident.<実在AlertId>`（F5 の契約）。
  * 引用チップから当時のアラート詳細へ遷移できるよう alertId を取り出す。
  */

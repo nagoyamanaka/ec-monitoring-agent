@@ -10,6 +10,7 @@ import {
   groupCitationsByKind,
   incidentAlertId,
   pastIncidentCount,
+  riskSubjectLabel,
   signalKindLabel,
   toForecastBriefingView,
   type CitationView,
@@ -232,5 +233,43 @@ describe("groupCitationsByKind / citationKindCount", () => {
       ]),
     ).toBe(2);
     expect(pastIncidentCount([citation({ id: "f-1" })])).toBe(0);
+  });
+});
+
+describe("riskSubjectLabel（E9: 生突合キーの表示専用人間語化）", () => {
+  it("terraform アドレス正規化の生ID（flagship VM / Valkey plan）を人間語へ写像する", () => {
+    expect(
+      riskSubjectLabel("module_gce_backbone_google_compute_instance_backbone"),
+    ).toBe("バックボーンVM（Mongo 同居・GCE）");
+    expect(
+      riskSubjectLabel(
+        "module_valkey_cache_google_redis_instance_catalog_cache",
+      ),
+    ).toBe("カタログキャッシュ（Valkey）");
+  });
+
+  it("過去事例・stub・schedule 側の語彙も同じ写像に載る（ドット区切りも吸収）", () => {
+    expect(riskSubjectLabel("google_compute_instance.backbone")).toBe(
+      "バックボーンVM（Mongo 同居・GCE）",
+    );
+    expect(riskSubjectLabel("db_connection_pool")).toBe("DB接続プール");
+    expect(riskSubjectLabel("valkey_cache_maxmemory")).toBe(
+      "カタログキャッシュ（Valkey）",
+    );
+    expect(riskSubjectLabel("checkout")).toBe("チェックアウト（購入導線）");
+  });
+
+  it("checkout との複合語彙は DB接続プール側へ倒す（ルール順の固定）", () => {
+    expect(riskSubjectLabel("checkout_db_connection_pool")).toBe(
+      "DB接続プール",
+    );
+  });
+
+  it("どのルールにも一致しない subject は原文のまま返す（防御・盛らない側）", () => {
+    expect(riskSubjectLabel("DB 接続プール枯渇")).toBe("DB 接続プール枯渇");
+    expect(riskSubjectLabel("google_sql_database_instance_ec_db")).toBe(
+      "google_sql_database_instance_ec_db",
+    );
+    expect(riskSubjectLabel("")).toBe("");
   });
 });

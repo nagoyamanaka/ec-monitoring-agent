@@ -57,6 +57,27 @@ describe("RiskCard", () => {
     ).toBeInTheDocument();
   });
 
+  it("subject が生突合キーなら人間語化し、生IDは tooltip へ降格する（E9）", () => {
+    renderCard({
+      ...RISK,
+      subject: "module_gce_backbone_google_compute_instance_backbone",
+    });
+    const subject = screen.getByText("バックボーンVM（Mongo 同居・GCE）");
+    expect(subject).toHaveAttribute(
+      "title",
+      "module_gce_backbone_google_compute_instance_backbone",
+    );
+    expect(
+      screen.queryByText("module_gce_backbone_google_compute_instance_backbone"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("人間語の subject はそのまま出し、tooltip は付けない（防御・原文維持）", () => {
+    renderCard();
+    const subject = screen.getByText("DB 接続プール枯渇");
+    expect(subject).not.toHaveAttribute("title");
+  });
+
   it("根拠の種類数チップ: 複数種類なら「根拠 n種類」、単一種類なら出さない", () => {
     renderCard();
     expect(screen.getByText("根拠 2種類")).toBeInTheDocument();
