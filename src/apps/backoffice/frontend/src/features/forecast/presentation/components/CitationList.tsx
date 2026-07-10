@@ -50,7 +50,7 @@ export function CitationList({ citations }: CitationListProps) {
                 // U1②a: 生ID等の最小主張メタは <details> に隠して縦長を解消する。
                 // シグナル id（pr-55 等）は reasoning 本文・コンソール台帳と同一 ID で照合できる。
                 details={
-                  <p className="font-mono text-[11px] text-slate-500">
+                  <p className="font-mono text-[11px] text-slate-400">
                     {c.id} · {c.subject}
                   </p>
                 }

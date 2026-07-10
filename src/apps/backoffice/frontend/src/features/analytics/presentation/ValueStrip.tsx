@@ -78,7 +78,8 @@ export function ValueStrip({ api, refreshKey }: ValueStripProps) {
       </span>
       {terms.map((term, i) => (
         <span key={term.label} className="inline-flex items-baseline gap-2.5">
-          <span className="text-slate-500" aria-hidden>
+          {/* 等式の演算子は読めて初めて等式＝装飾でなく本文（プロジェクター可読の下限 slate-400）。 */}
+          <span className="text-slate-400" aria-hidden>
             {i === 0 ? "＝" : "＋"}
           </span>
           <span className="inline-flex items-baseline gap-1.5">
