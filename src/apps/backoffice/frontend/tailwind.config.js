@@ -18,6 +18,35 @@ export default {
     transparent: "transparent",
     current: "currentColor",
     extend: {
+      // ブランドフォント（main.tsx で @fontsource からセルフホスト読込）。
+      // sans は body の指定と同一スタック、mono はイベント名・ID・数値チップ用の Plex Mono。
+      fontFamily: {
+        sans: [
+          '"IBM Plex Sans JP"',
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          '"Segoe UI"',
+          '"Hiragino Kaku Gothic ProN"',
+          '"Hiragino Sans"',
+          '"Noto Sans JP"',
+          '"Yu Gothic UI"',
+          "Meiryo",
+          "Roboto",
+          '"Helvetica Neue"',
+          "Arial",
+          "sans-serif",
+        ],
+        mono: [
+          '"IBM Plex Mono"',
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Consolas",
+          '"Liberation Mono"',
+          "monospace",
+        ],
+      },
       colors: {
         // light/dark とも観測コンソール基調（#0B0E14 系）に寄せる
         tremor: {

@@ -17,13 +17,17 @@ body {
   margin: 0;
   background-color: #0b0e14;
   color: #e5e7eb;
-  /* 日本語フォントを明示: 未指定だと Windows で游ゴシック（細く霞む）/MS Pゴシック等の
-     環境ガチャになるため、Hiragino/Noto Sans JP/Yu Gothic UI/Meiryo を優先順で指定。
-     外部フォント読込なしのシステムスタックで自己完結。palt は約物詰め。 */
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP",
+  /* ブランドフォント IBM Plex Sans JP（main.tsx で @fontsource からセルフホスト読込）。
+     和文・欧文・等幅（Plex Mono）が同一設計思想の「計器」ファミリーで、
+     ブランドマーク「次の一点」の幾何学的な精密さと声を揃える。
+     以降はロード失敗時のフォールバック: Windows の游ゴシック（細く霞む）/MS Pゴシック等の
+     環境ガチャを避けるため、Hiragino/Noto Sans JP/Yu Gothic UI/Meiryo を優先順で明示。
+     palt は約物詰め。tabular-nums で件数・確信度%などの数値の桁揺れを止める（Plex は tnum 対応）。 */
+  font-family: "IBM Plex Sans JP", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP",
     "Yu Gothic UI", Meiryo, Roboto, "Helvetica Neue", Arial, sans-serif;
   font-feature-settings: "palt";
+  font-variant-numeric: tabular-nums;
 }
 
 /* 証拠が「到着ごとに積み上がる」演出（EvidencePanel・タスク8）。
