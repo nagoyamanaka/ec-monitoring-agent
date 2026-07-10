@@ -42,6 +42,9 @@ const REALNESS_META: Record<
 
 type SignalRow = {
   readonly label: string;
+  /** 一覧で常時見せる一言（完結文・切り詰めない）。 */
+  readonly summary: string;
+  /** 全文（title ホバーで読める詳細）。 */
   readonly description: string;
   readonly realness: SignalRealness;
 };
@@ -69,18 +72,21 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     rows: [
       {
         label: "未適用の Terraform plan（VM 縮小）",
+        summary: "バックボーンVM（Mongo 同居）のメモリを 8GB→2GB に縮小",
         description:
           "バックボーンVM（Mongo 同居）を e2-standard-2 → e2-small に縮小＝メモリ 8→2GB。実 PR #83 の CI terraform plan と同内容（apply されると有効）",
         realness: "pinnedReal",
       },
       {
         label: "未適用の Terraform plan（Valkey 縮小）",
+        summary: "カタログキャッシュの maxmemory を 4GB→2GB に縮小",
         description:
           "カタログキャッシュ（Valkey）の maxmemory を 4GB → 2GB に縮小＝ヒット率低下でキャッシュミスが DB を直撃（合成 plan・Valkey は VM 上 compose 稼働で terraform 単独リソースが無く非リンク）",
         realness: "seed",
       },
       {
         label: "未マージ PR",
+        summary: "実リポジトリの open PR を全件 read",
         description:
           "実リポジトリの open PR を全件 read（未マージの変更予定を実 URL 付きで拾う・台帳に無い PR が予報に出ても実在）",
         realness: "real",
@@ -96,6 +102,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     rows: [
       {
         label: "負荷スケジュール",
+        summary: "土 20:00 週末セール → checkout 負荷 x5",
         description: "土 20:00 週末セール → checkout 負荷 x5",
         realness: "seed",
       },
@@ -110,6 +117,7 @@ const SIGNAL_LANES: readonly SignalLane[] = [
     rows: [
       {
         label: "過去の解決済み事例",
+        summary: "前回の VM 縮小・Valkey 縮小で枯渇した同型事例",
         description:
           "前回の VM 縮小・Valkey 縮小/TTL 短縮で枯渇した事例ほか同型障害のアーカイブ（実在の Alert として開ける）",
         realness: "seed",
@@ -168,7 +176,8 @@ export function ForecastDemoConsole({
                 </span>
                 <span className="text-xs text-slate-400">{lane.role}</span>
               </div>
-              {/* 1 材料 = 1 行に圧縮（ラベル＋本物度バッジ）。長い説明は title ホバーへ逃がして縦長を解消。 */}
+              {/* 1 材料 = ラベル＋完結文の一言（summary）。文中で切り詰めない＝
+                  「…」で事故って見えるのを避け、全文は title ホバーへ逃がす。 */}
               <ul className="mt-1 divide-y divide-slate-800/60">
                 {lane.rows.map((row) => {
                   const realness = REALNESS_META[row.realness];
@@ -183,9 +192,9 @@ export function ForecastDemoConsole({
                         </span>
                         <p
                           title={row.description}
-                          className="text-xs leading-snug text-slate-400 line-clamp-1"
+                          className="text-xs leading-snug text-slate-400"
                         >
-                          {row.description}
+                          {row.summary}
                         </p>
                       </div>
                       <span
