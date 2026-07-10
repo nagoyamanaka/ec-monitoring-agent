@@ -8,12 +8,12 @@ Built for the Findy **DevOps × AI Agent Hackathon 2026**.
 
 > 🇯🇵 日本語版（正）: [README.md](README.md) — the Japanese README and [docs/](docs/) are the source of truth; this file is a translated summary.
 
-| Measured (demo environment) |                                                                                                    |
-| --------------------------- | -------------------------------------------------------------------------------------------------- |
-| Forecast                    | Cross-checks 3 kinds of future signals × past incident memory — **only citation-verified evidence is shown** |
-| AI investigation (unknown)  | **8 ADK agents** traverse evidence read-only; report with evidence links in ~2–3 minutes           |
-| Known-failure classification | **Under 1 second, zero AI cost** (deterministic)                                                   |
-| Tests                       | **1,103 unit tests** + 22 E2E tests (learning loop & citation verification covered deterministically) |
+| Measured (demo environment)  |                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Forecast                     | Cross-checks 3 kinds of future signals × past incident memory — **only citation-verified evidence is shown** |
+| AI investigation (unknown)   | **8 ADK agents** traverse evidence read-only; report with evidence links in ~2–3 minutes                     |
+| Known-failure classification | **Under 1 second, zero AI cost** (deterministic)                                                             |
+| Tests                        | **1,103 unit tests** + 22 E2E tests (learning loop & citation verification covered deterministically)        |
 
 ## What makes it different
 
@@ -26,7 +26,11 @@ Built for the Findy **DevOps × AI Agent Hackathon 2026**.
 - **Dogfooding (self-operating loop).** This repository's own CI (Trivy) feeds its findings into the production `/ingest/security-scan` endpoint; a SECURITY investigation can trigger AI remediation that opens a draft PR against this very repository — **the monitored EC app and the monitoring agent itself live inside the same DevOps loop** (see [architecture.md §6.5](docs/architecture.md) — Japanese).
 - **Honest synthesis + real evidence.** Synthetic demo inputs are explicitly badged (amber) in the UI; only the entry point is synthetic — transform → classify → AI investigation run the real pipeline. No fake buttons without endpoints. External links attached to evidence are **real and deterministically derived**: CVE → real NVD pages (only canonical CVE ids resolve — no 404s), Terraform evidence → the actual change PR.
 
-## Overview
+## System Configuration Diagram
+
+![システム構成図](docs/assets/deploy-diagram.png)
+
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -70,13 +74,13 @@ Full details (in Japanese, code-accurate): **[docs/architecture.md](docs/archite
 
 ## Tech stack
 
-|            |                                                                                                                                   |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| AI         | **Gemini 2.5 Pro/Flash** (Vertex AI, ADC) + **Google ADK** (in-process multi-agent). Port DI swaps single Gemini ⇄ ADK              |
-| Backend    | TypeScript / Express, **DDD + Clean Architecture + CQRS + EDA**, RabbitMQ, MongoDB, Elasticsearch, Valkey                            |
-| Frontend   | React, SSE                                                                                                                           |
-| Infra      | **Cloud Run** (frontend / edge) + **Compute Engine** (EDA residents), Terraform, Cloud Monitoring / Cloud Logging (direct OTel)      |
-| CI/CD      | GitHub Actions                                                                                                                       |
+|          |                                                                                                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| AI       | **Gemini 2.5 Pro/Flash** (Vertex AI, ADC) + **Google ADK** (in-process multi-agent). Port DI swaps single Gemini ⇄ ADK          |
+| Backend  | TypeScript / Express, **DDD + Clean Architecture + CQRS + EDA**, RabbitMQ, MongoDB, Elasticsearch, Valkey                       |
+| Frontend | React, SSE                                                                                                                      |
+| Infra    | **Cloud Run** (frontend / edge) + **Compute Engine** (EDA residents), Terraform, Cloud Monitoring / Cloud Logging (direct OTel) |
+| CI/CD    | GitHub Actions                                                                                                                  |
 
 ## Quick start (local)
 
@@ -100,11 +104,11 @@ The **forecast demo console** on `/forecast` additionally offers the flagship DB
 
 All detailed documentation is in Japanese (source of truth):
 
-|                                                    |                                                                                                             |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| [docs/architecture.md](docs/architecture.md)       | **Architecture (code-accurate, current truth)**: overview, classification/investigation/learning flows, ADK agent graph, deployment, API, scenarios — Mermaid diagrams throughout |
-| [docs/steps/](docs/steps/README.md)                | Design documents (step series — history and rationale)                                                        |
-| [docs/decisions/](docs/decisions/)                 | Decision records                                                                                              |
+|                                              |                                                                                                                                                                                   |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [docs/architecture.md](docs/architecture.md) | **Architecture (code-accurate, current truth)**: overview, classification/investigation/learning flows, ADK agent graph, deployment, API, scenarios — Mermaid diagrams throughout |
+| [docs/steps/](docs/steps/README.md)          | Design documents (step series — history and rationale)                                                                                                                            |
+| [docs/decisions/](docs/decisions/)           | Decision records                                                                                                                                                                  |
 
 ## Status (2026-07-10)
 
