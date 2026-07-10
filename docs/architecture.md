@@ -392,5 +392,4 @@ src/
 
 ## 11. 未実装（設計のみ）
 
-- **イベントソーシング基盤（stretchⅢ）**: ハッカソン後。[docs/steps/step4-1-strategy.md](steps/step4-1-strategy.md) §7.10。
-- `VertexLLMClient`（独立クラスとしては未実装。Vertex AI 経路は `GeminiLLMClient` の `GOOGLE_GENAI_USE_VERTEXAI=true` で実現済み）。
+- **イベントソーシング基盤（stretchⅢ）**: ハッカソン後。将来的には検出層から出力されるイベントの単一入口（Event Gateway）として集約し、すべての検知ソースを同一イベントモデルへ正規化する構想。

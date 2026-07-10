@@ -1,11 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 20 20" fill="none">
-  <!-- BrandMark（shared/ui/BrandMark.tsx）と同一意匠: 角丸スクエア＋cyan→blue グラデ＋脈波（EKG）線 -->
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="20" y2="20" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#22d3ee"/>
-      <stop offset="100%" stop-color="#3b82f6"/>
-    </linearGradient>
-  </defs>
-  <rect width="20" height="20" rx="5" fill="url(#g)"/>
-  <polyline points="3,11 6.5,11 8.5,6 11.5,14 13.5,11 17,11" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
+  <!-- BrandMark（shared/ui/BrandMark.tsx）と同一意匠「次の一点」:
+       実線＝観測済みの軌跡、cyan の点＝その軌道の延長線上にある予測された次のデータポイント。
+       「線がどこへ向かうかを、線より先に知っている」= Kizashi（兆し）。 -->
+  <rect width="64" height="64" rx="14" fill="#0c1626"/>
+  <rect x="0.5" y="0.5" width="63" height="63" rx="13.5" stroke="#94b4d4" stroke-opacity="0.25"/>
+  <polyline points="14,45 27,45 36,32.4" stroke="#e6f4ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="46.5" cy="17.5" r="6" fill="#22d3ee"/>
 </svg>

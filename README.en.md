@@ -109,8 +109,3 @@ All detailed documentation is in Japanese (source of truth):
 | [docs/architecture.md](docs/architecture.md) | **Architecture (code-accurate, current truth)**: overview, classification/investigation/learning flows, ADK agent graph, deployment, API, scenarios — Mermaid diagrams throughout |
 | [docs/steps/](docs/steps/README.md)          | Design documents (step series — history and rationale)                                                                                                                            |
 | [docs/decisions/](docs/decisions/)           | Decision records                                                                                                                                                                  |
-
-## Status (2026-07-10)
-
-- Implemented: **Forecast Briefing** (future signals × memory → citation-verified risk forecasts, `/forecast` page, "🛡 preventive moves", forecast demo console) / detection boundary + 3 ingest routes / 3-tier classification (known, similar, unknown) / 8-agent ADK investigation (**live SSE relay of execution events**, citation-verified correlations + critic agent) / learning loop & promotion / remediation (advisory & dispatch) / real evidence links (CVE → NVD, Terraform → change PR) / "detection pending" banner for the real-detection scenario / SSE UI / Cloud Run + GCE deployment / full CI/CD
-- Design only (post-hackathon): event-sourcing foundation

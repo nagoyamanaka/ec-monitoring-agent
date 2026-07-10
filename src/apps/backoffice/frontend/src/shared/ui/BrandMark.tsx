@@ -1,44 +1,43 @@
-import { useId } from "react";
-
 export interface BrandMarkProps {
   className?: string;
 }
 
 /**
- * プロダクトのブランドマーク（ロゴ）。
- * 旧ロゴは cyan の丸ドットで SSE のライブ状態ランプと紛らわしかったため、
- * 角丸スクエア＋cyan→blue グラデの中に監視らしい「脈波（EKG/ウェーブ）」線を置いた
- * 明確なロゴ形にした。装飾なので aria-hidden（タイトル文字が代替テキストを担う）。
- * linearGradient の id は useId() で一意化し、同一ページに複数配置しても衝突しない。
+ * プロダクトのブランドマーク（ロゴ）「次の一点」。public/favicon.svg と同一意匠。
+ * 実線＝観測済みの軌跡、cyan の点＝その軌道の延長線上にある予測された次のデータポイント。
+ * 「線がどこへ向かうかを、線より先に知っている」= Kizashi（兆し）の核をそのまま幾何にした。
+ * 旧意匠（グラデタイル＋EKG 脈波）は汎用 activity アイコンと同型で予兆を語れないため改訂。
+ * グラデ廃止で useId も不要になった。cyan は UI の「予兆先手」と同じ意味（予測）にだけ使う。
+ * 装飾なので aria-hidden（タイトル文字が代替テキストを担う）。
  */
 export function BrandMark({ className }: BrandMarkProps) {
-  const uid = useId();
-  const gradientId = `brandmark-gradient-${uid}`;
-
   return (
     <svg
       width="20"
       height="20"
-      viewBox="0 0 20 20"
+      viewBox="0 0 64 64"
       fill="none"
       aria-hidden
       className={className}
     >
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="20" y2="20">
-          <stop offset="0%" stopColor="#22d3ee" />
-          <stop offset="100%" stopColor="#3b82f6" />
-        </linearGradient>
-      </defs>
-      <rect width="20" height="20" rx="5" fill={`url(#${gradientId})`} />
+      <rect width="64" height="64" rx="14" fill="#0c1626" />
+      <rect
+        x="0.5"
+        y="0.5"
+        width="63"
+        height="63"
+        rx="13.5"
+        stroke="#94b4d4"
+        strokeOpacity="0.25"
+      />
       <polyline
-        points="3,11 6.5,11 8.5,6 11.5,14 13.5,11 17,11"
-        fill="none"
-        stroke="#ffffff"
-        strokeWidth="1.5"
+        points="14,45 27,45 36,32.4"
+        stroke="#e6f4ff"
+        strokeWidth="5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      <circle cx="46.5" cy="17.5" r="6" fill="#22d3ee" />
     </svg>
   );
 }

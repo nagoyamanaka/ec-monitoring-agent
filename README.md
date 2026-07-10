@@ -105,8 +105,3 @@ make e2e         # E2E
 | [docs/architecture.md](docs/architecture.md) | **アーキテクチャ（コード準拠・現状の正）**。全体図・分類/調査/学習フロー・ADK グラフ・デプロイ・API・シナリオ |
 | [docs/steps/](docs/steps/README.md)          | 設計書（step 系・経緯と理由）。索引に実装とのドリフト注記あり                                                 |
 | [docs/decisions/](docs/decisions/)           | 決定記録・[ADR 集](docs/decisions/ADR.md)（検知境界・a2a 不使用・学習ループ等の意思決定要約）                 |
-
-## ステータス（2026-07-07）
-
-- 実装済み: **予兆ブリーフィング**（未来シグナル×記憶→引用検証付きリスク予報・`/forecast` ページ・「🛡 今打てる先手」・予兆デモコンソール。詳細 → [architecture.md §10](docs/architecture.md)）／検知境界＋3系統 ingest／分類3層（既知・類似・未知）／ADK 8エージェント調査（**実行イベントの SSE ライブ中継＝調査タイムライン可視化**・相関の citation 実在照合＋批判役 CorrelationVerifier）／学習ループ・昇格／リメディエーション（advisory・dispatch）／証拠の実リンク化（CVE→NVD・terraform→変更 PR・config 駆動で非侵食）／実検知シナリオの「検知待ち」バナー／SSE UI／Cloud Run + GCE デプロイ／CI/CD 一式
-- 設計のみ（ハッカソン後）: イベントソーシング基盤（[step4-1 §7.10](docs/steps/step4-1-strategy.md)）
