@@ -26,7 +26,11 @@ Findy **DevOps × AI Agent Hackathon 2026** 出展作品。
 - **ドッグフーディング（自己運用ループ）**: このリポジトリ自身の CI（Trivy）の検出が本番の `/ingest/security-scan` に流れ、SECURITY 調査が AI 実修正 → 自リポジトリへの draft PR を起こす＝**監視対象の EC も、監視するエージェント自身も、同じ DevOps ループの中にいる**（`.github/workflows/` の実ワークフローが運用系そのもの。図解 → [architecture.md §6.5](docs/architecture.md#65-devops-ドッグフーディング自己運用ループ)）。
 - **正直な合成 ＋ 証拠は本物**: デモの合成入力は UI 上で amber バッジ明示（入口のみ合成・変換→分類→AI 調査は実経路）。エンドポイントの無い偽ボタンは作らない（修正の起票も既定 `REMEDIATION_MODE=demo` では、同じ AI 修正パイプラインが事前起票した**実 draft PR** を提示＝リンク先は本物・何度押しても PR は増やさない。その場でのライブ起票は `REMEDIATION_MODE=dispatch/advisory` で有効）。さらに証拠に添える**外部リンクは実在・決定論導出**——脆弱性は CVE→NVD 実在リンク（正規形の CVE のみ解決＝404 を作らない）、terraform 証拠→変更 PR。config 未設定（本番）は素の証拠のまま＝挙動非侵食。
 
-## 全体像
+## システム構成図
+
+![システム構成図](docs/assets/deploy-diagram.png)
+
+## アーキテクチャ
 
 ![Kizashi システム全体の処理フロー — 検知（既存基盤）→ ingest 3系統 → 分類（既知1秒/類似/未知）→ AI 調査（ADK 8エージェント・read-only）→ 人間レビュー→学習ループ、起きる前の予兆ブリーフィング、write 隔離の AI 修正 draft PR](docs/assets/architecture.png)
 
@@ -96,11 +100,11 @@ make e2e         # E2E
 
 ## ドキュメント
 
-|                                                                                        |                                                                                                               |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| [docs/architecture.md](docs/architecture.md)                                           | **アーキテクチャ（コード準拠・現状の正）**。全体図・分類/調査/学習フロー・ADK グラフ・デプロイ・API・シナリオ |
-| [docs/steps/](docs/steps/README.md)                                                    | 設計書（step 系・経緯と理由）。索引に実装とのドリフト注記あり                                                 |
-| [docs/decisions/](docs/decisions/)                                                     | 決定記録・[ADR 集](docs/decisions/ADR.md)（検知境界・a2a 不使用・学習ループ等の意思決定要約）                 |
+|                                              |                                                                                                               |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| [docs/architecture.md](docs/architecture.md) | **アーキテクチャ（コード準拠・現状の正）**。全体図・分類/調査/学習フロー・ADK グラフ・デプロイ・API・シナリオ |
+| [docs/steps/](docs/steps/README.md)          | 設計書（step 系・経緯と理由）。索引に実装とのドリフト注記あり                                                 |
+| [docs/decisions/](docs/decisions/)           | 決定記録・[ADR 集](docs/decisions/ADR.md)（検知境界・a2a 不使用・学習ループ等の意思決定要約）                 |
 
 ## ステータス（2026-07-07）
 
