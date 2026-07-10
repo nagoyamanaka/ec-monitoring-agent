@@ -1,19 +1,17 @@
-import type {
-  InvestigationMetricsView,
-  InvestigationReportView,
-} from "./InvestigationReportView";
+import type { InvestigationReportView } from "./InvestigationReportView";
+import type { EvidenceLedgerKey } from "./evidenceLedger";
 import { formatElapsed } from "./investigationWorkload";
 
 /**
  * 証拠フローダイアグラム（タスク E8-A）の表示モデル・純関数。
  * 「どのソースから何件の証拠が流入し、AI 調査が1つの結論に収束させたか」を図にするための
- * 導出で、数字は全て backend が記録した実測（InvestigationMetrics）＝LLM 出力に依存しない。
+ * 導出で、数字は全て backend が記録した実測＝LLM 出力に依存しない
+ * （調査収集は InvestigationMetrics・Trivy CVE だけは検知イベント payload の実測件数）。
  * 描けない条件（旧データ・fallback・証拠0件）では null を返し、表示側は G1 の
  * ⏱ テキスト1行へ劣化する（捏造してまで図は出さない）。
  */
 
-export type EvidenceFlowSourceKey =
-  keyof InvestigationMetricsView["evidenceCounts"];
+export type EvidenceFlowSourceKey = EvidenceLedgerKey;
 
 export type EvidenceFlowSource = {
   readonly key: EvidenceFlowSourceKey;
@@ -39,6 +37,7 @@ export type EvidenceFlowModel = {
 const SOURCE_META: ReadonlyArray<
   [EvidenceFlowSourceKey, { label: string; icon: string }]
 > = [
+  ["security", { label: "Trivy (CI スキャン)", icon: "🛡" }],
   ["logs", { label: "Cloud Logging", icon: "▤" }],
   ["metrics", { label: "Cloud Monitoring", icon: "📈" }],
   ["terraformChanges", { label: "Terraform", icon: "⬡" }],
@@ -54,19 +53,23 @@ function toWeight(count: number): 1 | 2 | 3 {
 
 export function evidenceFlowModel(
   report: InvestigationReportView | null,
+  /** Trivy（CI スキャン）の CVE 件数。検知 payload 由来＝確信度を支えた流入源として図に載せる。 */
+  securityFindingCount = 0,
 ): EvidenceFlowModel | null {
   // fallback は結論に収束していない（E3 の証拠リンク温存表示が主役）＝図は出さない。
   if (!report || report.isFallback || !report.metrics) return null;
 
   const counts = report.metrics.evidenceCounts;
+  const countOf = (key: EvidenceFlowSourceKey): number =>
+    key === "security" ? securityFindingCount : counts[key];
   const sources: EvidenceFlowSource[] = SOURCE_META.filter(
-    ([key]) => counts[key] > 0,
+    ([key]) => countOf(key) > 0,
   ).map(([key, meta]) => ({
     key,
     label: meta.label,
     icon: meta.icon,
-    count: counts[key],
-    weight: toWeight(counts[key]),
+    count: countOf(key),
+    weight: toWeight(countOf(key)),
   }));
   if (sources.length === 0) return null;
 
