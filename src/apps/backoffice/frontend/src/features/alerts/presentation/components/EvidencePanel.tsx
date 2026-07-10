@@ -129,7 +129,7 @@ function EvidenceSectionView({
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                    "rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
                     CVE_SEVERITY_CLASS[f.severity] ??
                       "bg-slate-600/20 text-slate-300 ring-slate-500/30",
                   )}
@@ -142,7 +142,7 @@ function EvidenceSectionView({
                   target="_blank"
                   rel="noreferrer"
                   title="NVD で脆弱性詳細を開く"
-                  className="rounded bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
+                  className="rounded-md bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
                 >
                   {f.cveId}
                 </a>
@@ -180,7 +180,7 @@ function EvidenceSectionView({
               <div className="flex items-center gap-2">
                 <span
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                    "rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
                     LOG_LEVEL_CLASS[log.severity],
                   )}
                 >
@@ -268,7 +268,7 @@ function EvidenceSectionView({
                 target="_blank"
                 rel="noreferrer"
                 title="GitHub で由来変更の PR を開く"
-                className="ml-auto rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
+                className="ml-auto rounded-md bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
               >
                 変更 PR を開く →
               </a>
@@ -285,7 +285,7 @@ function EvidenceSectionView({
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      "rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase ring-1 ring-inset",
+                      "rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase ring-1 ring-inset",
                       TF_ACTION_CLASS[change.action],
                     )}
                   >
@@ -318,7 +318,7 @@ function EvidenceSectionView({
                   {diff.changedResources.map((r, i) => (
                     <li
                       key={i}
-                      className="rounded bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-amber-200"
+                      className="rounded-md bg-slate-700/40 px-1.5 py-0.5 font-mono text-[11px] text-amber-200"
                     >
                       {r}
                     </li>
@@ -349,12 +349,12 @@ function EvidenceSectionView({
                   target="_blank"
                   rel="noreferrer"
                   title="GitHub でコミットを開く"
-                  className="rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
+                  className="rounded-md bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300 underline decoration-dotted underline-offset-2 transition hover:bg-slate-600/60 hover:text-cyan-200"
                 >
                   {c.shortSha}
                 </a>
               ) : (
-                <code className="rounded bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300">
+                <code className="rounded-md bg-slate-700/40 px-1.5 py-0.5 text-[11px] text-cyan-300">
                   {c.shortSha}
                 </code>
               )}

@@ -10,7 +10,7 @@ import { ForecastBridgeCta } from "../components/ForecastBridgeCta";
 import { ForecastDemoConsole } from "../components/ForecastDemoConsole";
 import { ForecastGenerationPendingBanner } from "../components/ForecastGenerationPendingBanner";
 
-const PANEL = "rounded-xl border border-slate-800/80 bg-slate-900/40 p-5";
+const PANEL = "rounded-lg border border-slate-800/80 bg-slate-900/40 p-5";
 
 /**
  * 予兆ブリーフィングページ（step6 F7/F11/F12）。リスク一覧を level 降順で出す。
@@ -117,7 +117,7 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
           )}
 
           {status === "loading" && (
-            <div className="h-48 animate-pulse rounded-xl bg-slate-800/40" />
+            <div className="h-48 animate-pulse rounded-lg bg-slate-800/40" />
           )}
 
           {status === "error" && (

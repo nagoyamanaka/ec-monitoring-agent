@@ -38,4 +38,20 @@ describe("streamRoutes (integration)", () => {
 
     controller.abort();
   });
+
+  it("接続直後にコメント行が届く（Cloud Run のヘッダ保留対策・E7）", async () => {
+    const controller = new AbortController();
+    const res = await fetch(`${baseUrl}/alerts/stream`, { signal: controller.signal });
+
+    // 初回 heartbeat（30秒）を待たずに最初のチャンクが読めること。
+    // これが無いと GFE がヘッダごと保留し、EventSource の onopen が発火しない。
+    const reader = res.body!.getReader();
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("first chunk not received within 2s")), 2_000),
+    );
+    const { value } = await Promise.race([reader.read(), timeout]);
+    expect(new TextDecoder().decode(value)).toContain(": connected");
+
+    controller.abort();
+  });
 });

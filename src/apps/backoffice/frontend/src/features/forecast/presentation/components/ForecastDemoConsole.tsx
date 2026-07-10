@@ -192,7 +192,7 @@ export function ForecastDemoConsole({
                       </div>
                       <span
                         title={realness.note}
-                        className={`mt-0.5 shrink-0 cursor-help rounded px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${realness.className}`}
+                        className={`mt-0.5 shrink-0 cursor-help rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${realness.className}`}
                       >
                         {realness.label}
                       </span>

@@ -78,7 +78,7 @@ export function DetectionPendingBanner({
             type="button"
             aria-label="待機表示を閉じる"
             onClick={onDismiss}
-            className="grid h-5 w-5 place-items-center rounded text-sky-200/70 transition hover:bg-sky-500/20 hover:text-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            className="grid h-5 w-5 place-items-center rounded-md text-sky-200/70 transition hover:bg-sky-500/20 hover:text-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             <span aria-hidden className="text-sm leading-none">
               ✕
@@ -96,7 +96,7 @@ export function DetectionPendingBanner({
       <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-sky-200/90">
         {PIPELINE_HOPS.map((hop, i) => (
           <li key={hop} className="flex items-center gap-1.5">
-            <span className="rounded bg-sky-500/15 px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/25">
+            <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/25">
               {hop}
             </span>
             {i < PIPELINE_HOPS.length - 1 && (

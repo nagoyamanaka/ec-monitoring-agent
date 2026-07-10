@@ -191,7 +191,7 @@ function ScenarioRow({
         </span>
         <span
           title={realness.note}
-          className={`shrink-0 cursor-help rounded px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
+          className={`shrink-0 cursor-help rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
         >
           {realness.label}
         </span>
@@ -211,7 +211,7 @@ function ScenarioRow({
           <p className="text-slate-400">
             <span
               title={realness.note}
-              className={`mr-1.5 cursor-help rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
+              className={`mr-1.5 cursor-help rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${realness.className}`}
             >
               {realness.label}
             </span>

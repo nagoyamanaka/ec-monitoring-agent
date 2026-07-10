@@ -178,7 +178,7 @@ export function AlertDetailDrawer({
                 <SeverityBadge level={alert.severity} />
               )}
               <span
-                className="whitespace-nowrap rounded bg-slate-700/40 px-2 py-0.5 text-xs font-medium text-slate-300"
+                className="whitespace-nowrap rounded-md bg-slate-700/40 px-2 py-0.5 text-xs font-medium text-slate-300"
                 title={category.description}
               >
                 {category.label}
@@ -323,7 +323,7 @@ export function AlertDetailDrawer({
                 {teaser.chips.map((chip) => (
                   <span
                     key={chip}
-                    className="rounded bg-slate-700/50 px-1.5 py-0.5 text-[11px] font-medium text-slate-300 ring-1 ring-inset ring-slate-600/50"
+                    className="rounded-md bg-slate-700/50 px-1.5 py-0.5 text-[11px] font-medium text-slate-300 ring-1 ring-inset ring-slate-600/50"
                   >
                     {chip}
                   </span>

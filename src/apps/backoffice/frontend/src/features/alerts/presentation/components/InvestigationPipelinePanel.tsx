@@ -143,7 +143,7 @@ export function InvestigationPipelinePanel({
               <li
                 key={agent.name}
                 className={cn(
-                  "flex items-baseline gap-2 rounded px-2 py-1 text-xs transition",
+                  "flex items-baseline gap-2 rounded-md px-2 py-1 text-xs transition",
                   isCurrent
                     ? "bg-cyan-500/10 text-cyan-200 ring-1 ring-inset ring-cyan-500/30"
                     : wasActive

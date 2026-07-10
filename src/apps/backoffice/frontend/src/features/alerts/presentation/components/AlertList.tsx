@@ -56,19 +56,7 @@ export function AlertList({
         activeFilter={filter}
         onFilterToggle={toggleFilter}
       />
-      {filter && (
-        <p className="text-xs text-slate-400">
-          {filter === "pending" ? "レビュー待ち" : "CRITICAL"}のみ表示中（
-          {visible.length}件）
-          <button
-            type="button"
-            onClick={() => setFilter(null)}
-            className="ml-2 rounded font-medium text-cyan-300 hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-          >
-            解除
-          </button>
-        </p>
-      )}
+      {/* 絞り込み状態の表現はチップの ✓/✕ に一本化する（E8: 「のみ表示中」行＋解除リンクは同じ状態の三重表示で冗長だった）。 */}
       <AlertListBody
         alerts={visible}
         status={status}
@@ -155,7 +143,7 @@ function AlertListBody({
   }
 
   if (alerts.length === 0) {
-    // 絞り込み中の 0 件は「アクティブ無し」ではない（解除導線は上の注記が担う）。
+    // 絞り込み中の 0 件は「アクティブ無し」ではない（解除導線はヘッダのチップ ✕ が担う）。
     if (filtered) {
       return (
         <div className="rounded-tremor-default bg-slate-800/30 px-4 py-10 text-center text-sm text-slate-400 ring-1 ring-inset ring-slate-700/50">

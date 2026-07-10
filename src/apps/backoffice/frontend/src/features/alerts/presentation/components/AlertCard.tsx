@@ -182,7 +182,7 @@ export function AlertCard({
             重要度 {analyzing ? "判定中" : SEVERITY_LABEL[alert.severity]}
           </span>
           <span
-            className="whitespace-nowrap rounded bg-slate-700/50 px-1.5 py-0.5 text-xs font-medium text-slate-300"
+            className="whitespace-nowrap rounded-md bg-slate-700/50 px-1.5 py-0.5 text-xs font-medium text-slate-300"
             title={category.description}
           >
             {category.label}

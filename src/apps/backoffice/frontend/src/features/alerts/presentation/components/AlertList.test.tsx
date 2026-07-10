@@ -104,14 +104,20 @@ describe("AlertList", () => {
         ]}
       />,
     );
+    // 絞り込み状態の表現はチップの ✓/✕（aria-pressed）に一本化（E8: 「のみ表示中」行は撤去）。
     await userEvent.click(screen.getByRole("button", { name: "CRITICAL 1件" }));
     expect(screen.getByText("latency.spike")).toBeInTheDocument();
     expect(screen.queryByText("cpu.high")).not.toBeInTheDocument();
-    expect(screen.getByText(/CRITICALのみ表示中/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "CRITICAL 1件" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText(/のみ表示中/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "CRITICAL 1件" }));
     expect(screen.getByText("cpu.high")).toBeInTheDocument();
-    expect(screen.queryByText(/のみ表示中/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "CRITICAL 1件" }),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
   it("行クリックで onSelect を呼ぶ", async () => {
