@@ -16,7 +16,7 @@ import { reinvestigate } from "../../application/reinvestigate";
 import { AlertList } from "../components/AlertList";
 import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
 import { FirstRunGuide } from "../components/FirstRunGuide";
-import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
+import { LiveStreamStatus } from "../components/LiveStreamStatus";
 
 export interface AlertsPageProps {
   /** デモ操作卓 API（composition root で生成して注入）。 */
@@ -37,13 +37,10 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
     status,
     error,
     retrying,
-    streamStatus,
     lastUpdatedAt,
-    lastEvent,
     lastIncomingAlert,
     refreshAlert,
     refreshAlerts,
-    reconnectStream,
     remediationByAlertId,
     investigationProgressByAlertId,
     api,
@@ -189,14 +186,7 @@ export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
       <AlertsLayout
         forecastEnabled={forecastNav.enabled}
         forecastBadge={forecastNav.badge}
-        headerSlot={
-          <StreamStatusIndicator
-            status={streamStatus}
-            lastUpdatedAt={lastUpdatedAt}
-            lastEvent={lastEvent}
-            onReconnect={reconnectStream}
-          />
-        }
+        headerSlot={<LiveStreamStatus />}
         demoDrawer={
           <DemoDrawer
             api={demoApi}

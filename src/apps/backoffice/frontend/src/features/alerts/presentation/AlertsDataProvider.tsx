@@ -60,3 +60,12 @@ export function useAlertsData(): AlertsData {
   }
   return value;
 }
+
+/**
+ * プロバイダ外では null を返す寛容版。ページ横断の飾り（LiveStreamStatus など）が
+ * ページ単体テスト（プロバイダ無し）でも壊れないための入口（useForecastNav と同じ流儀）。
+ * ページ本体のデータ取得は従来どおり useAlertsData（例外＝配線ミス検出）を使うこと。
+ */
+export function useAlertsDataOptional(): AlertsData | null {
+  return useContext(AlertsDataContext);
+}

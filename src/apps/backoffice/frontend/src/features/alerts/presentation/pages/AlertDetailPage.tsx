@@ -20,7 +20,7 @@ import { FallbackRecoveryBanner } from "../components/FallbackRecoveryBanner";
 import { InvestigationPipelinePanel } from "../components/InvestigationPipelinePanel";
 import { RemediationPanel } from "../components/RemediationPanel";
 import { RelatedAlertsPanel } from "../components/RelatedAlertsPanel";
-import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
+import { LiveStreamStatus } from "../components/LiveStreamStatus";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 
 /** 報告書の各ブロックをカードで括る共通スタイル（グルーピングで視線の止め所を作る）。 */
@@ -44,11 +44,7 @@ export function AlertDetailPage() {
     alerts,
     status: listStatus,
     error,
-    streamStatus,
-    lastUpdatedAt,
-    lastEvent,
     refreshAlert,
-    reconnectStream,
     remediationByAlertId,
     investigationProgressByAlertId,
     api,
@@ -134,14 +130,7 @@ export function AlertDetailPage() {
     <DefaultLayout
       forecastEnabled={forecastNav.enabled}
       forecastBadge={forecastNav.badge}
-      headerSlot={
-        <StreamStatusIndicator
-          status={streamStatus}
-          lastUpdatedAt={lastUpdatedAt}
-          lastEvent={lastEvent}
-          onReconnect={reconnectStream}
-        />
-      }
+      headerSlot={<LiveStreamStatus />}
     >
       <button
         type="button"
