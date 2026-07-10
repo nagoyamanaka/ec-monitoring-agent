@@ -8,6 +8,7 @@ import { EvidenceFlowDiagram } from "./EvidenceFlowDiagram";
 import { RemediationReviewPanel } from "./RemediationReviewPanel";
 import { NextActionCard } from "./NextActionCard";
 import { alertReason } from "../../domain/alertReason";
+import { patternLabel } from "../../domain/patternLabel";
 import { nextAction } from "../../domain/nextAction";
 import {
   documentationRows,
@@ -26,17 +27,6 @@ import { evidenceFlowModel } from "../../domain/evidenceFlow";
  * データは二重持ちせず、同じ AlertView から表示時に射影する。
  */
 export type AlertReportVariant = "summary" | "full";
-
-/** AI 推定パターン名が機械 ID（UPPER_SNAKE_CASE）のときだけ人間語化して見出し行に出す対象と判定する。 */
-const RAW_ID_PATTERN = /^[A-Z0-9]+(?:_[A-Z0-9]+)+$/;
-
-function isRawId(patternName: string): boolean {
-  return RAW_ID_PATTERN.test(patternName);
-}
-
-function humanizeRawId(patternName: string): string {
-  return patternName.replace(/_/g, " ").toLowerCase();
-}
 
 export interface AlertCardExpandedProps {
   alert: AlertView;
@@ -272,12 +262,13 @@ export function AlertCardExpanded({
         </section>
       )}
 
-      {/* 推定原因（該当パターン / AI 推定パターン）。
-          結晶化パターンは人間語＋◈で出し、生ID（PROMOTED_...）は詳細の従属行へ降格。 */}
+      {/* 推定原因（該当パターン / 原因候補=AI推定）。
+          結晶化パターンは人間語＋◈で出し、生ID（PROMOTED_...）は詳細の従属行へ降格。
+          それ以外も patternLabel（G4）で人間語化し、写像が起きたときだけ生IDを従属行へ残す。 */}
       {reason.kind !== "analyzing" && (
         <section className="space-y-1">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-            {known ? "該当パターン（既知）" : "AI 推定パターン"}
+            {known ? "該当パターン（既知）" : "原因候補（AI 推定）"}
           </h4>
           {reason.kind === "known" && reason.crystallized ? (
             <>
@@ -294,15 +285,26 @@ export function AlertCardExpanded({
                 パターンID: <code>{reason.rawPatternName}</code>
               </p>
             </>
-          ) : isRawId(reason.patternName) ? (
+          ) : patternLabel(reason.patternName) !== reason.patternName ? (
             <>
-              <p className="text-slate-100">{humanizeRawId(reason.patternName)}</p>
+              <p className="text-slate-100">{patternLabel(reason.patternName)}</p>
               <p className="text-xs text-slate-400">
                 パターンID: <code>{reason.patternName}</code>
               </p>
             </>
           ) : (
             <p className="text-slate-100">{reason.patternName}</p>
+          )}
+          {/* 何が原因だったか（G4b）: 既知はパターン名だけでは原因を語らないため、
+              seed の定義文 or 結晶化の承認時 AI summary を1行で添える。
+              類似（SIMILARITY）は確定でないため候補調。 */}
+          {reason.kind === "known" && reason.cause !== undefined && (
+            <p className="text-slate-300">
+              <span className="text-slate-400">
+                {reason.source === "EXACT_MATCH" ? "原因: " : "原因候補: "}
+              </span>
+              {reason.cause}
+            </p>
           )}
           {/* 学習ループの経済性の対比（タスク G1）: 既知一致は AI を起動せず即・無料で確定する事実を
               毎回 1 行で想起させる（AI 調査の実測サマリと対になる）。 */}

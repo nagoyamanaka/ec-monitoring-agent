@@ -472,13 +472,14 @@ function ApprovedAlertsSection({
                     >
                       {alert.classificationType === "known"
                         ? "既知: "
-                        : "AI推定: "}
+                        : "原因候補: "}
                     </span>
-                    {/* patternName は空文字で届き得る（salvage 由来の推定パターン名欠落）。
-                        `??` は空文字を捕まえないので trim して placeholder に倒す。 */}
-                    {alert.patternName?.trim()
-                      ? alert.patternName
-                      : "（パターン未特定）"}
+                    {/* patternName は空文字で届き得る（salvage 由来の推定パターン名欠落）
+                        ＝patternLabel(null 許容) が null を返すので placeholder に倒す。
+                        生 enum は人間語化し、生IDは tooltip へ降格（G4）。 */}
+                    <span title={alert.patternName ?? undefined}>
+                      {patternLabel(alert.patternName) ?? "（パターン未特定）"}
+                    </span>
                     {alert.operatorNote ? ` — ${alert.operatorNote}` : ""}
                   </p>
                 </div>

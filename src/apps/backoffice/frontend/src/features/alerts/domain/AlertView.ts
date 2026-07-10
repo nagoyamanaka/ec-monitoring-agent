@@ -54,6 +54,8 @@ export type AlertClassificationView =
       readonly sourceAlertId?: string;
       /** 類似既知（SIMILARITY）のとき、一致した解決済み事例の対応メモ（当時どう直したか・任意）。 */
       readonly resolvedNote?: string;
+      /** 一致した既知パターンの説明＝何が原因か（seed=定義文/結晶化=承認時AI summary・任意）。 */
+      readonly patternDescription?: string;
     }
   | { readonly type: "unknown"; readonly confidence: null };
 
@@ -111,6 +113,9 @@ function toClassificationView(
         : {}),
       ...(dto.resolvedNote !== undefined
         ? { resolvedNote: dto.resolvedNote }
+        : {}),
+      ...(dto.patternDescription !== undefined
+        ? { patternDescription: dto.patternDescription }
         : {}),
     };
   }

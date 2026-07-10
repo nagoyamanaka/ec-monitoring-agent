@@ -11,6 +11,7 @@ import { alertConfidence } from "../../domain/alertConfidence";
 import { eventInfo, eventTitle } from "../../domain/eventCatalog";
 import { categoryInfo } from "../../domain/alertCategory";
 import { alertReason } from "../../domain/alertReason";
+import { patternLabel } from "../../domain/patternLabel";
 import { AlertStatusBadge } from "./AlertStatusBadge";
 import { ExactMatchBadge } from "./ExactMatchBadge";
 
@@ -52,6 +53,15 @@ function formatRelativeTime(iso: string): string {
   const hr = Math.round(min / 60);
   if (hr < 24) return `${hr}時間前`;
   return `${Math.round(hr / 24)}日前`;
+}
+
+/**
+ * 推定原因の1行表示（③行）。生 enum は人間語へ写像し、写像が起きたときだけ
+ * 原文（生ID）を tooltip へ降格する（G4・E9 と同じ作法）。
+ */
+function ReasonLabel({ patternName }: { patternName: string }) {
+  const label = patternLabel(patternName);
+  return <span title={label !== patternName ? patternName : undefined}>{label}</span>;
 }
 
 /** severity をスクリーンリーダー向けに読み上げるラベル（視覚上はストライプ色が担う）。 */
@@ -137,15 +147,15 @@ export function AlertCard({
       onClick={() => onSelect?.(alert.id)}
       onAnimationEnd={handleAnimationEnd}
       className={cn(
-        "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left ring-1 ring-inset transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
+        "relative flex w-full items-stretch overflow-hidden rounded-tremor-default text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
         isNewArrival && "card-arrive",
         justResolved && "resolve-flash",
         justUpdated && !justResolved && "card-update-flash",
         // 承認済みは減光＋彩度を落として沈める（hover で一時的に戻して閲覧しやすく）。
         approved && !selected && "opacity-55 saturate-50 hover:opacity-90",
         selected
-          ? "bg-slate-800/50 ring-cyan-500/50"
-          : "bg-slate-900/30 ring-slate-700/60 hover:bg-slate-800/30 hover:ring-slate-600",
+          ? "bg-slate-800/50 ring-1 ring-inset ring-cyan-500/50"
+          : "bg-slate-800/40 hover:bg-slate-800/60",
       )}
     >
       <span
@@ -160,7 +170,7 @@ export function AlertCard({
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 py-4 pl-5 pr-4">
         {/* ① 主役: 人間語タイトル（未登録は eventName にフォールバック） */}
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-lg font-semibold text-slate-50">
+          <span className="truncate text-lg font-bold text-slate-50">
             {title}
           </span>
           {info && (
@@ -198,7 +208,7 @@ export function AlertCard({
           {alert.occurrenceCount > 1 && (
             <span
               className={cn(
-                "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                "shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium",
                 occurrenceTone(alert.occurrenceCount),
                 countPulse && "count-pulse",
               )}
@@ -210,15 +220,24 @@ export function AlertCard({
           )}
         </div>
 
-        {/* ③ 副次: 推定原因（該当パターン／AI推定パターン）。
-            結晶化パターンは生ID（PROMOTED_...）を出さず ◈＋人間語（tooltip に生ID）。 */}
+        {/* ③ 副次: 推定原因（既知=原因／未知=原因候補）。
+            既知はパターン名がタイトルの復唱になるため、原因（cause＝seed 要約 or
+            結晶化の承認時 AI summary）があればそちらを出し、パターン名は tooltip へ（G4b）。
+            結晶化は ◈ を維持。AI推定の生 enum も人間語へ写像し生IDは tooltip へ（G4）。 */}
         <p className="truncate text-sm leading-relaxed text-slate-300">
           {reason.kind === "analyzing" ? (
             "AI が未知障害を調査中…"
           ) : (
             <>
               <span className="text-slate-400">
-                {reason.kind === "known" ? "該当: " : "AI推定: "}
+                {reason.kind !== "known"
+                  ? "原因候補: "
+                  : reason.cause === undefined
+                    ? "該当: "
+                    : // 類似（SIMILARITY）は確定でないため候補調＝類似度チップと整合させる。
+                      reason.source === "EXACT_MATCH"
+                      ? "原因: "
+                      : "原因候補: "}
               </span>
               {reason.kind === "known" && reason.crystallized ? (
                 <span
@@ -227,10 +246,14 @@ export function AlertCard({
                   <span aria-hidden className="text-emerald-300">
                     ◈{" "}
                   </span>
-                  {reason.patternName}
+                  {reason.cause ?? reason.patternName}
+                </span>
+              ) : reason.kind === "known" && reason.cause !== undefined ? (
+                <span title={`該当パターン: ${reason.patternName}`}>
+                  {reason.cause}
                 </span>
               ) : (
-                reason.patternName
+                <ReasonLabel patternName={reason.patternName} />
               )}
             </>
           )}
@@ -243,7 +266,7 @@ export function AlertCard({
         {confidence.kind === "exact-match" ? (
           <ExactMatchBadge variant="chip" />
         ) : confidence.kind === "ai" && aiFallback ? (
-          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-300 ring-1 ring-inset ring-amber-500/30">
+          <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-300">
             暫定
           </span>
         ) : confidence.kind === "ai" ? (

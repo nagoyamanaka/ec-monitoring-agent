@@ -41,6 +41,11 @@ export type KnownAlertClassificationPrimitives = {
   // AI 調査を起動しない既知ルートで、deep link を開かずその場に「次のアクション」を出す表示面に使う。
   // optional は sourceAlertId と同じ規約（INFERENCE・旧データ・対応メモ空では未設定）。
   readonly resolvedNote?: string;
+  // 既知分類の「何が原因か」＝一致した KnownErrorPattern.description（G4b）。
+  // seed パターンは定義文、結晶化パターンは承認時の AI 調査 summary（確定した原因）が入る。
+  // patternName がタイトルの復唱になる既知ルートで、一覧③行に原因を出す表示面に使う。
+  // optional は resolvedNote と同じ規約（旧データ・description 空では未設定）。
+  readonly patternDescription?: string;
 };
 
 export type UnknownAlertClassificationPrimitives = {
