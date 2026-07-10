@@ -274,7 +274,7 @@ function LifecycleStage({
       } ${grow ? "flex-1" : ""}`}
     >
       <span
-        className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${BADGE_TONE[tone]}`}
+        className={`inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${BADGE_TONE[tone]}`}
       >
         {badge}
       </span>

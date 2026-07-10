@@ -127,7 +127,7 @@ export function StreamStatusIndicator({
         <button
           type="button"
           onClick={onReconnect}
-          className="rounded px-1.5 py-0.5 text-xs font-medium text-slate-300 ring-1 ring-inset ring-slate-600 transition hover:bg-slate-700/60 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95"
+          className="rounded-md px-1.5 py-0.5 text-xs font-medium text-slate-300 ring-1 ring-inset ring-slate-600 transition hover:bg-slate-700/60 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-95"
         >
           再接続
         </button>

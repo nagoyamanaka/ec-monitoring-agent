@@ -16,7 +16,7 @@ export function ForecastBridgeCta() {
   return (
     <aside
       aria-label="反応的パイプラインへの案内"
-      className="space-y-2 rounded-xl border border-dashed border-slate-800 bg-slate-900/20 p-4"
+      className="space-y-2 rounded-lg border border-dashed border-slate-800 bg-slate-900/20 p-4"
     >
       <h3 className="text-xs font-semibold text-slate-300">
         もし防ぎきれずに発火したら？
@@ -40,7 +40,7 @@ export function ForecastBridgeCta() {
       </div>
       <Link
         to="/alerts"
-        className="inline-flex items-center gap-1 rounded text-xs font-medium text-cyan-400/80 transition hover:text-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        className="inline-flex items-center gap-1 rounded-md text-xs font-medium text-cyan-400/80 transition hover:text-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
       >
         アラート一覧を見る
         <span aria-hidden>→</span>

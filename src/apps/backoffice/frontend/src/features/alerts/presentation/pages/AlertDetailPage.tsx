@@ -24,7 +24,7 @@ import { StreamStatusIndicator } from "../components/StreamStatusIndicator";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 
 /** 報告書の各ブロックをカードで括る共通スタイル（グルーピングで視線の止め所を作る）。 */
-const PANEL = "rounded-xl border border-slate-800/80 bg-slate-900/40 p-5";
+const PANEL = "rounded-lg border border-slate-800/80 bg-slate-900/40 p-5";
 
 /**
  * アラート詳細ページ（DefaultLayout＝デモUI非侵食・ディープリンク/別タブ用）。
@@ -174,7 +174,7 @@ export function AlertDetailPage() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <SeverityBadge level={alert.severity} />
-                  <span className="rounded bg-slate-700/40 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-300">
+                  <span className="rounded-md bg-slate-700/40 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-300">
                     {alert.category}
                   </span>
                 </div>

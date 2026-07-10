@@ -78,7 +78,7 @@ export function ForecastGenerationPendingBanner({
       <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-sky-200/90">
         {GENERATION_STEPS.map((step, i) => (
           <li key={step} className="flex items-center gap-1.5">
-            <span className="rounded bg-sky-500/15 px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/25">
+            <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 ring-1 ring-inset ring-sky-500/25">
               {step}
             </span>
             {i < GENERATION_STEPS.length - 1 && (

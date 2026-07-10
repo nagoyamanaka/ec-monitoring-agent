@@ -234,7 +234,7 @@ export function AlertCardExpanded({
                   {detectionResource.labels.map((label) => (
                     <code
                       key={label.key}
-                      className="rounded bg-slate-800/70 px-1.5 py-0.5 text-[10px] text-slate-300 ring-1 ring-inset ring-slate-700/60"
+                      className="rounded-md bg-slate-800/70 px-1.5 py-0.5 text-[10px] text-slate-300 ring-1 ring-inset ring-slate-700/60"
                     >
                       {label.key}={label.value}
                     </code>
@@ -286,7 +286,7 @@ export function AlertCardExpanded({
                   ◈{" "}
                 </span>
                 {reason.patternName}
-                <span className="ml-2 rounded bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/25">
+                <span className="ml-2 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-inset ring-emerald-500/25">
                   結晶化（承認により学習）
                 </span>
               </p>

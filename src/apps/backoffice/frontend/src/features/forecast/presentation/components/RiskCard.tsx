@@ -21,7 +21,7 @@ export function RiskCard({ risk }: RiskCardProps) {
   const pastCount = pastIncidentCount(risk.citations);
   return (
     <article
-      className="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-5"
+      className="space-y-3 rounded-lg border border-slate-800/80 bg-slate-900/40 p-5"
       aria-label={`${riskLevelLabel(risk.level)}: ${risk.subject}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
