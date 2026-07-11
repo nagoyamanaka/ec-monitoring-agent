@@ -13,7 +13,7 @@ Built for the Findy **DevOps × AI Agent Hackathon 2026**.
 | Forecast                     | Cross-checks 3 kinds of future signals × past incident memory — **only citation-verified evidence is shown** |
 | AI investigation (unknown)   | **8 ADK agents** traverse evidence read-only; report with evidence links in ~2–3 minutes                     |
 | Known-failure classification | **Under 1 second, zero AI cost** (deterministic)                                                             |
-| Tests                        | **1,156 unit tests** + 22 E2E tests (learning loop & citation verification covered deterministically)        |
+| Tests                        | **1,170 unit tests** + 22 E2E tests (learning loop & citation verification covered deterministically)        |
 
 ## What makes it different
 
@@ -90,9 +90,9 @@ The architecture diagrams show **data causality**; concerns that apply uniformly
 | ------------------ | -------------------------------------------------------------------------------------------------------- |
 | Secrets            | **Secret Manager** (tf manages the secret shells only; plaintext versions injected out-of-band → never in tfstate, never in LLM context) |
 | CI auth            | **Workload Identity Federation** (keyless — no SA keys distributed to GitHub Actions)                     |
-| Least privilege    | **12 service accounts**, per-subservice isolation → bounded lateral movement                              |
-| State / artifacts  | **GCS ×2** (tfstate + deploy artifacts) with state-lock serialization; **Artifact Registry ×2**          |
-| Networking         | VPC / subnet / **VPC Access Connector ×3** / static IP / firewall (Cloud Run → GCE-resident RabbitMQ/Mongo/ES/Valkey) |
+| Least privilege    | **3 role-scoped service accounts** (CI-deploy / Cloud Run runtime / GCE runtime) → bounded lateral movement |
+| State / artifacts  | **GCS** (tfstate bucket provisioned outside tf via partial backend config; deploy-artifact bucket tf-managed) with state-lock serialization; **Artifact Registry** (apps image repo) |
+| Networking         | VPC / subnet / **Serverless VPC Access connector** / static IP / firewall (Cloud Run → GCE-resident RabbitMQ/Mongo/ES/Valkey) |
 | Write safety       | **Draft-PR human-approval gate** for AI remediation (no auto-merge)                                        |
 
 ## Quick start (local)
