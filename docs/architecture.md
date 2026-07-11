@@ -239,6 +239,23 @@ flowchart LR
 - **ドッグフーディング**: このリポジトリ自身の CI（Trivy）が検出した脆弱性を本番の `/ingest/security-scan` に送る＝監視エージェント自身が同じ DevOps ループの中にいる（詳細は §6.5）。
 - **観測性の現状ギャップ（設計判断・将来）**: OTel の分散トレース（`start.ts` の `TraceExporter`）はコード・SA 権限（`roles/cloudtrace.agent`）とも用意済みだが、`cloudtrace.googleapis.com` の API 有効化を意図的に見送っている（ROI 低・スパンは Cloud Trace に着かないがログ↔トレース相関フィールドは出る）。可視化が必要になったら bootstrap の services に1行足すだけ（`infra/terraform/modules/bootstrap/main.tf`）。ログ/メトリクス（Cloud Logging OTel 直送・Cloud Monitoring）は稼働中。
 
+### 6.1 基盤・非機能インフラ（図に描かない横断的関心事）
+
+§2・§6 のフロー図は**データの因果**を描くため、全ノードに均等にかかる横断的関心事（cross-cutting concern）はあえて描かない（描くと全箱から線が出て可読性を損なう）。以下は Terraform 管理下で常時効いている基盤で、§5.5 の脅威モデルが論拠として参照する多層防御の実体でもある。
+
+| 関心事           | 実装（`infra/terraform/`）                                                            | 目的・効き方                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 機密             | **Secret Manager**（箱のみ tf 管理・平文 version は `gcloud` で別投入＝tf state 非搭載） | 各コンテナへ環境注入。LLM コンテキストに載らない＝注入成功時も鍵は漏れない（§5.5） |
+| CI 認証          | **Workload Identity Federation**（pool + provider・鍵レス）                            | GitHub Actions → GCP を SA キー配布ゼロで認証。長期鍵の漏洩面を排除          |
+| 権限             | **サービスアカウント ×12**（サブサービス分離・最小権限）                                | プロセス誤動作時の横移動を限定（§5.5 最小権限・サービス分離）                |
+| 状態管理         | **GCS ×2**（tfstate + deploy 成果物）／state lock                                      | plan/apply の tfstate 奪い合いを `concurrency` で直列化（§6.5②）             |
+| 配信             | **Artifact Registry ×2**                                                               | image build & push の格納先（§6.5①）                                        |
+| ネットワーク     | VPC / subnet / **VPC Access Connector ×3** / 静的 IP / firewall                        | Cloud Run（サーバレス）→ GCE 常駐系（RabbitMQ/Mongo 等）への疎通            |
+| API 有効化       | `google_project_service`（bootstrap で宣言的に enable）                                | 使う GCP API を IaC で明示（Cloud Trace のみ意図的に未 enable＝§6 注）       |
+
+- **draft PR 承認ゲート**（§5）も「AI の write を止められる形で運用する」非機能設計としてここに連なる（実装は §5・§6.5④）。
+- これらは**本番のみ効く**基盤で、ローカル（docker compose）では該当せず＝挙動非侵食。
+
 ## 6.5 DevOps ドッグフーディング（自己運用ループ）
 
 > 観点「実運用を見据えた DevOps プロセス」。**監視対象の EC も、監視するエージェント自身も、同じ DevOps ループの中にいる**——このプロダクトは自分自身を CI/CD で運用し、自分自身の脆弱性を自分の検知パイプラインで拾い、自分自身のコードを AI が修正して自分のリポジトリに PR を出す。デモ用の飾りではなく、`.github/workflows/` の実ワークフローがそのままプロダクトの運用系である。
