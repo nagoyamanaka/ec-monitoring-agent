@@ -3,6 +3,7 @@ import type { AlertView } from "../../domain/AlertView";
 import type { AlertsStatus } from "../hooks/useAlerts";
 import { sortAlerts } from "../../domain/alertSort";
 import { AlertCard } from "./AlertCard";
+import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
 import {
   AlertsHeader,
   matchesAlertFilter,
@@ -150,13 +151,15 @@ function AlertListBody({
     // 絞り込み中の 0 件は「アクティブ無し」ではない（解除導線はヘッダのチップ ✕ が担う）。
     if (filtered) {
       return (
-        <div className="rounded-tremor-default bg-slate-800/40 px-4 py-10 text-center text-sm text-slate-400">
+        <div className="flex flex-col items-center gap-3 rounded-tremor-default bg-slate-800/40 px-4 py-10 text-center text-sm text-slate-400">
+          <EmptyStateFigure className="text-slate-500" />
           絞り込み条件に一致するアラートはありません。
         </div>
       );
     }
     return (
-      <div className="space-y-2 rounded-tremor-default bg-slate-800/40 px-4 py-10 text-center text-sm">
+      <div className="flex flex-col items-center gap-2 rounded-tremor-default bg-slate-800/40 px-4 py-10 text-center text-sm">
+        <EmptyStateFigure className="mb-1 text-slate-500" />
         <p className="text-slate-300">現在アクティブなアラートはありません。</p>
         <p className="font-medium text-cyan-300">
           → 右のデモ操作卓からシナリオを注入すると、AI の検知・分類・調査が始まります。

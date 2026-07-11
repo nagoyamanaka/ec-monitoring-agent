@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
+import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
 import {
   ArrowDownIcon,
   ArrowRightIcon,
@@ -96,11 +97,14 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
         />
       ) : (
         <Card className="!bg-slate-800/40 !ring-0">
-          <p className="py-10 text-center text-sm text-slate-400">
-            まだ学習の軌跡がありません。
-            <br />
-            未知のアラートを調査・承認すると、ここに「未知 → 承認 → 既知」の軌跡が現れます。
-          </p>
+          <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-slate-400">
+            <EmptyStateFigure className="text-slate-500" />
+            <p>
+              まだ学習の軌跡がありません。
+              <br />
+              未知のアラートを調査・承認すると、ここに「未知 → 承認 → 既知」の軌跡が現れます。
+            </p>
+          </div>
         </Card>
       )}
 
@@ -321,11 +325,14 @@ function AggregateBlock({ analytics }: { analytics: AnalyticsView }) {
           </h3>
           <div className="mt-4 flex flex-col items-center gap-2">
             {analytics.accuracyPercent === null ? (
-              <p className="py-10 text-center text-sm text-slate-400">
-                まだフィードバックがありません。
-                <br />
-                承認/却下を行うと正答率が表示されます。
-              </p>
+              <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-slate-400">
+                <EmptyStateFigure className="text-slate-500" />
+                <p>
+                  まだフィードバックがありません。
+                  <br />
+                  承認/却下を行うと正答率が表示されます。
+                </p>
+              </div>
             ) : (
               <>
                 <ConfidenceGauge
@@ -347,9 +354,10 @@ function AggregateBlock({ analytics }: { analytics: AnalyticsView }) {
             既知 / 未知の内訳
           </h3>
           {analytics.totalAlerts === 0 ? (
-            <p className="py-10 text-center text-sm text-slate-400">
+            <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-slate-400">
+              <EmptyStateFigure className="text-slate-500" />
               アラートがまだありません。
-            </p>
+            </div>
           ) : (
             <div className="mt-4 flex flex-col items-center gap-3">
               <DonutChart
@@ -446,9 +454,10 @@ function ApprovedAlertsSection({
       </p>
 
       {alerts.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-400">
+        <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-slate-400">
+          <EmptyStateFigure className="text-slate-500" />
           まだ承認済みのアラートはありません。
-        </p>
+        </div>
       ) : (
         <ul className="mt-4 space-y-2">
           {alerts.map((alert) => (
