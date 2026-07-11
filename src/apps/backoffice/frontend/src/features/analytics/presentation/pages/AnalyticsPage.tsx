@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
 import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
+import { useCountUp } from "@shared/ui/useCountUp";
 import {
   ArrowDownIcon,
   ArrowRightIcon,
@@ -146,6 +147,8 @@ function KnowledgeLifecycleHero({
 }) {
   const cause = patternLabel(alert.patternName) ?? "（原因は調査中）";
   const detailHref = `/alerts?focus=${encodeURIComponent(alert.id)}`;
+  // 学習の軌跡の主役数字は「増えていく」体感を与える（L3 モーション設計・reduced-motion 尊重）。
+  const shownKnownCount = Math.round(useCountUp(knownCount));
 
   return (
     <Card className="!bg-slate-800/40 !ring-0">
@@ -242,7 +245,7 @@ function KnowledgeLifecycleHero({
           vanity% は大書きしない（seed 依存＝数字のハルシネーション批判の的）。 */}
       <div className="mt-4 flex items-baseline gap-3 rounded-tremor-default bg-slate-800/60 px-4 py-3">
         <span className="text-2xl font-semibold tabular-nums text-emerald-300">
-          {knownCount}
+          {shownKnownCount}
         </span>
         <p className="text-xs text-slate-400">
           <span className="text-slate-200">件</span>
@@ -544,13 +547,14 @@ function StatCard({
   value: number;
   tone?: keyof typeof TONE_CLASS;
 }) {
+  const shown = Math.round(useCountUp(value)); // L3: 集計数字も揃ってカウントアップ
   return (
     <div className="text-center rounded-tremor-default bg-slate-800/40 px-4 py-3">
       <p className="text-xs text-slate-300">{label}</p>
       <p
         className={`mt-1 text-2xl font-semibold tabular-nums ${TONE_CLASS[tone]}`}
       >
-        {value}
+        {shown}
       </p>
     </div>
   );

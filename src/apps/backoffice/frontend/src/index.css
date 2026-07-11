@@ -5,6 +5,19 @@
 /* ダーク観測コンソール基調。main.tsx で読み込み、<html class="dark"> で運用する。 */
 :root {
   color-scheme: dark;
+
+  /* --- モーション設計トークン（L3・単一ソース）---
+     入場/退場・ドロワー開閉・フォーカス遷移・数値カウントアップを一つのイージング／
+     duration スケールに束ねる。下の keyframe ユーティリティ・Tailwind の bare `transition`
+     既定（tailwind.config.js の transitionDuration/TimingFunction DEFAULT）・useCountUp が
+     すべてここを参照する＝モーションの声を1箇所で調律できる。 */
+  --motion-fast: 160ms; /* フォーカスリング・ホバー・小さなフェード差し替え */
+  --motion-base: 240ms; /* 標準の入退場・ドロワー背景 dim・バッジ差し替え */
+  --motion-slow: 380ms; /* 距離のある入場（ドロワーパネル・証拠の積み上げ） */
+  /* 標準イージング＝強めの減速（要素が「到着して落ち着く」ブランドの精密さ）。 */
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 反復・往復するアンビエント（スイープ・フラッシュ・パルス）用の対称イージング。 */
+  --motion-ease-loop: ease-in-out;
 }
 
 html,
@@ -44,7 +57,7 @@ body {
 }
 
 .evidence-rise {
-  animation: evidence-rise 0.4s ease-out both;
+  animation: evidence-rise var(--motion-slow) var(--motion-ease) both;
 }
 
 /* 詳細ドロワーのスライドイン＋背景 dim（タスク12・最優先）。
@@ -68,11 +81,11 @@ body {
 }
 
 .drawer-overlay {
-  animation: drawer-overlay-in 0.2s ease-out both;
+  animation: drawer-overlay-in var(--motion-base) var(--motion-ease) both;
 }
 
 .drawer-panel {
-  animation: drawer-panel-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: drawer-panel-in var(--motion-slow) var(--motion-ease) both;
 }
 
 /* 一覧行の ANALYZING→OPEN 遷移演出（タスク12・高 ROI）。
@@ -93,7 +106,7 @@ body {
 }
 
 .resolve-flash {
-  animation: resolve-flash 1.3s ease-out;
+  animation: resolve-flash 1.3s var(--motion-ease-loop);
 }
 
 /* reviewStatus トランジション（タスク12・低コスト）。
@@ -110,7 +123,7 @@ body {
 }
 
 .badge-fade-in {
-  animation: badge-fade-in 0.25s ease-out both;
+  animation: badge-fade-in var(--motion-base) var(--motion-ease) both;
 }
 
 /* AI 調査ライブ・タイムラインの不確定プログレス（タスク E1）。
@@ -125,7 +138,7 @@ body {
 }
 
 .pipeline-sweep {
-  animation: pipeline-sweep 1.6s ease-in-out infinite;
+  animation: pipeline-sweep 1.6s var(--motion-ease-loop) infinite;
 }
 
 /* SSE 着弾のライブ感（タスク E5）。
@@ -152,7 +165,7 @@ body {
 }
 
 .card-arrive {
-  animation: card-arrive 1.2s ease-out both;
+  animation: card-arrive 1.2s var(--motion-ease) both;
 }
 
 @keyframes card-update-flash {
@@ -170,7 +183,7 @@ body {
 }
 
 .card-update-flash {
-  animation: card-update-flash 0.9s ease-out;
+  animation: card-update-flash 0.9s var(--motion-ease-loop);
 }
 
 /* dedup ×N 加算時のカウンタパルス（タスク E5）。storm デモで「畳み込みが生きている」体感を作る。 */
@@ -188,7 +201,7 @@ body {
 }
 
 .count-pulse {
-  animation: count-pulse 0.5s ease-out;
+  animation: count-pulse 0.5s var(--motion-ease-loop);
 }
 
 @media (prefers-reduced-motion: reduce) {

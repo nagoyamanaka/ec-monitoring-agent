@@ -119,6 +119,16 @@ export default {
         "tremor-title": ["1.125rem", { lineHeight: "1.75rem" }],
         "tremor-metric": ["1.875rem", { lineHeight: "2.25rem" }],
       },
+      // モーション設計トークン（L3）。bare `transition` の既定 duration/easing を
+      // index.css の CSS 変数へ差し替える＝既存の全 `transition`（ホバー・focus-visible
+      // リング等・約44箇所）を呼び出し側無改変でモーション統一の傘下に入れる。
+      // 明示的な duration-*/ease-* ユーティリティは従来どおり個別に勝つ。
+      transitionDuration: {
+        DEFAULT: "var(--motion-fast)",
+      },
+      transitionTimingFunction: {
+        DEFAULT: "var(--motion-ease)",
+      },
     },
   },
   safelist: [
