@@ -67,7 +67,7 @@ export function ValueStrip({ api, refreshKey }: ValueStripProps) {
       type="button"
       onClick={() => navigate("/analytics")}
       title="クリックで Analytics（内訳・正答率・承認履歴）へ。件数は過去の解決実績（学習済み履歴）を含む累計です"
-      className="flex w-full max-w-4xl flex-wrap items-center gap-x-2.5 gap-y-1 rounded-tremor-default bg-slate-800/30 px-4 py-2 text-left text-xs ring-1 ring-inset ring-slate-700/50 transition hover:bg-slate-800/50 hover:ring-slate-600"
+      className="flex w-full max-w-4xl flex-wrap items-center gap-x-2.5 gap-y-1 rounded-tremor-default bg-slate-800/30 px-4 py-2 text-left text-xs ring-1 ring-inset ring-slate-700/50 transition hover:bg-slate-800/50"
     >
       <span className="inline-flex items-baseline gap-1.5">
         <span className="text-slate-400">総アラート</span>

@@ -73,6 +73,7 @@ function FilterChip({
         "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-medium ring-1 ring-inset transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
         toneCls,
         empty && "opacity-40",
+        // L10 例外: フィルタトグルチップは面（brightness）を上げつつ、選択状態（active=ring-2）を hover でプレビューする。ring=選択セマンティクスなので規約内。
         !empty && onToggle && "cursor-pointer hover:brightness-125 hover:ring-2",
         active && "ring-2",
       )}

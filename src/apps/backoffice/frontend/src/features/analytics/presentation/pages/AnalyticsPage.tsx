@@ -184,7 +184,7 @@ function KnowledgeLifecycleHero({
         <Link
           to={detailHref}
           aria-label={`${eventTitle(alert.eventName)} の AI 調査の実測（証拠フロー）を開く`}
-          className="shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/10 hover:ring-cyan-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+          className="shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
           <p className="text-sm font-medium text-slate-200">AI 調査</p>
           {/* リンク可能性（Tier2）だけ cyan を残す＝ノード全体は他の AI 調査ノードと同じ中立面。 */}
