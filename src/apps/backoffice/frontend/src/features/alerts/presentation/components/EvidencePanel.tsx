@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { cn } from "@shared/ui/cn";
+import type { IconComponent } from "@shared/ui/icons";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 import type { AlertView } from "../../domain/AlertView";
 import {
@@ -16,6 +17,7 @@ import {
 import { collectPastIncidentRefs } from "../../domain/relatedAlerts";
 import { useEvidence } from "../hooks/useEvidence";
 import { EvidenceCountsGrid } from "./EvidenceCountsGrid";
+import { EVIDENCE_SOURCE_ICONS } from "./evidenceSourceIcons";
 
 export interface EvidencePanelProps {
   api: EvidenceApi;
@@ -32,13 +34,13 @@ export interface EvidencePanelProps {
 
 const SOURCE_META: Record<
   EvidenceSection["kind"],
-  { label: string; icon: string }
+  { label: string; icon: IconComponent }
 > = {
-  security: { label: "Trivy (CI スキャン)", icon: "🛡" },
-  logs: { label: "Cloud Logging", icon: "▤" },
-  metrics: { label: "Cloud Monitoring", icon: "📈" },
-  terraform: { label: "Terraform", icon: "⬡" },
-  commits: { label: "GitHub", icon: "❮❯" },
+  security: { label: "Trivy (CI スキャン)", icon: EVIDENCE_SOURCE_ICONS.security },
+  logs: { label: "Cloud Logging", icon: EVIDENCE_SOURCE_ICONS.logs },
+  metrics: { label: "Cloud Monitoring", icon: EVIDENCE_SOURCE_ICONS.metrics },
+  terraform: { label: "Terraform", icon: EVIDENCE_SOURCE_ICONS.terraformChanges },
+  commits: { label: "GitHub", icon: EVIDENCE_SOURCE_ICONS.commits },
 };
 
 /** メトリクス値の表示整形。ratio は %、null は "—"。 */
@@ -87,11 +89,10 @@ function Rise({
 
 function SectionHeader({ kind }: { kind: EvidenceSection["kind"] }) {
   const meta = SOURCE_META[kind];
+  const SourceIcon = meta.icon;
   return (
     <h5 className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-300">
-      <span aria-hidden className="text-slate-400">
-        {meta.icon}
-      </span>
+      <SourceIcon className="shrink-0 text-slate-400" />
       {meta.label}
     </h5>
   );

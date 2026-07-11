@@ -1,6 +1,7 @@
 import { cn } from "@shared/ui/cn";
 import type { InvestigationMetricsView } from "../../domain/InvestigationReportView";
 import type { EvidenceLedgerKey } from "../../domain/evidenceLedger";
+import { EVIDENCE_SOURCE_ICONS } from "./evidenceSourceIcons";
 
 /**
  * 証拠カウントの台帳グリッド（タスク C-3）。
@@ -40,15 +41,14 @@ export interface EvidenceCountsGridProps {
 const CELLS: ReadonlyArray<{
   key: EvidenceLedgerKey;
   label: string;
-  icon: string;
   source: string;
 }> = [
-  { key: "security", label: "スキャン", icon: "🛡", source: "Trivy (CI スキャン)" },
-  { key: "logs", label: "ログ", icon: "▤", source: "Cloud Logging" },
-  { key: "metrics", label: "メトリクス", icon: "📈", source: "Cloud Monitoring" },
-  { key: "terraformChanges", label: "Terraform", icon: "⬡", source: "Terraform 適用差分" },
-  { key: "commits", label: "コミット", icon: "❮❯", source: "GitHub" },
-  { key: "similarIncidents", label: "過去事例", icon: "◎", source: "類似事例DB" },
+  { key: "security", label: "スキャン", source: "Trivy (CI スキャン)" },
+  { key: "logs", label: "ログ", source: "Cloud Logging" },
+  { key: "metrics", label: "メトリクス", source: "Cloud Monitoring" },
+  { key: "terraformChanges", label: "Terraform", source: "Terraform 適用差分" },
+  { key: "commits", label: "コミット", source: "GitHub" },
+  { key: "similarIncidents", label: "過去事例", source: "類似事例DB" },
 ];
 
 const DEFAULT_KEYS: ReadonlyArray<EvidenceLedgerKey> = [
@@ -93,6 +93,7 @@ export function EvidenceCountsGrid({
     <div className={cn("space-y-1.5", className)}>
       <ul className={cn("grid gap-1.5", GRID_COLS[cells.length] ?? "grid-cols-5")}>
         {cells.map((cell) => {
+          const CellIcon = EVIDENCE_SOURCE_ICONS[cell.key];
           const count = countOf(cell.key);
           const empty = count === 0;
           const isUncited = !empty && !!uncited?.has(cell.key);
@@ -114,14 +115,12 @@ export function EvidenceCountsGrid({
                   empty ? "text-slate-600" : "text-slate-400",
                 )}
               >
-                <span
-                  aria-hidden
-                  className={
-                    empty ? "" : isUncited ? "text-slate-400" : "text-cyan-300"
-                  }
-                >
-                  {cell.icon}
-                </span>
+                <CellIcon
+                  className={cn(
+                    "shrink-0",
+                    !empty && (isUncited ? "text-slate-400" : "text-cyan-300"),
+                  )}
+                />
                 {cell.label}
               </p>
               <p

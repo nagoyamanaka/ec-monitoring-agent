@@ -1,5 +1,6 @@
 import { ConfidenceGauge, confidenceBrandColor } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
+import { ArrowDownIcon, ArrowRightIcon, ClockIcon } from "@shared/ui/icons";
 import type { EvidenceFlowModel } from "../../domain/evidenceFlow";
 import type {
   ConfidenceCalibrationView,
@@ -8,6 +9,7 @@ import type {
 import { INVESTIGATION_AGENTS } from "../../domain/investigationProgress";
 import { mentionedAgents } from "../../domain/investigationStepText";
 import { CalibratedConfidence } from "./CalibratedConfidence";
+import { EVIDENCE_SOURCE_ICONS } from "./evidenceSourceIcons";
 
 export interface EvidenceFlowDiagramProps {
   model: EvidenceFlowModel;
@@ -57,7 +59,7 @@ export function EvidenceFlowDiagram({
           証拠の流れ
         </h4>
         <p className="text-xs text-slate-400">
-          <span aria-hidden>⏱ </span>
+          <ClockIcon className="mr-1 inline-block align-[-0.125em]" />
           <span className="font-medium text-slate-200">
             {model.elapsedLabel}
           </span>
@@ -83,10 +85,12 @@ export function EvidenceFlowDiagram({
       >
         {/* 流入源（実測件数つき・0件のソースは model 側で除外済み） */}
         <ul className="min-w-0 flex-1 space-y-1.5">
-          {model.sources.map((source) => (
+          {model.sources.map((source) => {
+            const SourceIcon = EVIDENCE_SOURCE_ICONS[source.key];
+            return (
             <li key={source.key} className="flex items-center">
               <span className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-slate-800/60 px-2.5 py-1.5 text-xs">
-                <span className="shrink-0 text-slate-400">{source.icon}</span>
+                <SourceIcon className="shrink-0 text-slate-400" />
                 <span className="truncate text-slate-200">{source.label}</span>
                 <span className="ml-auto shrink-0 font-semibold tabular-nums text-slate-200">
                   {source.count}件
@@ -100,10 +104,11 @@ export function EvidenceFlowDiagram({
                 )}
               />
             </li>
-          ))}
+            );
+          })}
         </ul>
 
-        <span className="text-center text-slate-500 md:hidden">▼</span>
+        <ArrowDownIcon className="self-center text-slate-500 md:hidden" />
 
         {/* AI 調査ノード（収束点）。ホバー/フォーカスで8エージェント台帳を出す
             （常時表示は図の邪魔＝要求時にだけ・D2 の段階開示と同方針）。
@@ -152,10 +157,8 @@ export function EvidenceFlowDiagram({
           </div>
         </div>
 
-        <span className="text-center text-slate-500 md:hidden">▼</span>
-        <span className="hidden shrink-0 px-1.5 text-slate-500 md:block">
-          ▶
-        </span>
+        <ArrowDownIcon className="self-center text-slate-500 md:hidden" />
+        <ArrowRightIcon className="mx-1.5 hidden shrink-0 text-slate-500 md:block" />
 
         {/* 結論ノード（確信度＝キャリブレーション済みの記録値） */}
         <div className="flex min-w-0 flex-1 flex-col items-center gap-1 self-center rounded-lg bg-slate-800/50 px-4 py-3">

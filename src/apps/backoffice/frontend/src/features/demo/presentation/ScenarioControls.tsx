@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react";
+import { ChevronRightIcon, PlayIcon } from "@shared/ui/icons";
 import type {
   PendingDetection,
   TriggerOptions,
@@ -128,7 +129,7 @@ const SCENARIO_GROUPS: readonly ScenarioGroup[] = [
         id: "3",
         label: "インフラ障害（実 Cloud Monitoring）",
         description:
-          "CRITICAL ログ + HTTP 500 → 実 Cloud Monitoring が発報（GCP のみ）。⏱ 検知まで約1分・GCP にインシデントが残るため、反復は 3b を推奨",
+          "CRITICAL ログ + HTTP 500 → 実 Cloud Monitoring が発報（GCP のみ）。検知まで約1分・GCP にインシデントが残るため、反復は 3b を推奨",
         realness: "cloud",
       },
       {
@@ -179,12 +180,9 @@ function ScenarioRow({
         className="flex w-full items-center justify-between gap-2 px-3 py-3 text-left transition hover:bg-slate-700/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span
-            aria-hidden
-            className={`text-xs text-slate-400 transition-transform ${open ? "rotate-90" : ""}`}
-          >
-            ▶
-          </span>
+          <ChevronRightIcon
+            className={`shrink-0 text-xs text-slate-400 transition-transform ${open ? "rotate-90" : ""}`}
+          />
           {/* 「インフラ障害（実 Cl...」のような尻切れを避けるため truncate せず2行まで許容（E7）。 */}
           <span className="line-clamp-2 text-sm font-medium leading-snug text-slate-50">
             {scenario.label}
@@ -240,7 +238,14 @@ function ScenarioRow({
             }
             className="w-full rounded-md bg-cyan-500/15 px-3 py-2 text-sm font-medium text-cyan-100 ring-1 ring-inset ring-cyan-500/40 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
           >
-            {running ? "注入中…" : "▶ この障害を注入する"}
+            {running ? (
+              "注入中…"
+            ) : (
+              <>
+                <PlayIcon className="mr-1 inline-block align-[-0.125em]" />
+                この障害を注入する
+              </>
+            )}
           </button>
         </div>
       )}

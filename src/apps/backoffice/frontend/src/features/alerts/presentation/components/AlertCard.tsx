@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ConfidenceChip } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
+import { ChevronRightIcon, DiamondIcon } from "@shared/ui/icons";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 import {
   type AlertView,
@@ -243,9 +244,7 @@ export function AlertCard({
                 <span
                   title={`結晶化パターン（承認により学習・昇格）: ${reason.rawPatternName}`}
                 >
-                  <span aria-hidden className="text-emerald-300">
-                    ◈{" "}
-                  </span>
+                  <DiamondIcon className="mr-1 inline-block align-[-0.125em] text-emerald-300" />
                   {reason.cause ?? reason.patternName}
                 </span>
               ) : reason.kind === "known" && reason.cause !== undefined ? (
@@ -291,7 +290,7 @@ export function AlertCard({
         className="flex shrink-0 items-center pr-3 text-lg text-slate-600"
         aria-hidden
       >
-        ›
+        <ChevronRightIcon />
       </div>
     </button>
   );

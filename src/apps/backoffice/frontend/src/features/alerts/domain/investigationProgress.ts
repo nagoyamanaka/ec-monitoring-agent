@@ -76,16 +76,29 @@ export const INVESTIGATION_AGENTS: readonly AgentInfo[] = [
   },
 ];
 
+/**
+ * ツールアイコンの意味名（L1）。domain はグリフや SVG を持たず名前だけを語り、
+ * 描画（SVG コンポーネントへの対応）は presentation 側の TOOL_ICONS が担う。
+ */
+export type ToolIconName =
+  | "logs"
+  | "terraform"
+  | "commits"
+  | "similar"
+  | "runbook"
+  | "delegate"
+  | "generic";
+
 /** ツール（狙い撃ち証拠取得）の人間語ラベル＋アイコン。EvidencePanel の SOURCE_META と整合。 */
-const TOOL_META: Record<string, { label: string; icon: string }> = {
-  fetch_app_logs: { label: "Cloud Logging からログ取得", icon: "▤" },
-  fetch_terraform_diff: { label: "Terraform 差分を確認", icon: "⬡" },
-  fetch_recent_commits: { label: "GitHub の直近コミットを確認", icon: "❮❯" },
-  fetch_commit_diff: { label: "GitHub のコミット差分を精査", icon: "❮❯" },
-  search_similar_incidents: { label: "類似事例DBを検索", icon: "◎" },
-  find_escalation_owners: { label: "体制マスタから宛先を検索", icon: "📘" },
-  get_pull_request_diff: { label: "修正PRの差分を取得", icon: "❮❯" },
-  get_pull_request_checks: { label: "修正PRの CI 結果を確認", icon: "❮❯" },
+const TOOL_META: Record<string, { label: string; icon: ToolIconName }> = {
+  fetch_app_logs: { label: "Cloud Logging からログ取得", icon: "logs" },
+  fetch_terraform_diff: { label: "Terraform 差分を確認", icon: "terraform" },
+  fetch_recent_commits: { label: "GitHub の直近コミットを確認", icon: "commits" },
+  fetch_commit_diff: { label: "GitHub のコミット差分を精査", icon: "commits" },
+  search_similar_incidents: { label: "類似事例DBを検索", icon: "similar" },
+  find_escalation_owners: { label: "体制マスタから宛先を検索", icon: "runbook" },
+  get_pull_request_diff: { label: "修正PRの差分を取得", icon: "commits" },
+  get_pull_request_checks: { label: "修正PRの CI 結果を確認", icon: "commits" },
 };
 
 const AGENT_BY_NAME = new Map(INVESTIGATION_AGENTS.map((a) => [a.name, a]));
@@ -115,12 +128,12 @@ export function currentAgentName(
  * tool 名 → 表示ラベル＋アイコン。AgentTool 委譲（tool がエージェント名）は「◯◯ へ委譲」。
  * 未登録名は生の名前（実イベント優先＝隠さない）。
  */
-export function toolMeta(name: string): { label: string; icon: string } {
+export function toolMeta(name: string): { label: string; icon: ToolIconName } {
   const tool = TOOL_META[name];
   if (tool) return tool;
   const agent = AGENT_BY_NAME.get(name);
-  if (agent) return { label: `${agent.label} へ委譲`, icon: "⇢" };
-  return { label: name, icon: "·" };
+  if (agent) return { label: `${agent.label} へ委譲`, icon: "delegate" };
+  return { label: name, icon: "generic" };
 }
 
 /**

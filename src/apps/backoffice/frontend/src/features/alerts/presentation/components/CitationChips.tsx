@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@shared/ui/cn";
+import { ChevronRightIcon } from "@shared/ui/icons";
 import {
   groupCitations,
   groupCitationRefs,
@@ -44,12 +45,12 @@ export function CitationChips({ heading, citations, refs }: CitationChipsProps) 
         onClick={() => setOpen((cur) => !cur)}
         className="flex items-center gap-1.5 rounded-md text-[11px] font-medium uppercase tracking-wide text-slate-400 transition hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
       >
-        <span
-          aria-hidden
-          className={cn("text-[10px] transition-transform", open && "rotate-90")}
-        >
-          ▶
-        </span>
+        <ChevronRightIcon
+          className={cn(
+            "shrink-0 text-[10px] transition-transform",
+            open && "rotate-90",
+          )}
+        />
         {heading}
         <span className="rounded-md bg-slate-800/70 px-1.5 py-0.5 font-medium normal-case tracking-normal text-slate-300">
           {citations.length}件

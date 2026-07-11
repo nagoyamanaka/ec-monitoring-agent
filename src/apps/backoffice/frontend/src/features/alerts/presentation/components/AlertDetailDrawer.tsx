@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ConfidenceGauge, confidenceBrandColor } from "@shared/ui/tremor";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import { ChevronRightIcon } from "@shared/ui/icons";
 import { formatDateTimeJa, formatTimeJa } from "@shared/format/dateTime";
 import {
   type AlertView,
@@ -315,9 +316,7 @@ export function AlertDetailDrawer({
               </p>
               {teaser.headline && (
                 <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-slate-200">
-                  <span aria-hidden className="text-cyan-300">
-                    ▸{" "}
-                  </span>
+                  <ChevronRightIcon className="mr-1 inline-block align-[-0.125em] text-cyan-300" />
                   {teaser.headline}
                 </p>
               )}

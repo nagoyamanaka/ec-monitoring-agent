@@ -140,7 +140,7 @@ describe("ForecastPage", () => {
     ).toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "▶ 予報を生成（AI 調査・約1分）" }),
+      screen.getByRole("button", { name: "予報を生成（AI 調査・約1分）" }),
     );
     expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
     expect(api.generate).toHaveBeenCalledTimes(1);
@@ -161,7 +161,7 @@ describe("ForecastPage", () => {
 
     await userEvent.click(
       await screen.findByRole("button", {
-        name: "▶ 予報を生成（AI 調査・約1分）",
+        name: "予報を生成（AI 調査・約1分）",
       }),
     );
 
@@ -196,7 +196,7 @@ describe("ForecastPage", () => {
     expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
 
     await userEvent.click(
-      screen.getByRole("button", { name: "▶ 予報を再生成（AI 調査・約1分）" }),
+      screen.getByRole("button", { name: "予報を再生成（AI 調査・約1分）" }),
     );
 
     // 前回分は空白にせず暗転して残す（新旧の取り違え防止ラベルつき）
@@ -229,7 +229,7 @@ describe("ForecastPage", () => {
 
     await userEvent.click(
       await screen.findByRole("button", {
-        name: "▶ 予報を生成（AI 調査・約1分）",
+        name: "予報を生成（AI 調査・約1分）",
       }),
     );
     expect(
