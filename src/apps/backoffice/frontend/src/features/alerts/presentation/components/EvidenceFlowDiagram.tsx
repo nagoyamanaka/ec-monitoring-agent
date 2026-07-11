@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { ConfidenceGauge, confidenceBrandColor } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
+import { ConvergenceConnector } from "@shared/ui/ConvergenceConnector";
 import { ArrowDownIcon, ArrowRightIcon, ClockIcon } from "@shared/ui/icons";
 import type { EvidenceFlowModel } from "../../domain/evidenceFlow";
 import type {
@@ -23,13 +25,6 @@ export interface EvidenceFlowDiagramProps {
   className?: string;
 }
 
-/** コネクタの離散太さ（1..3）→ 高さクラス。連続スケールは使わない（fake precision 回避）。 */
-const WEIGHT_CLASS: Record<1 | 2 | 3, string> = {
-  1: "h-px",
-  2: "h-[3px]",
-  3: "h-[5px]",
-};
-
 /**
  * 証拠フローダイアグラム（タスク E8-A・報告用フルのみ）。
  * 「流入源（実測件数）→ AI 調査 → 結論（確信度）」の収束構造を図で示す。
@@ -46,6 +41,9 @@ export function EvidenceFlowDiagram({
   // この調査のステップ文に登場したエージェント（実データからの決定論導出・ゼロでも壊れない）。
   const mentionedList = mentionedAgents(steps.map((s) => s.text));
   const mentioned = new Set(mentionedList.map((a) => a.name));
+  // 収束ファン（L6）が実測で線を引くための参照。
+  const lanesRef = useRef<HTMLUListElement>(null);
+  const nodeRef = useRef<HTMLDivElement>(null);
   return (
     <section
       aria-label="証拠の流れ"
@@ -84,11 +82,11 @@ export function EvidenceFlowDiagram({
         className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:gap-0"
       >
         {/* 流入源（実測件数つき・0件のソースは model 側で除外済み） */}
-        <ul className="min-w-0 flex-1 space-y-1.5">
+        <ul ref={lanesRef} className="min-w-0 flex-1 space-y-1.5">
           {model.sources.map((source) => {
             const SourceIcon = EVIDENCE_SOURCE_ICONS[source.key];
             return (
-            <li key={source.key} className="flex items-center">
+            <li key={source.key} className="flex">
               <span className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-slate-800/60 px-2.5 py-1.5 text-xs">
                 <SourceIcon className="shrink-0 text-slate-400" />
                 <span className="truncate text-slate-200">{source.label}</span>
@@ -96,13 +94,6 @@ export function EvidenceFlowDiagram({
                   {source.count}件
                 </span>
               </span>
-              {/* コネクタ: 太さ＝件数の離散段階（多いソースほど太い流れ） */}
-              <span
-                className={cn(
-                  "hidden w-6 shrink-0 rounded-full bg-slate-600 md:block",
-                  WEIGHT_CLASS[source.weight],
-                )}
-              />
             </li>
             );
           })}
@@ -110,10 +101,20 @@ export function EvidenceFlowDiagram({
 
         <ArrowDownIcon className="self-center text-slate-500 md:hidden" />
 
+        {/* 収束ファン（L6）: 各レーン中心 → AI 調査ノード中心へ束ねる。太さ＝件数の離散段階。 */}
+        <ConvergenceConnector
+          lanesRef={lanesRef}
+          nodeRef={nodeRef}
+          weights={model.sources.map((s) => s.weight)}
+        />
+
         {/* AI 調査ノード（収束点）。ホバー/フォーカスで8エージェント台帳を出す
             （常時表示は図の邪魔＝要求時にだけ・D2 の段階開示と同方針）。
             配色は中間工程＝中立面＋cyan の枠だけ（発光は結論の確信度ゲージに譲る）。 */}
-        <div className="group relative shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30">
+        <div
+          ref={nodeRef}
+          className="group relative shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30"
+        >
           <p className="text-sm font-medium text-slate-200">AI 調査</p>
           <p
             tabIndex={0}

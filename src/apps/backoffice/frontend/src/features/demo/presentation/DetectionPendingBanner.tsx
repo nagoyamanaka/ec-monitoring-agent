@@ -62,6 +62,7 @@ export function DetectionPendingBanner({
       className="space-y-2 rounded-md bg-sky-500/10 px-3 py-3 text-[13px]"
     >
       <div className="flex items-center justify-between gap-2">
+        {/* 顕著性 Tier1（L7）: 「検知待ち」は状態＝sky パルスで光る権利を持つ（StreamStatusIndicator の正典参照）。 */}
         <span className="flex items-center gap-2 font-medium text-sky-100">
           <span
             aria-hidden

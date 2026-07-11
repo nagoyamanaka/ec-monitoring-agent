@@ -132,6 +132,7 @@ export function InvestigationPipelinePanel({
         )}
         aria-label="AI 調査パイプライン"
       >
+        {/* 顕著性 Tier1（L7）: 「調査中」は状態＝cyan パルスで光る権利を持つ（StreamStatusIndicator の正典参照）。 */}
         <div className="flex items-center gap-2">
           <span
             aria-hidden

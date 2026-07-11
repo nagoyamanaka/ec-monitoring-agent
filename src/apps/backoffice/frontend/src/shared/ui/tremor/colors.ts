@@ -41,3 +41,29 @@ export function confidenceColor(confidence: number): Color {
 export function confidenceBrandColor(confidence: number): Color {
   return confidence < 0.5 ? "slate" : "cyan";
 }
+
+/**
+ * Tremor の色名 → CSS 色（自作 SVG/div ゲージの stroke/背景に使う）。
+ * L2: ConfidenceBar/Gauge の中身を Tremor（ProgressBar/ProgressCircle）から自作へ
+ * 差し替える際、隣接する自作バー（CalibratedConfidence 等）と同じトーンで塗るための単一表。
+ * 確信度で使う色（cyan/slate/emerald）＋しきい値色（rose/amber/sky）を Tailwind 400 系で解決し、
+ * 未知の色名は控えめな slate にフォールバックする。
+ */
+const TREMOR_COLOR_CSS: Record<string, string> = {
+  cyan: "rgb(34 211 238)", // cyan-400（AI 確信度のブランドトーン）
+  emerald: "rgb(52 211 153)", // emerald-400（既知一致＝確定寄り）
+  slate: "rgb(100 116 139)", // slate-500（裏付けなし＝弱い数字は弱く）
+  rose: "rgb(251 113 133)", // rose-400
+  amber: "rgb(251 191 36)", // amber-400
+  sky: "rgb(56 189 248)", // sky-400
+};
+
+export function tremorColorToCss(color: Color | string): string {
+  return TREMOR_COLOR_CSS[color] ?? TREMOR_COLOR_CSS.slate;
+}
+
+/**
+ * 自作ゲージ/バー共通のトラック色。隣接する自作バー（CalibratedConfidence の
+ * `bg-slate-700/40`）と同一＝ G2「線でなく面」の面トーンに揃える。
+ */
+export const GAUGE_TRACK_CSS = "rgb(51 65 85 / 0.4)"; // slate-700/40

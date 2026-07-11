@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { useForecastNav } from "@features/forecast/presentation/ForecastProvider";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import { AlertDetailSkeleton } from "@shared/ui/Skeleton";
+import { useDocumentTitle } from "@shared/ui/useDocumentTitle";
 import { LinkIcon } from "@shared/ui/icons";
 import { hasAiInvestigation } from "../../domain/AlertView";
 import { eventTitle } from "../../domain/eventCatalog";
@@ -62,6 +64,9 @@ export function AlertDetailPage() {
     status,
     refresh: refreshCurrent,
   } = useAlertDetail({ id, alerts, listStatus, refreshAlert, api });
+
+  // 録画/画面共有のタブに事案名を出す（「脆弱性の検知 · Kizashi」等）。未解決時は総称。
+  useDocumentTitle(alert ? eventTitle(alert.eventName) : "アラート詳細");
 
   const handleDecision = useCallback(
     async (alertId: string, decision: FeedbackDecision, operatorNote?: string) => {
@@ -142,7 +147,9 @@ export function AlertDetailPage() {
 
       <div className="mt-4">
         {status === "loading" && (
-          <div className="h-40 animate-pulse rounded-tremor-default bg-slate-800/40" />
+          <div aria-busy>
+            <AlertDetailSkeleton />
+          </div>
         )}
 
         {status === "error" && (

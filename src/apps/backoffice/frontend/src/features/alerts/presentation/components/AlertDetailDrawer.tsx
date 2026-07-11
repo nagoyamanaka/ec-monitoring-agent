@@ -309,7 +309,7 @@ export function AlertDetailDrawer({
           {teaser ? (
             <Link
               to={`/alerts/${encodeURIComponent(alert.id)}`}
-              className="group block rounded-lg bg-slate-800/40 px-4 py-3 ring-1 ring-inset ring-slate-700/60 transition hover:bg-slate-800/70 hover:ring-cyan-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+              className="group block rounded-lg bg-slate-800/40 px-4 py-3 ring-1 ring-inset ring-slate-700/60 transition hover:bg-slate-800/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
             >
               <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
                 AI レポート全文

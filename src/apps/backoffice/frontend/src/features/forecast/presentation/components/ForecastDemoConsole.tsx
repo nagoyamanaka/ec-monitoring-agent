@@ -245,7 +245,7 @@ export function ForecastDemoConsole({
           disabled={busy}
           onClick={onReset}
           title="生成済みの予報を破棄して未生成状態に戻す（投入シグナルは残る＝もう一度生成できる）"
-          className="w-full rounded-md bg-slate-800/50 px-3 py-2 text-xs font-medium text-slate-300 ring-1 ring-inset ring-slate-700/60 transition hover:bg-rose-500/10 hover:text-rose-200 hover:ring-rose-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
+          className="w-full rounded-md bg-slate-800/50 px-3 py-2 text-xs font-medium text-slate-300 ring-1 ring-inset ring-slate-700/60 transition hover:bg-rose-500/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
         >
           {resetting ? "リセット中…" : "予報をリセット"}
         </button>

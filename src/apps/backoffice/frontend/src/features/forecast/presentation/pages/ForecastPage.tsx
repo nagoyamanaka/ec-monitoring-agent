@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { HttpError } from "@shared/api/HttpClient";
 import { formatDateTimeJa } from "@shared/format/dateTime";
+import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
+import { RiskCardSkeleton } from "@shared/ui/Skeleton";
+import { useDocumentTitle } from "@shared/ui/useDocumentTitle";
 import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import { LiveStreamStatus } from "@features/alerts/presentation/components/LiveStreamStatus";
 import { useForecastData, useForecastNav } from "../ForecastProvider";
@@ -26,6 +29,7 @@ export interface ForecastPageProps {
 }
 
 export function ForecastPage({ demoApi }: ForecastPageProps) {
+  useDocumentTitle("予兆");
   const {
     snapshot,
     status,
@@ -122,7 +126,9 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
           )}
 
           {status === "loading" && (
-            <div className="h-48 animate-pulse rounded-lg bg-slate-800/40" />
+            <div aria-busy>
+              <RiskCardSkeleton />
+            </div>
           )}
 
           {status === "error" && (
@@ -139,7 +145,8 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
           )}
 
           {status === "ready" && snapshot?.kind === "disabled" && (
-            <div className={PANEL}>
+            <div className={`${PANEL} flex flex-col items-center gap-3 text-center`}>
+              <EmptyStateFigure variant="disabled" className="text-slate-500" />
               <p className="text-sm text-slate-300">
                 予兆ブリーフィングはこの環境では無効です（FORECAST_ENABLED
                 off）。
@@ -149,7 +156,8 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
 
           {/* 生成中は「生成してください」の案内が矛盾するので伏せる（バナーが代替）。 */}
           {status === "ready" && snapshot?.kind === "empty" && !generating && (
-            <div className={PANEL}>
+            <div className={`${PANEL} flex flex-col items-center gap-3 text-center`}>
+              <EmptyStateFigure className="text-slate-500" />
               <p className="text-sm text-slate-300">
                 予報はまだ生成されていません。
                 {showConsole && (

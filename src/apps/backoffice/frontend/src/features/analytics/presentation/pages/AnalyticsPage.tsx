@@ -2,6 +2,10 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
+import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
+import { RiskCardSkeleton } from "@shared/ui/Skeleton";
+import { useCountUp } from "@shared/ui/useCountUp";
+import { useDocumentTitle } from "@shared/ui/useDocumentTitle";
 import {
   ArrowDownIcon,
   ArrowRightIcon,
@@ -32,6 +36,7 @@ export interface AnalyticsPageProps {
  * （証拠フロー）へ深リンクしてそこで見せる。
  */
 export function AnalyticsPage({ api }: AnalyticsPageProps) {
+  useDocumentTitle("学習");
   const { analytics, status, error, refresh } = useAnalytics(api);
   // Forecast タブの表示可否＋HIGH バッジ（FORECAST_ENABLED off なら非表示・F7）。
   const forecastNav = useForecastNav();
@@ -64,7 +69,9 @@ export function AnalyticsPage({ api }: AnalyticsPageProps) {
         </header>
 
         {status === "loading" && (
-          <div className="h-48 animate-pulse rounded-tremor-default bg-slate-800/40" />
+          <div aria-busy>
+            <RiskCardSkeleton />
+          </div>
         )}
 
         {status === "error" && (
@@ -96,11 +103,14 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
         />
       ) : (
         <Card className="!bg-slate-800/40 !ring-0">
-          <p className="py-10 text-center text-sm text-slate-400">
-            まだ学習の軌跡がありません。
-            <br />
-            未知のアラートを調査・承認すると、ここに「未知 → 承認 → 既知」の軌跡が現れます。
-          </p>
+          <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-slate-400">
+            <EmptyStateFigure className="text-slate-500" />
+            <p>
+              まだ学習の軌跡がありません。
+              <br />
+              未知のアラートを調査・承認すると、ここに「未知 → 承認 → 既知」の軌跡が現れます。
+            </p>
+          </div>
         </Card>
       )}
 
@@ -142,6 +152,8 @@ function KnowledgeLifecycleHero({
 }) {
   const cause = patternLabel(alert.patternName) ?? "（原因は調査中）";
   const detailHref = `/alerts?focus=${encodeURIComponent(alert.id)}`;
+  // 学習の軌跡の主役数字は「増えていく」体感を与える（L3 モーション設計・reduced-motion 尊重）。
+  const shownKnownCount = Math.round(useCountUp(knownCount));
 
   return (
     <Card className="!bg-slate-800/40 !ring-0">
@@ -174,7 +186,7 @@ function KnowledgeLifecycleHero({
         <Link
           to={detailHref}
           aria-label={`${eventTitle(alert.eventName)} の AI 調査の実測（証拠フロー）を開く`}
-          className="shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/10 hover:ring-cyan-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+          className="shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30 transition hover:bg-cyan-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
           <p className="text-sm font-medium text-slate-200">AI 調査</p>
           {/* リンク可能性（Tier2）だけ cyan を残す＝ノード全体は他の AI 調査ノードと同じ中立面。 */}
@@ -238,7 +250,7 @@ function KnowledgeLifecycleHero({
           vanity% は大書きしない（seed 依存＝数字のハルシネーション批判の的）。 */}
       <div className="mt-4 flex items-baseline gap-3 rounded-tremor-default bg-slate-800/60 px-4 py-3">
         <span className="text-2xl font-semibold tabular-nums text-emerald-300">
-          {knownCount}
+          {shownKnownCount}
         </span>
         <p className="text-xs text-slate-400">
           <span className="text-slate-200">件</span>
@@ -321,11 +333,14 @@ function AggregateBlock({ analytics }: { analytics: AnalyticsView }) {
           </h3>
           <div className="mt-4 flex flex-col items-center gap-2">
             {analytics.accuracyPercent === null ? (
-              <p className="py-10 text-center text-sm text-slate-400">
-                まだフィードバックがありません。
-                <br />
-                承認/却下を行うと正答率が表示されます。
-              </p>
+              <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-slate-400">
+                <EmptyStateFigure className="text-slate-500" />
+                <p>
+                  まだフィードバックがありません。
+                  <br />
+                  承認/却下を行うと正答率が表示されます。
+                </p>
+              </div>
             ) : (
               <>
                 <ConfidenceGauge
@@ -347,9 +362,10 @@ function AggregateBlock({ analytics }: { analytics: AnalyticsView }) {
             既知 / 未知の内訳
           </h3>
           {analytics.totalAlerts === 0 ? (
-            <p className="py-10 text-center text-sm text-slate-400">
+            <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-slate-400">
+              <EmptyStateFigure className="text-slate-500" />
               アラートがまだありません。
-            </p>
+            </div>
           ) : (
             <div className="mt-4 flex flex-col items-center gap-3">
               <DonutChart
@@ -446,9 +462,10 @@ function ApprovedAlertsSection({
       </p>
 
       {alerts.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-400">
+        <div className="flex flex-col items-center gap-3 py-8 text-center text-sm text-slate-400">
+          <EmptyStateFigure className="text-slate-500" />
           まだ承認済みのアラートはありません。
-        </p>
+        </div>
       ) : (
         <ul className="mt-4 space-y-2">
           {alerts.map((alert) => (
@@ -535,13 +552,14 @@ function StatCard({
   value: number;
   tone?: keyof typeof TONE_CLASS;
 }) {
+  const shown = Math.round(useCountUp(value)); // L3: 集計数字も揃ってカウントアップ
   return (
     <div className="text-center rounded-tremor-default bg-slate-800/40 px-4 py-3">
       <p className="text-xs text-slate-300">{label}</p>
       <p
         className={`mt-1 text-2xl font-semibold tabular-nums ${TONE_CLASS[tone]}`}
       >
-        {value}
+        {shown}
       </p>
     </div>
   );
