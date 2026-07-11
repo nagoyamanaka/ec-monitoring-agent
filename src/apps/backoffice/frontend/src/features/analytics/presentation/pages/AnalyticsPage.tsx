@@ -5,6 +5,7 @@ import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
 import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
 import { RiskCardSkeleton } from "@shared/ui/Skeleton";
 import { useCountUp } from "@shared/ui/useCountUp";
+import { useDocumentTitle } from "@shared/ui/useDocumentTitle";
 import {
   ArrowDownIcon,
   ArrowRightIcon,
@@ -35,6 +36,7 @@ export interface AnalyticsPageProps {
  * （証拠フロー）へ深リンクしてそこで見せる。
  */
 export function AnalyticsPage({ api }: AnalyticsPageProps) {
+  useDocumentTitle("学習");
   const { analytics, status, error, refresh } = useAnalytics(api);
   // Forecast タブの表示可否＋HIGH バッジ（FORECAST_ENABLED off なら非表示・F7）。
   const forecastNav = useForecastNav();

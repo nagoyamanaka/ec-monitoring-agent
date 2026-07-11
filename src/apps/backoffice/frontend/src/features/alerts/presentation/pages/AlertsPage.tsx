@@ -17,6 +17,7 @@ import { AlertList } from "../components/AlertList";
 import { AlertDetailDrawer } from "../components/AlertDetailDrawer";
 import { FirstRunGuide, useFirstRunGuide } from "../components/FirstRunGuide";
 import { LiveStreamStatus } from "../components/LiveStreamStatus";
+import { useDocumentTitle } from "@shared/ui/useDocumentTitle";
 
 export interface AlertsPageProps {
   /** デモ操作卓 API（composition root で生成して注入）。 */
@@ -32,6 +33,7 @@ export interface AlertsPageProps {
  * 選択中 alert は共有 alerts から都度引く＝SSE 更新がドロワーにもライブ反映される。
  */
 export function AlertsPage({ demoApi, analyticsApi }: AlertsPageProps) {
+  useDocumentTitle("アラート");
   const {
     alerts,
     status,

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { FetchHttpClient } from "@shared/api/FetchHttpClient";
+import { ErrorBoundary } from "@shared/ui/ErrorBoundary";
 import { createAlertsApi } from "@features/alerts/infrastructure/alertsApi";
 import { createEvidenceApi } from "@features/alerts/infrastructure/evidenceApi";
 import { createRemediationApi } from "@features/alerts/infrastructure/remediationApi";
@@ -40,25 +41,28 @@ export function App() {
     >
       {/* GET /forecast 1回で「Forecast ナビ表示可否（FORECAST_ENABLED）＋最新予報」を全ページへ共有 */}
       <ForecastProvider api={forecastApi}>
-        <Routes>
-          <Route path="/" element={<Navigate to="/alerts" replace />} />
-          <Route
-            path="/alerts"
-            element={
-              <AlertsPage demoApi={demoApi} analyticsApi={analyticsApi} />
-            }
-          />
-          <Route path="/alerts/:id" element={<AlertDetailPage />} />
-          <Route
-            path="/analytics"
-            element={<AnalyticsPage api={analyticsApi} />}
-          />
-          <Route
-            path="/forecast"
-            element={<ForecastPage demoApi={demoApi} />}
-          />
-          <Route path="*" element={<Navigate to="/alerts" replace />} />
-        </Routes>
+        {/* ルート直下に1枚（N1）。ページの throw を白画面でなく局所フォールバックへ劣化。 */}
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Navigate to="/alerts" replace />} />
+            <Route
+              path="/alerts"
+              element={
+                <AlertsPage demoApi={demoApi} analyticsApi={analyticsApi} />
+              }
+            />
+            <Route path="/alerts/:id" element={<AlertDetailPage />} />
+            <Route
+              path="/analytics"
+              element={<AnalyticsPage api={analyticsApi} />}
+            />
+            <Route
+              path="/forecast"
+              element={<ForecastPage demoApi={demoApi} />}
+            />
+            <Route path="*" element={<Navigate to="/alerts" replace />} />
+          </Routes>
+        </ErrorBoundary>
       </ForecastProvider>
     </AlertsDataProvider>
   );

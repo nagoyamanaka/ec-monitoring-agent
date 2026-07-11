@@ -4,6 +4,7 @@ import { HttpError } from "@shared/api/HttpClient";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
 import { RiskCardSkeleton } from "@shared/ui/Skeleton";
+import { useDocumentTitle } from "@shared/ui/useDocumentTitle";
 import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import { LiveStreamStatus } from "@features/alerts/presentation/components/LiveStreamStatus";
 import { useForecastData, useForecastNav } from "../ForecastProvider";
@@ -28,6 +29,7 @@ export interface ForecastPageProps {
 }
 
 export function ForecastPage({ demoApi }: ForecastPageProps) {
+  useDocumentTitle("予兆");
   const {
     snapshot,
     status,
