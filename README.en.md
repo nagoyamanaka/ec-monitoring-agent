@@ -82,6 +82,19 @@ Full details (in Japanese, code-accurate): **[docs/architecture.md](docs/archite
 | Infra    | **Cloud Run** (frontend / edge) + **Compute Engine** (EDA residents), Terraform, Cloud Monitoring / Cloud Logging (direct OTel) |
 | CI/CD    | GitHub Actions                                                                                                                  |
 
+### Cross-cutting infrastructure (deliberately kept off the flow diagrams)
+
+The architecture diagrams show **data causality**; concerns that apply uniformly to every node are listed here instead of cluttering the graph. All are Terraform-managed and are the concrete backing for the §5.5 threat model's defense-in-depth.
+
+|                    |                                                                                                          |
+| ------------------ | -------------------------------------------------------------------------------------------------------- |
+| Secrets            | **Secret Manager** (tf manages the secret shells only; plaintext versions injected out-of-band → never in tfstate, never in LLM context) |
+| CI auth            | **Workload Identity Federation** (keyless — no SA keys distributed to GitHub Actions)                     |
+| Least privilege    | **12 service accounts**, per-subservice isolation → bounded lateral movement                              |
+| State / artifacts  | **GCS ×2** (tfstate + deploy artifacts) with state-lock serialization; **Artifact Registry ×2**          |
+| Networking         | VPC / subnet / **VPC Access Connector ×3** / static IP / firewall (Cloud Run → GCE-resident RabbitMQ/Mongo/ES/Valkey) |
+| Write safety       | **Draft-PR human-approval gate** for AI remediation (no auto-merge)                                        |
+
 ## Quick start (local)
 
 ```bash
