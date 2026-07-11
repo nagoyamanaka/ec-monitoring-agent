@@ -225,9 +225,24 @@ export function AlertCard({
             既知はパターン名がタイトルの復唱になるため、原因（cause＝seed 要約 or
             結晶化の承認時 AI summary）があればそちらを出し、パターン名は tooltip へ（G4b）。
             結晶化は ◈ を維持。AI推定の生 enum も人間語へ写像し生IDは tooltip へ（G4）。 */}
-        <p className="truncate text-sm leading-relaxed text-slate-300">
+        {/* 顕著性 Tier1（L7）: 「調査中」は状態＝光る権利を持つ。他の分類/メタ行は slate に
+            沈めた（L0）が、状態だけは cyan パルスで前に出す（展開版・パイプラインと同じ声）。 */}
+        <p
+          className={cn(
+            "text-sm leading-relaxed",
+            reason.kind === "analyzing"
+              ? "flex items-center gap-1.5 font-medium text-cyan-200"
+              : "truncate text-slate-300",
+          )}
+        >
           {reason.kind === "analyzing" ? (
-            "AI が未知障害を調査中…"
+            <>
+              <span
+                aria-hidden
+                className="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-cyan-400"
+              />
+              AI が未知障害を調査中…
+            </>
           ) : (
             <>
               <span className="text-slate-400">
