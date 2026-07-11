@@ -504,7 +504,8 @@ export function EvidencePanel({
           証拠の取得に失敗しました。{error?.message}
         </div>
       ) : phase === "analyzing" ? (
-        <div className="flex items-center gap-2 rounded-md bg-slate-800/40 px-3 py-3 text-xs text-slate-300">
+        // 顕著性 Tier1（L7）: 「解析中」は状態＝cyan で光る（StreamStatusIndicator の正典参照・調査中系と統一）。
+        <div className="flex items-center gap-2 rounded-md bg-cyan-500/10 px-3 py-3 text-xs font-medium text-cyan-200">
           <span
             aria-hidden
             className="h-2 w-2 animate-pulse rounded-full bg-cyan-400"

@@ -4,6 +4,7 @@ import type { AlertsStatus } from "../hooks/useAlerts";
 import { sortAlerts } from "../../domain/alertSort";
 import { AlertCard } from "./AlertCard";
 import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
+import { AlertRowSkeleton } from "@shared/ui/Skeleton";
 import {
   AlertsHeader,
   matchesAlertFilter,
@@ -103,10 +104,7 @@ function AlertListBody({
     return (
       <div className="space-y-5" aria-busy>
         {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="h-20 animate-pulse rounded-tremor-default bg-slate-800/40"
-          />
+          <AlertRowSkeleton key={i} />
         ))}
       </div>
     );

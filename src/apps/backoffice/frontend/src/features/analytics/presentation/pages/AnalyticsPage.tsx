@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
 import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
+import { RiskCardSkeleton } from "@shared/ui/Skeleton";
 import { useCountUp } from "@shared/ui/useCountUp";
 import {
   ArrowDownIcon,
@@ -66,7 +67,9 @@ export function AnalyticsPage({ api }: AnalyticsPageProps) {
         </header>
 
         {status === "loading" && (
-          <div className="h-48 animate-pulse rounded-tremor-default bg-slate-800/40" />
+          <div aria-busy>
+            <RiskCardSkeleton />
+          </div>
         )}
 
         {status === "error" && (

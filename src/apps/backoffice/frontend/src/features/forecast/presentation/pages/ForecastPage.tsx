@@ -3,6 +3,7 @@ import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { HttpError } from "@shared/api/HttpClient";
 import { formatDateTimeJa } from "@shared/format/dateTime";
 import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
+import { RiskCardSkeleton } from "@shared/ui/Skeleton";
 import type { DemoApi } from "@features/demo/infrastructure/demoApi";
 import { LiveStreamStatus } from "@features/alerts/presentation/components/LiveStreamStatus";
 import { useForecastData, useForecastNav } from "../ForecastProvider";
@@ -123,7 +124,9 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
           )}
 
           {status === "loading" && (
-            <div className="h-48 animate-pulse rounded-lg bg-slate-800/40" />
+            <div aria-busy>
+              <RiskCardSkeleton />
+            </div>
           )}
 
           {status === "error" && (

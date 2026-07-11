@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { useForecastNav } from "@features/forecast/presentation/ForecastProvider";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import { AlertDetailSkeleton } from "@shared/ui/Skeleton";
 import { LinkIcon } from "@shared/ui/icons";
 import { hasAiInvestigation } from "../../domain/AlertView";
 import { eventTitle } from "../../domain/eventCatalog";
@@ -142,7 +143,9 @@ export function AlertDetailPage() {
 
       <div className="mt-4">
         {status === "loading" && (
-          <div className="h-40 animate-pulse rounded-tremor-default bg-slate-800/40" />
+          <div aria-busy>
+            <AlertDetailSkeleton />
+          </div>
         )}
 
         {status === "error" && (
