@@ -2,6 +2,11 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { Card, DonutChart, Legend, ConfidenceGauge } from "@shared/ui/tremor";
+import {
+  ArrowDownIcon,
+  ArrowRightIcon,
+  ChevronRightIcon,
+} from "@shared/ui/icons";
 import { useForecastNav } from "@features/forecast/presentation/ForecastProvider";
 import type { AnalyticsApi } from "../../infrastructure/analyticsApi";
 import {
@@ -106,9 +111,7 @@ function AnalyticsBody({ analytics }: { analytics: AnalyticsView }) {
       >
         <summary className="cursor-pointer list-none px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-300 transition hover:text-slate-100">
           <span className="inline-flex items-center gap-2">
-            <span className="text-slate-500 transition group-open:rotate-90">
-              ›
-            </span>
+            <ChevronRightIcon className="shrink-0 text-slate-500 transition group-open:rotate-90" />
             集計で確かめる（正答率・既知/未知の内訳・件数）
           </span>
         </summary>
@@ -204,8 +207,11 @@ function KnowledgeLifecycleHero({
           aria-hidden
           className="flex shrink-0 flex-col items-center justify-center self-center px-1.5 text-emerald-400/70"
         >
-          <span className="md:hidden">▼ 知識に昇格</span>
-          <span className="hidden md:block">▶</span>
+          <span className="md:hidden">
+            <ArrowDownIcon className="mr-1 inline-block align-[-0.125em]" />
+            知識に昇格
+          </span>
+          <ArrowRightIcon className="hidden md:block" />
           <span className="hidden text-[10px] text-emerald-400/60 md:block">
             昇格
           </span>
@@ -293,8 +299,8 @@ function LifecycleConnector() {
       aria-hidden
       className="flex shrink-0 items-center justify-center self-center px-1.5 text-cyan-500/70"
     >
-      <span className="md:hidden">▼</span>
-      <span className="hidden md:block">▶</span>
+      <ArrowDownIcon className="md:hidden" />
+      <ArrowRightIcon className="hidden md:block" />
     </div>
   );
 }
@@ -503,9 +509,7 @@ function ApprovedAlertsSection({
                 <span className="shrink-0 text-xs text-slate-400">
                   {formatRelativeTime(alert.occurredOn)}
                 </span>
-                <span className="shrink-0 text-slate-600" aria-hidden>
-                  ›
-                </span>
+                <ChevronRightIcon className="shrink-0 text-slate-600" />
               </Link>
             </li>
           ))}

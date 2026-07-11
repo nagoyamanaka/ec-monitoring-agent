@@ -1,14 +1,22 @@
+import {
+  ArrowUpRightIcon,
+  BookIcon,
+  FileTextIcon,
+  MonitorIcon,
+  WrenchIcon,
+  type IconComponent,
+} from "@shared/ui/icons";
 import type {
   InvestigationStepView,
   InvestigationLinkKind,
 } from "../../domain/InvestigationReportView";
 
 // ディープリンク種別ごとのアイコン（log=Cloud Logging, code=GitHub, runbook=手順書, console=Cloud Console）。
-const KIND_ICON: Record<InvestigationLinkKind, string> = {
-  log: "📄",
-  code: "🔧",
-  runbook: "📘",
-  console: "🖥️",
+const KIND_ICON: Record<InvestigationLinkKind, IconComponent> = {
+  log: FileTextIcon,
+  code: WrenchIcon,
+  runbook: BookIcon,
+  console: MonitorIcon,
 };
 
 /**
@@ -18,6 +26,7 @@ const KIND_ICON: Record<InvestigationLinkKind, string> = {
  */
 export function InvestigationItem({ item }: { item: InvestigationStepView }) {
   if (!item.href) return <>{item.text}</>;
+  const KindIcon = item.kind ? KIND_ICON[item.kind] : null;
   return (
     <a
       href={item.href}
@@ -25,11 +34,9 @@ export function InvestigationItem({ item }: { item: InvestigationStepView }) {
       rel="noopener noreferrer"
       className="inline-flex items-center gap-1 text-cyan-300 underline decoration-cyan-500/40 underline-offset-2 transition hover:text-cyan-200 hover:decoration-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
     >
-      {item.kind && <span aria-hidden>{KIND_ICON[item.kind]}</span>}
+      {KindIcon && <KindIcon className="shrink-0" />}
       <span>{item.text}</span>
-      <span aria-hidden className="text-cyan-500/70">
-        ↗
-      </span>
+      <ArrowUpRightIcon className="shrink-0 text-cyan-500/70" />
     </a>
   );
 }

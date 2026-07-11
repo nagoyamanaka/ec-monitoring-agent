@@ -16,7 +16,6 @@ export type EvidenceFlowSourceKey = EvidenceLedgerKey;
 export type EvidenceFlowSource = {
   readonly key: EvidenceFlowSourceKey;
   readonly label: string;
-  readonly icon: string;
   readonly count: number;
   /** コネクタの離散太さ 1..3。連続スケールは fake precision になるため段階のみ。 */
   readonly weight: 1 | 2 | 3;
@@ -33,16 +32,17 @@ export type EvidenceFlowModel = {
   readonly ariaSummary: string;
 };
 
-/** アイコン・呼称は EvidencePanel の SOURCE_META / investigationWorkload と統一する。 */
-const SOURCE_META: ReadonlyArray<
-  [EvidenceFlowSourceKey, { label: string; icon: string }]
-> = [
-  ["security", { label: "Trivy (CI スキャン)", icon: "🛡" }],
-  ["logs", { label: "Cloud Logging", icon: "▤" }],
-  ["metrics", { label: "Cloud Monitoring", icon: "📈" }],
-  ["terraformChanges", { label: "Terraform", icon: "⬡" }],
-  ["commits", { label: "GitHub", icon: "❮❯" }],
-  ["similarIncidents", { label: "類似事例DB", icon: "◎" }],
+/**
+ * 呼称は EvidencePanel の SOURCE_META / investigationWorkload と統一する。
+ * アイコンは presentation 側が key で引く（evidenceSourceIcons）＝domain は描画を持たない。
+ */
+const SOURCE_META: ReadonlyArray<[EvidenceFlowSourceKey, { label: string }]> = [
+  ["security", { label: "Trivy (CI スキャン)" }],
+  ["logs", { label: "Cloud Logging" }],
+  ["metrics", { label: "Cloud Monitoring" }],
+  ["terraformChanges", { label: "Terraform" }],
+  ["commits", { label: "GitHub" }],
+  ["similarIncidents", { label: "類似事例DB" }],
 ];
 
 function toWeight(count: number): 1 | 2 | 3 {
@@ -67,7 +67,6 @@ export function evidenceFlowModel(
   ).map(([key, meta]) => ({
     key,
     label: meta.label,
-    icon: meta.icon,
     count: countOf(key),
     weight: toWeight(countOf(key)),
   }));

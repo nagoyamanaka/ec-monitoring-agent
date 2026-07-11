@@ -52,7 +52,7 @@ describe("ForecastDemoConsole", () => {
   it("生成/リセットのボタンがコールバックを呼ぶ（文言は未生成/生成済みで切替）", async () => {
     const props = renderConsole();
     await userEvent.click(
-      screen.getByRole("button", { name: "▶ 予報を生成（AI 調査・約1分）" }),
+      screen.getByRole("button", { name: "予報を生成（AI 調査・約1分）" }),
     );
     expect(props.onGenerate).toHaveBeenCalledTimes(1);
 

@@ -1,4 +1,12 @@
 import { cn } from "@shared/ui/cn";
+import {
+  ArrowUpRightIcon,
+  ClockIcon,
+  DiamondIcon,
+  MonitorIcon,
+  ScaleIcon,
+  ZapIcon,
+} from "@shared/ui/icons";
 import { type AlertView } from "../../domain/AlertView";
 import { InvestigationItem } from "./InvestigationItem";
 import { InvestigationTimeline } from "./InvestigationTimeline";
@@ -255,11 +263,9 @@ export function AlertCardExpanded({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-cyan-300 underline decoration-cyan-500/40 underline-offset-2 transition hover:text-cyan-200 hover:decoration-cyan-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
             >
-              <span aria-hidden>🖥️</span>
+              <MonitorIcon className="shrink-0" />
               <span>Cloud Monitoring インシデントを開く</span>
-              <span aria-hidden className="text-cyan-500/70">
-                ↗
-              </span>
+              <ArrowUpRightIcon className="shrink-0 text-cyan-500/70" />
             </a>
           )}
         </section>
@@ -276,9 +282,7 @@ export function AlertCardExpanded({
           {reason.kind === "known" && reason.crystallized ? (
             <>
               <p className="text-slate-100">
-                <span aria-hidden className="text-emerald-300">
-                  ◈{" "}
-                </span>
+                <DiamondIcon className="mr-1 inline-block align-[-0.125em] text-emerald-300" />
                 {reason.patternName}
                 <span className="ml-2 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-300">
                   結晶化（承認により学習）
@@ -313,7 +317,7 @@ export function AlertCardExpanded({
               毎回 1 行で想起させる（AI 調査の実測サマリと対になる）。 */}
           {reason.kind === "known" && (
             <p className="text-xs text-emerald-300/90">
-              <span aria-hidden>⚡ </span>
+              <ZapIcon className="mr-1 inline-block align-[-0.125em]" />
               既知パターン一致＝
               <span className="font-medium">1秒未満・AI コストゼロ</span>
               で確定
@@ -377,7 +381,7 @@ export function AlertCardExpanded({
               値は上部 donut と同じ百分率語彙。下回った場合の行き先（AI 調査）も明示。 */}
           {evidence.similarityGate && (
             <p className="text-xs leading-relaxed text-slate-300">
-              <span aria-hidden>⚖ </span>
+              <ScaleIcon className="mr-1 inline-block align-[-0.125em]" />
               確定条件: 類似度
               <code className="mx-1 text-[10px] text-slate-400">
                 {evidence.similarityGate.raw}
@@ -406,7 +410,7 @@ export function AlertCardExpanded({
               full で証拠フローダイアグラム（E8-A）が描けるときは図に吸収し、この行は出さない。 */}
           {workload && !flow && (
             <p className="rounded-md bg-slate-800/40 px-3 py-2 text-xs leading-relaxed text-slate-400">
-              <span aria-hidden>⏱ </span>
+              <ClockIcon className="mr-1 inline-block align-[-0.125em]" />
               <span className="font-medium text-slate-200">
                 {workload.elapsedLabel}
               </span>

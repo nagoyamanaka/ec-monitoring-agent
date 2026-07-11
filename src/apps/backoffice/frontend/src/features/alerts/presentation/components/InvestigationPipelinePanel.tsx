@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@shared/ui/cn";
 import { formatTimeJa } from "@shared/format/dateTime";
+import {
+  ArrowRightIcon,
+  BookIcon,
+  ChevronRightIcon,
+  CodeIcon,
+  DotIcon,
+  HexagonIcon,
+  LogLinesIcon,
+  TargetIcon,
+  type IconComponent,
+} from "@shared/ui/icons";
 import { type AlertView, isAnalyzing } from "../../domain/AlertView";
 import {
   INVESTIGATION_AGENTS,
@@ -9,8 +20,20 @@ import {
   progressForRun,
   toolMeta,
   type InvestigationProgressView,
+  type ToolIconName,
 } from "../../domain/investigationProgress";
 import { InvestigationItem } from "./InvestigationItem";
+
+/** domain の ToolIconName → SVG（L1）。証拠源系は evidenceSourceIcons と同じ割当にする。 */
+const TOOL_ICONS: Record<ToolIconName, IconComponent> = {
+  logs: LogLinesIcon,
+  terraform: HexagonIcon,
+  commits: CodeIcon,
+  similar: TargetIcon,
+  runbook: BookIcon,
+  delegate: ArrowRightIcon,
+  generic: DotIcon,
+};
 
 export interface InvestigationPipelinePanelProps {
   alert: AlertView;
@@ -152,7 +175,13 @@ export function InvestigationPipelinePanel({
                 )}
               >
                 <span aria-hidden className="w-3 shrink-0 text-center">
-                  {isCurrent ? "▸" : wasActive ? "✓" : "·"}
+                  {isCurrent ? (
+                    <ChevronRightIcon className="inline-block align-[-0.125em]" />
+                  ) : wasActive ? (
+                    "✓"
+                  ) : (
+                    "·"
+                  )}
                 </span>
                 <span className="shrink-0 font-medium">{agent.label}</span>
                 <span className="min-w-0 truncate">{agent.role}</span>
@@ -169,14 +198,13 @@ export function InvestigationPipelinePanel({
           <ol className="space-y-1 border-t border-cyan-500/15 pt-2" aria-label="実行イベント">
             {runEvents.slice(-5).map((e, i) => {
               const tool = toolMeta(e.tool);
+              const ToolIcon = TOOL_ICONS[tool.icon];
               return (
                 <li
                   key={`${e.at}-${e.agent}-${e.tool}-${i}`}
                   className="evidence-rise flex items-center gap-2 text-xs text-slate-300"
                 >
-                  <span aria-hidden className="text-cyan-300">
-                    {tool.icon}
-                  </span>
+                  <ToolIcon className="shrink-0 text-cyan-300" />
                   <span className="font-medium text-slate-200">
                     {agentLabel(e.agent)}
                   </span>

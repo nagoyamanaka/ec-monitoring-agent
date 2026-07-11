@@ -12,7 +12,7 @@
  * 引用検証は実経路」を明示し、実データ（GitHub の実 PR）と区別する。未マージ PR は実リポジトリの
  * open PR を**全件** read するため、台帳に無い PR が予報に現れても嘘にならない文言にしている。
  */
-import { GamepadIcon } from "@shared/ui/icons";
+import { GamepadIcon, PlayIcon } from "@shared/ui/icons";
 import { DemoConsoleFrame } from "@shared/ui/DemoConsoleFrame";
 
 type SignalRealness = "real" | "pinnedReal" | "seed";
@@ -223,11 +223,16 @@ export function ForecastDemoConsole({
           title="上記シグナルを AI が突合し、リスク・確信度・根拠（引用）・今打てる先手を1ショット生成する"
           className="w-full rounded-md bg-cyan-500/15 px-3 py-2 text-sm font-medium text-cyan-100 ring-1 ring-inset ring-cyan-500/40 transition hover:bg-cyan-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 active:scale-[0.99] disabled:opacity-40 disabled:active:scale-100"
         >
-          {generating
-            ? "AI が調査中…（約1分）"
-            : hasBriefing
-              ? "▶ 予報を再生成（AI 調査・約1分）"
-              : "▶ 予報を生成（AI 調査・約1分）"}
+          {generating ? (
+            "AI が調査中…（約1分）"
+          ) : (
+            <>
+              <PlayIcon className="mr-1 inline-block align-[-0.125em]" />
+              {hasBriefing
+                ? "予報を再生成（AI 調査・約1分）"
+                : "予報を生成（AI 調査・約1分）"}
+            </>
+          )}
         </button>
         {/* 結果が出る場所を指し示す（視線誘導）。押下はここだが、進行状況と着地は本文側。 */}
         {generating && (

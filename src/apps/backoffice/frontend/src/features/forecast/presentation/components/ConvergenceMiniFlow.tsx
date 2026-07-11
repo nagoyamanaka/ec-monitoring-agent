@@ -1,4 +1,5 @@
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
+import { ArrowDownIcon, ArrowRightIcon } from "@shared/ui/icons";
 import { convergenceLanes } from "../../domain/ForecastView";
 import type { RiskCardView } from "../../domain/ForecastView";
 import { riskLevelLabel } from "../../domain/RiskLevel";
@@ -55,7 +56,7 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
           ))}
         </ul>
 
-        <span className="text-center text-slate-500 md:hidden">▼</span>
+        <ArrowDownIcon className="self-center text-slate-500 md:hidden" />
 
         {/* 調査ノード（収束点）＝AI が独立した根拠を突合して束ねる。見出し「AI 調査」は
             アラート詳細の証拠フロー（EvidenceFlowDiagram）と同一語彙で統一。
@@ -66,10 +67,8 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
           <p className="mt-0.5 text-xs text-slate-400">独立した根拠を突合</p>
         </div>
 
-        <span className="text-center text-slate-500 md:hidden">▼</span>
-        <span className="hidden shrink-0 px-1.5 text-slate-500 md:block">
-          ▶
-        </span>
+        <ArrowDownIcon className="self-center text-slate-500 md:hidden" />
+        <ArrowRightIcon className="mx-1.5 hidden shrink-0 text-slate-500 md:block" />
 
         {/* 結論ノード（レベル＋確信度%）。subject はカード見出し（この直上）が担うため
             ここでは重複表示せず、収束の帰結＝深刻度に焦点を当てる。 */}
