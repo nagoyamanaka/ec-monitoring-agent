@@ -13,7 +13,7 @@ flowchart LR
   subgraph detect["検知（境界の外）"]
     EC["EC バックエンド<br/>(注文・在庫・決済)"]
     CM["Cloud Monitoring<br/>Alerting Policy"]
-    CI["GitHub Actions CI<br/>Trivy / npm audit"]
+    CI["GitHub Actions CI<br/>Trivy fs scan"]
   end
 
   subgraph ingest["peer ingest（3系統・同一パイプラインに合流）"]
@@ -167,7 +167,7 @@ flowchart TD
 ## 5. リメディエーション（write 隔離・人間承認ゲート）
 
 - 調査=read / 修正=write を構造分離。自動マージは一切しない。
-- 2モード（`REMEDIATION_MODE`）: **advisory**（in-process で方針テキスト→`SECURITY_REMEDIATION.md` 草案PR）／**dispatch**（`repository_dispatch` → `ai-remediation.yml` でランナー上の AI が実コード修正→Trivy 再スキャン＋テスト緑→draft PR→`POST /ingest/remediation-result` で結果確定）。
+- 3モード（`REMEDIATION_MODE`・既定 **demo**）: **demo**（事前に同パイプラインで起票済みの**本物の draft PR** URL（`REMEDIATION_DEMO_PR_URL`）を毎回提示＝GitHub 非接触・PR 増殖なし・書き込みトークン不要。審査/デモ用）／**advisory**（in-process で方針テキスト→`SECURITY_REMEDIATION.md` 草案PR）／**dispatch**（`repository_dispatch` → `ai-remediation.yml` でランナー上の AI が実コード修正→Trivy 再スキャン＋テスト緑→draft PR→`POST /ingest/remediation-result` で結果確定）。
 - 自己修正ループは `REMEDIATION_MAX_ATTEMPTS`（既定2）で打ち切り（課金暴走の安全弁）。対象はシナリオ4（脆弱性）のみ（旧5/6=構成変更・アプリコード退行は自動修正見送りの[決定記録](decisions/decision-scenario67-remediation-dropped.md)を経て、2026-07-06 にシナリオ自体もデモ卓から撤退）。
 
 ## 5.5 プロンプトインジェクションの脅威モデル（設計判断）
@@ -247,10 +247,10 @@ flowchart LR
 | ---------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | 機密             | **Secret Manager**（箱のみ tf 管理・平文 version は `gcloud` で別投入＝tf state 非搭載） | 各コンテナへ環境注入。LLM コンテキストに載らない＝注入成功時も鍵は漏れない（§5.5） |
 | CI 認証          | **Workload Identity Federation**（pool + provider・鍵レス）                            | GitHub Actions → GCP を SA キー配布ゼロで認証。長期鍵の漏洩面を排除          |
-| 権限             | **サービスアカウント ×12**（サブサービス分離・最小権限）                                | プロセス誤動作時の横移動を限定（§5.5 最小権限・サービス分離）                |
-| 状態管理         | **GCS ×2**（tfstate + deploy 成果物）／state lock                                      | plan/apply の tfstate 奪い合いを `concurrency` で直列化（§6.5②）             |
-| 配信             | **Artifact Registry ×2**                                                               | image build & push の格納先（§6.5①）                                        |
-| ネットワーク     | VPC / subnet / **VPC Access Connector ×3** / 静的 IP / firewall                        | Cloud Run（サーバレス）→ GCE 常駐系（RabbitMQ/Mongo 等）への疎通            |
+| 権限             | **役割別サービスアカウント ×3**（CI デプロイ用 / Cloud Run 実行用 / GCE 実行用・最小権限） | 実行系と CI 系を分離。プロセス誤動作時の横移動を限定（§5.5 最小権限・サービス分離） |
+| 状態管理         | **GCS**（tfstate 用＝partial backend config で tf 外に用意・deploy 資材用＝tf 管理）／state lock | plan/apply の tfstate 奪い合いを CI の `concurrency` で直列化（§6.5②）       |
+| 配信             | **Artifact Registry**（apps リポジトリに ec-backend / backoffice-backend イメージ）    | image build & push の格納先（§6.5①）                                        |
+| ネットワーク     | VPC / subnet / **Serverless VPC Access Connector** / 静的 IP / firewall                | Cloud Run（サーバレス）→ GCE 常駐系（RabbitMQ/Mongo 等）への疎通            |
 | API 有効化       | `google_project_service`（bootstrap で宣言的に enable）                                | 使う GCP API を IaC で明示（Cloud Trace のみ意図的に未 enable＝§6 注）       |
 
 - **draft PR 承認ゲート**（§5）も「AI の write を止められる形で運用する」非機能設計としてここに連なる（実装は §5・§6.5④）。
@@ -312,7 +312,7 @@ src/
 ```
 
 - ポート実装は `...Adapter`、ドメインサービスは `...DomainService`。driven ポートと wire DTO は infrastructure 配下。ワイヤ型は contracts に単一ソース化。
-- テスト: Vitest（BDD）unit 1156件・160ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
+- テスト: Vitest（BDD）unit 1170件・166ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
 
 ## 8. 主要 API（backoffice）
 
