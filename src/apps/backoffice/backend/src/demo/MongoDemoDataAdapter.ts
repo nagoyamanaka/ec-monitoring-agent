@@ -30,4 +30,8 @@ export class MongoDemoDataAdapter implements DemoDataPort {
   async clearRemediations(): Promise<void> {
     await this.client.db().collection("remediations").deleteMany({});
   }
+
+  async clearAppliedInfraChanges(): Promise<void> {
+    await this.client.db().collection("applied_infra_changes").deleteMany({});
+  }
 }
