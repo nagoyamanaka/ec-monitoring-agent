@@ -13,7 +13,7 @@ Built for the Findy **DevOps × AI Agent Hackathon 2026**.
 | Forecast                     | Cross-checks 3 kinds of future signals × past incident memory — **only citation-verified evidence is shown** |
 | AI investigation (unknown)   | **8 ADK agents** traverse evidence read-only; report with evidence links in ~2–3 minutes                     |
 | Known-failure classification | **Under 1 second, zero AI cost** (deterministic)                                                             |
-| Tests                        | **1,170 unit tests** + 22 E2E tests (learning loop & citation verification covered deterministically)        |
+| Tests                        | **1,174 unit tests** + 22 E2E tests (learning loop & citation verification covered deterministically)        |
 
 ## What makes it different
 
