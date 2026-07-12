@@ -59,7 +59,7 @@ import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitorin
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
 import { CloudMonitoringGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudMonitoringGatewayImpl.js";
 import { TerraformGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/TerraformGatewayImpl.js";
-import { InMemoryAppliedInfraChangeStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryAppliedInfraChangeStore.js";
+import { MongoAppliedInfraChangeStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/MongoAppliedInfraChangeStore.js";
 import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/GitHubGatewayImpl.js";
 import { GitHubPullRequestReadGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestReadGateway.js";
 import { InMemoryPendingInfraPlanStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryPendingInfraPlanStore.js";
@@ -203,10 +203,10 @@ export class BackofficeApp {
     // ADK版（エージェントの狙い撃ちツール）で共有する。
     const cloudLoggingGateway = new CloudLoggingGatewayImpl();
     const cloudMonitoringGateway = new CloudMonitoringGatewayImpl();
-    // apply 時に捕捉した IaC 変更イベントの保管。調査（terraformGateway 経由 read）と
-    // demo 注入（TriggerDemoScenarioUseCase 経由 write）で同一インスタンスを共有する。
-    // 実機では CI からの HTTP ingest を上流に差し込み、本ストアはその受け皿になる。
-    const appliedInfraChangeStore = new InMemoryAppliedInfraChangeStore();
+    // apply 時に捕捉した IaC 変更イベントの保管。write（demo 注入＝edge）と read（調査＝worker）が
+    // 本番では別プロセスに分かれるため、InMemory ではなく共有 Mongo を SoT にする
+    // （InMemory 版だと調査側に apply が届かず terraform 証拠・確信度シグナルが常に欠落する）。
+    const appliedInfraChangeStore = new MongoAppliedInfraChangeStore(mongoClient);
     // 未適用 plan（予兆の FUTURE_CHANGE シグナル）の受け皿。CI の plan ingest が record する想定で、
     // デモではフラッグシップ seed（F8・バックボーン VM 縮小）を DEMO_ENABLED 配下で投入する。
     // 引用チップ「証拠を開く」の解決先 PR（#83＝この plan を CI が本物の plan にした PR）を env で後付けする。

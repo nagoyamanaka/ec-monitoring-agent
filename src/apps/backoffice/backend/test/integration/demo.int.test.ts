@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import request from "supertest";
+import { MongoClient } from "mongodb";
 import { BackofficeApp } from "../../src/BackofficeApp.js";
 import { EcDemoGateway } from "../../src/demo/EcDemoGateway.js";
 import { startApp } from "./support.js";
@@ -14,6 +15,7 @@ import { startApp } from "./support.js";
  */
 describe("demoRoutes (integration)", () => {
   let app: BackofficeApp;
+  let mongo: MongoClient;
   const setPaymentMode = vi.fn().mockResolvedValue(undefined);
   const setInventoryMode = vi.fn().mockResolvedValue(undefined);
   const placeOrder = vi.fn().mockImplementation(async (p: { orderId: string }) => ({ orderId: p.orderId }));
@@ -28,6 +30,7 @@ describe("demoRoutes (integration)", () => {
   beforeAll(async () => {
     const started = await startApp({ ecDemoGateway });
     app = started.app;
+    mongo = started.mongo;
   });
 
   afterAll(async () => {
@@ -50,11 +53,20 @@ describe("demoRoutes (integration)", () => {
     expect(res.status).toBe(202);
     expect(res.body).toMatchObject({ scenarioId: "infra-fault" });
     expect(injectInfraFault).toHaveBeenCalledTimes(1);
+
+    // apply 証跡は共有 Mongo に永続化される（edge の record を worker の調査が読める前提を担保）。
+    // InMemory に退行すると本番の edge/worker 分離で terraform 証拠・確信度シグナルが欠落する。
+    const applied = await mongo.db().collection("applied_infra_changes").find({}).toArray();
+    expect(applied).toHaveLength(1);
+    expect(applied[0]).toMatchObject({ summary: expect.stringContaining("Cloud SQL") });
   });
 
-  it("POST /demo/reset は 200 を返す", async () => {
+  it("POST /demo/reset は 200 を返し、apply 証跡も掃除する", async () => {
     const res = await request(app.httpApp).post("/demo/reset").send();
     expect(res.status).toBe(200);
+
+    const applied = await mongo.db().collection("applied_infra_changes").find({}).toArray();
+    expect(applied).toHaveLength(0);
   });
 
   it("GET /demo/status は demoEnabled=true と集計を返す", async () => {

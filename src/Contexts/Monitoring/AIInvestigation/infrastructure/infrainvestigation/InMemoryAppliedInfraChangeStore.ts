@@ -3,9 +3,9 @@ import {
   AppliedInfraChangeStore,
 } from "./AppliedInfraChangeStore.js";
 
-// apply イベントのオンメモリ保管（単一プロセス前提）。
-// デモ／ローカルでは demo 注入が record し、調査が findAppliedSince で引く。
-// 実機では HTTP ingest（CI からの POST）を上流に差し替える想定（本クラスはその受け皿の最小実装）。
+// apply イベントのオンメモリ保管（単一プロセス前提・テスト用）。
+// アプリの配線は MongoAppliedInfraChangeStore（edge の record を worker の調査が読めるよう
+// 共有 Mongo を SoT にする）。本クラスは UT の軽量 fake としてのみ使う。
 export class InMemoryAppliedInfraChangeStore implements AppliedInfraChangeStore {
   private readonly changes: AppliedInfraChange[] = [];
 

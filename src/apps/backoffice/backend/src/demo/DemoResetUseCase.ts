@@ -30,6 +30,7 @@ export class DemoResetUseCase {
     await this.demoDataPort.clearAlerts();
     await this.demoDataPort.clearPatterns();
     await this.demoDataPort.clearRemediations();
+    await this.demoDataPort.clearAppliedInfraChanges();
 
     for (const pattern of KNOWN_ERROR_PATTERN_SEEDS) {
       await this.knownErrorPatternRepository.save(pattern);

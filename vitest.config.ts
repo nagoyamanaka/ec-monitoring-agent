@@ -13,6 +13,9 @@ export default defineConfig({
       "node_modules/**",
       "src/apps/backoffice/frontend/**",
       "**/*.int.test.ts",
+      // `pnpm build`（tsc）が dist にコンパイル済み *.test.js を吐くと unit run が拾って
+      // 全ファイル collect 失敗する（vitest は CJS 出力を import できない）。ソースのみ対象にする。
+      "dist/**",
     ],
   },
   resolve: {

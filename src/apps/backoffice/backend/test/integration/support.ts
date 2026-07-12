@@ -15,7 +15,12 @@ export const MONGO_URL =
   process.env.MONGO_URL ?? "mongodb://localhost:27017/monitoring_integration";
 export const INGEST_TOKEN = process.env.INGEST_TOKEN ?? "it-token";
 
-const COLLECTIONS = ["alerts", "remediations", "known_error_patterns"];
+const COLLECTIONS = [
+  "alerts",
+  "remediations",
+  "known_error_patterns",
+  "applied_infra_changes",
+];
 
 // app.build() が "backoffice" 名で登録した同一 Mongo クライアントを再利用する。
 export async function sharedMongoClient(): Promise<MongoClient> {
