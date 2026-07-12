@@ -259,37 +259,49 @@ export class BackofficeApp {
     //  - 既定: 単一Gemini（LLMInvestigationAdapter）
     let aiInvestigationPort: AIInvestigationPort;
     if (config.ai.useAdk && !config.ai.useStubInvestigation) {
+      const adkRunnerConfig = {
+        model: config.gemini.model,
+        // 相関検証（批判役）だけ軽量モデル＝D3 の wall-clock 逼迫に配慮（タスク J2）。
+        verifierModel: config.ai.adkVerifierModel,
+        // ロール別の静的モデル割当（D3 対策①）。推論の薄いロールを flash 化して wall-clock を削る。
+        collectorModel: config.ai.adkCollectorModel,
+        escalationModel: config.ai.adkEscalationModel,
+        triageModel: config.ai.adkTriageModel,
+        // コーディネーターの思考予算（fallback 第6原因の防御・env で運用チューニング可能）。
+        coordinatorThinkingBudget: config.ai.adkCoordinatorThinkingBudget,
+        maxLlmCalls: config.ai.adkMaxLlmCalls,
+        timeoutMs: config.ai.investigationTimeoutMs,
+        logger,
+        // 実行イベント（ツール呼び出し）を SSE "investigation-progress" へライブ中継（E1(b)）。
+        progressNotifier: sseNotifier,
+        cloudLoggingGateway,
+        terraformGateway,
+        githubGateway,
+        similarIncidentRepository,
+        // 他責/運用案件のエスカレーション草案（タスク35）の宛先を引く体制マスタ（read-only・seed 駆動）。
+        escalationDirectory: new InMemoryEscalationDirectory(ESCALATION_DIRECTORY_SEED),
+        // 修正PRの自動レビュー（タスク36）が diff/変更ファイル/CI を引く read-only ゲートウェイ。
+        // 起票先（remediationRepo）の PR を見る。未設定なら null/空で review は自然に省略される。
+        pullRequestReadGateway: new GitHubPullRequestReadGateway(
+          config.github.token,
+          config.github.remediationRepo,
+        ),
+      };
+      // fallback 第6原因（最終JSON合成ターンの思考が出力予算を食い潰し空応答・実測はフル証拠の
+      // 高推論シナリオで発生）への縮退リトライ用。思考予算だけ落とした同一グラフ＝深い熟考を捨てて
+      // 最終JSONの出力トークンを確保する。恒久策（finalizer 分離＋responseSchema 強制）は ADR 参照。
+      const retryThinkingBudget =
+        config.ai.adkCoordinatorThinkingBudget > 0
+          ? Math.min(4096, config.ai.adkCoordinatorThinkingBudget)
+          : 4096;
       aiInvestigationPort = new ADKAgentInvestigationAdapter(
-        new ADKInvestigationAgentRunner({
-          model: config.gemini.model,
-          // 相関検証（批判役）だけ軽量モデル＝D3 の wall-clock 逼迫に配慮（タスク J2）。
-          verifierModel: config.ai.adkVerifierModel,
-          // ロール別の静的モデル割当（D3 対策①）。推論の薄いロールを flash 化して wall-clock を削る。
-          collectorModel: config.ai.adkCollectorModel,
-          escalationModel: config.ai.adkEscalationModel,
-          triageModel: config.ai.adkTriageModel,
-          // コーディネーターの思考予算（fallback 第6原因の防御・env で運用チューニング可能）。
-          coordinatorThinkingBudget: config.ai.adkCoordinatorThinkingBudget,
-          maxLlmCalls: config.ai.adkMaxLlmCalls,
-          timeoutMs: config.ai.investigationTimeoutMs,
-          logger,
-          // 実行イベント（ツール呼び出し）を SSE "investigation-progress" へライブ中継（E1(b)）。
-          progressNotifier: sseNotifier,
-          cloudLoggingGateway,
-          terraformGateway,
-          githubGateway,
-          similarIncidentRepository,
-          // 他責/運用案件のエスカレーション草案（タスク35）の宛先を引く体制マスタ（read-only・seed 駆動）。
-          escalationDirectory: new InMemoryEscalationDirectory(ESCALATION_DIRECTORY_SEED),
-          // 修正PRの自動レビュー（タスク36）が diff/変更ファイル/CI を引く read-only ゲートウェイ。
-          // 起票先（remediationRepo）の PR を見る。未設定なら null/空で review は自然に省略される。
-          pullRequestReadGateway: new GitHubPullRequestReadGateway(
-            config.github.token,
-            config.github.remediationRepo,
-          ),
-        }),
+        new ADKInvestigationAgentRunner(adkRunnerConfig),
         undefined,
         logger,
+        new ADKInvestigationAgentRunner({
+          ...adkRunnerConfig,
+          coordinatorThinkingBudget: retryThinkingBudget,
+        }),
       );
     } else {
       // linkConfig は既定（env 由来）を使うため undefined を渡す（JS の既定引数が適用される）。

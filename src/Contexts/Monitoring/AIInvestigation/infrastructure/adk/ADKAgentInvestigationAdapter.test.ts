@@ -20,11 +20,13 @@ const context: InvestigationContext = {
 /** エージェント・グラフ（ADK）を呼ばずにアダプタのオーケストレーションだけを検証するフェイク。 */
 class FakeAgentRunner implements InvestigationAgentRunner {
   lastOptions: { alertId?: string } | undefined;
+  calls = 0;
   constructor(private readonly behavior: { text?: string; error?: Error }) {}
   async run(
     _seedPrompt: string,
     options?: { alertId?: string },
   ): Promise<string> {
+    this.calls++;
     this.lastOptions = options;
     if (this.behavior.error) throw this.behavior.error;
     return this.behavior.text ?? "";
@@ -139,6 +141,70 @@ describe("ADKAgentInvestigationAdapter", () => {
         kind: "code",
       },
     ]);
+  });
+
+  it("1回目が空応答なら縮退リトライで成功レポートを返し、retry を Cloud Logging で追える", async () => {
+    // fallback 第6原因の実発生系: 思考が出力予算を食い潰し finalText が0文字（切断ですらない）。
+    const logger = new RecordingLogger();
+    const retryRunner = new FakeAgentRunner({ text: validJson });
+    const adapter = new ADKAgentInvestigationAdapter(
+      new FakeAgentRunner({ text: "" }),
+      undefined,
+      logger,
+      retryRunner,
+    );
+
+    const report = await adapter.investigate(context);
+
+    expect(report.isFallback).toBe(false);
+    expect(report.summary).toBe("DB接続枯渇");
+    expect(retryRunner.calls).toBe(1);
+    expect(logger.logs.map((l) => l.action)).toContain("ai_investigation_retrying");
+  });
+
+  it("1回目が runner 例外でも縮退リトライで復帰する（瞬断も一過性として扱う）", async () => {
+    const adapter = new ADKAgentInvestigationAdapter(
+      new FakeAgentRunner({ error: new Error("transient") }),
+      undefined,
+      undefined,
+      new FakeAgentRunner({ text: validJson }),
+    );
+
+    const report = await adapter.investigate(context);
+
+    expect(report.isFallback).toBe(false);
+    expect(report.summary).toBe("DB接続枯渇");
+  });
+
+  it("縮退リトライも失敗したら fallback（再実行は1回で有界＝HOLブロッキングを広げない）", async () => {
+    const retryRunner = new FakeAgentRunner({ text: "壊れたJSON" });
+    const adapter = new ADKAgentInvestigationAdapter(
+      new FakeAgentRunner({ text: "" }),
+      undefined,
+      undefined,
+      retryRunner,
+    );
+
+    const report = await adapter.investigate(context);
+
+    expect(report.isFallback).toBe(true);
+    expect(report.confidence).toBe(0);
+    expect(retryRunner.calls).toBe(1);
+  });
+
+  it("1回目が成功したら縮退リトライは呼ばない（正常系のコスト・遅延を増やさない）", async () => {
+    const retryRunner = new FakeAgentRunner({ text: validJson });
+    const adapter = new ADKAgentInvestigationAdapter(
+      new FakeAgentRunner({ text: validJson }),
+      undefined,
+      undefined,
+      retryRunner,
+    );
+
+    const report = await adapter.investigate(context);
+
+    expect(report.isFallback).toBe(false);
+    expect(retryRunner.calls).toBe(0);
   });
 
   it("infraEvidence と linkConfig から、AI が引用した sha の証拠リンクだけ調査ステップへ追記する", async () => {
