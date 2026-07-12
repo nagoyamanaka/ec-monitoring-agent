@@ -31,6 +31,7 @@
 | [ADR-23](#adr-23-cloud-trace-api-の有効化を意図的見送り) | Cloud Trace API 見送り | インフラ |
 | [ADR-24](#adr-24-デモシナリオの撤退在庫競合旧56) | デモシナリオの撤退記録 | デモ |
 | [ADR-25](#adr-25-investigationreport-は順応者acl-を挟まない) | モジュール境界: ACL を挟まない | モデル |
+| [ADR-26](#adr-26-空応答fallbackは思考予算を落とした縮退リトライ1回で防御) | 空応答 fallback: 縮退リトライ1回 | AI |
 
 ---
 
@@ -183,3 +184,9 @@
 - **決定**: `AIInvestigationPort` が `AlertAnalysis` 所有の `InvestigationReport` を返すのは境界違反としない（順応者で維持）。ACL・共有カーネル化はしない。`SSEAlertNotifier` は Primitives（契約）依存を維持する。
 - **理由**: `AlertAnalysis`/`AIInvestigation` は同一 bounded context（Monitoring）内のモジュールで、依存は一方向・循環なし。AIInvestigation に保護すべき独自内部モデルがなく、ACL は恒等マッピングの儀式コスト。ドメインへ「戻る」データはドメインクラスで受け、外へ「出ていく」データは Primitives で配る。物理分割時に `contracts/*Primitives` を公開言語へ昇格させる継ぎ目は確保済み。
 - **参照**: [step4-1 §8.3・§12](../steps/step4-1-strategy.md)
+
+## ADR-26: 空応答 fallback は思考予算を落とした縮退リトライ1回で防御
+
+- **決定**: ADK 調査の最終出力が空/パース不能/runner 例外のとき、コーディネーターの思考予算だけを落とした（min(4096, 設定値)）同一グラフで **1回だけ** 再実行してから fallback（暫定表示）に落とす。再実行は `ai_investigation_retrying` ログで観測可能にする。
+- **理由**: 失敗署名（`timedOut=false`・`finalTextLen=0`・最終JSON合成ターンで終了）の機序は「gemini-2.5 系は思考トークンも出力予算を消費するため、証拠が競合する高推論シナリオで思考が予算を食い切り finishReason=MAX_TOKENS・0文字になる」。同条件の盲目リトライは運任せだが、思考↓＝最終JSON用トークン保証↑は機序そのものに効く。分析の質は sub-agent（root_cause_analyst 等）の予算に触れないため保たれ、落ちるのはハブの熟考だけ＝「浅いが完全なレポート ≫ fallback」。上限1回で RabbitMQ prefetch(1) の占有を有界に保つ。恒久策は「統括と JSON 化の分離」＝エージェントループ後にツールなし・思考最小・`responseSchema` 強制の finalizer 単発呼び出しへ直列化すること（構造化出力は制約付きデコードなので空応答/散文が原理的に出ない。コーディネーター自体への responseSchema はツール呼び出しと排他のため不可）。コンテスト後の課題として残す。
+- **参照**: `ADKAgentInvestigationAdapter`（縮退オーケストレーション）・`InvestigationCoordinator`（fallback 第4/第6原因の防御コメント）・`BackofficeApp`（リトライ用ランナーの配線）
