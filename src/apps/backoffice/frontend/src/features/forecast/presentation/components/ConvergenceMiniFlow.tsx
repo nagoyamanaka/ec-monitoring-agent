@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useState } from "react";
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { ConvergenceConnector } from "@shared/ui/ConvergenceConnector";
 import { ArrowDownIcon, ArrowRightIcon } from "@shared/ui/icons";
@@ -22,9 +22,10 @@ export interface ConvergenceMiniFlowProps {
 
 export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
   const lanes = convergenceLanes(risk.citations);
-  // 収束ファン（L6）が実測で線を引くための参照。
-  const lanesRef = useRef<HTMLUListElement>(null);
-  const nodeRef = useRef<HTMLDivElement>(null);
+  // 収束ファン（L6）が実測で線を引くための端点。コールバック ref で state に載せる
+  // （ref オブジェクトだと収束先ノードの添付がコネクタの effect に間に合わない）。
+  const [lanesEl, setLanesEl] = useState<HTMLUListElement | null>(null);
+  const [nodeEl, setNodeEl] = useState<HTMLDivElement | null>(null);
   if (lanes.length === 0) return null;
 
   const percent = Math.round(risk.confidence * 100);
@@ -43,7 +44,7 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
         className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:gap-0"
       >
         {/* 入力レーン（根拠の種類別件数・0件レーンは convergenceLanes 側で出ない） */}
-        <ul ref={lanesRef} className="min-w-0 flex-1 space-y-1.5">
+        <ul ref={setLanesEl} className="min-w-0 flex-1 space-y-1.5">
           {lanes.map((lane) => (
             <li key={lane.kind} className="flex">
               <span
@@ -63,14 +64,14 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
         <ArrowDownIcon className="self-center text-slate-500 md:hidden" />
 
         {/* 収束ファン（L6）: 各レーン中心 → AI 調査ノード中心へ束ねる（EvidenceFlowDiagram と共有）。 */}
-        <ConvergenceConnector lanesRef={lanesRef} nodeRef={nodeRef} />
+        <ConvergenceConnector lanes={lanesEl} node={nodeEl} />
 
         {/* 調査ノード（収束点）＝AI が独立した根拠を突合して束ねる。見出し「AI 調査」は
             アラート詳細の証拠フロー（EvidenceFlowDiagram）と同一語彙で統一。
             具象LLM（Gemini/Vertex）はポートの向こう＝UI では名指しせず "AI" で統一。
             配色は中間工程＝中立面＋cyan の枠だけ（発光は結論ノードの確信度に譲る）。 */}
         <div
-          ref={nodeRef}
+          ref={setNodeEl}
           className="shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30"
         >
           <p className="text-sm font-medium text-slate-200">AI 調査</p>

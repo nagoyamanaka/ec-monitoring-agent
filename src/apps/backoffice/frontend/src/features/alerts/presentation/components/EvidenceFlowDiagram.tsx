@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useState } from "react";
 import { ConfidenceGauge, confidenceBrandColor } from "@shared/ui/tremor";
 import { cn } from "@shared/ui/cn";
 import { ConvergenceConnector } from "@shared/ui/ConvergenceConnector";
@@ -41,9 +41,10 @@ export function EvidenceFlowDiagram({
   // この調査のステップ文に登場したエージェント（実データからの決定論導出・ゼロでも壊れない）。
   const mentionedList = mentionedAgents(steps.map((s) => s.text));
   const mentioned = new Set(mentionedList.map((a) => a.name));
-  // 収束ファン（L6）が実測で線を引くための参照。
-  const lanesRef = useRef<HTMLUListElement>(null);
-  const nodeRef = useRef<HTMLDivElement>(null);
+  // 収束ファン（L6）が実測で線を引くための端点。コールバック ref で state に載せる
+  // （ref オブジェクトだと収束先ノードの添付がコネクタの effect に間に合わない）。
+  const [lanesEl, setLanesEl] = useState<HTMLUListElement | null>(null);
+  const [nodeEl, setNodeEl] = useState<HTMLDivElement | null>(null);
   return (
     <section
       aria-label="証拠の流れ"
@@ -82,7 +83,7 @@ export function EvidenceFlowDiagram({
         className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:gap-0"
       >
         {/* 流入源（実測件数つき・0件のソースは model 側で除外済み） */}
-        <ul ref={lanesRef} className="min-w-0 flex-1 space-y-1.5">
+        <ul ref={setLanesEl} className="min-w-0 flex-1 space-y-1.5">
           {model.sources.map((source) => {
             const SourceIcon = EVIDENCE_SOURCE_ICONS[source.key];
             return (
@@ -103,8 +104,8 @@ export function EvidenceFlowDiagram({
 
         {/* 収束ファン（L6）: 各レーン中心 → AI 調査ノード中心へ束ねる。太さ＝件数の離散段階。 */}
         <ConvergenceConnector
-          lanesRef={lanesRef}
-          nodeRef={nodeRef}
+          lanes={lanesEl}
+          node={nodeEl}
           weights={model.sources.map((s) => s.weight)}
         />
 
@@ -112,7 +113,7 @@ export function EvidenceFlowDiagram({
             （常時表示は図の邪魔＝要求時にだけ・D2 の段階開示と同方針）。
             配色は中間工程＝中立面＋cyan の枠だけ（発光は結論の確信度ゲージに譲る）。 */}
         <div
-          ref={nodeRef}
+          ref={setNodeEl}
           className="group relative shrink-0 self-center rounded-lg bg-slate-800/60 px-4 py-3 text-center ring-1 ring-inset ring-cyan-500/30"
         >
           <p className="text-sm font-medium text-slate-200">AI 調査</p>
