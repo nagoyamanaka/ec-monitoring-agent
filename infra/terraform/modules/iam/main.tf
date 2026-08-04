@@ -56,3 +56,26 @@ resource "google_service_account_iam_member" "wif" {
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repository}"
 }
+
+# AI リメディエーションジョブ（ai-remediation.yml）専用 SA。
+# deployer を使い回さないのは、修正ジョブに必要なのが Vertex AI の呼び出しだけで、
+# Cloud Run / GCE / Secret Manager への権限が要らないため（LLM が書いたコードを走らせる
+# ランナーに、デプロイできる資格情報を置かない）。
+resource "google_service_account" "remediation" {
+  project      = var.project_id
+  account_id   = var.remediation_sa_id
+  display_name = "CI AI remediation (Vertex AI only)"
+}
+
+resource "google_project_iam_member" "remediation" {
+  for_each = toset(var.remediation_roles)
+  project  = var.project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.remediation.email}"
+}
+
+resource "google_service_account_iam_member" "wif_remediation" {
+  service_account_id = google_service_account.remediation.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repository}"
+}

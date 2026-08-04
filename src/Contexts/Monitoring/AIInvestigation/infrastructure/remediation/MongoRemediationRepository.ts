@@ -42,7 +42,23 @@ export class MongoRemediationRepository implements RemediationRepository {
     );
     if (!doc) return null;
 
-    const d = doc as unknown as RemediationDoc;
+    return this.toRecord(doc as unknown as RemediationDoc);
+  }
+
+  async findStaleDispatched(before: Date): Promise<RemediationRecord[]> {
+    // createdAt は ISO 8601 UTC 固定長（toISOString）で保存しているため、文字列の $lt が
+    // 時刻の大小と一致する。保存形式を変えるならここも一緒に変える。
+    const docs = await this.collection()
+      .find({
+        status: "dispatched",
+        createdAt: { $lt: before.toISOString() },
+      } as unknown as Filter<Document>)
+      .toArray();
+
+    return docs.map((doc) => this.toRecord(doc as unknown as RemediationDoc));
+  }
+
+  private toRecord(d: RemediationDoc): RemediationRecord {
     return {
       alertId: d._id,
       status: d.status,

@@ -32,3 +32,8 @@ output "workload_identity_provider" {
 output "deployer_sa_email" {
   value = module.iam.deployer_sa_email
 }
+
+output "remediation_sa_email" {
+  description = "AI リメディエーションジョブ用 SA（GitHub Actions Variables の REMEDIATION_SA へ）"
+  value       = module.iam.remediation_sa_email
+}

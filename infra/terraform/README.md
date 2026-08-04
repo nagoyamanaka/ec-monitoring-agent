@@ -73,6 +73,17 @@ terraform apply
 
 4. **GitHub Actions に WIF を設定**: `terraform output workload_identity_provider` と `deployer_sa_email` を repo の Variables（`WIF_PROVIDER` / `DEPLOYER_SA`）に登録（`.github/workflows/terraform.yml` 参照）。
 
+   AI リメディエーション（`ai-remediation.yml`）を回すなら追加で:
+
+   | 種別 | 名前 | 値 |
+   | --- | --- | --- |
+   | Variables | `REMEDIATION_SA` | `terraform output remediation_sa_email`（`roles/aiplatform.user` のみの専用 SA。**`DEPLOYER_SA` を使い回さない**——LLM が書いたコードを走らせるランナーにデプロイ権限は要らない） |
+   | Variables | `GOOGLE_CLOUD_LOCATION` | 任意（未設定なら `global`）。Vertex AI のリージョン |
+   | Secrets | `INGEST_URL` | backend の ingest ベース URL。結果 callback（`/ingest/remediation-result`）の宛先で、**未設定だとジョブが失敗する**（届かない確定を緑にしないため。旧 `BACKOFFICE_INGEST_URL` は廃止） |
+   | Secrets | `INGEST_TOKEN` | `x-ingest-token`（`app.yml` / `terraform.yml` と共用） |
+
+   `GEMINI_API_KEY` Secret は**不要**（2026-08-04 に WIF ＋ Vertex AI へ寄せた。secret が1本減り、認証・モデル・課金先が backend と揃う）。
+
 ## デプロイフロー
 
 Terraform はインフラ（サービス設定・IAM・スケーリング）を管理し、**コンテナイメージの更新は CI または手動コマンドが担う**。

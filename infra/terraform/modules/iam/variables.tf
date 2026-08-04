@@ -33,6 +33,20 @@ variable "provider_allowed_audiences" {
   ]
 }
 
+variable "remediation_sa_id" {
+  type        = string
+  description = "AI リメディエーションジョブ（ai-remediation.yml）が impersonate する専用 SA"
+  default     = "ai-remediation"
+}
+
+# 修正ジョブがやることは Vertex AI の呼び出しだけ。ここに roles を足したくなったら、
+# 「LLM が書いたコードを走らせるランナーにその権限を渡してよいか」を先に考える。
+variable "remediation_roles" {
+  type        = list(string)
+  description = "Project roles granted to the AI remediation SA"
+  default     = ["roles/aiplatform.user"]
+}
+
 variable "deployer_roles" {
   type        = list(string)
   description = "Project roles granted to the CI deployer SA"

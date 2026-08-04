@@ -150,6 +150,13 @@ export const config = {
       1,
       parseInt(process.env.REMEDIATION_MAX_ATTEMPTS ?? "2"),
     ),
+    // dispatch 経路の確定待ち上限。これを過ぎた dispatched は failed へ落とす
+    // （CI の callback が来ない＝ジョブ失敗/宛先未配線/切断 でも record を宙に浮かせない）。
+    // 既定 20 分は CI 側の実測（install＋trivy＋typecheck＋test を MAX_ATTEMPTS 回）に対する余裕。
+    dispatchTimeoutMs: Math.max(
+      60000,
+      parseInt(process.env.REMEDIATION_DISPATCH_TIMEOUT_MS ?? "1200000"),
+    ),
   },
   elasticsearch: {
     // 空なら InMemory にフォールバック（SimilarPatternRule は無効）。設定すると ES バックエンド＋graded confidence 分類が有効化される。

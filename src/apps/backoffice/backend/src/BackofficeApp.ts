@@ -37,6 +37,7 @@ import { DraftRemediationCommandHandler } from "../../../../Contexts/Monitoring/
 import { GetRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationUseCase.js";
 import { GetRemediationQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationQueryHandler.js";
 import { RecordRemediationResultUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/RecordRemediationResult/RecordRemediationResultUseCase.js";
+import { ExpireStaleRemediationsUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/ExpireStaleRemediations/ExpireStaleRemediationsUseCase.js";
 import { RemediationExecutor } from "../../../../Contexts/Monitoring/AIInvestigation/domain/remediation/RemediationExecutor.js";
 import { RemediationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/remediation/RemediationPort.js";
 import { InfraInvestigationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/InfraInvestigationPort.js";
@@ -131,10 +132,15 @@ export type BackofficeAppOverrides = {
   forecastPort?: ForecastPort;
 };
 
+// dispatched の期限切れを探しに行く間隔。期限そのもの（REMEDIATION_DISPATCH_TIMEOUT_MS）と違い、
+// 運用で変える必要が無いので env にしない。1分＝画面の待ち体験に対して十分細かい。
+const REMEDIATION_EXPIRY_SWEEP_INTERVAL_MS = 60000;
+
 export class BackofficeApp {
   private server!: Server;
   private connection!: RabbitMqConnection;
   private valkey?: ValkeyConnection;
+  private remediationExpirySweep?: NodeJS.Timeout;
 
   constructor(private readonly overrides: BackofficeAppOverrides = {}) {}
 
@@ -428,6 +434,9 @@ export class BackofficeApp {
             config.github.remediationRepo,
             config.remediation.dispatchEventType,
             config.remediation.maxAttempts,
+            // advisory 経路の PR base と同じ値。dispatch では CI 側の checkout ref も兼ねる
+            // （脆弱性の実体があるブランチを修正し、そこへ PR を戻す）。
+            config.github.remediationBaseRef,
           )
         : new InProcessAdvisoryRemediation(
             // advisory の planner は調査と同じ llmClient を再利用（stub 時は決定論フォールバックへ落ちる）。
@@ -458,6 +467,29 @@ export class BackofficeApp {
       sseNotifier,
       logger,
     );
+
+    // 上の callback が来なかった場合の終端。CI 側の on-missing-url:fail は「送る側」の防御で、
+    // ジョブ自体が落ちれば何も送られない＝受ける側にも時間終端が要る。edge では回さない
+    // （worker/all の1プロセスだけが走査する＝多重確定と SSE の重複 push を作らない）。
+    if (config.role !== "edge") {
+      const expireStaleRemediationsUseCase = new ExpireStaleRemediationsUseCase(
+        remediationRepository,
+        sseNotifier,
+        logger,
+        config.remediation.dispatchTimeoutMs,
+      );
+      this.remediationExpirySweep = setInterval(() => {
+        void expireStaleRemediationsUseCase.run().catch(async (error: unknown) => {
+          await logger.warn({
+            service: "backoffice-backend",
+            action: "remediation_expiry_sweep_failed",
+            message: `期限切れ走査に失敗：${error instanceof Error ? error.message : String(error)}`,
+          });
+        });
+      }, REMEDIATION_EXPIRY_SWEEP_INTERVAL_MS);
+      // 走査そのものはプロセスを生かす理由にならない（テスト/CLI がぶら下がらないように）。
+      this.remediationExpirySweep.unref();
+    }
 
     // 予兆ブリーフィング（step6 F5/F6）: 全依存 read-only・write ゼロ。FORECAST_ENABLED off（既定）
     // ではルートが 404 なので配線は inert＝既存P0経路に影響しない。
@@ -614,6 +646,10 @@ export class BackofficeApp {
   }
 
   async stop(): Promise<void> {
+    if (this.remediationExpirySweep) {
+      clearInterval(this.remediationExpirySweep);
+      this.remediationExpirySweep = undefined;
+    }
     await this.connection?.close();
     await this.valkey?.close();
     await this.server?.stop();

@@ -21,6 +21,9 @@ export class GitHubActionsRemediationDispatcher implements RemediationExecutor {
     private readonly eventType: string = "ai-remediation",
     // AI自己修正ループの上限（課金暴走の安全弁）。CI 側ループがこの回数で打ち切る。
     private readonly maxAttempts: number = 2,
+    // 修正の土台にする ref（＝PR の base）。repository_dispatch の起動 ref は常に既定ブランチ
+    // なので、脆弱性の実体が別ブランチにあるなら payload で運ぶしかない。空＝既定ブランチ。
+    private readonly baseRef: string = "",
   ) {}
 
   async execute(input: RemediationInput): Promise<RemediationOutcome> {
@@ -59,6 +62,8 @@ export class GitHubActionsRemediationDispatcher implements RemediationExecutor {
           vulnerabilities: input.vulnerabilities,
           // CI 側の自己修正ループはこの回数で打ち切る（上限は backend config が単一ソース）。
           maxAttempts: this.maxAttempts,
+          // CI はこの ref を checkout して修正ブランチを切り、同じ ref へ PR を向ける。
+          baseRef: this.baseRef,
         },
       }),
       signal: AbortSignal.timeout(10000),

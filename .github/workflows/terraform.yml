@@ -149,28 +149,29 @@ jobs:
             }
 
       # 未適用 plan の投入（D3）: 予兆の FUTURE_CHANGE シグナル（url 付き＝証拠を開く可）として
-      # backoffice の record 口（デモ seed と同じ）へ積む。security-scan（app.yml）と同じ
-      # INGEST_URL/INGEST_TOKEN の直 POST。失敗しても必須の plan ジョブは落とさない。
-      - name: Ingest plan to backoffice (FUTURE_CHANGE signal)
+      # backoffice の record 口（デモ seed と同じ）へ積む。リソース変更 0 件なら jq が空ファイルを
+      # 残すので、ingest-post 側が「送るものが無い」としてスキップする。
+      - name: Summarize plan payload
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -s plan-changes.json ]; then
+            jq '{resourceCount: (.resourceChanges | length), summary, url}' plan-changes.json
+          else
+            echo "リソース変更なし。"
+          fi
+
+      # 予兆シグナルなので、届かなくても plan ジョブは落とさない（on-missing-url: skip ＋ continue-on-error）。
+      # payload は working-directory 配下に生成されるが、composite action はワークスペース基準で動く。
+      - name: POST to /ingest/terraform-plan
         if: github.event_name == 'pull_request'
         continue-on-error: true
-        env:
-          INGEST_URL: ${{ secrets.INGEST_URL }}
-          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
-        run: |
-          if [ -z "$INGEST_URL" ]; then
-            echo "INGEST_URL 未設定。ingest スキップ。"
-            exit 0
-          fi
-          if [ ! -s plan-changes.json ]; then
-            echo "リソース変更なし。ingest スキップ。"
-            exit 0
-          fi
-          jq '{resourceCount: (.resourceChanges | length), summary, url}' plan-changes.json
-          curl -fsS -X POST "$INGEST_URL/ingest/terraform-plan" \
-            -H "Content-Type: application/json" \
-            -H "x-ingest-token: $INGEST_TOKEN" \
-            -d @plan-changes.json
+        uses: ./.github/actions/ingest-post
+        with:
+          url: ${{ secrets.INGEST_URL }}
+          token: ${{ secrets.INGEST_TOKEN }}
+          path: /ingest/terraform-plan
+          payload-file: infra/terraform/envs/prod/plan-changes.json
+          on-missing-url: skip
 
   apply:
     # main への push（または手動）でのみ apply。environment 承認ゲートを噛ませる。
