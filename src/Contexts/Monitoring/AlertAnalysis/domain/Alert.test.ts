@@ -183,6 +183,107 @@ describe("Alert.submitFeedback()", () => {
   });
 });
 
+describe("Alert.reviewHistory（判定履歴の append）", () => {
+  const analyzedAlert = () =>
+    Alert.createAsUnknown({
+      id: new AlertId(Uuid.random().value),
+      monitoringEvent: testEvent,
+    }).attachInvestigationReport(testReport);
+
+  it("却下 → 再調査 → 承認 で履歴が2件残る（やり直しで却下が消えない）", () => {
+    const rejected = analyzedAlert().submitFeedback({
+      isCorrect: false,
+      operatorNote: "原因が違う",
+    });
+    // 再調査: 最新の判定（状態）は白紙に戻るが、判定した事実は残る。
+    const reopened = rejected.reopenForReinvestigation();
+    const approved = reopened
+      .attachInvestigationReport(testReport)
+      .submitFeedback({ isCorrect: true });
+
+    expect(reopened.feedback).toBeNull();
+    expect(reopened.reviewHistory).toHaveLength(1);
+
+    expect(approved.reviewHistory).toHaveLength(2);
+    expect(approved.reviewHistory.map((r) => r.isCorrect)).toEqual([false, true]);
+    expect(approved.reviewHistory.map((r) => r.decision)).toEqual([
+      "rejected",
+      "acted",
+    ]);
+    expect(approved.reviewHistory[0].operatorNote).toBe("原因が違う");
+    // 判定はどの版のレポートに対するものか（再調査で版が上がっている）。
+    expect(approved.reviewHistory.map((r) => r.reportRevision)).toEqual([1, 2]);
+  });
+
+  it("「診断は正しいが対処は見送った」を isCorrect と decision で表現できる", () => {
+    const deferred = analyzedAlert().submitFeedback({
+      isCorrect: true,
+      decision: "deferred",
+      operatorNote: "セール明けに対応",
+    });
+
+    const record = deferred.reviewHistory[0];
+    expect(record.isCorrect).toBe(true);
+    expect(record.decision).toBe("deferred");
+    // 人間が明示的に選んだ決裁は derived と区別する。
+    expect(record.decisionSource).toBe("operator");
+    // 決裁は見送りでも AI の採点は正解＝正答率の分子には入る。
+    expect(deferred.feedback?.isCorrect).toBe(true);
+  });
+
+  it("decision 未指定（現行 UI の承認/却下）は isCorrect からの導出として記録する", () => {
+    const approved = analyzedAlert().submitFeedback({ isCorrect: true });
+
+    expect(approved.reviewHistory[0].decision).toBe("acted");
+    expect(approved.reviewHistory[0].decisionSource).toBe("derived");
+  });
+
+  it("旧データ（reviewHistory 未保存）は feedback から1件復元する", () => {
+    const base = analyzedAlert();
+    const legacy = Alert.fromPrimitives({
+      ...base.toPrimitives(),
+      reviewHistory: undefined,
+      reportRevision: undefined,
+      feedback: { isCorrect: true, operatorNote: "当時の所見" },
+      correctFeedbackCount: 1,
+    });
+
+    expect(legacy.reviewHistory).toHaveLength(1);
+    const record = legacy.reviewHistory[0];
+    expect(record.isCorrect).toBe(true);
+    expect(record.operatorNote).toBe("当時の所見");
+    // 当時記録していなかった値は、実測値の顔をさせない。
+    expect(record.decisionSource).toBe("derived");
+    expect(record.decidedAt).toBeNull();
+  });
+
+  it("判定を受けていない旧データは履歴も空のまま（復元しない）", () => {
+    const legacy = Alert.fromPrimitives({
+      ...analyzedAlert().toPrimitives(),
+      reviewHistory: undefined,
+      feedback: null,
+    });
+
+    expect(legacy.reviewHistory).toHaveLength(0);
+  });
+
+  it("履歴がラウンドトリップできる（decidedAt は Date に戻る）", () => {
+    const original = analyzedAlert()
+      .submitFeedback({ isCorrect: false })
+      .reopenForReinvestigation()
+      .submitFeedback({ isCorrect: true, decision: "deferred" });
+
+    const restored = Alert.fromPrimitives(original.toPrimitives());
+
+    expect(restored.reviewHistory).toHaveLength(2);
+    expect(restored.reviewHistory[1].decision).toBe("deferred");
+    expect(restored.reviewHistory[1].decidedAt?.toISOString()).toBe(
+      original.reviewHistory[1].decidedAt?.toISOString(),
+    );
+    expect(restored.reportRevision).toBe(original.reportRevision);
+  });
+});
+
 describe("Alert toPrimitives/fromPrimitives", () => {
   it("既知パターンのAlertがラウンドトリップできる", () => {
     const original = Alert.createFromKnownPattern({

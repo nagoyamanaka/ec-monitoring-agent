@@ -296,6 +296,37 @@ export type InvestigationReportPrimitives = {
   readonly confidenceCalibration?: ConfidenceCalibrationPrimitives;
 };
 
+/**
+ * 決裁の種別（人間が何を選んだか）。acted=提示された対処を実行した /
+ * deferred=対処せず見送った（理由は operatorNote） / rejected=診断そのものを却下し再調査へ。
+ * AI の採点（isCorrect）とは別軸で、「診断は正しいが対処は見送った」を表現できることが分割の目的。
+ */
+export type ReviewDecision = "acted" | "deferred" | "rejected";
+
+/**
+ * decision の出所。operator=人間が明示的に選んだ／derived=isCorrect から導出した暫定値。
+ * 現行 UI は承認/却下の二値しか送らないため既定は derived で、旧データからの復元も derived。
+ * 推測値を実測値と同じ顔で置かないための一級フィールド（母数を語るときに必要）。
+ */
+export type ReviewDecisionSource = "operator" | "derived";
+
+/**
+ * 1件の判定の記録（追記のみ）。`feedback`（最新の判定＝やり直しで白紙に戻る状態）と違い、
+ * これは事実の記録なので `reopenForReinvestigation` でも消えない。正答率の母数はこちらから数える。
+ */
+export type ReviewRecordPrimitives = {
+  // AI の診断が正しかったか（＝AI の採点）。
+  readonly isCorrect: boolean;
+  // 人間が何を選んだか（＝決裁）。
+  readonly decision: ReviewDecision;
+  readonly decisionSource: ReviewDecisionSource;
+  readonly operatorNote: string | null;
+  // 判定時刻（ISO 文字列）。null は旧データからの復元＝時刻が残っていないことを表す。
+  readonly decidedAt: string | null;
+  // どの版のレポートに対する判定か（investigationReport の付け替えのたびに増える）。
+  readonly reportRevision: number;
+};
+
 export type AlertPrimitives = {
   id: string;
   monitoringEvent: MonitoringEventPrimitives;
@@ -305,6 +336,13 @@ export type AlertPrimitives = {
   investigationReport: InvestigationReportPrimitives | null;
   feedback: { isCorrect: boolean; operatorNote?: string } | null;
   correctFeedbackCount: number;
+  // 判定履歴（追記のみ）。optional は旧データ互換＝未保存なら feedback から1件復元する
+  // （dedupKey と同じ規約）。復元エントリは decisionSource=derived / decidedAt=null で
+  // 「当時記録していなかった値」であることを残す。
+  reviewHistory?: ReviewRecordPrimitives[];
+  // レポートの版数（attachInvestigationReport のたびに +1）。判定がどの版に対するものかの参照先。
+  // optional は旧データ互換＝未保存ならレポート有無から 1/0 に復元する。
+  reportRevision?: number;
   // 重複観測の畳み込みキーと発生回数。同一 dedupKey の OPEN/ANALYZING Alert は
   // 新規作成せず occurrenceCount を加算する（アラート嵐の抑制・UI は「×N」表示）。
   // optional は旧データ互換（未保存なら backend が dedupKey 再導出・count=1 で補完）。

@@ -12,14 +12,32 @@ import { MonitoringEvent } from "../../Shared/domain/MonitoringEvent.js";
 import { InvestigationReport } from "./InvestigationReport.js";
 import { ReviewStatus } from "./ReviewStatus.js";
 import { AggregateRoot } from "../../../Shared/domain/AggregateRoot.js";
-import type { AlertPrimitives } from "./contracts/AlertContract.js";
+import type {
+  AlertPrimitives,
+  ReviewDecision,
+  ReviewDecisionSource,
+  ReviewRecordPrimitives,
+} from "./contracts/AlertContract.js";
 
 // シリアライズ契約は contracts に一元化（backend/frontend 共通の単一ソース）。
-export type { AlertPrimitives };
+export type { AlertPrimitives, ReviewDecision, ReviewDecisionSource };
 
 type AlertFeedback = {
   readonly isCorrect: boolean;
   readonly operatorNote?: string;
+};
+
+/**
+ * 1件の判定の記録。ワイヤ形（ReviewRecordPrimitives）との差は decidedAt が Date であることだけ。
+ * `isCorrect` の主語は AI（診断が当たっていたか）、`decision` の主語は人間（それを受けて何を選んだか）。
+ */
+export type ReviewRecord = {
+  readonly isCorrect: boolean;
+  readonly decision: ReviewDecision;
+  readonly decisionSource: ReviewDecisionSource;
+  readonly operatorNote: string | null;
+  readonly decidedAt: Date | null;
+  readonly reportRevision: number;
 };
 
 // 「障害が起きた」という事実とその後の状態を追跡する
@@ -32,6 +50,12 @@ export class Alert extends AggregateRoot {
   private readonly _classification: AlertClassification;
   private readonly _investigationReport: InvestigationReport | null;
   private readonly _feedback: AlertFeedback | null;
+  // 判定の履歴（追記のみ）。_feedback が「最新の判定」という状態の射影であるのに対し、
+  // こちらは判定という事実の記録。やり直し（reopenForReinvestigation）は状態を戻すが事実は消さない。
+  private readonly _reviewHistory: readonly ReviewRecord[];
+  // レポートの版数。0=レポート未着、以降 attachInvestigationReport のたびに +1。
+  // 判定がどの版のレポートに対するものかを ReviewRecord に刻むために持つ。
+  private readonly _reportRevision: number;
   private readonly _correctFeedbackCount: number;
   // 重複観測の畳み込みキー（monitoringEvent.dedupKey() を materialize）と発生回数。
   // dedupKey はクエリ容易性のため Alert ドキュメントの一級フィールドとして持つ
@@ -48,6 +72,8 @@ export class Alert extends AggregateRoot {
     classification: AlertClassification;
     investigationReport: InvestigationReport | null;
     feedback: AlertFeedback | null;
+    reviewHistory: readonly ReviewRecord[];
+    reportRevision: number;
     correctFeedbackCount: number;
     dedupKey: string;
     occurrenceCount: number;
@@ -62,6 +88,8 @@ export class Alert extends AggregateRoot {
     this._classification = params.classification;
     this._investigationReport = params.investigationReport;
     this._feedback = params.feedback;
+    this._reviewHistory = params.reviewHistory;
+    this._reportRevision = params.reportRevision;
     this._correctFeedbackCount = params.correctFeedbackCount;
     this._dedupKey = params.dedupKey;
     this._occurrenceCount = params.occurrenceCount;
@@ -91,6 +119,18 @@ export class Alert extends AggregateRoot {
 
   get feedback(): AlertFeedback | null {
     return this._feedback;
+  }
+
+  /**
+   * 判定の履歴（古い順・追記のみ）。正答率の母数はここから数える＝却下 → 再調査 → 承認 が
+   * 2件として残る（feedback から数えると却下が消える）。
+   */
+  get reviewHistory(): readonly ReviewRecord[] {
+    return this._reviewHistory;
+  }
+
+  get reportRevision(): number {
+    return this._reportRevision;
   }
 
   /**
@@ -132,6 +172,8 @@ export class Alert extends AggregateRoot {
       classification: params.classification,
       investigationReport: null,
       feedback: null,
+      reviewHistory: [],
+      reportRevision: 0,
       correctFeedbackCount: 0,
       dedupKey: params.monitoringEvent.dedupKey(),
       occurrenceCount: 1,
@@ -159,6 +201,8 @@ export class Alert extends AggregateRoot {
       classification,
       investigationReport: null,
       feedback: null,
+      reviewHistory: [],
+      reportRevision: 0,
       correctFeedbackCount: 0,
       dedupKey: params.monitoringEvent.dedupKey(),
       occurrenceCount: 1,
@@ -180,6 +224,8 @@ export class Alert extends AggregateRoot {
       classification: this._classification,
       investigationReport: this._investigationReport,
       feedback: this._feedback,
+      reviewHistory: this._reviewHistory,
+      reportRevision: this._reportRevision,
       correctFeedbackCount: this._correctFeedbackCount,
       dedupKey: this._dedupKey,
       occurrenceCount: this._occurrenceCount + 1,
@@ -193,6 +239,8 @@ export class Alert extends AggregateRoot {
    * クリアする＝再調査後の新しいレポートを白紙で承認/却下できるようにする。
    * 既存の分類・レポートは新レポート到着まで表示用に保持する（待機中の文脈を失わない）。
    * 「却下＝二値学習」とは別概念（やり直し）のため、correctFeedbackCount は減らさない。
+   * 白紙に戻すのは「最新の判定」という状態（feedback）だけで、判定が行われたという事実
+   * （reviewHistory）には触れない——ここを消すと却下が正答率の母数から抜ける（ADR-27 の測定ギャップ）。
    */
   reopenForReinvestigation(): Alert {
     return new Alert({
@@ -203,6 +251,8 @@ export class Alert extends AggregateRoot {
       classification: this._classification,
       investigationReport: this._investigationReport,
       feedback: null,
+      reviewHistory: this._reviewHistory,
+      reportRevision: this._reportRevision,
       correctFeedbackCount: this._correctFeedbackCount,
       dedupKey: this._dedupKey,
       occurrenceCount: this._occurrenceCount,
@@ -226,6 +276,8 @@ export class Alert extends AggregateRoot {
       classification: this._classification,
       investigationReport: this._investigationReport,
       feedback: this._feedback,
+      reviewHistory: this._reviewHistory,
+      reportRevision: this._reportRevision,
       correctFeedbackCount: this._correctFeedbackCount,
       dedupKey: this._dedupKey,
       occurrenceCount: this._occurrenceCount,
@@ -243,6 +295,9 @@ export class Alert extends AggregateRoot {
       classification: this._classification,
       investigationReport: report,
       feedback: this._feedback,
+      reviewHistory: this._reviewHistory,
+      // 新しい版のレポート＝以降の判定は別の版に対するものになる。
+      reportRevision: this._reportRevision + 1,
       correctFeedbackCount: this._correctFeedbackCount,
       dedupKey: this._dedupKey,
       occurrenceCount: this._occurrenceCount,
@@ -251,10 +306,28 @@ export class Alert extends AggregateRoot {
     });
   }
 
-  submitFeedback(params: { isCorrect: boolean; operatorNote?: string }): Alert {
+  /**
+   * オペレーターの判定。「最新の判定」（feedback / reviewStatus）を上書きすると同時に、
+   * 履歴へ1件追記する。`decision` 未指定は現行 UI（承認/却下の二値）からの呼び出しで、
+   * isCorrect から導出した暫定値を derived と明示して置く（推測値を実測値の顔で残さない）。
+   */
+  submitFeedback(params: {
+    isCorrect: boolean;
+    operatorNote?: string;
+    decision?: ReviewDecision;
+  }): Alert {
     const reviewStatus = params.isCorrect
       ? ReviewStatus.approved()
       : ReviewStatus.rejected();
+
+    const record: ReviewRecord = {
+      isCorrect: params.isCorrect,
+      decision: params.decision ?? (params.isCorrect ? "acted" : "rejected"),
+      decisionSource: params.decision ? "operator" : "derived",
+      operatorNote: params.operatorNote ?? null,
+      decidedAt: new Date(),
+      reportRevision: this._reportRevision,
+    };
 
     return new Alert({
       id: this.id,
@@ -268,6 +341,8 @@ export class Alert extends AggregateRoot {
         isCorrect: params.isCorrect,
         operatorNote: params.operatorNote,
       },
+      reviewHistory: [...this._reviewHistory, record],
+      reportRevision: this._reportRevision,
       correctFeedbackCount: params.isCorrect
         ? this._correctFeedbackCount + 1
         : this._correctFeedbackCount,
@@ -287,6 +362,11 @@ export class Alert extends AggregateRoot {
       classification: alertClassificationToPrimitives(this._classification),
       investigationReport: this._investigationReport?.toPrimitives() ?? null,
       feedback: this._feedback ? { ...this._feedback } : null,
+      reviewHistory: this._reviewHistory.map((record) => ({
+        ...record,
+        decidedAt: record.decidedAt?.toISOString() ?? null,
+      })),
+      reportRevision: this._reportRevision,
       correctFeedbackCount: this._correctFeedbackCount,
       dedupKey: this._dedupKey,
       occurrenceCount: this._occurrenceCount,
@@ -311,6 +391,10 @@ export class Alert extends AggregateRoot {
         ? InvestigationReport.fromPrimitives(primitives.investigationReport)
         : null,
       feedback: primitives.feedback ?? null,
+      reviewHistory: restoreReviewHistory(primitives),
+      // 旧データ互換: 版数未保存の Alert はレポートの有無から 1/0 に畳む。
+      reportRevision:
+        primitives.reportRevision ?? (primitives.investigationReport ? 1 : 0),
       correctFeedbackCount: primitives.correctFeedbackCount,
       // 旧データ互換: dedupKey 未保存の Alert は monitoringEvent から再導出、回数は 1。
       dedupKey: primitives.dedupKey ?? monitoringEvent.dedupKey(),
@@ -319,4 +403,40 @@ export class Alert extends AggregateRoot {
       updatedAt: new Date(primitives.updatedAt),
     });
   }
+}
+
+/**
+ * 判定履歴の復元。履歴が空でありながら判定（feedback）だけがある Alert は、
+ * 履歴を持たなかった頃のデータ（およびデモ seed の埋め込み判定）なので、feedback から1件を復元する
+ * ——ここを空のままにすると、既存の正答率の母数が実装変更だけで縮む（測定値を実装都合で動かさない）。
+ * 当時 decision と decidedAt は記録していないため、暫定値であることを derived / null で残す。
+ * 判定を1件も受けていない Alert は履歴も空のままで、復元は起きない。
+ */
+function restoreReviewHistory(primitives: AlertPrimitives): ReviewRecord[] {
+  const stored = primitives.reviewHistory ?? [];
+  if (stored.length > 0) return stored.map(toReviewRecord);
+
+  const feedback = primitives.feedback;
+  if (feedback === null || feedback === undefined) return [];
+  return [
+    {
+      isCorrect: feedback.isCorrect,
+      decision: feedback.isCorrect ? "acted" : "rejected",
+      decisionSource: "derived",
+      operatorNote: feedback.operatorNote ?? null,
+      decidedAt: null,
+      reportRevision: primitives.investigationReport ? 1 : 0,
+    },
+  ];
+}
+
+function toReviewRecord(record: ReviewRecordPrimitives): ReviewRecord {
+  return {
+    isCorrect: record.isCorrect,
+    decision: record.decision,
+    decisionSource: record.decisionSource,
+    operatorNote: record.operatorNote,
+    decidedAt: record.decidedAt ? new Date(record.decidedAt) : null,
+    reportRevision: record.reportRevision,
+  };
 }

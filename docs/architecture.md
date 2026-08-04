@@ -84,7 +84,7 @@ flowchart TD
 ```
 
 - 承認済みアラートは dedup 窓から除外（再発火が即・既知として新規表示＝既知事象の高速判定を体験可能）。承認済み一覧は Analytics ページで確認できる。
-- 却下→再調査は「やり直し」＝過去のレビューをクリアして新レポートを白紙で承認/却下できる状態に戻す（`Alert.reopenForReinvestigation`・operatorNote が次の調査プロンプトに載る）。二値学習の feedback とは別概念。
+- 却下→再調査は「やり直し」＝過去のレビューをクリアして新レポートを白紙で承認/却下できる状態に戻す（`Alert.reopenForReinvestigation`・operatorNote が次の調査プロンプトに載る）。二値学習の feedback とは別概念。**クリアされるのは「最新の判定」という状態（`feedback`）だけで、判定の履歴（`Alert.reviewHistory`＝追記のみ）は残る**——正答率の母数はこの履歴から数えるため、却下 → 再調査 → 承認 は 1/2 として数えられる（[ADR-29](decisions/ADR.md#adr-29-判定は上書きの状態と追記の事実に分ける正答率の母数は履歴から数える)）。履歴は AI の採点（`isCorrect`）と人間の決裁（`decision`: acted / deferred / rejected）を別フィールドで持つ。
 - このループは E2E で縦に担保: 未知→調査→承認（OPEN 据置）→手動昇格→再発が即・既知（AI 調査なし）→オンデマンドレポート→却下→再調査差し替え（`e2e/backoffice/feedback-lifecycle.e2e.test.ts`）、および「オペレーターの訂正が次回の SIMILARITY 分類の正になる」学習一周（同ファイル similarity learning loop）。
 - **却下は分類を変えない（学習は承認のみ）**: `SubmitFeedbackUseCase` が SimilarIncident に index するのは `isCorrect=true`（承認）時だけ。却下（`isCorrect=false`）は、直前が承認だった場合にその学習を撤回する（`withdrawResolved`）のみで、新たな学習は積まない。却下時の operatorNote は当該 Alert に残るが将来の分類母集団には流れない＝二値学習シグナルを濁さない設計。オペレーターの「これは DB でなく X だった」を将来へ効かせる唯一の経路は **再調査（operatorNote で AI に該当 Alert の結論を訂正させる）→ その結果を承認（訂正が `resolvedNote` としてコーパスに入る）**。「却下理由そのものを負例／訂正シグナルとして学習に反映する」経路は現状なく、やるなら新規の設計判断。
 - **同型 eventName の判別限界（正直さ）**: 3/3b のように eventName・payload が近い別障害は、決定論の `SimilarPatternRule`（Jaccard [0,1]）では判別力が弱く、実質の分岐は AI 調査の判断に委ねられる。メモに新障害を特徴づける語（エラーメッセージ／リソース名）を残すほど次回の SIMILARITY と AI プロンプトの弁別が効く。なお InMemory コーパスは起動時 warmUp＝揮発（`/demo/reset` で全 DB 話の seed に戻る）で、訂正の永続は Elasticsearch 構成時のみ。
