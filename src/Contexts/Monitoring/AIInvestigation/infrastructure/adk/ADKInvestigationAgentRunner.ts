@@ -2,11 +2,17 @@ import {
   InMemoryRunner,
   isFinalResponse,
   getFunctionCalls,
+  getFunctionResponses,
   type Event,
 } from "@google/adk";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationProgressNotifier } from "../../domain/InvestigationProgressNotifier.js";
 import { InvestigationAgentRunner } from "./InvestigationAgentRunner.js";
+import type {
+  InvestigationFinalizer,
+  SubAgentOutput,
+} from "./InvestigationFinalizer.js";
+import { finalizeInvestigationOutput } from "./finalizeInvestigationOutput.js";
 import {
   buildInvestigationTools,
   type InvestigationToolDeps,
@@ -78,6 +84,12 @@ export type ADKInvestigationAgentRunnerConfig = InvestigationToolDeps &
    * agentTrace ログと同じイベントタップを SSE にも流す。未注入なら中継なし（ログのみ）。
    */
   readonly progressNotifier?: InvestigationProgressNotifier;
+  /**
+   * エージェントループ終了後に最終 JSON を清書する後段（ADR-26 恒久策の finalizer 方式）。
+   * グラフの**外**の直列ステップなのでエージェント数は増えない。未注入ならコーディネーターの
+   * 最終テキストをそのまま返す＝従来挙動（縮退リトライだけで防御していた頃と同じ）。
+   */
+  readonly finalizer?: InvestigationFinalizer;
 };
 
 function extractText(event: Event): string {
@@ -85,6 +97,24 @@ function extractText(event: Event): string {
   return parts
     .map((p) => (typeof p.text === "string" ? p.text : ""))
     .join("");
+}
+
+/**
+ * AgentTool の function response 本文を文字列化する。ADK は非オブジェクトの戻り値を
+ * `{ result }`、失敗を `{ error }` に包む（`agents/functions.js`）ので、その2形だけ素直に開く。
+ * それ以外（outputSchema 付きサブエージェントの構造化出力）は JSON のまま清書役へ渡す。
+ */
+function stringifySubAgentResponse(response: Record<string, unknown> | undefined): string {
+  if (!response) return "";
+  const result = response["result"];
+  if (typeof result === "string") return result;
+  const error = response["error"];
+  if (typeof error === "string") return `(エラー) ${error}`;
+  try {
+    return JSON.stringify(response);
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -96,8 +126,13 @@ function extractText(event: Event): string {
  * モデル到達経路（Vertex AI / AI Studio）は @google/genai と同じ env で ADK が自動選択するため、
  * 本クラスは経路を意識しない（Part1 で本番は GOOGLE_GENAI_USE_VERTEXAI=true＝無料クレジット）。
  *
+ * finalizer（ADR-26 恒久策）を注入すると、ループ終了後に「サブエージェントの出力群 → 固定スキーマ
+ * JSON」の清書を1回だけ直列で挟む。返すのは清書結果だが、清書がパースを通らなければコーディネーター
+ * の最終テキストへ戻すので、注入前の挙動が下限として残る。
+ *
  * GeminiLLMClient と同じく「疎通主体の薄い infra」なのでユニットテストはコロケーションせず、
- * 分岐ロジック（パース/マッピング/fallback）は ADKAgentInvestigationAdapter 側の UT で担保する。
+ * 分岐ロジック（パース/マッピング/fallback）は ADKAgentInvestigationAdapter、清書の縮退判断は
+ * finalizeInvestigationOutput の UT で担保する。
  */
 export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
   private readonly runner: InMemoryRunner;
@@ -105,17 +140,21 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
   private readonly timeoutMs: number;
   private readonly logger: Logger;
   private readonly progressNotifier: InvestigationProgressNotifier | undefined;
+  private readonly finalizer: InvestigationFinalizer | undefined;
+  /**
+   * サブエージェント（AgentTool）の名前集合。清書役へ渡す材料を「サブエージェントの出力」に
+   * 限るための判別に使う。証拠収集ツール（Cloud Logging 等）の生レスポンスまで混ぜると
+   * 清書のコンテキストが調査本体より太るうえ、要約前の一次データが結論を引っ張る。
+   */
+  private readonly subAgentNames: ReadonlySet<string>;
 
   constructor(config: ADKInvestigationAgentRunnerConfig) {
     const tools = buildInvestigationTools(config);
     const escalationTools = buildEscalationTools(config);
     const remediationReviewTools = buildRemediationReviewTools(config);
-    const coordinator = createInvestigationCoordinator({
-      // coordinator / root_cause_analyst / remediation_planner / remediation_reviewer は
-      // 深い推論（証拠統合・因果推論・コード読解）の核なので主モデル固定（ここは削らない）。
-      model: config.model,
-      thinkingBudget:
-        config.coordinatorThinkingBudget ?? DEFAULT_COORDINATOR_THINKING_BUDGET,
+    // coordinator / root_cause_analyst / remediation_planner / remediation_reviewer は
+    // 深い推論（証拠統合・因果推論・コード読解）の核なので主モデル固定（ここは削らない）。
+    const subAgents = {
       evidenceCollector: createEvidenceCollectorAgent(
         config.collectorModel ?? config.model,
         tools,
@@ -131,12 +170,21 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
       correlationVerifier: createCorrelationVerifierAgent(
         config.verifierModel ?? config.model,
       ),
+    };
+    const coordinator = createInvestigationCoordinator({
+      model: config.model,
+      thinkingBudget:
+        config.coordinatorThinkingBudget ?? DEFAULT_COORDINATOR_THINKING_BUDGET,
+      ...subAgents,
     });
+    // 名前は各 create*Agent が持つ実体から引く（文字列を二重管理するとリネームで静かにずれる）。
+    this.subAgentNames = new Set(Object.values(subAgents).map((agent) => agent.name));
     this.runner = new InMemoryRunner({ agent: coordinator, appName: APP_NAME });
     this.maxLlmCalls = config.maxLlmCalls;
     this.timeoutMs = config.timeoutMs ?? 120_000;
     this.logger = config.logger;
     this.progressNotifier = config.progressNotifier;
+    this.finalizer = config.finalizer;
   }
 
   async run(
@@ -152,6 +200,9 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
     // これが無いと「サブエージェントが呼ばれなかった」のか「呼ばれたが出力がガードで落ちた」のかを
     // 本番ログで切り分けられない（impact/escalation 不在の一次調査はまずこのトレースを見る）。
     const agentTrace: string[] = [];
+    // サブエージェントが返した本文（清書役への材料）。コーディネーターの最終ターンが空でも
+    // 調査の実質はここに残っているので、これを拾える限り fallback には落ちない（ADR-26 恒久策）。
+    const subAgentOutputs: SubAgentOutput[] = [];
 
     const stream = this.runner.runEphemeral({
       userId: USER_ID,
@@ -180,6 +231,14 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
           }
         }
       }
+      for (const response of getFunctionResponses(event)) {
+        const name = response.name ?? "";
+        if (!this.subAgentNames.has(name)) continue;
+        subAgentOutputs.push({
+          agent: name,
+          output: stringifySubAgentResponse(response.response),
+        });
+      }
       if (isFinalResponse(event)) {
         finalText = extractText(event);
       }
@@ -189,16 +248,31 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
       }
     }
 
+    // エージェントループの外で JSON 化だけをやり直す（熟考する仕事と書き出す仕事を同じターンに
+    // 置かない）。清書がパースを通らなければコーディネーターの下書きへ黙って戻るので、この段で
+    // 現行より悪くなることはない＝縮退リトライ（ADR-26 現行防御）はそのまま後段に残る。
+    const finalization = await finalizeInvestigationOutput({
+      finalizer: this.finalizer,
+      transcript: {
+        seedPrompt,
+        subAgentOutputs,
+        coordinatorFinalText: finalText,
+      },
+      logger: this.logger,
+    });
+
     // 調査の所要・打ち切り・最終応答長を観測する。timedOut=true（上限到達で打ち切り）や
     // finalTextLen=0（最終応答に未到達）は fallback（暫定表示）の典型。timeoutMs への肉薄を監視する。
     // agentTrace は「呼び出し元→ツール/サブエージェント」の時系列で、impact_triage / runbook_escalation
     // が実際に呼ばれたかをここで確定させる。
+    // outputSource は清書役の採用率（finalizer / coordinator）。finalTextLen=0 かつ
+    // outputSource=finalizer が「第6原因を恒久策が拾った」実測1件になる。
     await this.logger.info({
       service: "backoffice-backend",
       action: "adk_investigation_run_completed",
-      message: `ADK調査実行：elapsedMs=${Date.now() - startedAt}, events=${eventCount}, timedOut=${timedOut}, maxLlmCalls=${this.maxLlmCalls}, finalTextLen=${finalText.length}, agentTrace=[${agentTrace.join(" > ") || "(no tool calls)"}]`,
+      message: `ADK調査実行：elapsedMs=${Date.now() - startedAt}, events=${eventCount}, timedOut=${timedOut}, maxLlmCalls=${this.maxLlmCalls}, finalTextLen=${finalText.length}, outputSource=${finalization.source}, outputLen=${finalization.text.length}, subAgentOutputs=${subAgentOutputs.length}, agentTrace=[${agentTrace.join(" > ") || "(no tool calls)"}]`,
     });
 
-    return finalText;
+    return finalization.text;
   }
 }

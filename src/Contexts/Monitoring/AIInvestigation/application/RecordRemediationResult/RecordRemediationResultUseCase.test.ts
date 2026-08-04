@@ -26,6 +26,9 @@ class FakeRemediationRepository implements RemediationRepository {
     const matches = this.saved.filter((r) => r.alertId === alertId);
     return matches[matches.length - 1] ?? null;
   }
+  async findStaleDispatched(): Promise<RemediationRecord[]> {
+    return []; // 期限切れ走査はこの UseCase の関心外
+  }
 }
 
 describe("RecordRemediationResultUseCase", () => {
@@ -91,6 +94,30 @@ describe("RecordRemediationResultUseCase", () => {
       status: "drafted",
       pullRequestUrl: null,
       reason: null,
+    });
+  });
+
+  it("テストゲート緑だが変更ゼロなら skipped で確定する（失敗として記録しない）", async () => {
+    await repo.save({
+      alertId: ALERT_ID,
+      status: "dispatched",
+      pullRequestUrl: null,
+      vulnerabilityCount: 2,
+      reason: null,
+      createdAt: new Date(),
+    });
+
+    await useCase.run({
+      alertId: ALERT_ID,
+      status: "skipped",
+      reason: "修正すべき変更は残っていませんでした",
+    });
+
+    expect(repo.saved[1]).toMatchObject({
+      status: "skipped",
+      pullRequestUrl: null,
+      vulnerabilityCount: 2,
+      reason: "修正すべき変更は残っていませんでした",
     });
   });
 

@@ -15,6 +15,12 @@ export class InMemoryRemediationRepository implements RemediationRepository {
     return this.store.get(alertId) ?? null;
   }
 
+  async findStaleDispatched(before: Date): Promise<RemediationRecord[]> {
+    return [...this.store.values()].filter(
+      (r) => r.status === "dispatched" && r.createdAt.getTime() < before.getTime(),
+    );
+  }
+
   clear(): void {
     this.store.clear();
   }

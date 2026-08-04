@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { cn } from "./cn";
 
 /**
@@ -25,19 +25,26 @@ const COLUMN_WIDTH = 28;
 type Segment = { readonly y: number; readonly weight: 1 | 2 | 3 };
 type Geometry = { readonly height: number; readonly toY: number; readonly segments: Segment[] };
 
+/**
+ * 端点は **RefObject でなく実体（HTMLElement | null）** で受ける。ref オブジェクトで受けると
+ * 「自分の layout effect が走る時点で、JSX 上あとに並ぶ収束先ノードの ref はまだ未添付（null）」
+ * という React のコミット順に噛まれ、早期 return して ResizeObserver すら張れずに永久に線が
+ * 出なくなる（dev は StrictMode の二重実行がたまたま救うため本番だけ消える）。実体を props で
+ * 受ければ、コールバック ref で state が入った時点で effect が再実行され順序に依存しない。
+ */
 export interface ConvergenceConnectorProps {
   /** 入力レーンを縦に並べた要素（各直接子＝1レーンの中心 y から線を引く）。 */
-  lanesRef: RefObject<HTMLElement | null>;
+  lanes: HTMLElement | null;
   /** 収束先の AI 調査ノード（この中心へ全レーンを束ねる）。 */
-  nodeRef: RefObject<HTMLElement | null>;
-  /** レーンごとの太さ（件数の離散段階 1..3・省略時は一律 1）。lanesRef の子順と対応。 */
+  node: HTMLElement | null;
+  /** レーンごとの太さ（件数の離散段階 1..3・省略時は一律 1）。lanes の子順と対応。 */
   weights?: readonly (1 | 2 | 3)[];
   className?: string;
 }
 
 export function ConvergenceConnector({
-  lanesRef,
-  nodeRef,
+  lanes,
+  node,
   weights,
   className,
 }: ConvergenceConnectorProps) {
@@ -48,8 +55,6 @@ export function ConvergenceConnector({
 
   useLayoutEffect(() => {
     const host = hostRef.current;
-    const lanes = lanesRef.current;
-    const node = nodeRef.current;
     if (!host || !lanes || !node) return;
 
     const measure = () => {
@@ -82,8 +87,8 @@ export function ConvergenceConnector({
     observer.observe(lanes);
     observer.observe(node);
     return () => observer.disconnect();
-    // weightKey で太さ変化を、ref 群でマウント差し替えを拾う（レイアウト追従は observer）。
-  }, [lanesRef, nodeRef, weightKey]);
+    // weightKey で太さ変化を、端点の実体で添付/差し替えを拾う（レイアウト追従は observer）。
+  }, [lanes, node, weightKey]);
 
   return (
     <div

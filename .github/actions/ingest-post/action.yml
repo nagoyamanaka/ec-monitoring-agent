@@ -1,0 +1,88 @@
+name: Ingest POST
+description: >
+  backoffice の ingest 境界へ JSON を1件 POST する。x-ingest-token ヘッダ・URL 結合・
+  「送るものが無い/宛先が無い」ときの扱いを、ワークフロー3本で1箇所に集約する。
+
+# なぜ composite にしたか:
+#   検知（security-scan）・予兆（terraform-plan）・確定（remediation-result）の3経路が
+#   同じ ingest 境界を叩くのに、各ワークフローが独自にガードを書いていた。結果、
+#   「宛先未設定なら exit 0」が一律になり、**確定を運ぶ callback が黙って消えても CI は緑**という
+#   区別の無さが残っていた（record が dispatched のまま永久に残る）。宛先の有無をどう扱うかを
+#   呼び出し側が `on-missing-url` で宣言する形にして、その区別をここで所有する。
+#
+# 副作用として、URL の secret 名は呼び出し側が `url` 入力へ渡す形になる。以後どの名前へ
+# ドリフトしても「入力が空」として同じ経路で見えるので、名前違いが沈黙しない。
+
+inputs:
+  url:
+    description: ingest 境界のベース URL（末尾スラッシュ有無は問わない）。空なら on-missing-url に従う。
+    required: false
+    default: ""
+  token:
+    description: x-ingest-token ヘッダに載せる共有トークン。空なら送らない（backend 側も未設定なら素通し）。
+    required: false
+    default: ""
+  path:
+    description: ベース URL に結合するパス（例 /ingest/security-scan）。
+    required: true
+  payload-file:
+    description: POST する JSON のファイルパス。存在しない/空なら「送るものが無い」として必ずスキップする。
+    required: true
+  on-missing-url:
+    description: >
+      url が空のときの振る舞い。skip=何もせず成功（検知・予兆＝落としても届かないだけ）／
+      fail=ステップを失敗させる（確定を運ぶ callback＝届かないと record が宙に浮く）。
+    required: false
+    default: skip
+
+runs:
+  using: composite
+  steps:
+    - name: POST ${{ inputs.path }}
+      shell: bash
+      env:
+        INGEST_POST_URL: ${{ inputs.url }}
+        INGEST_POST_TOKEN: ${{ inputs.token }}
+        INGEST_POST_PATH: ${{ inputs.path }}
+        INGEST_POST_PAYLOAD_FILE: ${{ inputs.payload-file }}
+        INGEST_POST_ON_MISSING_URL: ${{ inputs.on-missing-url }}
+      run: |
+        set -euo pipefail
+
+        case "$INGEST_POST_ON_MISSING_URL" in
+          skip|fail) ;;
+          *)
+            echo "::error::on-missing-url は skip|fail のいずれか（受領値: ${INGEST_POST_ON_MISSING_URL}）"
+            exit 1
+            ;;
+        esac
+
+        # ① 宛先。未設定は「デプロイ前/scan-only」と「callback の宛先を配線し忘れた」の
+        #    両方があり得るので、どちらとして扱うかは呼び出し側の宣言に従う。
+        if [ -z "$INGEST_POST_URL" ]; then
+          if [ "$INGEST_POST_ON_MISSING_URL" = "fail" ]; then
+            echo "::error::ingest URL が空です（${INGEST_POST_PATH}）。この POST は確定を運ぶため、届かないまま成功にはできません。"
+            exit 1
+          fi
+          echo "::notice::ingest URL 未設定。${INGEST_POST_PATH} への POST をスキップします。"
+          exit 0
+        fi
+
+        # ② 中身。「HIGH/CRITICAL なし」「plan にリソース変更なし」は正常な無送信。
+        if [ ! -s "$INGEST_POST_PAYLOAD_FILE" ]; then
+          echo "::notice::payload が空（${INGEST_POST_PAYLOAD_FILE}）。${INGEST_POST_PATH} への POST をスキップします。"
+          exit 0
+        fi
+
+        # 末尾スラッシュを剥がしてから結合する（// による 404 を作らない）。
+        base="${INGEST_POST_URL%/}"
+
+        args=(-fsS -X POST "${base}${INGEST_POST_PATH}" -H "Content-Type: application/json")
+        if [ -n "$INGEST_POST_TOKEN" ]; then
+          args+=(-H "x-ingest-token: ${INGEST_POST_TOKEN}")
+        fi
+        args+=(--data-binary "@${INGEST_POST_PAYLOAD_FILE}")
+
+        echo "POST ${base}${INGEST_POST_PATH} ($(wc -c < "$INGEST_POST_PAYLOAD_FILE") bytes)"
+        curl "${args[@]}"
+        echo

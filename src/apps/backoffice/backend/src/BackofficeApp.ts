@@ -37,6 +37,7 @@ import { DraftRemediationCommandHandler } from "../../../../Contexts/Monitoring/
 import { GetRemediationUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationUseCase.js";
 import { GetRemediationQueryHandler } from "../../../../Contexts/Monitoring/AIInvestigation/application/GetRemediation/GetRemediationQueryHandler.js";
 import { RecordRemediationResultUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/RecordRemediationResult/RecordRemediationResultUseCase.js";
+import { ExpireStaleRemediationsUseCase } from "../../../../Contexts/Monitoring/AIInvestigation/application/ExpireStaleRemediations/ExpireStaleRemediationsUseCase.js";
 import { RemediationExecutor } from "../../../../Contexts/Monitoring/AIInvestigation/domain/remediation/RemediationExecutor.js";
 import { RemediationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/remediation/RemediationPort.js";
 import { InfraInvestigationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/InfraInvestigationPort.js";
@@ -53,6 +54,7 @@ import { LLMTextClient } from "../../../../Contexts/Monitoring/AIInvestigation/d
 import { AIInvestigationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/AIInvestigationPort.js";
 import { ADKAgentInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKAgentInvestigationAdapter.js";
 import { ADKInvestigationAgentRunner } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKInvestigationAgentRunner.js";
+import { GeminiInvestigationFinalizer } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/GeminiInvestigationFinalizer.js";
 import { InMemoryEscalationDirectory } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/escalation/InMemoryEscalationDirectory.js";
 import { ESCALATION_DIRECTORY_SEED } from "../../../../Contexts/Monitoring/seeds/EscalationDirectorySeed.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
@@ -130,10 +132,15 @@ export type BackofficeAppOverrides = {
   forecastPort?: ForecastPort;
 };
 
+// dispatched の期限切れを探しに行く間隔。期限そのもの（REMEDIATION_DISPATCH_TIMEOUT_MS）と違い、
+// 運用で変える必要が無いので env にしない。1分＝画面の待ち体験に対して十分細かい。
+const REMEDIATION_EXPIRY_SWEEP_INTERVAL_MS = 60000;
+
 export class BackofficeApp {
   private server!: Server;
   private connection!: RabbitMqConnection;
   private valkey?: ValkeyConnection;
+  private remediationExpirySweep?: NodeJS.Timeout;
 
   constructor(private readonly overrides: BackofficeAppOverrides = {}) {}
 
@@ -269,6 +276,19 @@ export class BackofficeApp {
         triageModel: config.ai.adkTriageModel,
         // コーディネーターの思考予算（fallback 第6原因の防御・env で運用チューニング可能）。
         coordinatorThinkingBudget: config.ai.adkCoordinatorThinkingBudget,
+        // 最終JSONの清書役（ADR-26 恒久策）。グラフの外の直列ステップなのでエージェント数は
+        // 増えない（8体のまま）。清書が使えなければコーディネーターの下書きへ戻るので、
+        // 下の縮退リトライは撤去せず前段の防御として残す。
+        finalizer: config.ai.adkFinalizerEnabled
+          ? new GeminiInvestigationFinalizer({
+              model: config.ai.adkFinalizerModel,
+              useVertexAI: config.gemini.useVertexAI,
+              project: config.gemini.project,
+              location: config.gemini.location,
+              apiKey: config.gemini.apiKey,
+              timeoutMs: config.ai.adkFinalizerTimeoutMs,
+            })
+          : undefined,
         maxLlmCalls: config.ai.adkMaxLlmCalls,
         timeoutMs: config.ai.investigationTimeoutMs,
         logger,
@@ -289,7 +309,10 @@ export class BackofficeApp {
       };
       // fallback 第6原因（最終JSON合成ターンの思考が出力予算を食い潰し空応答・実測はフル証拠の
       // 高推論シナリオで発生）への縮退リトライ用。思考予算だけ落とした同一グラフ＝深い熟考を捨てて
-      // 最終JSONの出力トークンを確保する。恒久策（finalizer 分離＋responseSchema 強制）は ADR 参照。
+      // 最終JSONの出力トークンを確保する。
+      // 恒久策（finalizer 分離＋responseSchema 強制）を上に入れた後もこれを残すのは、finalizer が
+      // 前段の防御であって置き換えではないため——清書役自体が落ちた場合（Vertex 側の瞬断・
+      // タイムアウト）の受け皿がここになる。ADK 調査そのものが例外で死ぬ経路も引き続きここが拾う。
       const retryThinkingBudget =
         config.ai.adkCoordinatorThinkingBudget > 0
           ? Math.min(4096, config.ai.adkCoordinatorThinkingBudget)
@@ -411,6 +434,9 @@ export class BackofficeApp {
             config.github.remediationRepo,
             config.remediation.dispatchEventType,
             config.remediation.maxAttempts,
+            // advisory 経路の PR base と同じ値。dispatch では CI 側の checkout ref も兼ねる
+            // （脆弱性の実体があるブランチを修正し、そこへ PR を戻す）。
+            config.github.remediationBaseRef,
           )
         : new InProcessAdvisoryRemediation(
             // advisory の planner は調査と同じ llmClient を再利用（stub 時は決定論フォールバックへ落ちる）。
@@ -441,6 +467,29 @@ export class BackofficeApp {
       sseNotifier,
       logger,
     );
+
+    // 上の callback が来なかった場合の終端。CI 側の on-missing-url:fail は「送る側」の防御で、
+    // ジョブ自体が落ちれば何も送られない＝受ける側にも時間終端が要る。edge では回さない
+    // （worker/all の1プロセスだけが走査する＝多重確定と SSE の重複 push を作らない）。
+    if (config.role !== "edge") {
+      const expireStaleRemediationsUseCase = new ExpireStaleRemediationsUseCase(
+        remediationRepository,
+        sseNotifier,
+        logger,
+        config.remediation.dispatchTimeoutMs,
+      );
+      this.remediationExpirySweep = setInterval(() => {
+        void expireStaleRemediationsUseCase.run().catch(async (error: unknown) => {
+          await logger.warn({
+            service: "backoffice-backend",
+            action: "remediation_expiry_sweep_failed",
+            message: `期限切れ走査に失敗：${error instanceof Error ? error.message : String(error)}`,
+          });
+        });
+      }, REMEDIATION_EXPIRY_SWEEP_INTERVAL_MS);
+      // 走査そのものはプロセスを生かす理由にならない（テスト/CLI がぶら下がらないように）。
+      this.remediationExpirySweep.unref();
+    }
 
     // 予兆ブリーフィング（step6 F5/F6）: 全依存 read-only・write ゼロ。FORECAST_ENABLED off（既定）
     // ではルートが 404 なので配線は inert＝既存P0経路に影響しない。
@@ -597,6 +646,10 @@ export class BackofficeApp {
   }
 
   async stop(): Promise<void> {
+    if (this.remediationExpirySweep) {
+      clearInterval(this.remediationExpirySweep);
+      this.remediationExpirySweep = undefined;
+    }
     await this.connection?.close();
     await this.valkey?.close();
     await this.server?.stop();

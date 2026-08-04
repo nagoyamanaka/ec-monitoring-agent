@@ -11,6 +11,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write # WIF の OIDC トークン取得（Vertex AI 認証）に必須
 
 jobs:
   remediate:
@@ -20,12 +21,34 @@ jobs:
       # 脆弱性一覧（backend が dispatch 時に同梱）。AIエージェントの修正入力。
       VULNERABILITIES: ${{ toJSON(github.event.client_payload.vulnerabilities) }}
       BRANCH: security/ai-remediation-${{ github.event.client_payload.alertId }}
+      # 修正の土台にする ref（＝PR の base）。repository_dispatch の既定は default branch だが、
+      # 脆弱性の実体は baseline ブランチ側にあるので backend の設定値（GITHUB_REMEDIATION_BASE_REF）を
+      # client_payload で運ぶ。空なら既定ブランチ＝従来どおり。
+      BASE_REF: ${{ github.event.client_payload.baseRef || github.event.repository.default_branch }}
       # AI自己修正ループの上限（backend config が単一ソース。未指定時のみ 2 にフォールバック）。
       # 通らないと延々リトライして課金暴走するのを防ぐ安全弁。
       MAX_ATTEMPTS: ${{ github.event.client_payload.maxAttempts || '2' }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.baseRef || github.event.repository.default_branch }}
+
+      # ローカル composite action は「チェックアウトされた作業ツリー」から解決される。上で base ref
+      # （脆弱な baseline ブランチ）を被せた以上、そこに .github/actions がある保証は無い——結果 callback が
+      # 「修正対象ブランチに何が commit されているか」に依存してしまう。既定ブランチ側の CI 部品だけを
+      # 別パスへ取り出して、その依存を切る。
+      - name: Checkout CI tooling (composite actions) from default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .ci-tooling
+          sparse-checkout: .github/actions
+
+      # 取り出した部品は修正ブランチの中身ではない。無視させないと「変更あり」の誤検出と
+      # `git add -A` での巻き込み commit を起こす。
+      - name: Exclude CI tooling from the remediation worktree
+        run: echo "/.ci-tooling/" >> .git/info/exclude
 
       - uses: pnpm/action-setup@v4
         with:
@@ -42,12 +65,22 @@ jobs:
       - name: Create remediation branch
         run: git switch -c "$BRANCH"
 
+      # Vertex AI へのキーレス認証（app.yml / terraform.yml と同じ WIF 経路）。
+      # API キー（GEMINI_API_KEY）を廃止したので、secret が1本減り、認証・モデル・課金先が
+      # backend（Vertex）と揃う。SA は修正ジョブ専用＝roles/aiplatform.user のみで、
+      # デプロイ用 SA は使い回さない（修正ジョブにデプロイ権限は要らない）。
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.REMEDIATION_SA }}
+
       # Gemini CLI（非対話）をバイナリで導入。バイナリ実行にするのは、下の
       # 「修正→検証→失敗をフィードバックして再修正」ループを上限つきで回すため
       # （Action 1発だと我々のテストゲートでの自己修正ループを制御できない）。
       # ※ パッケージ名/CLI フラグは利用時点の最新リリースに合わせてピン留め・要確認。
-      # ★GCP無料クレジットで賄う場合は Vertex AI 認証（GOOGLE_GENAI_USE_VERTEXAI=true 等）に切替。
       # ★品質不足ならこのループの gemini 呼び出しを claude(code) CLI に差し替えるだけ（ゲートは不変）。
+      #   差し替えは step 1個の置換で足りるので composite action にはしない（契約はテストゲートが担う）。
       - name: Install Gemini CLI
         run: npm install -g @google/gemini-cli
 
@@ -57,7 +90,10 @@ jobs:
       - name: AI self-correction loop (bounded by MAX_ATTEMPTS)
         id: fix
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # ADC（auth step が出力）で Vertex AI を叩く。API キーは使わない。
+          GOOGLE_GENAI_USE_VERTEXAI: "true"
+          GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION || 'global' }}
         run: |
           set -u
           attempt=1
@@ -98,51 +134,96 @@ jobs:
             attempt=$((attempt + 1))
           done
 
-          echo "verified=${verified}" >> "$GITHUB_OUTPUT"
-          if [ "$verified" != "true" ]; then
-            echo "上限 ${MAX_ATTEMPTS} 回で検証通過せず。PRは起票せず failed として返します。"
+          # 検証ログは成果物ではなく作業ファイル。commit 対象に混ざると「変更あり」を誤検出する。
+          rm -f verify.log
+
+          # 「緑」と「直した」は別物。base が既に trivy 緑だと AI が何もしなくても verified=true に
+          # なり、その先の git commit が変更ゼロで exit 1 して job ごと落ちる＝経路が回った証拠にすら
+          # ならない終わり方をしていた。ここで明示的に分け、無変更は失敗ではなく skipped として返す。
+          if [ -n "$(git status --porcelain)" ]; then
+            changed=true
+          else
+            changed=false
           fi
 
-      # ── 緑なら draft PR 起票（自動マージなし=人間レビュー）────────────────────
+          echo "verified=${verified}" >> "$GITHUB_OUTPUT"
+          echo "changed=${changed}" >> "$GITHUB_OUTPUT"
+          echo "verified=${verified} changed=${changed}"
+          if [ "$verified" != "true" ]; then
+            echo "上限 ${MAX_ATTEMPTS} 回で検証通過せず。PRは起票せず failed として返します。"
+          elif [ "$changed" != "true" ]; then
+            echo "検証は緑だが変更ゼロ（${BASE_REF} に修正対象が残っていない）。PRは起票せず skipped として返します。"
+          fi
+
+      # ── 緑かつ変更ありなら draft PR 起票（自動マージなし=人間レビュー）──────────
       - name: Open draft PR
         id: pr
-        if: ${{ steps.fix.outputs.verified == 'true' }}
+        if: ${{ steps.fix.outputs.verified == 'true' && steps.fix.outputs.changed == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           git config user.name "ai-remediation[bot]"
           git config user.email "ai-remediation@users.noreply.github.com"
           git add -A
           git commit -m "fix(security): AI remediation for alert ${ALERT_ID}"
           git push -u origin "$BRANCH"
+          # base は checkout した ref に揃える（既定ブランチへ向けると baseline 差分が丸ごと乗る）。
           url=$(gh pr create --draft \
             --title "fix(security): AI remediation (alert ${ALERT_ID})" \
             --body "AI が起票したセキュリティ修正です。trivy 再スキャン + UT 緑を確認済み。マージ前にレビューしてください。" \
+            --base "$BASE_REF" \
             --head "$BRANCH")
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       # ── backend へ結果 callback（成功/失敗いずれも必ず通知）─────────────────
-      - name: Callback to backoffice (result)
+      # 3状態を書き分ける: drafted（PR起票）/ skipped（緑だが直すものが無かった）/ failed（上限まで赤）。
+      - name: Build callback payload
         if: always()
         env:
-          BACKOFFICE_INGEST_URL: ${{ secrets.BACKOFFICE_INGEST_URL }}
-          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
           PR_URL: ${{ steps.pr.outputs.url }}
+          VERIFIED: ${{ steps.fix.outputs.verified }}
+          CHANGED: ${{ steps.fix.outputs.changed }}
           JOB_STATUS: ${{ job.status }}
         run: |
-          # secrets を if で評価できないため、未設定ガードはここで行う（scan-only/未デプロイ時はスキップ）。
-          if [ -z "$BACKOFFICE_INGEST_URL" ]; then
-            echo "BACKOFFICE_INGEST_URL 未設定。callback をスキップします。"
+          set -euo pipefail
+          if [ "$JOB_STATUS" = "success" ] && [ -n "$PR_URL" ]; then
+            jq -nc --arg id "$ALERT_ID" --arg url "$PR_URL" \
+              '{alertId:$id, status:"drafted", pullRequestUrl:$url}' > ingest-remediation-result.json
+            jq . ingest-remediation-result.json
             exit 0
           fi
-          if [ "$JOB_STATUS" = "success" ] && [ -n "$PR_URL" ]; then
-            payload=$(jq -nc --arg id "$ALERT_ID" --arg url "$PR_URL" \
-              '{alertId:$id, status:"drafted", pullRequestUrl:$url}')
-          else
-            payload=$(jq -nc --arg id "$ALERT_ID" --arg n "$MAX_ATTEMPTS" \
-              '{alertId:$id, status:"failed", reason:("AI修正が上限\($n)回でテストゲート（trivy再スキャン/typecheck/test）を通過しませんでした")}')
+
+          if [ "$JOB_STATUS" = "success" ] && [ "$VERIFIED" = "true" ] && [ "$CHANGED" = "false" ]; then
+            jq -nc --arg id "$ALERT_ID" --arg ref "$BASE_REF" \
+              '{alertId:$id, status:"skipped", reason:("テストゲート（trivy再スキャン/typecheck/test）は緑で、\($ref) に修正すべき変更は残っていませんでした")}' \
+              > ingest-remediation-result.json
+            jq . ingest-remediation-result.json
+            exit 0
           fi
-          curl -fsS -X POST "$BACKOFFICE_INGEST_URL/ingest/remediation-result" \
-            -H "Content-Type: application/json" \
-            -H "x-ingest-token: $INGEST_TOKEN" \
-            -d "$payload"
+
+          # 失敗の理由を「どこまで進んだか」で書き分ける。全部を「上限まで赤」と書くと、
+          # PR 起票やジョブ前半で落ちた回も同じ文面になり、画面から原因が読めなくなる。
+          if [ "$VERIFIED" = "false" ]; then
+            reason="AI修正が上限${MAX_ATTEMPTS}回でテストゲート（trivy再スキャン/typecheck/test）を通過しませんでした"
+          elif [ "$VERIFIED" = "true" ]; then
+            reason="テストゲートは通過しましたが、修正PRの起票に失敗しました（GitHub Actions の実行ログを確認してください）"
+          else
+            reason="修正ジョブが検証に到達する前に失敗しました（GitHub Actions の実行ログを確認してください）"
+          fi
+          jq -nc --arg id "$ALERT_ID" --arg reason "$reason" \
+            '{alertId:$id, status:"failed", reason:$reason}' > ingest-remediation-result.json
+          jq . ingest-remediation-result.json
+
+      # この POST だけは on-missing-url: fail。確定を運ぶ callback なので、届かないまま緑に
+      # したら record が dispatched のまま永久に残る（＝backend 側の期限切れ処理が拾うまで宙に浮く）。
+      # 他2本（検知・予兆）は届かなくてもその1件が欠けるだけなので skip でよい、という区別。
+      - name: Callback to backoffice (result)
+        if: always()
+        uses: ./.ci-tooling/.github/actions/ingest-post
+        with:
+          url: ${{ secrets.INGEST_URL }}
+          token: ${{ secrets.INGEST_TOKEN }}
+          path: /ingest/remediation-result
+          payload-file: ingest-remediation-result.json
+          on-missing-url: fail

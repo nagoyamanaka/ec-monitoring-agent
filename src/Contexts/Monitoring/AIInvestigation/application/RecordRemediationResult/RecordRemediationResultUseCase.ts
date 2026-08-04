@@ -6,7 +6,8 @@ import { remediationRecordToPrimitives } from "../../domain/contracts/Remediatio
 
 /**
  * CI（GitHub Actions のAIリメディジョブ）からの最終結果を受けて RemediationRecord を確定する。
- * dispatched（受付）→ drafted（PR起票成功）/ failed（修正不能・UT落ち等）への遷移。
+ * dispatched（受付）→ drafted（PR起票成功）/ skipped（テストゲートは緑だが直す変更が無かった）/
+ * failed（修正不能・UT落ち等）への遷移。
  * vulnerabilityCount は dispatch 時に記録済みの値を保つ（CI は件数を知らなくてよい）。
  *
  * この確定は dispatch 経路では非同期（CI 完了は数分後）でクライアント操作が起点に無いため、
@@ -21,7 +22,7 @@ export class RecordRemediationResultUseCase {
 
   async run(params: {
     alertId: string;
-    status: Extract<RemediationStatus, "drafted" | "failed">;
+    status: Extract<RemediationStatus, "drafted" | "skipped" | "failed">;
     pullRequestUrl?: string | null;
     reason?: string | null;
   }): Promise<void> {

@@ -6,3 +6,8 @@ output "workload_identity_provider" {
 output "deployer_sa_email" {
   value = google_service_account.deployer.email
 }
+
+output "remediation_sa_email" {
+  description = "ai-remediation.yml の vars.REMEDIATION_SA に設定する値"
+  value       = google_service_account.remediation.email
+}

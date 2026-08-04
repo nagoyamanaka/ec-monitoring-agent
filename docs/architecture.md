@@ -4,7 +4,7 @@
 
 ## 1. 一言
 
-**起きる前**は未来シグナル（未マージ PR・未適用 Terraform plan・負荷予定）×過去の記憶で引用検証付きのリスク予報を出し（§10）、**起きた後**は既存の観測基盤（Cloud Monitoring 等）の「検知」の上に乗って、アラート発火後の「**調査 → 評価 → レビュー**」の人手ワークフローを AI エージェントが圧縮するシステム。検知（閾値発火・dedup・相関）は上流の責務＝境界の外に置き、本体は「発火済みアラート」を受けて自律調査する。
+**起きる前**は未来シグナル（未マージ PR・未適用 Terraform plan・負荷予定）を過去の記憶と突合して引用検証付きのリスク予報を出し（§10・**記憶は確度を上げる材料で、無くても未来シグナル単独で予報は出る**）、**起きた後**は既存の観測基盤（Cloud Monitoring 等）の「検知」の上に乗って、アラート発火後の「**調査 → 評価 → レビュー**」の人手ワークフローを AI エージェントが圧縮するシステム。検知（閾値発火・dedup・相関）は上流の責務＝境界の外に置き、本体は「発火済みアラート」を受けて自律調査する。
 
 ## 2. システム全体図
 
@@ -158,7 +158,8 @@ flowchart TD
 
 - 既知/未知でルートが変わる（既知は重い調査モジュールを通さない）。出口は自責→修正起案 / 他責→運用エスカレーションに分岐。
 - 失敗時も空にしない: runner 例外・パース不能の fallback レポートに**収集済み証拠リンクを温存**。パース不能時は rawSnippet をログに残し真因を追跡。
-- **空応答への縮退リトライ（二段防御）**: gemini-2.5 系は思考トークンも `maxOutputTokens` を消費するため、証拠が競合する高推論シナリオ（例: 症状=メモリ枯渇 × Terraform 差分=接続上限縮小）では最終 JSON 合成ターンの思考が予算を食い切り **finishReason=MAX_TOKENS・0文字**になる故障モードがある（思考予算キャップは努力目標であり硬い壁ではない）。1回目が空/パース不能/例外のとき、**思考予算だけ落とした同一グラフで1回だけ再実行**してから fallback に落とす（思考↓＝最終 JSON 用トークン保証↑と失敗機序に整合・sub-agent の予算は不変なので分析の質は保たれる・再実行は `ai_investigation_retrying` ログで観測可能・上限1回で prefetch(1) の占有を有界に保つ）。恒久策（統括と JSON 化の分離＝ツールなし・`responseSchema` 強制の finalizer 直列化）は [ADR-26](decisions/ADR.md#adr-26-空応答fallbackは思考予算を落とした縮退リトライ1回で防御) に記録。
+- **空応答への構造的防御（finalizer 分離）**: gemini-2.5 系は思考トークンも `maxOutputTokens` を消費するため、証拠が競合する高推論シナリオ（例: 症状=メモリ枯渇 × Terraform 差分=接続上限縮小）では最終 JSON 合成ターンの思考が予算を食い切り **finishReason=MAX_TOKENS・0文字**になる故障モードがある（思考予算キャップは努力目標であり硬い壁ではない）。**恒久策として「統括」と「JSON 化」を別ターンに分離**した——エージェントループ終了後に、**ツールなし・思考予算0・`responseSchema`（制約付きデコード）強制の単発呼び出し**を1回だけ直列で足し、セッションで回収したサブエージェント出力群を JSON へ清書させる（`GeminiInvestigationFinalizer`）。ツールを持たないので `responseSchema` の併用制約に当たらず、思考が予算を取らないので空応答の機序自体が成立しない。**エージェント数は増えない**（グラフ外の直列ステップ・8体のまま）。清書がパースを通らなければコーディネーターの下書きへ黙って戻す（`finalizeInvestigationOutput`）ので分離前が下限。
+- **空応答への縮退リトライ（後段の受け皿）**: 上の finalizer は前段の防御であって置き換えではないため、縮退リトライは残す。1回目が空/パース不能/例外のとき、**思考予算だけ落とした同一グラフで1回だけ再実行**してから fallback に落とす（思考↓＝最終 JSON 用トークン保証↑と失敗機序に整合・sub-agent の予算は不変なので分析の質は保たれる・再実行は `ai_investigation_retrying` ログで観測可能・上限1回で prefetch(1) の占有を有界に保つ）。清書役自体が落ちた場合（Vertex 側の瞬断・タイムアウト）と、ADK 調査そのものが例外で死ぬ経路をここが拾う。決定の履歴は [ADR-26](decisions/ADR.md#adr-26-空応答fallbackは思考予算を落とした縮退リトライ1回で防御)。
 - **fallback からの復帰導線（E3）**: fallback は行き止まりにしない。ドロワー/詳細ページの警告バナー直下に「再調査を実行」（既存 `POST /alerts/:id/reinvestigate` へ定型 operatorNote を添えてワンクリック結線・`FallbackRecoveryBanner`）、温存された証拠リンクは「収集済みの証拠リンク」として要約射影でも表示、一覧カードの「AI推定: 」空文字は「調査失敗・再調査可」の定型文に写像。
 - **働きの明細（G1）**: 調査完了時に UseCase が実測メトリクス（`InvestigationMetrics`＝elapsedMs＋証拠件数内訳: ログ/メトリクス/Terraform差分/コミット/類似事例）を `InvestigationReport.metrics`（optional・後方互換）へ deterministic に添付（ADK/単一Gemini 両経路で同形・LLM 出力ではない）。UI はレポート冒頭に「**92秒**で Cloud Logging・GitHub・類似事例DB を横断し、**証拠62件**を収集して原因を推定」の実測1行（要約射影）を出し、既知一致には「既知パターン一致＝**1秒未満・AI コストゼロ**で確定」の経済性対比を添える。表示は記録済みの事実のみ（「人間なら◯分」等の換算はしない）。
 - **報告書の視覚構造（E8・詳細ページ full 射影）**: 同じ実測メトリクスを**証拠フローダイアグラム**（流入源→AI 調査→結論の収束図・`EvidenceFlowDiagram`＋`evidenceFlowModel` 純関数）として図示し、G1 の実測1行は図ヘッダに吸収（同じ数字を二度出さない・描けない条件では1行へ劣化）。結論ノードに確信度ゲージ＋キャリブレーション注記を合流。冒頭は結論ファースト（AI推定パターン直下に自責/他責バッジ＋障害規模1行・推奨アクションを調査ステップより先に）。調査ステップは縦タイムライン（生エージェント名は台帳で人間語化・時刻は記録が無いため出さない＝順序のみ）。生ログ引用（算定根拠/添付証拠/判定根拠）は既定折りたたみ「n件」＋展開でソース種別レーン（観測データ/変更履歴/過去事例・`groupCitations`）。すべて記録済み実データからの表示射影＝backend 変更ゼロ。
@@ -169,6 +170,10 @@ flowchart TD
 
 - 調査=read / 修正=write を構造分離。自動マージは一切しない。
 - 3モード（`REMEDIATION_MODE`・既定 **demo**）: **demo**（事前に同パイプラインで起票済みの**本物の draft PR** URL（`REMEDIATION_DEMO_PR_URL`）を毎回提示＝GitHub 非接触・PR 増殖なし・書き込みトークン不要。審査/デモ用）／**advisory**（in-process で方針テキスト→`SECURITY_REMEDIATION.md` 草案PR）／**dispatch**（`repository_dispatch` → `ai-remediation.yml` でランナー上の AI が実コード修正→Trivy 再スキャン＋テスト緑→draft PR→`POST /ingest/remediation-result` で結果確定）。
+  - **実績**: 既存の draft PR（#29/#31/#32/#38）は**すべて advisory 経路**（`InProcessAdvisoryRemediation` → `GitHubPullRequestGateway`）が起票したもので、dispatch 経路＝ランナー上のテストゲートを通過した PR はまだ無い（2026-08-04 時点で `ai-remediation.yml` の実行回数 0）。**配線は下記のとおり通してあるが、「回した」とは言えない**。
+  - dispatch の CI 側: 認証は WIF ＋ Vertex AI（API キー無し・SA は `roles/aiplatform.user` のみの専用 SA で、デプロイ SA は使い回さない）。修正の土台にする ref は `client_payload.baseRef`（＝backend の `GITHUB_REMEDIATION_BASE_REF`）で運び、同じ ref へ draft PR を戻す（`repository_dispatch` の起動 ref は常に既定ブランチなので、payload で運ばないと脆弱性の実体があるブランチに届かない）。
+  - CI が返す確定は3値: **drafted**（PR 起票）／**skipped**（テストゲートは緑だが直す変更が無かった）／**failed**（上限まで赤・PR 起票失敗・検証到達前の失敗を理由で書き分け）。
+- **確定が届かなかった場合の終端**: CI 側は結果 POST を必須扱いにし（[.github/actions/ingest-post](../.github/actions/ingest-post/action.yml) の `on-missing-url: fail`。検知・予兆の2経路は `skip`）、backend 側は `REMEDIATION_DISPATCH_TIMEOUT_MS`（既定20分）を過ぎた `dispatched` を `failed` へ落とす（`ExpireStaleRemediationsUseCase`・worker/all の1プロセスのみが走査）。**送る側と受ける側の両方**に置いてあるのは、ジョブ自体が落ちれば callback は発生しようがないため＝CI の誠実さに依存させない。
 - 自己修正ループは `REMEDIATION_MAX_ATTEMPTS`（既定2）で打ち切り（課金暴走の安全弁）。対象はシナリオ4（脆弱性）のみ（旧5/6=構成変更・アプリコード退行は自動修正見送りの[決定記録](decisions/decision-scenario67-remediation-dropped.md)を経て、2026-07-06 にシナリオ自体もデモ卓から撤退）。
 
 ## 5.5 プロンプトインジェクションの脅威モデル（設計判断）
@@ -293,7 +298,7 @@ flowchart TB
 - **③ 自己検知（ループの閉じ）**（`app.yml` の `security-scan` job）: Trivy が**自リポジトリの依存**を fs スキャン→HIGH/CRITICAL を代表 CVE に昇格し全件同梱→本番 `/ingest/security-scan` に POST。**検知入力が外部イベントではなく自分自身の CI から来る**＝ドッグフーディングの核。これが[シナリオ4](#9-デモシナリオ5ボタンリアルさバッジ付き)の実経路。
 - **④ 自己修復**（`ai-remediation.yml`）: SECURITY 調査が `repository_dispatch` を発火→ランナー上で AI が実コードを修正→Trivy 再スキャン＋テスト緑になるまで自己修正（`REMEDIATION_MAX_ATTEMPTS` で打ち切り＝課金暴走の安全弁）→**自リポジトリに draft PR**（自動マージなし・人間承認）。マージされれば ① に戻り再デプロイ＝**完全な自己参照 DevOps ループ**。
 
-> **正直さの境界**: ①②③④は実ワークフロー。ただしデモ卓のシナリオ4は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
+> **正直さの境界**: ①②③は実行実績のある実ワークフロー。**④は配線済みだが実行回数 0**（既存の draft PR は in-process の advisory 経路が起票したもの＝ランナーのテストゲートは通っていない。§5 参照）。加えてデモ卓のシナリオ4は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
 
 ## 7. コード構成（DDD + Clean Architecture + CQRS + EDA）
 
@@ -353,7 +358,7 @@ src/
 
 ## 10. 予兆ブリーフィング（Forecast・実装済み）
 
-未来シグナル×記憶の**引用付きリスク予報**。**F1〜F8・F10〜F12 まで実装済み**。ローカル E2E（`e2e/backoffice/forecast.e2e.test.ts`）が引用検証（偽引用 drop・裏付けゼロ破棄）・MEMORY の実在解決・GET キャッシュ配信を決定論担保。残タスクはコードでなく人間タスク（実 PR ステージングと録画）のみ。
+未来シグナル×記憶の**引用付きリスク予報**。**発火条件は未来シグナルが1本以上あることだけ**で、記憶（過去の同型障害）は**発火の関門ではなくレベルの増幅材**＝前例が無くても未来シグナル単独で予報は出る（その場合は原則 LOW〜MEDIUM に留まる／§10 の F5・プロンプト規約）。**F1〜F8・F10〜F12 まで実装済み**。ローカル E2E（`e2e/backoffice/forecast.e2e.test.ts`）が引用検証（偽引用 drop・裏付けゼロ破棄）・MEMORY の実在解決・GET キャッシュ配信を決定論担保。残タスクはコードでなく人間タスク（実 PR ステージングと録画）のみ。
 
 ```
 未来シグナル3系統                         記憶

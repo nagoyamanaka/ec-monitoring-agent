@@ -3,17 +3,26 @@ import { RecordRemediationResultUseCase } from "../../../../../../Contexts/Monit
 
 type RemediationResultBody = {
   alertId?: string;
-  status?: string; // "drafted" | "failed"
+  status?: string; // "drafted" | "skipped" | "failed"
   pullRequestUrl?: string | null;
   reason?: string | null;
 };
 
-const ACCEPTED_STATUSES = new Set(["drafted", "failed"]);
+type AcceptedStatus = "drafted" | "skipped" | "failed";
+
+const ACCEPTED_STATUSES: ReadonlySet<string> = new Set<AcceptedStatus>([
+  "drafted",
+  "skipped",
+  "failed",
+]);
 
 /**
  * POST /ingest/remediation-result
  * GitHub Actions のAIリメディジョブが完了時に呼ぶ callback。
- * dispatched で受け付けた修正の最終結果（PR起票成功 or 失敗）を確定する。
+ * dispatched で受け付けた修正の最終結果を確定する:
+ *   drafted = PR 起票成功 / skipped = テストゲートは緑だが直す変更が無かった / failed = 上限まで赤。
+ * skipped を分けているのは、base が既に緑のときの「何もしなかった」を失敗として記録しないため
+ * （DraftRemediationUseCase の skipped＝対象なし、と同じ意味に揃えている）。
  * SecurityScanIngest と同じ x-ingest-token で保護する。
  */
 export class RemediationResultIngestPostController {
@@ -32,13 +41,15 @@ export class RemediationResultIngestPostController {
       const body = req.body as RemediationResultBody;
       const status = (body.status ?? "").toLowerCase();
       if (!body.alertId || !ACCEPTED_STATUSES.has(status)) {
-        res.status(400).json({ error: "alertId and status(drafted|failed) are required" });
+        res
+          .status(400)
+          .json({ error: "alertId and status(drafted|skipped|failed) are required" });
         return;
       }
 
       await this.recordRemediationResultUseCase.run({
         alertId: body.alertId,
-        status: status as "drafted" | "failed",
+        status: status as AcceptedStatus,
         pullRequestUrl: body.pullRequestUrl ?? null,
         reason: body.reason ?? null,
       });
