@@ -220,7 +220,9 @@ jobs:
             # ここを不合格条件にすると、無関係な推移依存の入れ替わりで止まりうるので出すだけにする。
             jq -r '[.Results[]?.Vulnerabilities[]?.VulnerabilityID] | unique | .[]' \
               "$RUNNER_TEMP/rescan.json" > "$RUNNER_TEMP/after-cves.txt"
-            comm -13 "$RUNNER_TEMP/base-cves.txt" "$RUNNER_TEMP/after-cves.txt" | paste -sd, - \
+            # 1行1 CVE で書く。paste で畳むと0件でも改行1バイトが残り、下の -s が真になって
+            # 「増えています: （空）」という嘘の warning が出る。
+            comm -13 "$RUNNER_TEMP/base-cves.txt" "$RUNNER_TEMP/after-cves.txt" \
               > "$RUNNER_TEMP/introduced.txt"
 
             pnpm typecheck || return 1
@@ -264,6 +266,11 @@ jobs:
               break
             fi
 
+            # 検証ログは必ずジョブログにも出す。feedback に畳むだけだと、最終試行で落ちたときに
+            # 「なぜ赤いのか」がどこにも残らない（次の試行が無いまま削除される）。
+            echo "--- verify.log 末尾（試行${attempt}）---"
+            tail -c 6000 verify.log
+
             feedback="前回（試行${attempt}）の修正は検証に失敗しました。対象CVEの再スキャン/typecheck/test のいずれかが赤です。
             以下の検証ログ末尾を踏まえ、最小修正で再度直してください:
             $(tail -c 4000 verify.log)"
@@ -276,7 +283,7 @@ jobs:
 
           # ゲートには含めないが、AI が新たに持ち込んだ CVE は必ず表に出す（隠すと PR の意味が濁る）。
           if [ -s "$RUNNER_TEMP/introduced.txt" ]; then
-            echo "::warning::base に無かった HIGH/CRITICAL が増えています: $(cat "$RUNNER_TEMP/introduced.txt")"
+            echo "::warning::base に無かった HIGH/CRITICAL が増えています: $(paste -sd, - < "$RUNNER_TEMP/introduced.txt")"
           fi
 
           # 「緑」と「直した」は別物。base が既に trivy 緑だと AI が何もしなくても verified=true に
