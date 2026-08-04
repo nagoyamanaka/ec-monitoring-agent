@@ -151,3 +151,90 @@ describe("AnalyticsPage 引用照合率（従属ブロック）", () => {
     expect(screen.queryByText(/が実在照合済み/)).toBeNull();
   });
 });
+
+describe("AnalyticsPage 予報の測定（診断側とは別ブロック・E6）", () => {
+  const measurement = {
+    forecasts: 4,
+    excludedFallback: 0,
+    excludedNoSignals: 2,
+    excludedUnmeasured: 0,
+    citationsEmitted: 11,
+    citationsDropped: 0,
+    risksEmitted: 6,
+    risksDropped: 0,
+    signalsCollected: 34,
+    signalsByKind: [
+      { kind: "FUTURE_CHANGE", count: 12 },
+      { kind: "MEMORY", count: 10 },
+    ],
+    risksSurvived: 6,
+    byLevel: [
+      { level: "HIGH", count: 1, withMemoryCitation: 1 },
+      { level: "MEDIUM", count: 3, withMemoryCitation: 1 },
+      { level: "LOW", count: 2, withMemoryCitation: 0 },
+    ],
+  };
+
+  async function openAggregate() {
+    const summary = await screen.findByText(/集計で確かめる/);
+    const details = summary.closest("details") as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event("toggle"));
+  }
+
+  it("破棄が0でも件数で出す（発火していないことを隠さない・率にしない）", async () => {
+    renderPage(fakeApi({ forecastMeasurement: measurement }));
+    await openAggregate();
+
+    const line = await screen.findByText(/実在しない引用として破棄/);
+    const scope = within(line as HTMLElement);
+    expect(scope.getByText("11")).toBeInTheDocument();
+    expect(scope.getAllByText("0").length).toBeGreaterThan(0);
+    // 数字の行に％を作らない。％が出てよいのは「残った側は定義上 100%」という
+    // 率を出さない理由の説明だけで、それは別の行（注記）にある。
+    expect(scope.queryByText(/%/)).toBeNull();
+    expect(
+      await screen.findByText(/残った引用の照合率は定義上 100%/),
+    ).toBeInTheDocument();
+  });
+
+  it("収集 → 発火の絞り込みを kind 別内訳つきで出す", async () => {
+    renderPage(fakeApi({ forecastMeasurement: measurement }));
+    await openAggregate();
+
+    const line = await screen.findByText(/件を突合して/);
+    const scope = within(line as HTMLElement);
+    expect(scope.getByText("34")).toBeInTheDocument();
+    expect(scope.getByText("6")).toBeInTheDocument();
+    // kind は機械語（FUTURE_CHANGE）のまま出さない
+    expect(scope.getByText(/未来の変更 12・過去インシデント 10/)).toBeInTheDocument();
+  });
+
+  it("level 分布を「うち前例あり」つきで出す（前例が無くても出る・ただし弱く出る）", async () => {
+    renderPage(fakeApi({ forecastMeasurement: measurement }));
+    await openAggregate();
+
+    expect(
+      await screen.findByText(
+        /高 1（うち前例あり 1）・中 3（うち前例あり 1）・低 2（うち前例あり 0）/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("除外した予報の件数を併記する（LLM を呼んでいない回を黙って混ぜない）", async () => {
+    renderPage(fakeApi({ forecastMeasurement: measurement }));
+    await openAggregate();
+
+    expect(
+      await screen.findByText(/集計から除外: シグナル0件の空予報 2 件/),
+    ).toBeInTheDocument();
+  });
+
+  it("予報が0回なら行ごと出さない", async () => {
+    renderPage(fakeApi());
+    await openAggregate();
+    await screen.findByText(/フィードバック 2 件を母数に算出/);
+
+    expect(screen.queryByText(/実在しない引用として破棄/)).toBeNull();
+  });
+});

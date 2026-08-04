@@ -78,6 +78,50 @@ describe("toAnalyticsView", () => {
       }).citationCoverage,
     ).toBeNull();
   });
+
+  it("予報の測定はそのまま渡す（破棄0でも落とさない＝発火していないことを隠さない）", () => {
+    const measurement = {
+      forecasts: 4,
+      excludedFallback: 0,
+      excludedNoSignals: 1,
+      excludedUnmeasured: 0,
+      citationsEmitted: 11,
+      citationsDropped: 0,
+      risksEmitted: 6,
+      risksDropped: 0,
+      signalsCollected: 34,
+      signalsByKind: [{ kind: "FUTURE_CHANGE", count: 12 }],
+      risksSurvived: 6,
+      byLevel: [{ level: "HIGH", count: 2, withMemoryCitation: 1 }],
+    };
+
+    expect(toAnalyticsView({ ...base, forecastMeasurement: measurement })
+      .forecastMeasurement).toEqual(measurement);
+  });
+
+  it("予報が0回／旧backendは null（母数0の数字を出さない）", () => {
+    expect(toAnalyticsView(base).forecastMeasurement).toBeNull();
+    // 除外だけがあるケース（fallback しか無い等）も母数0なので出さない
+    expect(
+      toAnalyticsView({
+        ...base,
+        forecastMeasurement: {
+          forecasts: 0,
+          excludedFallback: 2,
+          excludedNoSignals: 0,
+          excludedUnmeasured: 0,
+          citationsEmitted: 0,
+          citationsDropped: 0,
+          risksEmitted: 0,
+          risksDropped: 0,
+          signalsCollected: 0,
+          signalsByKind: [],
+          risksSurvived: 0,
+          byLevel: [],
+        },
+      }).forecastMeasurement,
+    ).toBeNull();
+  });
 });
 
 function approved(

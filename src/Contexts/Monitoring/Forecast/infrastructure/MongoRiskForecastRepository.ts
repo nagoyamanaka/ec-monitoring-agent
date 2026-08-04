@@ -52,6 +52,16 @@ export class MongoRiskForecastRepository implements RiskForecastRepository {
     return this.toBriefing(doc);
   }
 
+  // 測定の標本は**破棄済みも含めた全行**（→ RiskForecastRepository.findAll のコメント）。
+  // 件数は当面2桁なので全件読みで足りる（ページングを先回りしない）。
+  async findAll(): Promise<ForecastBriefing[]> {
+    const docs = await this.collection()
+      .find({})
+      .sort({ generatedAt: 1, _id: 1 })
+      .toArray();
+    return docs.map((doc) => this.toBriefing(doc));
+  }
+
   async clear(): Promise<void> {
     await this.collection().updateMany(
       { discardedAt: null } as unknown as Filter<Document>,

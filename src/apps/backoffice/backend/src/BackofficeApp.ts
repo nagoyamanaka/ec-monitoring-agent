@@ -67,6 +67,8 @@ import { GitHubPullRequestReadGateway } from "../../../../Contexts/Monitoring/AI
 import { InMemoryPendingInfraPlanStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryPendingInfraPlanStore.js";
 import { ForecastRiskCommandHandler } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskCommandHandler.js";
 import { ForecastRiskUseCase } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskUseCase.js";
+import { GetForecastMeasurementQueryHandler } from "../../../../Contexts/Monitoring/Forecast/application/GetForecastMeasurement/GetForecastMeasurementQueryHandler.js";
+import { GetForecastMeasurementUseCase } from "../../../../Contexts/Monitoring/Forecast/application/GetForecastMeasurement/GetForecastMeasurementUseCase.js";
 import { ForecastPort } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastPort.js";
 import { ForecastSignalSource } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastSignalSource.js";
 import { GeminiForecastAdapter } from "../../../../Contexts/Monitoring/Forecast/infrastructure/GeminiForecastAdapter.js";
@@ -528,6 +530,14 @@ export class BackofficeApp {
       logger,
     );
     const forecastRiskCommandHandler = new ForecastRiskCommandHandler(forecastRiskUseCase);
+    // 予報の測定（E6-1/E6-3）。GET /analytics に相乗りするので FORECAST_ENABLED には従属しない
+    // ——予報を止めても「これまで何回出して何を落としたか」は測定として残す。履歴0件なら空集計。
+    const getForecastMeasurementUseCase = new GetForecastMeasurementUseCase(
+      riskForecastRepository,
+    );
+    const getForecastMeasurementQueryHandler = new GetForecastMeasurementQueryHandler(
+      getForecastMeasurementUseCase,
+    );
 
     const commandBus = new InMemoryCommandBus(
       new CommandHandlers([
@@ -549,6 +559,7 @@ export class BackofficeApp {
         getAnalyticsQueryHandler,
         getInfraEvidenceQueryHandler,
         getRemediationQueryHandler,
+        getForecastMeasurementQueryHandler,
       ]),
     );
 

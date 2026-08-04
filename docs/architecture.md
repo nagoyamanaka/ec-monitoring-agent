@@ -186,7 +186,7 @@ LLM には外部由来テキストが渡る——直接系（ingest イベント
 - **修正は write 隔離＋人間承認ゲート**（§5）: コード修正は別ワークフローに構造分離され、テストゲートを通っても draft PR 止まり・自動マージなし。「勝手に修正しろ」と誘導しても人間レビューを越えられない。
 - **機密はプロンプト外**: シークレットは Terraform 管理の Secret Manager から各コンテナへ環境注入され、LLM のコンテキストに載らない。会話内容を吐かせる注入が成功しても鍵・認証情報は露出しない。
 - **最小権限・サービス分離**: サブサービスごとのコンテナ分離＋SA 権限の絞り込みで、仮にプロセスが誤動作しても横移動を限定。
-- **構造化出力＋引用の実在照合**（§2・§10.3）: 出力は JSON 契約に固定して safeParse、citations は収集済みの実在証拠 id へ機械照合し偽引用は自動破棄。注入で捏造させた結論・因果が UI 上の断定として表示される経路を構造的に落とす。
+- **構造化出力＋引用の実在照合**（§2・§10.3）: 出力は JSON 契約に固定して safeParse、citations は収集済みの実在証拠 id へ機械照合し偽引用は自動破棄。注入で捏造させた結論・因果が UI 上の断定として表示される経路を構造的に落とす。照合結果は捨てずに集計し（`GET /analytics` の `citationCoverage`＝**引用単位**の `X/Y` と種別内訳）、機構が働いているかを数字で出す。⚠ ゲートを通った引用（`relatedAlerts`）は定義上 100% なので母数に入れない・**引用ゼロで丸ごと落とした主張はこの率に含まれない**（[ADR-30](decisions/ADR.md#adr-30-引用照合率は引用単位で数えゲートを通った引用は母数に入れない)）。
 
 **限界の明示（正直さ）**: 上記は「注入が成功しても被害を絞る」防御であり、「注入そのものを入力境界で遮断する」ものではない。入力層での注入分類・ジェイルブレイク遮断（Model Armor 等のマネージドガード挿入）は将来の拡張点として本節に記録する（§6 の Cloud Trace API 見送りと同じ「ROI による意図的見送り＋復帰手順の明文化」の型）。
 
@@ -332,7 +332,7 @@ src/
 | `POST /ingest/cloud-monitoring`   | Cloud Monitoring webhook（Basic 認証）                                                                                                                   |
 | `POST /ingest/security-scan`      | CI/Trivy 検知（`INGEST_TOKEN`）                                                                                                                          |
 | `POST /ingest/remediation-result` | AI リメディ CI の結果 callback                                                                                                                           |
-| `GET /analytics`                  | 承認済みアラート等の集計ビュー                                                                                                                           |
+| `GET /analytics`                  | 承認済みアラート等の集計ビュー（正答率＝判定履歴が母数・引用照合率＝**引用単位**の `citationCoverage`・予報の測定＝**破棄の件数**の `forecastMeasurement`） |
 | `POST /demo/scenario` ほか        | デモ操作卓（`DEMO_ENABLED` 配下）                                                                                                                        |
 | `GET /forecast`                   | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）                               |
 | `POST /forecast`                  | 予報の生成（`FORECAST_ENABLED` かつ `DEMO_ENABLED` 配下・Gemini 呼び出し・horizon は `FORECAST_HORIZON` 固定）                                           |
@@ -387,6 +387,7 @@ src/
 - F4 `ForecastPort`/`ForecastContext`＋`GeminiForecastAdapter`。**単発 Gemini 経路・ADK 非使用は意図的**＝入力は Handler が事前収集済みでツールコール型探索が不要、`responseMimeType=application/json` 強制で無人閲覧の構造化堅牢性を優先。`LLMTextClient`（GeminiLLMClient）注入のコンポジション・JSON 固定＋citations 必須プロンプト・safeParse・confidence クランプ・未知 level は LOW 丸め・level 降順ソート・失敗時は throw せず `isFallback=true` 縮退。
 - F5 `ForecastRiskCommandHandler`（`Forecast/application/ForecastRisk/`）: 主シグナル収集→subject で ForecastMemory を引き MEMORY シグナルへ正規化→結合→Port.forecast→**引用検証＝citations を実在シグナル id に照合し偽引用は破棄・裏付けゼロのリスクは丸ごと破棄**→`RiskForecastRepository.append` で保存。**シグナル0件は Gemini 非呼び出しで空予報＝課金ゼロ**。予報はシグナル全量同梱の `ForecastBriefing` として保存＝引用チップの解決先を配信に含める。wire 契約は `Forecast/domain/contracts/ForecastContract.ts`。
 - F5b 予報の永続化は **Mongo `risk_forecasts` へ生成のたびに1件追記**（`MongoRiskForecastRepository`・role 非依存＝ edge/worker のどちらで生成しても同じ履歴を引く）。読み取りは `findLatest` の最新1件だけで配信の形は不変。`DELETE /forecast` は `discardedAt` を立てる **soft discard**＝未生成状態に戻すが履歴（測定の標本）は残す。→ [ADR-28](decisions/ADR.md)
+- F5c 予報の測定は**率でなく破棄の件数**（`GET /analytics` の `forecastMeasurement`・診断側の `citationCoverage` とは別フィールド／別表示ブロック）。偽引用は永続化の前に落ちるので**残った側の照合率は定義上 100%**＝測るのは落とした側。`RiskForecast` に追記するのは破棄カウンタ4つだけで、level 分布・シグナル kind 別内訳・MEMORY 引用の有無は**保存せず読み取り時に数え直す**（`buildForecastMeasurement`・標本は `findAll()`＝`discardedAt` を無視した全行）。集計から外す3種（fallback／シグナル0件＝LLM 非呼び出し／検証カウンタ未保存）は**件数を併記**。有効リードタイム（`effectiveLeadTime`）は `予測発生 − 発行 − 対処所要`で、対処所要は **Terraform apply 経路一律30分の宣言値**（`window` が自由文字列のため予測発生時刻は呼び出し側の注記）。→ [ADR-31](decisions/ADR.md#adr-31-予報の測定は率ではなく落とした件数で出し導けるものは保存しない)
 
 ### 10.4 ルート・DI（F6）
 
@@ -412,7 +413,7 @@ src/
 
 ### 10.8 予兆デモコンソール（F12）
 
-`DELETE /forecast`＝`RiskForecastRepository.clearLatest()`・`demoGuard` 配下。**アラート側 /demo/reset とは独立**＝一覧のリセットが提出前に温めた予報キャッシュ（無人閲覧の要）を巻き込まない。UI は `ForecastDemoConsole`＝アラート一覧の DEMO CONSOLE と同一視覚言語（fuchsia ピル・realness バッジ・cyan 実行/rose リセット）の右 aside パネルで、**投入シグナル台帳**（実データ＝実 GitHub PR は1つだけ・残りは合成 seed、と本物度を明示）＋「▶ 予報を生成（AI 突合・約1分）」「予報をリセット」を集約。可用性は GET /demo/status 404 判定＝本番ではコンソールごと非表示・予報閲覧は無傷。
+`DELETE /forecast`＝`RiskForecastRepository.clear()`（soft discard・履歴は残す）・`demoGuard` 配下。**アラート側 /demo/reset とは独立**＝一覧のリセットが提出前に温めた予報キャッシュ（無人閲覧の要）を巻き込まない。UI は `ForecastDemoConsole`＝アラート一覧の DEMO CONSOLE と同一視覚言語（fuchsia ピル・realness バッジ・cyan 実行/rose リセット）の右 aside パネルで、**投入シグナル台帳**（実データ＝実 GitHub PR は1つだけ・残りは合成 seed、と本物度を明示）＋「▶ 予報を生成（AI 突合・約1分）」「予報をリセット」を集約。可用性は GET /demo/status 404 判定＝本番ではコンソールごと非表示・予報閲覧は無傷。
 
 ## 11. 未実装（設計のみ）
 

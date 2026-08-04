@@ -67,6 +67,10 @@ class FakeRepository implements RiskForecastRepository {
     if (this.saved.length <= this.discardedUpTo) return null;
     return this.saved[this.saved.length - 1] ?? null;
   }
+  // 測定の標本は破棄済みも含む全件（Mongo 実装と同じ）。
+  async findAll(): Promise<ForecastBriefing[]> {
+    return [...this.saved];
+  }
   async clear(): Promise<void> {
     this.discardedUpTo = this.saved.length;
   }
@@ -206,6 +210,54 @@ describe("ForecastRiskUseCase", () => {
     const actions = logger.logs.map((l) => l.action);
     expect(actions.filter((a) => a === "forecast_fake_citation_dropped")).toHaveLength(2);
     expect(actions.filter((a) => a === "forecast_uncited_risk_dropped")).toHaveLength(2);
+  });
+
+  it("落とした側の会計を予報に載せる（E6-1・判定は変えない）", async () => {
+    const port = new FakePort([
+      risk("real", ["pr-1"]), // 引用1・破棄0
+      risk("mixed", ["pr-1", "ghost-9"]), // 引用2・破棄1
+      risk("all-fake", ["ghost-1", "ghost-2"]), // 引用2・リスクごと破棄
+      risk("uncited", []), // 引用0・リスクごと破棄
+    ]);
+    const { useCase, repository } = build({
+      sources: [new FakeSource([signal("pr-1", "db_connection_pool")])],
+      port,
+    });
+
+    await useCase.run({ horizon: "今週末" });
+
+    expect(repository.saved[0].forecast.verification).toEqual({
+      citationsEmitted: 5,
+      citationsDropped: 3,
+      risksEmitted: 4,
+      risksDropped: 2,
+    });
+  });
+
+  it("forecast_generated ログが level 内訳と MEMORY 引用の有無を持つ（E6-3 の最小形）", async () => {
+    const memory = new FakeMemory([
+      {
+        incidentId: "alert-123",
+        subject: "db_connection_pool",
+        trigger: "ec.db.connection_pool_exhausted",
+        outcome: "pool 上限を拡大して解消",
+      },
+    ]);
+    const port = new FakePort([
+      risk("with-memory", ["pr-1", "inc-1"], "HIGH"),
+      risk("without-memory", ["pr-1"], "LOW"),
+    ]);
+    const { useCase, logger } = build({
+      sources: [new FakeSource([signal("pr-1", "db_connection_pool")])],
+      memory,
+      port,
+    });
+
+    await useCase.run({ horizon: "今週末" });
+
+    const generated = logger.logs.find((l) => l.action === "forecast_generated");
+    expect(generated?.message).toContain("levels=HIGH=1,MEDIUM=0,LOW=1");
+    expect(generated?.message).toContain("withMemoryCitation=1");
   });
 
   it("シグナル0件なら Port を呼ばず空予報（isFallback=false）を保存する", async () => {

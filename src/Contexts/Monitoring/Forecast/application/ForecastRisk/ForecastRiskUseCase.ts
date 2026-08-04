@@ -6,6 +6,10 @@ import { ForecastPort } from "../../domain/ForecastPort.js";
 import { ForecastSignal, ForecastSignalKind } from "../../domain/ForecastSignal.js";
 import { ForecastSignalSource } from "../../domain/ForecastSignalSource.js";
 import { RiskForecast, RiskItem } from "../../domain/RiskForecast.js";
+import {
+  countMemoryCitedRisks,
+  formatLevels,
+} from "../../domain/riskLevelBreakdown.js";
 
 /**
  * 予兆ブリーフィングの生成（全依存 read-only・write ゼロ）。
@@ -125,11 +129,30 @@ export class ForecastRiskUseCase {
   ): Promise<RiskForecast> {
     const signalIds = new Set(signals.map((signal) => signal.id));
     const verifiedRisks: RiskItem[] = [];
+    // 破棄側の会計（E6-1）。判定は変えず、今まで捨てていたローカル値を予報に載せるだけ。
+    let citationsEmitted = 0;
+    let citationsDropped = 0;
     for (const risk of forecast.risks) {
+      citationsEmitted += risk.citations.length;
       const verified = await this.verifyRisk(risk, signalIds);
-      if (verified) verifiedRisks.push(verified);
+      if (verified) {
+        citationsDropped += risk.citations.length - verified.citations.length;
+        verifiedRisks.push(verified);
+      } else {
+        // 丸ごと破棄したリスクの引用は全部「実在しなかった」か、あるいは最初から空。
+        citationsDropped += risk.citations.length;
+      }
     }
-    return { ...forecast, risks: verifiedRisks };
+    return {
+      ...forecast,
+      risks: verifiedRisks,
+      verification: {
+        citationsEmitted,
+        citationsDropped,
+        risksEmitted: forecast.risks.length,
+        risksDropped: forecast.risks.length - verifiedRisks.length,
+      },
+    };
   }
 
   // 1リスクぶんの照合。偽引用は citations から除き、裏付けゼロなら null（破棄）を返す。
@@ -168,7 +191,10 @@ export class ForecastRiskUseCase {
     await this.logger.info({
       service: "backoffice-backend",
       action: "forecast_generated",
-      message: `予報を保存しました: horizon=${forecast.horizon}, signals=${signals.length}, risks=${forecast.risks.length}, isFallback=${forecast.isFallback}`,
+      // level 内訳と MEMORY 引用の有無を同じ行に出す（E6-3）。破棄側のログ
+      // （forecast_uncited_risk_dropped）は level を持つのに、**生き残った側が持っていなかった**
+      // ＝残ったリスクが強く出たのか弱く出たのかをログだけでは言えなかった非対称の解消。
+      message: `予報を保存しました: horizon=${forecast.horizon}, signals=${signals.length}, risks=${forecast.risks.length}, levels=${formatLevels(forecast.risks)}, withMemoryCitation=${countMemoryCitedRisks(forecast.risks, signals)}, isFallback=${forecast.isFallback}`,
     });
   }
 
