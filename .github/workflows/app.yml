@@ -94,9 +94,11 @@ jobs:
   build-push-frontend:
     name: Build & push frontend (nginx)
     runs-on: ubuntu-latest
-    # needs: [check, e2e]
-    # 修正フィードバック短縮のため、一時的にe2e条件をなくす
-    needs: [check]
+    # 2026-07-01 に「修正フィードバック短縮のため」e2e を一時的に外していたが、
+    # 「E2E が赤でもデプロイできる」状態そのものが負債なので復活させた（v1.5 D1）。
+    # フィードバックを縮めたい場合もゲートを外す方向へは戻さず、E2E 側の並列化・
+    # 変更検知スキップで解く。
+    needs: [check, e2e]
     if: github.ref == 'refs/heads/main'
 
     permissions:
@@ -144,9 +146,8 @@ jobs:
   build-push-backend:
     name: Build & push backend (GCE backbone)
     runs-on: ubuntu-latest
-    # needs: [check, e2e]
-    # 修正フィードバック短縮のため、一時的にe2e条件をなくす
-    needs: [check]
+    # frontend 側と同じ理由で e2e ゲートを復活（v1.5 D1）。
+    needs: [check, e2e]
     if: github.ref == 'refs/heads/main'
 
     permissions:
