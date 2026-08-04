@@ -27,6 +27,8 @@ export class AnalyticsResponse implements Response {
   public readonly activeAlertCount: number;
   public readonly knownCount: number;
   public readonly unknownCount: number;
+  // 判定の総数（＝正答率の母数）。Alert 単位ではなく判定単位で数えるので、
+  // 却下 → 再調査 → 承認 は 2 件。feedback（最新の判定）から数えると却下が消える（ADR-27 の測定ギャップ）。
   public readonly withFeedbackCount: number;
   public readonly correctCount: number;
   public readonly incorrectCount: number;
@@ -47,13 +49,14 @@ export class AnalyticsResponse implements Response {
     const approved: ApprovedAlertSummary[] = [];
     for (const alert of alerts) {
       if (alert.classification.type === "known") known += 1;
-      const feedback = alert.feedback;
-      if (feedback !== null) {
+      // 母数は判定の履歴（追記のみ）から数える。承認済み一覧のほうは「いま承認状態か」という
+      // 状態の話なので、最新の判定（feedback）から引く＝2つは別の軸で、一致しなくてよい。
+      for (const record of alert.reviewHistory) {
         withFeedback += 1;
-        if (feedback.isCorrect) {
-          correct += 1;
-          approved.push(toApprovedSummary(alert));
-        }
+        if (record.isCorrect) correct += 1;
+      }
+      if (alert.feedback?.isCorrect === true) {
+        approved.push(toApprovedSummary(alert));
       }
     }
 

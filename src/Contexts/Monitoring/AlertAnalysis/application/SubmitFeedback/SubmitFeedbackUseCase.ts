@@ -2,7 +2,7 @@ import { EvidenceWeightedPromotionPolicy } from "@monitoring/AlertAnalysis/domai
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { ResolvedIncident } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { SimilarIncidentRepository } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
-import { Alert } from "../../domain/Alert.js";
+import { Alert, ReviewDecision } from "../../domain/Alert.js";
 import { AlertId } from "../../domain/AlertId.js";
 import { AlertRepository } from "../../domain/AlertRepository.js";
 import { KnownErrorPatternRepository } from "../../domain/KnownErrorPatternRepository.js";
@@ -25,8 +25,10 @@ export class SubmitFeedbackUseCase {
     alertId: AlertId;
     isCorrect: boolean;
     operatorNote?: string;
+    // 人間が選んだ決裁。未指定なら Alert 側で isCorrect から導出する（derived として記録される）。
+    decision?: ReviewDecision;
   }): Promise<void> {
-    const { alertId, isCorrect, operatorNote } = params;
+    const { alertId, isCorrect, operatorNote, decision } = params;
 
     const alert = await this.alertRepository.findById(alertId);
     if (alert === null) {
@@ -38,7 +40,11 @@ export class SubmitFeedbackUseCase {
     // 承認しても status は OPEN のまま（現役一覧・詳細に出し続ける）。承認＝対処済みの扱いは
     // dedup 側で担う（AnalyzeAlertUseCase は承認済みへは畳み込まず、再発火を新規アラートとして開く）。
     const wasApproved = alert.feedback?.isCorrect === true;
-    const updatedAlert = alert.submitFeedback({ isCorrect, operatorNote });
+    const updatedAlert = alert.submitFeedback({
+      isCorrect,
+      operatorNote,
+      decision,
+    });
     await this.alertRepository.save(updatedAlert);
 
     if (isCorrect) {

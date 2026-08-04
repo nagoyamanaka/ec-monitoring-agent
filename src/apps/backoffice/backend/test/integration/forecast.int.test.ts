@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
+import { MongoClient } from "mongodb";
 import { BackofficeApp } from "../../src/BackofficeApp.js";
 import { ForecastContext } from "../../../../../Contexts/Monitoring/Forecast/domain/ForecastContext.js";
 import { ForecastPort } from "../../../../../Contexts/Monitoring/Forecast/domain/ForecastPort.js";
@@ -16,6 +17,7 @@ import { startApp } from "./support.js";
  */
 describe("forecastRoutes (integration)", () => {
   let app: BackofficeApp;
+  let mongo: MongoClient;
 
   // 実在する sch-1 と偽引用 ghost-9 を混ぜ、引用ゼロのリスクも出す fake（引用検証の実演）。
   const forecastPort: ForecastPort = {
@@ -51,6 +53,7 @@ describe("forecastRoutes (integration)", () => {
   beforeAll(async () => {
     const started = await startApp({ forecastPort });
     app = started.app;
+    mongo = started.mongo;
   });
 
   afterAll(async () => {
@@ -92,12 +95,32 @@ describe("forecastRoutes (integration)", () => {
     expect(res.body.forecast.risks[0].citations).toEqual(["sch-1"]);
   });
 
+  it("POST を重ねると予報は上書きされず Mongo に追記される（履歴＝測定の標本）", async () => {
+    await request(app.httpApp).post("/forecast").send();
+
+    expect(await mongo.db().collection("risk_forecasts").countDocuments({})).toBe(2);
+    // 追記しても配信は最新1件のまま＝ GET /forecast の形は不変。
+    const res = await request(app.httpApp).get("/forecast");
+    expect(res.status).toBe(200);
+    expect(res.body.forecast.forecastId).toBe("forecast-int-1");
+  });
+
+  it("POST /demo/reset は予報を巻き込まない（提出前に温めたキャッシュを守る設計）", async () => {
+    const reset = await request(app.httpApp).post("/demo/reset").send();
+    expect(reset.status).toBe(200);
+
+    const res = await request(app.httpApp).get("/forecast");
+    expect(res.status).toBe(200);
+    expect(await mongo.db().collection("risk_forecasts").countDocuments({})).toBe(2);
+  });
+
   it("DELETE /forecast は生成済み予報を破棄し、GET が未生成（404）に戻る（F12）", async () => {
     const del = await request(app.httpApp).delete("/forecast");
     expect(del.status).toBe(204);
 
     const res = await request(app.httpApp).get("/forecast");
     expect(res.status).toBe(404);
-    // アラート側 /demo/reset とは独立（提出前に温めた予報キャッシュを巻き込まない設計）
+    // 未生成状態に戻るのは配信だけで、生成履歴は残す（デモ卓のリセットで標本を失わない）。
+    expect(await mongo.db().collection("risk_forecasts").countDocuments({})).toBe(2);
   });
 });

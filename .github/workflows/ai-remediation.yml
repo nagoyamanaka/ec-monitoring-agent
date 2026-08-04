@@ -26,6 +26,11 @@ on:
         required: false
         default: "2"
         type: string
+      cveIds:
+        description: "対象を絞る CVE（カンマ区切り・空なら base で見つかった HIGH/CRITICAL 全件）。本番と同じ範囲で試すなら CVE-2021-3807,CVE-2022-25883"
+        required: false
+        default: ""
+        type: string
       callback:
         description: "backend へ結果を POST するか（off にすると存在しない alertId の record を作らずに済む）"
         required: false
@@ -94,23 +99,47 @@ jobs:
       - name: Create remediation branch
         run: git switch -C "$BRANCH"
 
-      # 手動実行には client_payload が無い＝AI に渡す脆弱性リストが空になる。base ref を実際に
-      # スキャンして、backend が送るのと同じ形を作る。出力はワークツリー外に置く（スキャン結果が
-      # 「AI の変更」として commit されたり変更検知を汚したりしないため）。
-      # repository_dispatch ではこの step は動かない＝backend が送った実データをそのまま使う。
-      - name: Collect vulnerabilities by scanning the base ref (manual run only)
-        if: github.event_name == 'workflow_dispatch'
+      # 修正前の base ref をスキャンして基準線を取る。用途は2つ:
+      #   (1) 手動実行では client_payload が無いので、ここから AI へ渡す脆弱性リストを作る
+      #   (2) どちらのトリガでも「もともと base にあった CVE」を記録し、AI が新たに持ち込んだ
+      #       ものと区別できるようにする（下のゲートの参考情報）
+      # 出力はワークツリー外に置く（スキャン結果が「AI の変更」として commit されたり
+      # 変更検知を汚したりしないため）。
+      - name: Scan the base ref (baseline for the gate)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          # 対象を絞る CVE。シェルへ直接展開せず env 経由で受ける（入力をコマンドに混ぜない）。
+          CVE_IDS: ${{ inputs.cveIds }}
         run: |
           set -euo pipefail
           docker run --rm -v "$PWD:/repo" -v "$RUNNER_TEMP:/out" -w /repo aquasec/trivy:latest \
             fs --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --no-progress \
-            --format json --output /out/trivy-manual.json .
+            --format json --output /out/base-scan.json .
+          jq -r '[.Results[]?.Vulnerabilities[]?.VulnerabilityID] | unique | .[]' \
+            "$RUNNER_TEMP/base-scan.json" > "$RUNNER_TEMP/base-cves.txt"
+          echo "${BASE_REF} の既存 HIGH/CRITICAL: $(wc -l < "$RUNNER_TEMP/base-cves.txt") 種"
+
+          [ "$EVENT_NAME" = "workflow_dispatch" ] || exit 0
+
           jq -c '[ .Results[]?.Vulnerabilities[]?
                    | { cveId: .VulnerabilityID, severity: .Severity,
                        package: .PkgName, version: .InstalledVersion,
-                       fixedVersion: (.FixedVersion // null) } ]' \
-            "$RUNNER_TEMP/trivy-manual.json" > "$RUNNER_TEMP/vulns.json"
-          echo "検出: $(jq 'length' "$RUNNER_TEMP/vulns.json") 件（HIGH/CRITICAL・${BASE_REF}）"
+                       fixedVersion: (.FixedVersion // null) } ] | unique_by(.cveId, .package)' \
+            "$RUNNER_TEMP/base-scan.json" > "$RUNNER_TEMP/vulns.json"
+
+          # 絞り込み。base 全件を対象にすると、AI が指示されていない推移依存（tar 等）まで
+          # 直さないとゲートを越えられず、PR 起票まで到達しない＝ランナー配線の検証にならない。
+          if [ -n "${CVE_IDS:-}" ]; then
+            jq -c --arg ids "$CVE_IDS" \
+              '($ids | split(",") | map(gsub("^\\s+|\\s+$";"") | ascii_upcase)) as $keep
+               | map(select((.cveId | ascii_upcase) as $c | $keep | index($c)))' \
+              "$RUNNER_TEMP/vulns.json" > "$RUNNER_TEMP/vulns.filtered.json"
+            mv "$RUNNER_TEMP/vulns.filtered.json" "$RUNNER_TEMP/vulns.json"
+          fi
+
+          echo "手動実行の修正対象: $(jq 'length' "$RUNNER_TEMP/vulns.json") 件"
+          jq -r '.[] | "  \(.cveId)  \(.package)@\(.version) -> \(.fixedVersion // "(fixなし)")"' \
+            "$RUNNER_TEMP/vulns.json"
 
       # Vertex AI へのキーレス認証（app.yml / terraform.yml と同じ WIF 経路）。
       # API キー（GEMINI_API_KEY）を廃止したので、secret が1本減り、認証・モデル・課金先が
@@ -132,7 +161,7 @@ jobs:
         run: npm install -g @google/gemini-cli
 
       # ── AI修正 → テストゲート検証 → 失敗なら再修正、を MAX_ATTEMPTS まで ──────
-      # ここが精度と課金の両立点: 検証（trivy再スキャン+typecheck+test）が緑になるまで
+      # ここが精度と課金の両立点: 検証（対象CVEの再スキャン+typecheck+test）が緑になるまで
       # 自己修正するが、上限回数で必ず打ち切る（無限リトライ＝課金暴走を防ぐ安全弁）。
       - name: AI self-correction loop (bounded by MAX_ATTEMPTS)
         id: fix
@@ -150,6 +179,45 @@ jobs:
           else
             vulns="$VULNERABILITIES"
           fi
+
+          # 依頼が空なら検証すべきものが無い。黙って緑にすると「直した」の証拠にならないので落とす
+          # （backend は vulnerabilities が空なら dispatch せず skipped にするので、ここに来る＝配線の異常）。
+          want_count=$(jq 'length' <<<"$vulns" 2>/dev/null || echo 0)
+          if [ "$want_count" -eq 0 ]; then
+            echo "::error::修正対象の脆弱性が0件で起動されました。検証すべきものがありません。"
+            exit 1
+          fi
+          echo "修正対象: ${want_count} 件"
+
+          # テストゲート。**「リポジトリ全体で HIGH/CRITICAL ゼロ」は条件にしない。**
+          # base に元から多数の推移依存 CVE があり（実測: main で25種）、AI はそれを直すよう
+          # 指示されてもいない（プロンプトは vulns に限定）。全件ゼロを要求すると verified が
+          # 永久に立たず、draft PR が原理的に出なくなる＝依頼と検証の粒度を揃える。
+          verify_gate() {
+            pnpm install --no-frozen-lockfile || return 1
+            docker run --rm -v "$PWD:/repo" -v "$RUNNER_TEMP:/out" -w /repo aquasec/trivy:latest \
+              fs --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --no-progress \
+              --format json --output /out/rescan.json . || return 1
+
+            remaining=$(jq -r --argjson want "$vulns" \
+              '[.Results[]?.Vulnerabilities[]?.VulnerabilityID] as $found
+               | [$want[]?.cveId] | unique | map(select(. as $c | $found | index($c))) | join(", ")' \
+              "$RUNNER_TEMP/rescan.json")
+            if [ -n "$remaining" ]; then
+              echo "未修正の対象CVE: ${remaining}"
+              return 1
+            fi
+
+            # 参考情報（ゲートにはしない）: AI が新たに持ち込んだ CVE を可視化する。
+            # ここを不合格条件にすると、無関係な推移依存の入れ替わりで止まりうるので出すだけにする。
+            jq -r '[.Results[]?.Vulnerabilities[]?.VulnerabilityID] | unique | .[]' \
+              "$RUNNER_TEMP/rescan.json" > "$RUNNER_TEMP/after-cves.txt"
+            comm -13 "$RUNNER_TEMP/base-cves.txt" "$RUNNER_TEMP/after-cves.txt" | paste -sd, - \
+              > "$RUNNER_TEMP/introduced.txt"
+
+            pnpm typecheck || return 1
+            pnpm test || return 1
+          }
 
           attempt=1
           verified=false
@@ -171,18 +239,14 @@ jobs:
             gemini -y -p "$prompt" || true
 
             # 検証（テストゲート）。出力を捕捉し、失敗時は次試行のフィードバックに使う。
-            if ( pnpm install --no-frozen-lockfile \
-                 && docker run --rm -v "$PWD:/repo" -w /repo aquasec/trivy:latest \
-                      fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --no-progress . \
-                 && pnpm typecheck \
-                 && pnpm test ) > verify.log 2>&1; then
+            if verify_gate > verify.log 2>&1; then
               verified=true
               echo "::endgroup::"
               echo "attempt ${attempt} verified ✅"
               break
             fi
 
-            feedback="前回（試行${attempt}）の修正は検証に失敗しました。trivy再スキャン/typecheck/test のいずれかが赤です。
+            feedback="前回（試行${attempt}）の修正は検証に失敗しました。対象CVEの再スキャン/typecheck/test のいずれかが赤です。
             以下の検証ログ末尾を踏まえ、最小修正で再度直してください:
             $(tail -c 4000 verify.log)"
             echo "::endgroup::"
@@ -191,6 +255,11 @@ jobs:
 
           # 検証ログは成果物ではなく作業ファイル。commit 対象に混ざると「変更あり」を誤検出する。
           rm -f verify.log
+
+          # ゲートには含めないが、AI が新たに持ち込んだ CVE は必ず表に出す（隠すと PR の意味が濁る）。
+          if [ -s "$RUNNER_TEMP/introduced.txt" ]; then
+            echo "::warning::base に無かった HIGH/CRITICAL が増えています: $(cat "$RUNNER_TEMP/introduced.txt")"
+          fi
 
           # 「緑」と「直した」は別物。base が既に trivy 緑だと AI が何もしなくても verified=true に
           # なり、その先の git commit が変更ゼロで exit 1 して job ごと落ちる＝経路が回った証拠にすら
@@ -253,7 +322,7 @@ jobs:
 
           if [ "$JOB_STATUS" = "success" ] && [ "$VERIFIED" = "true" ] && [ "$CHANGED" = "false" ]; then
             jq -nc --arg id "$ALERT_ID" --arg ref "$BASE_REF" \
-              '{alertId:$id, status:"skipped", reason:("テストゲート（trivy再スキャン/typecheck/test）は緑で、\($ref) に修正すべき変更は残っていませんでした")}' \
+              '{alertId:$id, status:"skipped", reason:("テストゲート（対象CVEの再スキャン/typecheck/test）は緑で、\($ref) に修正すべき変更は残っていませんでした")}' \
               > ingest-remediation-result.json
             jq . ingest-remediation-result.json
             exit 0
@@ -262,7 +331,7 @@ jobs:
           # 失敗の理由を「どこまで進んだか」で書き分ける。全部を「上限まで赤」と書くと、
           # PR 起票やジョブ前半で落ちた回も同じ文面になり、画面から原因が読めなくなる。
           if [ "$VERIFIED" = "false" ]; then
-            reason="AI修正が上限${MAX_ATTEMPTS}回でテストゲート（trivy再スキャン/typecheck/test）を通過しませんでした"
+            reason="AI修正が上限${MAX_ATTEMPTS}回でテストゲート（対象CVEの再スキャン/typecheck/test）を通過しませんでした"
           elif [ "$VERIFIED" = "true" ]; then
             reason="テストゲートは通過しましたが、修正PRの起票に失敗しました（GitHub Actions の実行ログを確認してください）"
           else

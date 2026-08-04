@@ -158,13 +158,13 @@ export class ForecastRiskUseCase {
     return { ...risk, citations: validCitations };
   }
 
-  // シグナル同梱の ForecastBriefing として最新1件を保存（引用チップの解決先を配信に含める）。
+  // シグナル同梱の ForecastBriefing として1件追記（引用チップの解決先を配信に含める）。
   private async saveBriefing(
     forecast: RiskForecast,
     signals: ForecastSignal[],
   ): Promise<void> {
     const briefing: ForecastBriefing = { forecast, signals };
-    await this.riskForecastRepository.saveLatest(briefing);
+    await this.riskForecastRepository.append(briefing);
     await this.logger.info({
       service: "backoffice-backend",
       action: "forecast_generated",
@@ -179,7 +179,7 @@ export class ForecastRiskUseCase {
       action: "forecast_no_signals",
       message: `予兆シグナルが0件のため空予報を保存しました（Gemini 非呼び出し）: horizon=${horizon}`,
     });
-    await this.riskForecastRepository.saveLatest({
+    await this.riskForecastRepository.append({
       forecast: {
         forecastId: randomUUID(),
         generatedAt: new Date(),

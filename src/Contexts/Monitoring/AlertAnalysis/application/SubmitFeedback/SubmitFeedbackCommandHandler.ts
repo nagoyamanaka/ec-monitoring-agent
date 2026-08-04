@@ -17,6 +17,7 @@ export class SubmitFeedbackCommandHandler
       alertId: new AlertId(command.alertId),
       isCorrect: command.isCorrect,
       operatorNote: command.operatorNote,
+      decision: command.decision,
     });
   }
 }

@@ -139,6 +139,39 @@ describe("GetAnalyticsUseCase", () => {
     expect(summary.category).toBe("APPLICATION");
   });
 
+  it("却下 → 再調査 → 承認 は母数2として数える（やり直しで却下が消えない）", async () => {
+    // ADR-27 の測定ギャップ: feedback から数えると再調査で却下が消え、母数が 1/1 に縮む。
+    const reviewed = makeKnownAlert()
+      .submitFeedback({ isCorrect: false, operatorNote: "原因が違う" })
+      .reopenForReinvestigation()
+      .submitFeedback({ isCorrect: true });
+    await alertRepo.save(reviewed);
+
+    const response = await useCase.run();
+
+    expect(response.withFeedbackCount).toBe(2);
+    expect(response.correctCount).toBe(1);
+    expect(response.incorrectCount).toBe(1);
+    expect(response.accuracy).toBeCloseTo(1 / 2);
+    // 承認済み一覧は「いま承認状態か」という別軸なので、こちらは 1 件のまま。
+    expect(response.approvedAlerts).toHaveLength(1);
+  });
+
+  it("再調査の途中（判定を白紙に戻した状態）でも母数は減らない", async () => {
+    await alertRepo.save(
+      makeKnownAlert()
+        .submitFeedback({ isCorrect: false })
+        .reopenForReinvestigation(),
+    );
+
+    const response = await useCase.run();
+
+    expect(response.withFeedbackCount).toBe(1);
+    expect(response.correctCount).toBe(0);
+    expect(response.accuracy).toBe(0);
+    expect(response.approvedAlerts).toHaveLength(0);
+  });
+
   it("空の suggestedPatternName（salvage 欠落）は patternName を null に畳む", async () => {
     // シナリオ4: 途中切断で推定パターン名が欠落した未知アラートを承認クローズしたケース。
     const salvaged = makeUnknownAlert()
