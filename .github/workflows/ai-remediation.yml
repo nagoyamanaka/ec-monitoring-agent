@@ -7,6 +7,30 @@ name: AI Remediation
 on:
   repository_dispatch:
     types: [ai-remediation]
+  # 手動実行。**本番の連鎖（backend → dispatch → callback）とは別物**で、ランナー側の配線
+  # （WIF+Vertex 認証・gemini CLI のフラグ・docker 内 trivy・gh pr create）だけを、backend や
+  # PAT 権限と切り離して検証するための口。D3-b の合格判定はあくまで repository_dispatch 側。
+  workflow_dispatch:
+    inputs:
+      alertId:
+        description: "対象 alertId（ブランチ名と callback のキーになる。手動検証なら任意の文字列でよい）"
+        required: true
+        type: string
+      baseRef:
+        description: "修正の土台にする ref（＝PR の base）"
+        required: false
+        default: demo/security-baseline
+        type: string
+      maxAttempts:
+        description: "AI自己修正ループの上限"
+        required: false
+        default: "2"
+        type: string
+      callback:
+        description: "backend へ結果を POST するか（off にすると存在しない alertId の record を作らずに済む）"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -17,22 +41,25 @@ jobs:
   remediate:
     runs-on: ubuntu-latest
     env:
-      ALERT_ID: ${{ github.event.client_payload.alertId }}
+      # repository_dispatch では client_payload、workflow_dispatch では inputs から取る。
+      # 片方のイベントでは他方のコンテキストが空になるので `||` で畳める。
+      ALERT_ID: ${{ github.event.client_payload.alertId || inputs.alertId }}
       # 脆弱性一覧（backend が dispatch 時に同梱）。AIエージェントの修正入力。
+      # 手動実行では payload が無いので、下の step が checkout 先を trivy スキャンして同じ形を作る。
       VULNERABILITIES: ${{ toJSON(github.event.client_payload.vulnerabilities) }}
-      BRANCH: security/ai-remediation-${{ github.event.client_payload.alertId }}
+      BRANCH: security/ai-remediation-${{ github.event.client_payload.alertId || inputs.alertId }}
       # 修正の土台にする ref（＝PR の base）。repository_dispatch の既定は default branch だが、
       # 脆弱性の実体は baseline ブランチ側にあるので backend の設定値（GITHUB_REMEDIATION_BASE_REF）を
       # client_payload で運ぶ。空なら既定ブランチ＝従来どおり。
-      BASE_REF: ${{ github.event.client_payload.baseRef || github.event.repository.default_branch }}
+      BASE_REF: ${{ github.event.client_payload.baseRef || inputs.baseRef || github.event.repository.default_branch }}
       # AI自己修正ループの上限（backend config が単一ソース。未指定時のみ 2 にフォールバック）。
       # 通らないと延々リトライして課金暴走するのを防ぐ安全弁。
-      MAX_ATTEMPTS: ${{ github.event.client_payload.maxAttempts || '2' }}
+      MAX_ATTEMPTS: ${{ github.event.client_payload.maxAttempts || inputs.maxAttempts || '2' }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.client_payload.baseRef || github.event.repository.default_branch }}
+          ref: ${{ github.event.client_payload.baseRef || inputs.baseRef || github.event.repository.default_branch }}
 
       # ローカル composite action は「チェックアウトされた作業ツリー」から解決される。上で base ref
       # （脆弱な baseline ブランチ）を被せた以上、そこに .github/actions がある保証は無い——結果 callback が
@@ -62,8 +89,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # -C（強制作成）にしてあるのは、同じ alertId で再実行しうるため（手動検証・本番のリトライとも）。
+      # security/ai-remediation-* は bot 所有の名前空間なので、作り直しで失うものは無い。
       - name: Create remediation branch
-        run: git switch -c "$BRANCH"
+        run: git switch -C "$BRANCH"
+
+      # 手動実行には client_payload が無い＝AI に渡す脆弱性リストが空になる。base ref を実際に
+      # スキャンして、backend が送るのと同じ形を作る。出力はワークツリー外に置く（スキャン結果が
+      # 「AI の変更」として commit されたり変更検知を汚したりしないため）。
+      # repository_dispatch ではこの step は動かない＝backend が送った実データをそのまま使う。
+      - name: Collect vulnerabilities by scanning the base ref (manual run only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" -v "$RUNNER_TEMP:/out" -w /repo aquasec/trivy:latest \
+            fs --scanners vuln --severity HIGH,CRITICAL --exit-code 0 --no-progress \
+            --format json --output /out/trivy-manual.json .
+          jq -c '[ .Results[]?.Vulnerabilities[]?
+                   | { cveId: .VulnerabilityID, severity: .Severity,
+                       package: .PkgName, version: .InstalledVersion,
+                       fixedVersion: (.FixedVersion // null) } ]' \
+            "$RUNNER_TEMP/trivy-manual.json" > "$RUNNER_TEMP/vulns.json"
+          echo "検出: $(jq 'length' "$RUNNER_TEMP/vulns.json") 件（HIGH/CRITICAL・${BASE_REF}）"
 
       # Vertex AI へのキーレス認証（app.yml / terraform.yml と同じ WIF 経路）。
       # API キー（GEMINI_API_KEY）を廃止したので、secret が1本減り、認証・モデル・課金先が
@@ -96,6 +143,14 @@ jobs:
           GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION || 'global' }}
         run: |
           set -u
+          # 入力の出どころ: 本番は client_payload（job env）、手動実行は上の step が作ったファイル。
+          # GITHUB_ENV で job env を上書きする形は precedence が紛らわしいので、明示的に選ぶ。
+          if [ -s "$RUNNER_TEMP/vulns.json" ]; then
+            vulns=$(cat "$RUNNER_TEMP/vulns.json")
+          else
+            vulns="$VULNERABILITIES"
+          fi
+
           attempt=1
           verified=false
           feedback=""
@@ -103,7 +158,7 @@ jobs:
             echo "::group::Remediation attempt ${attempt}/${MAX_ATTEMPTS}"
             prompt="あなたはセキュリティ脆弱性を修正するコーディングエージェントです。
             次の HIGH/CRITICAL 脆弱性をすべて修正してください（JSON配列）:
-            ${VULNERABILITIES}
+            ${vulns}
 
             手順:
             1. 影響パッケージを fixedVersion 以上へ更新（package.json/lockfile、必要なら Dockerfile。yarn.lock/pnpm-lock 両対応）。
@@ -167,13 +222,15 @@ jobs:
           git config user.email "ai-remediation@users.noreply.github.com"
           git add -A
           git commit -m "fix(security): AI remediation for alert ${ALERT_ID}"
-          git push -u origin "$BRANCH"
+          # ブランチを -C で作り直しているので push も強制。bot 所有の名前空間に閉じている。
+          git push -u --force origin "$BRANCH"
           # base は checkout した ref に揃える（既定ブランチへ向けると baseline 差分が丸ごと乗る）。
+          # 同じ alertId の再実行では PR が既に開いている＝create が失敗するので、その場合は既存を引く。
           url=$(gh pr create --draft \
             --title "fix(security): AI remediation (alert ${ALERT_ID})" \
             --body "AI が起票したセキュリティ修正です。trivy 再スキャン + UT 緑を確認済み。マージ前にレビューしてください。" \
             --base "$BASE_REF" \
-            --head "$BRANCH")
+            --head "$BRANCH" 2>/dev/null) || url=$(gh pr view "$BRANCH" --json url -q .url)
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       # ── backend へ結果 callback（成功/失敗いずれも必ず通知）─────────────────
@@ -218,8 +275,10 @@ jobs:
       # この POST だけは on-missing-url: fail。確定を運ぶ callback なので、届かないまま緑に
       # したら record が dispatched のまま永久に残る（＝backend 側の期限切れ処理が拾うまで宙に浮く）。
       # 他2本（検知・予兆）は届かなくてもその1件が欠けるだけなので skip でよい、という区別。
+      # 手動実行で callback=false のときだけ送らない（実在しない alertId の record を作らないため）。
+      # repository_dispatch では常に送る＝確定を運ぶ義務がある。
       - name: Callback to backoffice (result)
-        if: always()
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.callback) }}
         uses: ./.ci-tooling/.github/actions/ingest-post
         with:
           url: ${{ secrets.INGEST_URL }}
