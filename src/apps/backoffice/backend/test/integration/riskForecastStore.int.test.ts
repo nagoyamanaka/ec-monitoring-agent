@@ -104,4 +104,36 @@ describe("MongoRiskForecastRepository (integration)", () => {
     expect((await store.findLatest())?.forecast.forecastId).toBe("f-4");
     expect(await mongo.db().collection("risk_forecasts").countDocuments({})).toBe(4);
   });
+
+  it("findAll は破棄済みも含めた全件を古い順で返す（測定の標本＝ E6）", async () => {
+    const all = await store.findAll();
+
+    // f-1〜f-3 は clear() で破棄済みだが標本には残る（リセットで level 分布が消えない）
+    expect(all.map((b) => b.forecast.forecastId)).toEqual(["f-1", "f-2", "f-3", "f-4"]);
+    expect(await store.findLatest()).not.toBeNull(); // 配信は最新1件のまま
+  });
+
+  it("検証カウンタ（追記フィールド）がマッピング追加なしでラウンドトリップする", async () => {
+    const withStats = briefing("f-5", "2026-08-04T00:00:00.000Z");
+    await store.append({
+      ...withStats,
+      forecast: {
+        ...withStats.forecast,
+        verification: {
+          citationsEmitted: 3,
+          citationsDropped: 1,
+          risksEmitted: 2,
+          risksDropped: 1,
+        },
+      },
+    });
+
+    const latest = await store.findLatest();
+    expect(latest?.forecast.verification).toEqual({
+      citationsEmitted: 3,
+      citationsDropped: 1,
+      risksEmitted: 2,
+      risksDropped: 1,
+    });
+  });
 });

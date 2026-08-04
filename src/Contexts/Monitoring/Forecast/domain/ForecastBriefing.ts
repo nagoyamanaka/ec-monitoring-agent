@@ -22,6 +22,13 @@ export interface RiskForecastRepository {
   append(briefing: ForecastBriefing): Promise<void>;
   findLatest(): Promise<ForecastBriefing | null>;
   /**
+   * 測定の標本＝**これまでに生成した全予報**（古い順）。
+   * `clear()` で破棄した行も返す——破棄は配信の話（未生成状態に戻す）であって履歴の話ではない。
+   * ここで discardedAt を除くと、デモ卓のリセット1回で level 分布も破棄件数も消えて、
+   * 追記型にした意味が無くなる（→ ADR-28）。
+   */
+  findAll(): Promise<ForecastBriefing[]>;
+  /**
    * 生成済み予報を未生成状態に戻す（デモ卓のリセット・F12）。
    * **履歴は消さない**——読み取り対象から外すだけ。デモ卓のリセット1回で測定の標本が
    * 消えると、追記にした意味が無くなるため。
@@ -48,6 +55,9 @@ export function toForecastBriefingPrimitives(
         ...(risk.preventiveAction ? { preventiveAction: risk.preventiveAction } : {}),
       })),
       isFallback: briefing.forecast.isFallback,
+      ...(briefing.forecast.verification
+        ? { verification: { ...briefing.forecast.verification } }
+        : {}),
     },
     signals: briefing.signals.map(
       (signal): ForecastSignalPrimitives => ({

@@ -4,6 +4,8 @@ import { GetAnalyticsQuery } from "../../../../../../Contexts/Monitoring/AlertAn
 import { AnalyticsResponse } from "../../../../../../Contexts/Monitoring/AlertAnalysis/application/GetAnalytics/AnalyticsResponse.js";
 import { GetKnownErrorPatternsQuery } from "../../../../../../Contexts/Monitoring/AlertAnalysis/application/GetKnownErrorPatterns/GetKnownErrorPatternsQuery.js";
 import { PatternResponse } from "../../../../../../Contexts/Monitoring/AlertAnalysis/application/GetKnownErrorPatterns/PatternResponse.js";
+import { GetForecastMeasurementQuery } from "../../../../../../Contexts/Monitoring/Forecast/application/GetForecastMeasurement/GetForecastMeasurementQuery.js";
+import { ForecastMeasurementResponse } from "../../../../../../Contexts/Monitoring/Forecast/application/GetForecastMeasurement/GetForecastMeasurementUseCase.js";
 
 export class AnalyticsGetController {
   constructor(private readonly queryBus: QueryBus) {}
@@ -18,10 +20,17 @@ export class AnalyticsGetController {
       const patterns = await this.queryBus.ask<PatternResponse>(
         new GetKnownErrorPatternsQuery(),
       );
+      // 予報の測定（E6）は **AnalyticsResponse には入れず**、同じレスポンスの別フィールドに置く。
+      // 診断側（正答率・引用照合率）と分母の意味が違うので、同じ集計オブジェクトに混ぜない
+      // ——混ぜた時点で「予報の照合率は定義上 100%」が診断側の率を汚す。
+      const forecast = await this.queryBus.ask<ForecastMeasurementResponse>(
+        new GetForecastMeasurementQuery(),
+      );
       res.json({
         ...analytics,
         promotedPatternCount: patterns.patterns.filter((p) => p.isPromoted)
           .length,
+        forecastMeasurement: forecast.measurement,
       });
     } catch (error) {
       next(error);

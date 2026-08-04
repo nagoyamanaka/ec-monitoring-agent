@@ -20,6 +20,38 @@ export type ApprovedAlertSummaryDto = {
   readonly operatorNote: string | null;
 };
 
+/** 引用照合率の集計（backend CitationCoverage と同形）。 */
+export type CitationCoverageDto = {
+  readonly total: number;
+  readonly resolved: number;
+  readonly byKind: readonly { readonly kind: string; readonly count: number }[];
+  readonly unmeasured: number;
+};
+
+/**
+ * 予報の測定（E6・backend ForecastMeasurement と同形）。
+ * 診断側（citationCoverage）とは**分母の意味が違う**ので、率を持たず件数だけを運ぶ。
+ * 予報は偽引用を永続化の前に落とすため、残った側の照合率は定義上 100%＝測るのは落とした側。
+ */
+export type ForecastMeasurementDto = {
+  readonly forecasts: number;
+  readonly excludedFallback: number;
+  readonly excludedNoSignals: number;
+  readonly excludedUnmeasured: number;
+  readonly citationsEmitted: number;
+  readonly citationsDropped: number;
+  readonly risksEmitted: number;
+  readonly risksDropped: number;
+  readonly signalsCollected: number;
+  readonly signalsByKind: readonly { readonly kind: string; readonly count: number }[];
+  readonly risksSurvived: number;
+  readonly byLevel: readonly {
+    readonly level: string;
+    readonly count: number;
+    readonly withMemoryCitation: number;
+  }[];
+};
+
 /** GET /analytics の生レスポンス（backend AnalyticsResponse と同形）。 */
 export type AnalyticsDto = {
   readonly totalAlerts: number;
@@ -34,6 +66,10 @@ export type AnalyticsDto = {
   readonly approvedAlerts?: readonly ApprovedAlertSummaryDto[];
   /** 昇格（結晶化）済みパターン数。学習ループの成果指標。旧backend互換で未定義を許容。 */
   readonly promotedPatternCount?: number;
+  /** 引用照合率（E2）。旧backend互換で未定義を許容。 */
+  readonly citationCoverage?: CitationCoverageDto;
+  /** 予報の測定（E6）。旧backend互換で未定義を許容。 */
+  readonly forecastMeasurement?: ForecastMeasurementDto;
 };
 
 export type AnalyticsView = {
@@ -53,6 +89,16 @@ export type AnalyticsView = {
   readonly approvedAlerts: readonly ApprovedAlertSummaryDto[];
   /** 昇格（結晶化）済みパターン数。 */
   readonly promotedPatternCount: number;
+  /**
+   * 引用照合率。引用が1件も無ければ null（母数0の％を作らない）。
+   * ％は持たせない——**母数を隠した％を大きく出さない**方針なので、表示は必ず X/Y の件数で行う。
+   */
+  readonly citationCoverage: CitationCoverageDto | null;
+  /**
+   * 予報の測定。集計対象の予報が1件も無ければ null（母数0の数字を出さない）。
+   * ％は持たせない——予報側は**破棄の件数**で出す指標で、率にすると定義上 100% にしかならない。
+   */
+  readonly forecastMeasurement: ForecastMeasurementDto | null;
 };
 
 /**
@@ -105,5 +151,16 @@ export function toAnalyticsView(dto: AnalyticsDto): AnalyticsView {
     knownRatio,
     approvedAlerts: dto.approvedAlerts ?? [],
     promotedPatternCount: dto.promotedPatternCount ?? 0,
+    // 引用ゼロは「照合率 0%」ではなく「まだ測る材料が無い」。null に畳んで表示側で出し分ける。
+    citationCoverage:
+      dto.citationCoverage && dto.citationCoverage.total > 0
+        ? dto.citationCoverage
+        : null,
+    // 予報ゼロは「破棄0件」ではなく「まだ1回も生成していない」。除外だけがあるケース
+    // （fallback しか無い等）も母数0なので出さない。
+    forecastMeasurement:
+      dto.forecastMeasurement && dto.forecastMeasurement.forecasts > 0
+        ? dto.forecastMeasurement
+        : null,
   };
 }

@@ -20,10 +20,30 @@ export type RiskItem = {
   readonly preventiveAction?: string;
 };
 
+/**
+ * 引用検証（ハルシネーション・ガード）の会計（E6-1）。
+ *
+ * `verifyCitations()` は偽引用と裏付けゼロのリスクを**永続化の前に**落とすので、
+ * 保存済み予報だけを見ると引用照合率は**定義上 100%** になる。測るべきなのは残った側ではなく
+ * **落とした側**で、その値は現状ローカル変数として捨てられている（外に出るのは warn の文字列だけ）。
+ * ここに載せるのは今すでに数えている値そのもので、判定ロジックは一切変えない。
+ *
+ * 追記フィールド（旧データは未設定）。ドキュメントは `RiskForecast` の射影なので、
+ * Mongo 側のマッピングを書き足さずにそのまま同じ doc へ乗る。
+ */
+export type CitationVerificationStats = {
+  readonly citationsEmitted: number; // LLM が出した引用の総数（検証前）
+  readonly citationsDropped: number; // 実在しない id として落とした引用数
+  readonly risksEmitted: number; // LLM が出したリスク数（検証前）
+  readonly risksDropped: number; // 裏付けが1つも残らず丸ごと破棄したリスク数
+};
+
 export type RiskForecast = {
   readonly forecastId: string;
   readonly generatedAt: Date;
   readonly horizon: string; // 対象期間（例: "今週末"）
   readonly risks: RiskItem[]; // level 降順
   readonly isFallback: boolean; // 生成失敗時の縮退
+  // 引用検証の会計（E6-1）。LLM を呼ばなかった予報（シグナル0件の空予報）には付かない。
+  readonly verification?: CitationVerificationStats;
 };

@@ -158,7 +158,11 @@ jobs:
       # ★品質不足ならこのループの gemini 呼び出しを claude(code) CLI に差し替えるだけ（ゲートは不変）。
       #   差し替えは step 1個の置換で足りるので composite action にはしない（契約はテストゲートが担う）。
       - name: Install Gemini CLI
-        run: npm install -g @google/gemini-cli
+        run: |
+          npm install -g @google/gemini-cli
+          # 何が入ったかを毎回残す。未ピン留めなので、挙動が変わったときに
+          # 「いつのリリースから変わったか」を実行ログだけで追えるようにしておく。
+          gemini --version || true
 
       # ── AI修正 → テストゲート検証 → 失敗なら再修正、を MAX_ATTEMPTS まで ──────
       # ここが精度と課金の両立点: 検証（対象CVEの再スキャン+typecheck+test）が緑になるまで
@@ -170,6 +174,10 @@ jobs:
           GOOGLE_GENAI_USE_VERTEXAI: "true"
           GOOGLE_CLOUD_PROJECT: ${{ vars.GCP_PROJECT_ID }}
           GOOGLE_CLOUD_LOCATION: ${{ vars.GOOGLE_CLOUD_LOCATION || 'global' }}
+          # trusted-folders の同意。これが無いと CLI は -y（YOLO）を "default" に落としたうえで
+          # 起動自体を拒否する＝非対話環境では何も実行されない。CI の作業ツリーは毎回 checkout した
+          # 使い捨てなので、信頼の判断はここで与えるのが正しい。
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
         run: |
           set -u
           # 入力の出どころ: 本番は client_payload（job env）、手動実行は上の step が作ったファイル。
@@ -221,6 +229,7 @@ jobs:
 
           attempt=1
           verified=false
+          ai_ran_ok=false
           feedback=""
           while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
             echo "::group::Remediation attempt ${attempt}/${MAX_ATTEMPTS}"
@@ -236,7 +245,16 @@ jobs:
             ${feedback}"
 
             # ※ -y/--yolo（ツール自動承認）・-p/--prompt（非対話）はリリースに合わせ要確認。
-            gemini -y -p "$prompt" || true
+            # 失敗を握り潰さない。以前これを `|| true` で捨てていたため、CLI が trusted-folders で
+            # 起動拒否されても「テストゲートが通らなかった」という顔で終わり、上限回数ぶん空振りした。
+            # AI が動かなかったのとゲートが赤いのは別の失敗＝別の直し方なので、必ず区別して残す。
+            if gemini -y -p "$prompt" > "$RUNNER_TEMP/gemini.log" 2>&1; then
+              ai_ran_ok=true
+            else
+              rc=$?
+              echo "::warning::AI CLI が異常終了しました（試行${attempt}・exit ${rc}）"
+            fi
+            tail -c 4000 "$RUNNER_TEMP/gemini.log"
 
             # 検証（テストゲート）。出力を捕捉し、失敗時は次試行のフィードバックに使う。
             if verify_gate > verify.log 2>&1; then
@@ -272,8 +290,11 @@ jobs:
 
           echo "verified=${verified}" >> "$GITHUB_OUTPUT"
           echo "changed=${changed}" >> "$GITHUB_OUTPUT"
-          echo "verified=${verified} changed=${changed}"
-          if [ "$verified" != "true" ]; then
+          echo "aiRanOk=${ai_ran_ok}" >> "$GITHUB_OUTPUT"
+          echo "verified=${verified} changed=${changed} aiRanOk=${ai_ran_ok}"
+          if [ "$ai_ran_ok" != "true" ]; then
+            echo "::error::AI CLI が一度も正常終了しませんでした。ゲート以前の問題です（上のログを確認）。"
+          elif [ "$verified" != "true" ]; then
             echo "上限 ${MAX_ATTEMPTS} 回で検証通過せず。PRは起票せず failed として返します。"
           elif [ "$changed" != "true" ]; then
             echo "検証は緑だが変更ゼロ（${BASE_REF} に修正対象が残っていない）。PRは起票せず skipped として返します。"
@@ -310,6 +331,7 @@ jobs:
           PR_URL: ${{ steps.pr.outputs.url }}
           VERIFIED: ${{ steps.fix.outputs.verified }}
           CHANGED: ${{ steps.fix.outputs.changed }}
+          AI_RAN_OK: ${{ steps.fix.outputs.aiRanOk }}
           JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
@@ -330,7 +352,9 @@ jobs:
 
           # 失敗の理由を「どこまで進んだか」で書き分ける。全部を「上限まで赤」と書くと、
           # PR 起票やジョブ前半で落ちた回も同じ文面になり、画面から原因が読めなくなる。
-          if [ "$VERIFIED" = "false" ]; then
+          if [ "$AI_RAN_OK" = "false" ]; then
+            reason="AI CLI を実行できませんでした（修正は試みられていません）。GitHub Actions の実行ログを確認してください"
+          elif [ "$VERIFIED" = "false" ]; then
             reason="AI修正が上限${MAX_ATTEMPTS}回でテストゲート（対象CVEの再スキャン/typecheck/test）を通過しませんでした"
           elif [ "$VERIFIED" = "true" ]; then
             reason="テストゲートは通過しましたが、修正PRの起票に失敗しました（GitHub Actions の実行ログを確認してください）"

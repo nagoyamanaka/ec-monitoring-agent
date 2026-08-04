@@ -20,6 +20,8 @@ import {
   type ApprovedAlertSummaryDto,
 } from "../../domain/AnalyticsView";
 import { eventInfo, eventTitle } from "@features/alerts/domain/eventCatalog";
+import { CITATION_KIND_LABEL } from "@features/alerts/domain/citationGroups";
+import type { CitationSourceKind } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
 import { LiveStreamStatus } from "@features/alerts/presentation/components/LiveStreamStatus";
 import { useAnalytics } from "../hooks/useAnalytics";
 
@@ -408,6 +410,129 @@ function AggregateBlock({ analytics }: { analytics: AnalyticsView }) {
           tone="rose"
         />
       </div>
+
+      <CitationCoverageLine analytics={analytics} />
+      <ForecastMeasurementLine analytics={analytics} />
+    </div>
+  );
+}
+
+/**
+ * 引用照合率（E2）。正答率が人間の承認/却下を母数にするのに対し、こちらは
+ * 「AI が挙げた根拠が実在したか」を収集済み証拠と決定論で突合した結果＝**母数は引用単位**。
+ * ％を大きく出さず X/Y の件数で出す（母数を隠した％を出さない方針）。
+ */
+function CitationCoverageLine({ analytics }: { analytics: AnalyticsView }) {
+  const coverage = analytics.citationCoverage;
+  if (coverage === null) return null;
+
+  const breakdown = coverage.byKind
+    .map(
+      ({ kind, count }) =>
+        `${CITATION_KIND_LABEL[kind as CitationSourceKind] ?? kind} ${count}`,
+    )
+    .join("・");
+
+  return (
+    <div className="rounded-tremor-default bg-slate-800/40 px-4 py-3 text-xs text-slate-300">
+      <p>
+        引用{" "}
+        <span className="font-semibold tabular-nums text-slate-100">
+          {coverage.resolved}/{coverage.total}
+        </span>{" "}
+        が実在照合済み
+        {breakdown !== "" && <span className="text-slate-400">（{breakdown}）</span>}
+      </p>
+      <p className="mt-1 text-slate-400">
+        AI が挙げた根拠を収集済み証拠と決定論で突合した結果。母数は引用単位で、
+        照合できなかった引用も分母に残す。
+        {coverage.unmeasured > 0 &&
+          `照合結果が未保存の引用 ${coverage.unmeasured} 件は集計から除外。`}
+      </p>
+    </div>
+  );
+}
+
+const SIGNAL_KIND_LABEL: Record<string, string> = {
+  FUTURE_CHANGE: "未来の変更",
+  SCHEDULE: "スケジュール",
+  MEMORY: "過去インシデント",
+};
+
+const RISK_LEVEL_LABEL: Record<string, string> = {
+  HIGH: "高",
+  MEDIUM: "中",
+  LOW: "低",
+};
+
+/**
+ * 予報の測定（E6-1 / E6-3）。**診断側とは別ブロック**にするのは分母の意味が逆だから——
+ * 予報は偽引用を表示前に落とすので、残った側の照合率は定義上 100%。測るのは落とした側で、
+ * 出せる指標は率ではなく**破棄の件数**になる。同じ枠に並べると診断側の率まで信用されない。
+ * 破棄0でもそのまま出す（「機構が要らなかった」ではなく「まだ発火していない」なので隠さない）。
+ */
+function ForecastMeasurementLine({ analytics }: { analytics: AnalyticsView }) {
+  const m = analytics.forecastMeasurement;
+  if (m === null) return null;
+
+  const signalBreakdown = m.signalsByKind
+    .map(({ kind, count }) => `${SIGNAL_KIND_LABEL[kind] ?? kind} ${count}`)
+    .join("・");
+  // 「前例が無くても出る。ただし弱く出る」を数字で示す段。過去インシデントの引用が
+  // 無いリスクが何段目に出たかが芯なので、level ごとに (うち前例あり N) を併記する。
+  const levelBreakdown = m.byLevel
+    .map(
+      ({ level, count, withMemoryCitation }) =>
+        `${RISK_LEVEL_LABEL[level] ?? level} ${count}（うち前例あり ${withMemoryCitation}）`,
+    )
+    .join("・");
+  const excluded = [
+    m.excludedFallback > 0 ? `生成失敗の縮退 ${m.excludedFallback} 件` : null,
+    m.excludedNoSignals > 0 ? `シグナル0件の空予報 ${m.excludedNoSignals} 件` : null,
+    m.excludedUnmeasured > 0 ? `計測前の予報 ${m.excludedUnmeasured} 件` : null,
+  ].filter((entry) => entry !== null);
+
+  return (
+    <div className="rounded-tremor-default bg-slate-800/40 px-4 py-3 text-xs text-slate-300">
+      <p>
+        予報{" "}
+        <span className="font-semibold tabular-nums text-slate-100">
+          {m.forecasts}
+        </span>{" "}
+        回のうち、AI が挙げた引用{" "}
+        <span className="font-semibold tabular-nums text-slate-100">
+          {m.citationsEmitted}
+        </span>{" "}
+        件中{" "}
+        <span className="font-semibold tabular-nums text-slate-100">
+          {m.citationsDropped}
+        </span>{" "}
+        件を実在しない引用として破棄・裏付けの残らなかったリスク{" "}
+        <span className="font-semibold tabular-nums text-slate-100">
+          {m.risksDropped}
+        </span>{" "}
+        件を表示前に破棄
+      </p>
+      <p className="mt-1">
+        シグナル{" "}
+        <span className="font-semibold tabular-nums text-slate-100">
+          {m.signalsCollected}
+        </span>{" "}
+        件を突合して、リスク{" "}
+        <span className="font-semibold tabular-nums text-slate-100">
+          {m.risksSurvived}
+        </span>{" "}
+        件に絞り込み
+        {signalBreakdown !== "" && (
+          <span className="text-slate-400">（{signalBreakdown}）</span>
+        )}
+      </p>
+      <p className="mt-1 text-slate-400">危険度: {levelBreakdown}</p>
+      <p className="mt-1 text-slate-400">
+        予報は実在しない引用を表示前に落とすので、残った引用の照合率は定義上 100%
+        になる。ここで数えているのは落とした側＝率ではなく件数で出す。
+        {excluded.length > 0 && `集計から除外: ${excluded.join("・")}。`}
+      </p>
     </div>
   );
 }

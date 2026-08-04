@@ -25,12 +25,24 @@ export type RiskItemPrimitives = {
   readonly preventiveAction?: string;
 };
 
+// 引用検証の会計（E6-1・domain CitationVerificationStats と同形）。
+// 表示は analytics 側の集計（ForecastMeasurement）で行うが、予報1件ぶんの内訳も
+// wire に出しておく（1件だけ見て「この予報で何を落としたか」が言える）。
+export type CitationVerificationStatsPrimitives = {
+  readonly citationsEmitted: number;
+  readonly citationsDropped: number;
+  readonly risksEmitted: number;
+  readonly risksDropped: number;
+};
+
 export type RiskForecastPrimitives = {
   readonly forecastId: string;
   readonly generatedAt: string; // ISO 8601
   readonly horizon: string;
   readonly risks: RiskItemPrimitives[]; // level 降順
   readonly isFallback: boolean;
+  // LLM を呼ばなかった予報（シグナル0件）と旧データには付かない。
+  readonly verification?: CitationVerificationStatsPrimitives;
 };
 
 export type ForecastBriefingPrimitives = {
