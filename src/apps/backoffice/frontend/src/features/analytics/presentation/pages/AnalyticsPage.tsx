@@ -20,6 +20,8 @@ import {
   type ApprovedAlertSummaryDto,
 } from "../../domain/AnalyticsView";
 import { eventInfo, eventTitle } from "@features/alerts/domain/eventCatalog";
+import { CITATION_KIND_LABEL } from "@features/alerts/domain/citationGroups";
+import type { CitationSourceKind } from "@monitoring/AlertAnalysis/domain/contracts/AlertContract";
 import { LiveStreamStatus } from "@features/alerts/presentation/components/LiveStreamStatus";
 import { useAnalytics } from "../hooks/useAnalytics";
 
@@ -408,6 +410,44 @@ function AggregateBlock({ analytics }: { analytics: AnalyticsView }) {
           tone="rose"
         />
       </div>
+
+      <CitationCoverageLine analytics={analytics} />
+    </div>
+  );
+}
+
+/**
+ * 引用照合率（E2）。正答率が人間の承認/却下を母数にするのに対し、こちらは
+ * 「AI が挙げた根拠が実在したか」を収集済み証拠と決定論で突合した結果＝**母数は引用単位**。
+ * ％を大きく出さず X/Y の件数で出す（母数を隠した％を出さない方針）。
+ */
+function CitationCoverageLine({ analytics }: { analytics: AnalyticsView }) {
+  const coverage = analytics.citationCoverage;
+  if (coverage === null) return null;
+
+  const breakdown = coverage.byKind
+    .map(
+      ({ kind, count }) =>
+        `${CITATION_KIND_LABEL[kind as CitationSourceKind] ?? kind} ${count}`,
+    )
+    .join("・");
+
+  return (
+    <div className="rounded-tremor-default bg-slate-800/40 px-4 py-3 text-xs text-slate-300">
+      <p>
+        引用{" "}
+        <span className="font-semibold tabular-nums text-slate-100">
+          {coverage.resolved}/{coverage.total}
+        </span>{" "}
+        が実在照合済み
+        {breakdown !== "" && <span className="text-slate-400">（{breakdown}）</span>}
+      </p>
+      <p className="mt-1 text-slate-400">
+        AI が挙げた根拠を収集済み証拠と決定論で突合した結果。母数は引用単位で、
+        照合できなかった引用も分母に残す。
+        {coverage.unmeasured > 0 &&
+          `照合結果が未保存の引用 ${coverage.unmeasured} 件は集計から除外。`}
+      </p>
     </div>
   );
 }

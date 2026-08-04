@@ -50,6 +50,34 @@ describe("toAnalyticsView", () => {
         .promotedPatternCount,
     ).toBe(3);
   });
+
+  it("引用照合率はそのまま渡す（％には畳まない＝母数を隠さない）", () => {
+    const v = toAnalyticsView({
+      ...base,
+      citationCoverage: {
+        total: 9,
+        resolved: 8,
+        byKind: [{ kind: "terraform", count: 4 }],
+        unmeasured: 0,
+      },
+    });
+    expect(v.citationCoverage).toEqual({
+      total: 9,
+      resolved: 8,
+      byKind: [{ kind: "terraform", count: 4 }],
+      unmeasured: 0,
+    });
+  });
+
+  it("引用が1件も無い／旧backendは null（母数0の率を作らない）", () => {
+    expect(toAnalyticsView(base).citationCoverage).toBeNull();
+    expect(
+      toAnalyticsView({
+        ...base,
+        citationCoverage: { total: 0, resolved: 0, byKind: [], unmeasured: 0 },
+      }).citationCoverage,
+    ).toBeNull();
+  });
 });
 
 function approved(

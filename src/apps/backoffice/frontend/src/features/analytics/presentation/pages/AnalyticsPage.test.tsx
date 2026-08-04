@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AnalyticsPage } from "./AnalyticsPage";
 import type { AnalyticsApi } from "../../infrastructure/analyticsApi";
@@ -97,5 +97,57 @@ describe("AnalyticsPage 学習の軌跡ヒーロー", () => {
     expect(
       screen.queryByRole("heading", { name: "1件の学習の軌跡" }),
     ).toBeNull();
+  });
+});
+
+describe("AnalyticsPage 引用照合率（従属ブロック）", () => {
+  const coverage = {
+    total: 9,
+    resolved: 8,
+    byKind: [
+      { kind: "terraform", count: 4 },
+      { kind: "cve", count: 2 },
+    ],
+    unmeasured: 0,
+  };
+
+  // 集計は主役から降ろした折りたたみの中にある（U5）。開くところまでが表示条件。
+  // jsdom は summary クリックで details を開かない（活性化の挙動が未実装）ので、
+  // open を立てて toggle を発火する＝ブラウザが行う手順をそのまま再現する。
+  async function openAggregate() {
+    const summary = await screen.findByText(/集計で確かめる/);
+    const details = summary.closest("details") as HTMLDetailsElement;
+    details.open = true;
+    fireEvent(details, new Event("toggle"));
+  }
+
+  it("X/Y の件数と種別内訳を出す（％を大書きしない）", async () => {
+    renderPage(fakeApi({ citationCoverage: coverage }));
+    await openAggregate();
+
+    const line = await screen.findByText(/が実在照合済み/);
+    const scope = within(line.parentElement as HTMLElement);
+    expect(scope.getByText("8/9")).toBeInTheDocument();
+    // kind は機械語のまま出さず、引用チップと同じ日本語ラベルへ写す。
+    expect(scope.getByText(/Terraformリソース 4・脆弱性 \(CVE\) 2/)).toBeInTheDocument();
+    expect(scope.queryByText(/%/)).toBeNull();
+  });
+
+  it("照合結果が未保存の引用があれば除外件数を併記する", async () => {
+    renderPage(fakeApi({ citationCoverage: { ...coverage, unmeasured: 3 } }));
+    await openAggregate();
+
+    expect(
+      await screen.findByText(/照合結果が未保存の引用 3 件は集計から除外/),
+    ).toBeInTheDocument();
+  });
+
+  it("引用が1件も無ければ行ごと出さない（母数0の率を作らない）", async () => {
+    renderPage(fakeApi());
+    await openAggregate();
+    // 集計ブロック自体は開いている（正答率カードが出ている）。
+    await screen.findByText(/フィードバック 2 件を母数に算出/);
+
+    expect(screen.queryByText(/が実在照合済み/)).toBeNull();
   });
 });

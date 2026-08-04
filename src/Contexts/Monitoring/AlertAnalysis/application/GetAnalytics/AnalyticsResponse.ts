@@ -1,5 +1,6 @@
 import { Response } from "../../../../Shared/domain/Response.js";
 import { Alert } from "../../domain/Alert.js";
+import { buildCitationCoverage, CitationCoverage } from "./CitationCoverage.js";
 
 /**
  * 承認済み（＝過去に正しいと判断してクローズした）アラートの一行サマリ。
@@ -36,6 +37,9 @@ export class AnalyticsResponse implements Response {
   public readonly accuracy: number | null;
   // 承認済みアラート（過去の判断）の一覧。新しい順。
   public readonly approvedAlerts: ApprovedAlertSummary[];
+  // 引用照合率（E2）。正答率が「AI の診断が当たったか」の人間評価なのに対し、こちらは
+  // 「AI が挙げた根拠が実在したか」の決定論評価＝母数が引用単位で、人間の判定を待たずに出る。
+  public readonly citationCoverage: CitationCoverage;
 
   constructor(alerts: Alert[]) {
     this.totalAlerts = alerts.length;
@@ -69,6 +73,7 @@ export class AnalyticsResponse implements Response {
     this.approvedAlerts = approved.sort((a, b) =>
       b.occurredOn.localeCompare(a.occurredOn),
     );
+    this.citationCoverage = buildCitationCoverage(alerts);
   }
 }
 

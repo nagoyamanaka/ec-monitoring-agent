@@ -20,6 +20,14 @@ export type ApprovedAlertSummaryDto = {
   readonly operatorNote: string | null;
 };
 
+/** 引用照合率の集計（backend CitationCoverage と同形）。 */
+export type CitationCoverageDto = {
+  readonly total: number;
+  readonly resolved: number;
+  readonly byKind: readonly { readonly kind: string; readonly count: number }[];
+  readonly unmeasured: number;
+};
+
 /** GET /analytics の生レスポンス（backend AnalyticsResponse と同形）。 */
 export type AnalyticsDto = {
   readonly totalAlerts: number;
@@ -34,6 +42,8 @@ export type AnalyticsDto = {
   readonly approvedAlerts?: readonly ApprovedAlertSummaryDto[];
   /** 昇格（結晶化）済みパターン数。学習ループの成果指標。旧backend互換で未定義を許容。 */
   readonly promotedPatternCount?: number;
+  /** 引用照合率（E2）。旧backend互換で未定義を許容。 */
+  readonly citationCoverage?: CitationCoverageDto;
 };
 
 export type AnalyticsView = {
@@ -53,6 +63,11 @@ export type AnalyticsView = {
   readonly approvedAlerts: readonly ApprovedAlertSummaryDto[];
   /** 昇格（結晶化）済みパターン数。 */
   readonly promotedPatternCount: number;
+  /**
+   * 引用照合率。引用が1件も無ければ null（母数0の％を作らない）。
+   * ％は持たせない——**母数を隠した％を大きく出さない**方針なので、表示は必ず X/Y の件数で行う。
+   */
+  readonly citationCoverage: CitationCoverageDto | null;
 };
 
 /**
@@ -105,5 +120,10 @@ export function toAnalyticsView(dto: AnalyticsDto): AnalyticsView {
     knownRatio,
     approvedAlerts: dto.approvedAlerts ?? [],
     promotedPatternCount: dto.promotedPatternCount ?? 0,
+    // 引用ゼロは「照合率 0%」ではなく「まだ測る材料が無い」。null に畳んで表示側で出し分ける。
+    citationCoverage:
+      dto.citationCoverage && dto.citationCoverage.total > 0
+        ? dto.citationCoverage
+        : null,
   };
 }
