@@ -44,8 +44,10 @@ export function confidenceBrandColor(confidence: number): Color {
 
 /**
  * Tremor の色名 → CSS 色（自作 SVG/div ゲージの stroke/背景に使う）。
- * L2: ConfidenceBar/Gauge の中身を Tremor（ProgressBar/ProgressCircle）から自作へ
- * 差し替える際、隣接する自作バー（CalibratedConfidence 等）と同じトーンで塗るための単一表。
+ * L2: ConfidenceGauge の中身を Tremor（ProgressCircle）から自作へ差し替える際、
+ * 隣接する自作バー（CalibratedConfidence 等）と同じトーンで塗るための単一表。
+ * （横バー版の ConfidenceBar は予報カードが唯一の利用者だったため、確信度%の撤去＝
+ * ADR-32 と同時に削除した。）
  * 確信度で使う色（cyan/slate/emerald）＋しきい値色（rose/amber/sky）を Tailwind 400 系で解決し、
  * 未知の色名は控えめな slate にフォールバックする。
  */

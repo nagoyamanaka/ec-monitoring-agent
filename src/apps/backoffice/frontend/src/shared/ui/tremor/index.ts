@@ -30,6 +30,5 @@ export {
 } from "@tremor/react";
 
 export { ConfidenceGauge } from "./ConfidenceGauge";
-export { ConfidenceBar } from "./ConfidenceBar";
 export { ConfidenceChip } from "./ConfidenceChip";
 export { rankColor, confidenceColor, confidenceBrandColor } from "./colors";

@@ -395,7 +395,7 @@ src/
 
 ### 10.5 UI（F7）
 
-`frontend/features/forecast`＝domain（`ForecastView`/`RiskLevel` 純関数・wire は `ForecastContract` を `@monitoring` alias 直 import）／infrastructure（`forecastApi`＝GET の 404 を body で「機能 off（guard・非JSON）/未生成（JSON）」に判別し可用性を返す＝専用 status API を増やさない）／application（`triggerForecast`）／presentation（`ForecastProvider`＝GET 1回でナビ表示可否＋最新予報を全ページ共有・`ForecastPage`＝リスク level 降順・`RiskCard`＝level バッジ+confidence ゲージ+reasoning・**`CitationList`＝引用検証済みシグナルのみの引用チップ（未マージ PR／未適用 plan（実 PR #83）／過去アラートへ実リンク・ハルシネーション否定の可視化）**）。`/forecast` SPA ルート追加（vite proxy / nginx を Accept 出し分けの SPA-aware 側へ移動）・Forecast ナビタブは `FORECAST_ENABLED` off で非表示＋HIGH n件バッジの導線1個。カード描画は `shared/ui/ReferencedEvidenceCard` へ昇格し相関パネル（`RelatedAlertsPanel`）と共有＝「参照 id を実在レコードへ解決して提示する」同型パターンの単一実装。
+`frontend/features/forecast`＝domain（`ForecastView`/`RiskLevel` 純関数・wire は `ForecastContract` を `@monitoring` alias 直 import）／infrastructure（`forecastApi`＝GET の 404 を body で「機能 off（guard・非JSON）/未生成（JSON）」に判別し可用性を返す＝専用 status API を増やさない）／application（`triggerForecast`）／presentation（`ForecastProvider`＝GET 1回でナビ表示可否＋最新予報を全ページ共有・`ForecastPage`＝リスク level 降順・`RiskCard`＝level バッジ+**根拠 N種類チップ**（引用の kind 数＝決定論値）+reasoning。⚠ **confidence は表示しない**——LLM の自己申告をクランプしただけで診断側のような cap も署名UIも無く、判断材料が level と同じ＝決定論で出せている軸の二重表示だった（[ADR-32](decisions/ADR.md#adr-32-予報に確信度は表示しない較正できない自己申告を決定論で出せている軸に重ねない)。値は wire・履歴・同 level 内の表示順には残す）・**`CitationList`＝引用検証済みシグナルのみの引用チップ（未マージ PR／未適用 plan（実 PR #83）／過去アラートへ実リンク・ハルシネーション否定の可視化）**）。`/forecast` SPA ルート追加（vite proxy / nginx を Accept 出し分けの SPA-aware 側へ移動）・Forecast ナビタブは `FORECAST_ENABLED` off で非表示＋HIGH n件バッジの導線1個。カード描画は `shared/ui/ReferencedEvidenceCard` へ昇格し相関パネル（`RelatedAlertsPanel`）と共有＝「参照 id を実在レコードへ解決して提示する」同型パターンの単一実装。
 
 ### 10.6 フラッグシップ seed と E2E（F8）
 
