@@ -70,7 +70,7 @@ import { ForecastRiskUseCase } from "../../../../Contexts/Monitoring/Forecast/ap
 import { ForecastPort } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastPort.js";
 import { ForecastSignalSource } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastSignalSource.js";
 import { GeminiForecastAdapter } from "../../../../Contexts/Monitoring/Forecast/infrastructure/GeminiForecastAdapter.js";
-import { InMemoryRiskForecastRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/InMemoryRiskForecastRepository.js";
+import { MongoRiskForecastRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/MongoRiskForecastRepository.js";
 import { PendingPlanSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/PendingPlanSignalSource.js";
 import { PullRequestSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/PullRequestSignalSource.js";
 import { ResolvedAlertForecastMemoryRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/ResolvedAlertForecastMemoryRepository.js";
@@ -513,7 +513,10 @@ export class BackofficeApp {
       // 生成時（ForecastRiskUseCase）にも再 warmUp されるため、ここは初期ログの観測点を兼ねる。
       await forecastMemoryRepository.warmUp();
     }
-    const riskForecastRepository = new InMemoryRiskForecastRepository();
+    // 予報は Mongo に1件ずつ追記する（role 非依存＝ edge/worker のどちらで生成しても同じ履歴を引く）。
+    // InMemory 版は「生成した個体でしか読めない」ため、Cloud Run edge の再起動・多重インスタンスで
+    // GET /forecast が 404 に落ち、かつ測定の標本が残らなかった。
+    const riskForecastRepository = new MongoRiskForecastRepository(mongoClient);
     // ★差し替え点（ForecastPort）: 既定は単発 Gemini（ADK 非使用は意図的・GeminiForecastAdapter 参照）。
     const forecastPort =
       this.overrides.forecastPort ?? new GeminiForecastAdapter(llmClient, logger);

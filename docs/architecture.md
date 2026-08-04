@@ -385,7 +385,8 @@ src/
 ### 10.3 生成と引用検証（F4・F5）
 
 - F4 `ForecastPort`/`ForecastContext`＋`GeminiForecastAdapter`。**単発 Gemini 経路・ADK 非使用は意図的**＝入力は Handler が事前収集済みでツールコール型探索が不要、`responseMimeType=application/json` 強制で無人閲覧の構造化堅牢性を優先。`LLMTextClient`（GeminiLLMClient）注入のコンポジション・JSON 固定＋citations 必須プロンプト・safeParse・confidence クランプ・未知 level は LOW 丸め・level 降順ソート・失敗時は throw せず `isFallback=true` 縮退。
-- F5 `ForecastRiskCommandHandler`（`Forecast/application/ForecastRisk/`）: 主シグナル収集→subject で ForecastMemory を引き MEMORY シグナルへ正規化→結合→Port.forecast→**引用検証＝citations を実在シグナル id に照合し偽引用は破棄・裏付けゼロのリスクは丸ごと破棄**→`RiskForecastRepository` に最新1件保存。**シグナル0件は Gemini 非呼び出しで空予報＝課金ゼロ**。予報はシグナル全量同梱の `ForecastBriefing` として保存＝引用チップの解決先を配信に含める。wire 契約は `Forecast/domain/contracts/ForecastContract.ts`。
+- F5 `ForecastRiskCommandHandler`（`Forecast/application/ForecastRisk/`）: 主シグナル収集→subject で ForecastMemory を引き MEMORY シグナルへ正規化→結合→Port.forecast→**引用検証＝citations を実在シグナル id に照合し偽引用は破棄・裏付けゼロのリスクは丸ごと破棄**→`RiskForecastRepository.append` で保存。**シグナル0件は Gemini 非呼び出しで空予報＝課金ゼロ**。予報はシグナル全量同梱の `ForecastBriefing` として保存＝引用チップの解決先を配信に含める。wire 契約は `Forecast/domain/contracts/ForecastContract.ts`。
+- F5b 予報の永続化は **Mongo `risk_forecasts` へ生成のたびに1件追記**（`MongoRiskForecastRepository`・role 非依存＝ edge/worker のどちらで生成しても同じ履歴を引く）。読み取りは `findLatest` の最新1件だけで配信の形は不変。`DELETE /forecast` は `discardedAt` を立てる **soft discard**＝未生成状態に戻すが履歴（測定の標本）は残す。→ [ADR-28](decisions/ADR.md)
 
 ### 10.4 ルート・DI（F6）
 

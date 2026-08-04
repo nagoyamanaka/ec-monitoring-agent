@@ -58,14 +58,17 @@ class FakePort implements ForecastPort {
 
 class FakeRepository implements RiskForecastRepository {
   saved: ForecastBriefing[] = [];
-  async saveLatest(briefing: ForecastBriefing): Promise<void> {
+  // Mongo 実装と同じ意味論: clear() は履歴を消さず、読み取り対象から外すだけ。
+  private discardedUpTo = 0;
+  async append(briefing: ForecastBriefing): Promise<void> {
     this.saved.push(briefing);
   }
   async findLatest(): Promise<ForecastBriefing | null> {
+    if (this.saved.length <= this.discardedUpTo) return null;
     return this.saved[this.saved.length - 1] ?? null;
   }
-  async clearLatest(): Promise<void> {
-    this.saved = [];
+  async clear(): Promise<void> {
+    this.discardedUpTo = this.saved.length;
   }
 }
 

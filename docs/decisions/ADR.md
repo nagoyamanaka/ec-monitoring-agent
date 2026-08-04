@@ -33,6 +33,7 @@
 | [ADR-25](#adr-25-investigationreport-は順応者acl-を挟まない) | モジュール境界: ACL を挟まない | モデル |
 | [ADR-26](#adr-26-空応答fallbackは思考予算を落とした縮退リトライ1回で防御) | 空応答 fallback: 縮退リトライ1回 | AI |
 | [ADR-27](#adr-27-ai-精度は正診率でなく誤診の検出可能性で設計する定量評価は未実施) | 精度は正診率でなく誤診の検出可能性 | AI |
+| [ADR-28](#adr-28-予報は追記型で永続化する最新1件のオンメモリ保持をやめる) | 予報は追記型で永続化・リセットは soft discard | 予兆 |
 
 ---
 
@@ -215,3 +216,11 @@
   3. **確信度の単調性検証**: 確信度帯（〜0.5／0.5〜0.75／0.75〜）ごとに承認率を出す。単調に増えていれば「確信度が意味を持つ」ことの実測になり、キャリブレーション設計そのものの検証になる。生の正診率を1つ出すより、当システムの主張に直結する。
   4. **合成 eval ハーネス**（優先度最低）: デモ卓シナリオ（1/2/3/3b/4）は障害を自作しているため正解ラベルが既知で、実 Gemini で N 回流して原因推定の一致を自動採点できる。ただし 5 シナリオ × 数回では n が小さく信頼区間が広い＝数字として弱い。上記 2/3 が先。
 - **参照**: `AnalyticsResponse`（正答率の算出）・`AnalyticsPage`（母数併記・従属化）・`Alert.reopenForReinvestigation`（測定ギャップ）・`CitationResolution`（引用照合の 1:1 対応）・`ConfidenceCalibration`（下げ方向のみの cap）・[ADR-05](#adr-05-調査readと修正writeの構造分離人間承認ゲート)（承認ゲート）・[ADR-07](#adr-07-学習は承認のみ昇格は学習でなく結晶化)（学習＝承認のみ）
+
+## ADR-28: 予報は追記型で永続化する（最新1件のオンメモリ保持をやめる）
+
+- **決定**: `RiskForecast`（`ForecastBriefing`）を Mongo の `risk_forecasts` へ**生成のたびに1件 insert** する。読み取りは従来どおり**最新1件だけ**（`GET /forecast` の挙動・ワイヤの形は不変）。`DELETE /forecast`（デモ卓のリセット・F12）は行を消さず `discardedAt` を立てる **soft discard** とし、読み取り対象から外すだけにする。ストアの種類は増やさない（edge/worker が既に共有している Mongo に相乗り）。
+- **理由**: 従来の `InMemoryRiskForecastRepository` は単一プロセスの最新1件のみを保持していた。帰結が2つある。(1) **消える**——Cloud Run edge の再起動・インスタンス増減で、生成した個体と `GET` を受けた個体が違えば 404 に落ちる。これは terraform 証拠が `edge/worker × InMemory` で欠落した事故と**同型の負債**。(2) **測れない**——予報の level 分布・偽引用の破棄件数は「過去に何を出したか」の標本を要求するが、上書き保存では母数が常に 1。本番で回った回数の痕跡は Cloud Logging だけで、`forecast_generated` は `horizon / signals / risks / isFallback` しか持たず**生き残ったリスクの level はログにも無い**（level が出るのは破棄側の `forecast_uncited_risk_dropped` だけ＝非対称）。**測定の標本は、保存の形で決まる。**
+- **soft discard にした理由**: 追記にしておきながら、デモ卓のリセット1回で履歴が消えるなら追記の意味が無い。「未生成状態に戻す」は**配信の話**であって履歴の話ではないので、両者を別の軸として分けた。`DELETE /forecast` がアラート側 `/demo/reset` に相乗りしないという既存の判断（温めた予報キャッシュを巻き込まない）とも同じ方向。
+- **検証カウンタは同じドキュメントに載せる**: 引用の破棄件数・level 分布といった測定値のために別コレクションを作らない。ストアは `RiskForecast` の射影（`Date` だけ ISO 文字列化）として組んであり、**`RiskForecast` に追記されたフィールドはマッピングを書き足さずに同じ doc へ載る**。
+- **参照**: `MongoRiskForecastRepository`・`RiskForecastRepository`（`append` / `findLatest` / `clear`）・`ForecastRiskUseCase.verifyRisk`（破棄の発生点）・[ADR-27](#adr-27-ai-精度は正診率でなく誤診の検出可能性で設計する定量評価は未実施)（測定の方針）

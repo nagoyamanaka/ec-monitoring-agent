@@ -20,6 +20,8 @@ const COLLECTIONS = [
   "remediations",
   "known_error_patterns",
   "applied_infra_changes",
+  // 予報は追記型（履歴が積まれる）＝掃除しないと前回実行分が「最新の予報」として残る。
+  "risk_forecasts",
 ];
 
 // app.build() が "backoffice" 名で登録した同一 Mongo クライアントを再利用する。
