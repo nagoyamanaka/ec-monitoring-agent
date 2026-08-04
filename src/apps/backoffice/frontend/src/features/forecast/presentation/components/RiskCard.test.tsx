@@ -43,18 +43,26 @@ function renderCard(risk: RiskCardView = RISK) {
 }
 
 describe("RiskCard", () => {
-  it("window を主見出しに、level バッジ・confidence%・reasoning を出す", () => {
+  it("window を主見出しに、level バッジ・reasoning を出す", () => {
     renderCard();
     expect(
       screen.getByRole("heading", { level: 3, name: /土曜 20:00-22:00/ }),
     ).toBeInTheDocument();
     expect(screen.getByText("HIGH")).toBeInTheDocument();
-    expect(screen.getByText("80%")).toBeInTheDocument();
     expect(
       screen.getByText(
         "接続上限を縮小する未マージ PR と週末の負荷スケジュールが重なる",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("確信度%は出さない。裏付けの強さは決定論の「根拠 N種類」が担う", () => {
+    renderCard();
+    // 予報の confidence は LLM の自己申告をクランプしただけで、診断側のような
+    // 検証可能な裏付けによる cap も、由来を開く署名UIも無い。判断材料は level と
+    // 同じ「独立した種類の根拠がどれだけ重なったか」なので、決定論値のほうを残す。
+    expect(screen.queryByText("80%")).toBeNull();
+    expect(screen.getByText(/根拠 \d種類/)).toBeInTheDocument();
   });
 
   it("subject が生突合キーなら人間語化し、生IDは tooltip へ降格する（E9）", () => {

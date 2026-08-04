@@ -28,10 +28,11 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
   const [nodeEl, setNodeEl] = useState<HTMLDivElement | null>(null);
   if (lanes.length === 0) return null;
 
-  const percent = Math.round(risk.confidence * 100);
+  // 確信度%は結論ノードから外した（→ RiskCard の注記）。読み上げも同じ形にする
+  // ——収束の強さは「何種類が何件重なったか」で既に言えている。
   const ariaSummary = `${lanes
     .map((l) => `${l.kindLabel}${l.count}件`)
-    .join("・")}を AI が突合し ${riskLevelLabel(risk.level)}（確信度${percent}%）と判定`;
+    .join("・")}を AI が突合し ${riskLevelLabel(risk.level)}と判定`;
 
   return (
     <section
@@ -81,20 +82,15 @@ export function ConvergenceMiniFlow({ risk }: ConvergenceMiniFlowProps) {
         <ArrowDownIcon className="self-center text-slate-500 md:hidden" />
         <ArrowRightIcon className="mx-1.5 hidden shrink-0 text-slate-500 md:block" />
 
-        {/* 結論ノード（レベル＋確信度%）。subject はカード見出し（この直上）が担うため
+        {/* 結論ノード（レベル）。subject はカード見出し（この直上）が担うため
             ここでは重複表示せず、収束の帰結＝深刻度に焦点を当てる。 */}
         <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 self-center rounded-lg bg-slate-800/50 px-4 py-3 text-center">
           <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
             結論に収束
           </p>
-          <div className="flex items-center gap-2">
-            {/* 「顔」の HIGH バッジはカード上部が単独で担うため、ここは人間語ラベルで再掲する
-                （バッジ色は流用しつつ二重の "HIGH" 文字は出さない）。 */}
-            <SeverityBadge level={risk.level} label={riskLevelLabel(risk.level)} />
-            <span className="text-xs font-semibold tabular-nums text-cyan-300">
-              確信度 {percent}%
-            </span>
-          </div>
+          {/* 「顔」の HIGH バッジはカード上部が単独で担うため、ここは人間語ラベルで再掲する
+              （バッジ色は流用しつつ二重の "HIGH" 文字は出さない）。 */}
+          <SeverityBadge level={risk.level} label={riskLevelLabel(risk.level)} />
         </div>
       </div>
     </section>

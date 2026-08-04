@@ -1,6 +1,5 @@
 import { SeverityBadge } from "@shared/ui/SeverityBadge";
 import { ClockIcon, ShieldIcon } from "@shared/ui/icons";
-import { ConfidenceBar } from "@shared/ui/tremor";
 import {
   citationKindCount,
   pastIncidentCount,
@@ -44,19 +43,23 @@ export function RiskCard({ risk }: RiskCardProps) {
             {subjectLabel}
           </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <div className="flex items-center gap-2">
-            {kindCount >= 2 && (
-              <span
-                className="rounded-full bg-slate-700/40 px-2 py-0.5 text-[11px] font-medium text-slate-300"
-                title="独立した種類の根拠（変更予定・負荷予定・過去の記憶）が重なるほどリスクの裏付けが強い"
-              >
-                根拠 {kindCount}種類
-              </span>
-            )}
-            <SeverityBadge level={risk.level} />
-          </div>
-          <ConfidenceBar confidence={risk.confidence} className="w-40 shrink-0" />
+        {/* 確信度%は出さない。予報の confidence は LLM の**自己申告をクランプしただけ**で、
+            診断側（ConfidenceCalibration＝検証可能な裏付けで cap を決め、署名UIで内訳を開く）
+            のような担保が無い。しかも判断材料は level と同じ「独立した種類の根拠がどれだけ
+            重なったか」なので、**その軸は既に「根拠 N種類」が決定論で出している**（citations の
+            kind を数えた値＝盛る経路が無い）。未較正の％を大書きするのは「母数を隠した％を
+            大きく出さない」という自分の規律への違反でもある。→ 値は wire と履歴には残す
+            （LLM が何と言ったかの記録・同 level 内の表示順の tiebreak）が、画面には出さない。 */}
+        <div className="flex shrink-0 items-center gap-2">
+          {kindCount >= 2 && (
+            <span
+              className="rounded-full bg-slate-700/40 px-2 py-0.5 text-[11px] font-medium text-slate-300"
+              title="独立した種類の根拠（変更予定・負荷予定・過去の記憶）が重なるほどリスクの裏付けが強い"
+            >
+              根拠 {kindCount}種類
+            </span>
+          )}
+          <SeverityBadge level={risk.level} />
         </div>
       </div>
       <p className="text-sm leading-relaxed text-slate-300">{risk.reasoning}</p>

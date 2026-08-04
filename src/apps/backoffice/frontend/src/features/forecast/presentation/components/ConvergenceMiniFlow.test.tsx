@@ -28,7 +28,7 @@ const RISK: RiskCardView = {
 };
 
 describe("ConvergenceMiniFlow", () => {
-  it("入力レーンを種類別件数で、突合ノードと結論（subject・レベル・確信度%）を出す", () => {
+  it("入力レーンを種類別件数で、突合ノードと結論（subject・レベル）を出す", () => {
     render(<ConvergenceMiniFlow risk={RISK} />);
     // 入力: 変更予定2件・負荷予定1件・過去1件
     expect(screen.getByText("未来の変更")).toBeInTheDocument();
@@ -36,17 +36,22 @@ describe("ConvergenceMiniFlow", () => {
     expect(screen.getByText("スケジュール")).toBeInTheDocument();
     // 調査ノード（アラート詳細の証拠フローと同一語彙）
     expect(screen.getByText("AI 調査")).toBeInTheDocument();
-    // 結論（レベルは人間語ラベル・確信度%。subject はカード見出しが担うため非重複）
+    // 結論（レベルは人間語ラベル。subject はカード見出しが担うため非重複）
     expect(screen.getByText("結論に収束")).toBeInTheDocument();
     expect(screen.getByText("高リスク")).toBeInTheDocument();
-    expect(screen.getByText("確信度 80%")).toBeInTheDocument();
   });
 
-  it("読み上げ用に収束を1文で要約する（種類・件数・レベル・確信度）", () => {
+  it("確信度%は出さない（LLM の自己申告＝未較正・収束の強さは件数が担う）", () => {
+    render(<ConvergenceMiniFlow risk={RISK} />);
+    expect(screen.queryByText(/確信度/)).toBeNull();
+    expect(screen.queryByText(/%/)).toBeNull();
+  });
+
+  it("読み上げ用に収束を1文で要約する（種類・件数・レベル）", () => {
     render(<ConvergenceMiniFlow risk={RISK} />);
     expect(
       screen.getByText(
-        "未来の変更2件・スケジュール1件・過去の同型事例1件を AI が突合し 高リスク（確信度80%）と判定",
+        "未来の変更2件・スケジュール1件・過去の同型事例1件を AI が突合し 高リスクと判定",
       ),
     ).toBeInTheDocument();
   });
