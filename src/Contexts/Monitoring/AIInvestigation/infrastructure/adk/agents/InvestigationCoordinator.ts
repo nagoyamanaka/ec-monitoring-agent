@@ -84,6 +84,10 @@ export function createInvestigationCoordinator(params: {
     // 高推論シナリオ（3b インフラ因果連鎖・6 コード退行分析）で最終JSON合成ターンの思考が予算を
     // 食い切り、finishReason=MAX_TOKENS で回答テキストが 0 文字（finalTextLen=0・切断ですらない）に
     // なる実害が出た。思考を頭打ちにして回答用トークンを必ず残す（budget は env で運用チューニング可能）。
+    //
+    // なお恒久策（ADR-26）としてループの外に清書役（finalizer・ツールなし・responseSchema 強制）を
+    // 置いたので、このターンが空でも調査結果は失われない。それでも下の「JSON だけを出力する」指示と
+    // 予算キャップは残す——清書役が落ちたときの下限が、このターンの出力そのものだから。
     generateContentConfig: {
       maxOutputTokens: 65535,
       thinkingConfig: { thinkingBudget: params.thinkingBudget },

@@ -53,6 +53,7 @@ import { LLMTextClient } from "../../../../Contexts/Monitoring/AIInvestigation/d
 import { AIInvestigationPort } from "../../../../Contexts/Monitoring/AIInvestigation/domain/AIInvestigationPort.js";
 import { ADKAgentInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKAgentInvestigationAdapter.js";
 import { ADKInvestigationAgentRunner } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/ADKInvestigationAgentRunner.js";
+import { GeminiInvestigationFinalizer } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/GeminiInvestigationFinalizer.js";
 import { InMemoryEscalationDirectory } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/escalation/InMemoryEscalationDirectory.js";
 import { ESCALATION_DIRECTORY_SEED } from "../../../../Contexts/Monitoring/seeds/EscalationDirectorySeed.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
@@ -269,6 +270,19 @@ export class BackofficeApp {
         triageModel: config.ai.adkTriageModel,
         // コーディネーターの思考予算（fallback 第6原因の防御・env で運用チューニング可能）。
         coordinatorThinkingBudget: config.ai.adkCoordinatorThinkingBudget,
+        // 最終JSONの清書役（ADR-26 恒久策）。グラフの外の直列ステップなのでエージェント数は
+        // 増えない（8体のまま）。清書が使えなければコーディネーターの下書きへ戻るので、
+        // 下の縮退リトライは撤去せず前段の防御として残す。
+        finalizer: config.ai.adkFinalizerEnabled
+          ? new GeminiInvestigationFinalizer({
+              model: config.ai.adkFinalizerModel,
+              useVertexAI: config.gemini.useVertexAI,
+              project: config.gemini.project,
+              location: config.gemini.location,
+              apiKey: config.gemini.apiKey,
+              timeoutMs: config.ai.adkFinalizerTimeoutMs,
+            })
+          : undefined,
         maxLlmCalls: config.ai.adkMaxLlmCalls,
         timeoutMs: config.ai.investigationTimeoutMs,
         logger,
@@ -289,7 +303,10 @@ export class BackofficeApp {
       };
       // fallback 第6原因（最終JSON合成ターンの思考が出力予算を食い潰し空応答・実測はフル証拠の
       // 高推論シナリオで発生）への縮退リトライ用。思考予算だけ落とした同一グラフ＝深い熟考を捨てて
-      // 最終JSONの出力トークンを確保する。恒久策（finalizer 分離＋responseSchema 強制）は ADR 参照。
+      // 最終JSONの出力トークンを確保する。
+      // 恒久策（finalizer 分離＋responseSchema 強制）を上に入れた後もこれを残すのは、finalizer が
+      // 前段の防御であって置き換えではないため——清書役自体が落ちた場合（Vertex 側の瞬断・
+      // タイムアウト）の受け皿がここになる。ADK 調査そのものが例外で死ぬ経路も引き続きここが拾う。
       const retryThinkingBudget =
         config.ai.adkCoordinatorThinkingBudget > 0
           ? Math.min(4096, config.ai.adkCoordinatorThinkingBudget)

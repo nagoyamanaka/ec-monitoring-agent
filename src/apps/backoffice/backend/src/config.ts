@@ -58,6 +58,21 @@ export const config = {
     adkCoordinatorThinkingBudget: parseInt(
       process.env.AI_INVESTIGATION_COORDINATOR_THINKING_BUDGET ?? "16384",
     ),
+    // 最終JSONの清書役（ADR-26 恒久策の finalizer 方式）。エージェントループの外で
+    // ツールなし・思考0・responseSchema 強制の単発呼び出しを直列に足す。既定 on＝
+    // 「熟考する仕事と JSON を書き出す仕事を分ける」を常時効かせる（失敗時だけ動く3枚目の
+    // fallback にすると構造の分離にならない）。清書が使えなければコーディネーターの下書きへ
+    // 黙って戻るので、切るのは緊急時の退避手段（AI_INVESTIGATION_FINALIZER=false）。
+    adkFinalizerEnabled: process.env.AI_INVESTIGATION_FINALIZER !== "false",
+    // 清書役のモデル。推論でなく転記なので既定 flash（collector / escalation / verifier と同じ判断）。
+    adkFinalizerModel:
+      process.env.AI_INVESTIGATION_FINALIZER_MODEL ?? "gemini-2.5-flash",
+    // 清書1回のクライアント側タイムアウト(ms)。調査本体の後ろに直列で乗るぶん、ここで粘るより
+    // 下書きへ縮退した方が速い。investigationTimeoutMs とは別軸（調査の上限には含めない）。
+    adkFinalizerTimeoutMs: Math.max(
+      1_000,
+      parseInt(process.env.AI_INVESTIGATION_FINALIZER_TIMEOUT_MS ?? "30000"),
+    ),
     // AI調査1件のウォールクロック上限(ms)。ADK の8エージェント自律ループは実測 92-116秒かかり、
     // 既定120秒では並列実行時に超過して暫定落ちする。240秒へ広げて余裕を持たせる。
     investigationTimeoutMs: Math.max(

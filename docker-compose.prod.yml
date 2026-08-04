@@ -59,6 +59,14 @@ services:
       # gemini-2.5-pro は思考も maxOutputTokens を消費するため上限にキャップして最終JSON用トークンを残す。
       # 有効域 128〜32768・-1 で動的。増やすほど推論は深いが wall-clock が伸びて D3 タイムアウト risk 増。
       AI_INVESTIGATION_COORDINATOR_THINKING_BUDGET: ${AI_INVESTIGATION_COORDINATOR_THINKING_BUDGET:-16384}
+      # 最終JSONの清書役（ADR-26 恒久策）。ループの外でツールなし・思考0・responseSchema 強制の
+      # 単発呼び出しを直列に足し、空応答/散文の機序そのものを断つ。エージェント数は増えない（8体のまま）。
+      # 既定 on。false で停止＝コーディネーターの最終テキストをそのまま使う従来挙動へ戻す退避手段。
+      AI_INVESTIGATION_FINALIZER: ${AI_INVESTIGATION_FINALIZER:-true}
+      # 清書役のモデル。推論でなく転記なので既定 flash。
+      AI_INVESTIGATION_FINALIZER_MODEL: ${AI_INVESTIGATION_FINALIZER_MODEL:-gemini-2.5-flash}
+      # 清書1回のタイムアウト(ms)。調査本体の後ろに直列で乗るので、粘るより下書きへ縮退させる。
+      AI_INVESTIGATION_FINALIZER_TIMEOUT_MS: ${AI_INVESTIGATION_FINALIZER_TIMEOUT_MS:-30000}
       # 単一Gemini経路(GeminiLLMClient)の1呼び出しタイムアウト(ms)。旧ハードコード30秒だと
       # gemini-2.5-pro が超過して毎回 fallback(confidence=0) に落ちていたため 90秒へ。
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-90000}
