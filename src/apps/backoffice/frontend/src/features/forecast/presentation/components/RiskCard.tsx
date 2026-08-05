@@ -9,6 +9,7 @@ import type { RiskCardView } from "../../domain/ForecastView";
 import { riskLevelLabel } from "../../domain/RiskLevel";
 import { CitationList } from "./CitationList";
 import { ConvergenceMiniFlow } from "./ConvergenceMiniFlow";
+import { ForecastTimeline } from "./ForecastTimeline";
 
 /**
  * 予兆リスク1件のカード（step6 F7）: 「いつ危ないか」が予報の答えなので **window を主見出し**、
@@ -19,9 +20,11 @@ import { ConvergenceMiniFlow } from "./ConvergenceMiniFlow";
  */
 export interface RiskCardProps {
   risk: RiskCardView;
+  /** 予報の発行時刻（時間軸の左端）。無ければ軸を出さない＝カードは従来どおり成立する。 */
+  generatedAt?: string;
 }
 
-export function RiskCard({ risk }: RiskCardProps) {
+export function RiskCard({ risk, generatedAt }: RiskCardProps) {
   const kindCount = citationKindCount(risk.citations);
   const pastCount = pastIncidentCount(risk.citations);
   const subjectLabel = riskSubjectLabel(risk.subject);
@@ -62,6 +65,10 @@ export function RiskCard({ risk }: RiskCardProps) {
           <SeverityBadge level={risk.level} />
         </div>
       </div>
+      {/* 「いつ危ないか」の直下に「いつまでに動くか」を置く。window（見出し）だけだと
+          対処を始める期限が画面のどこにも無く、時間の話が読み手の暗算に残っていた。
+          引用にスケジュールが無ければ軸ごと出ない（縮退）。 */}
+      {generatedAt && <ForecastTimeline risk={risk} generatedAt={generatedAt} />}
       <p className="text-sm leading-relaxed text-slate-300">{risk.reasoning}</p>
       {/* U1③: 収束ミニフロー＝「入力（根拠の種類別件数）→ AI 調査 → 結論」。
           カードは「入力→AI推論→結論→先手」の順で読ませたいので先手ブロックの直前に置く。 */}
