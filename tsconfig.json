@@ -4,6 +4,9 @@
     "rootDir": "./src",
     "outDir": "./dist"
   },
-  "include": ["src/Contexts/**/*"],
-  "exclude": ["node_modules", "dist", "src/apps"]
+  // src/apps 配下は各パッケージが自分の tsconfig で見るが、CI エントリ（src/apps/ci）は
+  // workspace パッケージを持たない（root の tsx で起動する）ので、ここで型検査に含める。
+  // 含めないと CI のグルーだけが typecheck の外に落ちる。
+  "include": ["src/Contexts/**/*", "src/apps/ci/**/*"],
+  "exclude": ["node_modules", "dist", "src/apps/backoffice", "src/apps/ec"]
 }

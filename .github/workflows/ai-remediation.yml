@@ -77,10 +77,18 @@ jobs:
           path: .ci-tooling
           sparse-checkout: .github/actions
 
-      # 取り出した部品は修正ブランチの中身ではない。無視させないと「変更あり」の誤検出と
-      # `git add -A` での巻き込み commit を起こす。
-      - name: Exclude CI tooling from the remediation worktree
-        run: echo "/.ci-tooling/" >> .git/info/exclude
+      # このジョブは AI の書いた差分を `git add -A` で丸ごと拾う。したがって「ワークツリーに
+      # 落ちるが成果物ではないもの」は先に除外しておかないと、そのまま公開リポジトリへ push される。
+      #  - .ci-tooling/  : 上で取り出した CI 部品（修正ブランチの中身ではない）
+      #  - gha-creds-*.json: google-github-actions/auth がワークスペース直下に書く資格情報ファイル。
+      #    秘密鍵は含まないが credential_source.headers に Actions の OIDC 要求トークンが載る。
+      #    （2026-08-04 に実際に commit・push された。下の staged ガードはその再発防止の二重化）
+      - name: Exclude non-artifacts from the remediation worktree
+        run: |
+          {
+            echo "/.ci-tooling/"
+            echo "/gha-creds-*.json"
+          } >> .git/info/exclude
 
       - uses: pnpm/action-setup@v4
         with:
@@ -318,16 +326,41 @@ jobs:
           git config user.name "ai-remediation[bot]"
           git config user.email "ai-remediation@users.noreply.github.com"
           git add -A
+
+          # push 直前の最後の関門。LLM が書いた差分を無審査で公開リポジトリへ送る経路なので、
+          # 資格情報らしきファイルが紛れていたらここで止める。除外パターン（.git/info/exclude）
+          # が漏れても、この2枚目で塞ぐ。
+          if git diff --cached --name-only \
+               | grep -Eiq '(^|/)(gha-creds-.*|.*service.?account.*|.*credentials?)\.json$|\.(pem|p12|key)$|(^|/)\.env(\.|$)'; then
+            echo "::error::資格情報らしきファイルが staged されています。commit を中止します。"
+            git diff --cached --name-only | sed 's/^/  /'
+            exit 1
+          fi
+
           git commit -m "fix(security): AI remediation for alert ${ALERT_ID}"
           # ブランチを -C で作り直しているので push も強制。bot 所有の名前空間に閉じている。
           git push -u --force origin "$BRANCH"
+
           # base は checkout した ref に揃える（既定ブランチへ向けると baseline 差分が丸ごと乗る）。
           # 同じ alertId の再実行では PR が既に開いている＝create が失敗するので、その場合は既存を引く。
-          url=$(gh pr create --draft \
-            --title "fix(security): AI remediation (alert ${ALERT_ID})" \
-            --body "AI が起票したセキュリティ修正です。trivy 再スキャン + UT 緑を確認済み。マージ前にレビューしてください。" \
-            --base "$BASE_REF" \
-            --head "$BRANCH" 2>/dev/null) || url=$(gh pr view "$BRANCH" --json url -q .url)
+          # stderr は捨てない。以前 2>/dev/null で潰していたため、起票できない理由（Actions の
+          # PR 作成許可設定・権限・base 不正）が一切ログに残らなかった。
+          if url=$(gh pr create --draft \
+              --title "fix(security): AI remediation (alert ${ALERT_ID})" \
+              --body "AI が起票したセキュリティ修正です。対象CVEの再スキャン + typecheck + test 緑を確認済み。マージ前にレビューしてください。" \
+              --base "$BASE_REF" \
+              --head "$BRANCH" 2>"$RUNNER_TEMP/pr.err"); then
+            :
+          else
+            echo "::warning::gh pr create が失敗しました。既存 PR を探します。エラー:"
+            sed 's/^/  /' "$RUNNER_TEMP/pr.err"
+            url=$(gh pr view "$BRANCH" --json url -q .url 2>/dev/null || true)
+          fi
+
+          if [ -z "$url" ]; then
+            echo "::error::PR を作成も取得もできませんでした（ブランチ ${BRANCH} は push 済み）。上のエラーを確認してください。"
+            exit 1
+          fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       # ── backend へ結果 callback（成功/失敗いずれも必ず通知）─────────────────

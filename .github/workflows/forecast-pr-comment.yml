@@ -1,0 +1,109 @@
+name: Forecast PR Comment
+
+# E7: リリース判定の場（PR）へ予報を届ける入口。
+#
+# 本番 edge の GET /forecast を引き、その PR の subject に該当する予報があるときだけ
+# コメントを1枚出す（同じ PR には積まず、既存コメントを更新する）。
+#
+# 🚨 **これは gate ではない。** 予報でリリースを止める実装は入れない——形式的な外部承認は
+#    変更失敗率の低下と結びつかない（DORA / 2019 State of DevOps）ので、止める権限は持たせず
+#    「既にあるレビューと自動チェックに材料を届ける」に徹する。したがって:
+#      - スクリプトは何が起きても exit 0（edge 停止・予報未生成・JSON 破損すべて warning 止まり）
+#      - コメント投稿の失敗も continue-on-error（fork PR は GITHUB_TOKEN が read-only）
+#      - 該当 subject が無ければコメントを出さない（毎 PR に出すと無視が習慣になる）
+#
+# 決めた記録（acted / deferred / rejected）はここでは作らない。入口だけ。
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  # 面（スライド）用のスクリーンショットを実在 PR で撮り直すための手動口。
+  workflow_dispatch:
+    inputs:
+      prNumber:
+        description: "コメントを出す PR 番号"
+        required: true
+        type: string
+      predictedAt:
+        description: "予測発生時刻の**人手の注記**（ISO 8601・例 2026-08-08T20:00:00+09:00）。空なら有効リードタイムは出さない"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# 連続 push で同じ PR に対する実行が重なると、コメントの探索と更新が競合する。
+concurrency:
+  group: forecast-pr-comment-${{ github.event.pull_request.number || inputs.prNumber }}
+  cancel-in-progress: true
+
+jobs:
+  comment:
+    name: Forecast -> PR comment
+    runs-on: ubuntu-latest
+    env:
+      # 本番 edge。forecast-keepwarm.yml と同じ repo variable を使う（宛先は1つ）。
+      FORECAST_EDGE_URL: ${{ vars.FORECAST_EDGE_URL }}
+      PR_NUMBER: ${{ github.event.pull_request.number || inputs.prNumber }}
+      REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # イベント種別で分岐せず、どちらのトリガでも GitHub から引く（title/headRef の出所を1本にする）。
+      # 値はシェルへ直接展開せず GITHUB_OUTPUT 経由で env に渡す（入力をコマンドに混ぜない）。
+      # 引けなくても job は落とさない（PR の情報が取れないことでチェックを赤くしない）。
+      # 空のまま次へ進むと、スクリプト側が「PR の情報が揃っていません」として skip する。
+      - name: Resolve PR metadata
+        id: pr
+        run: |
+          set -uo pipefail
+          gh pr view "$PR_NUMBER" --json title,headRefName \
+            | jq -r '"title=" + .title, "headRef=" + .headRefName' >> "$GITHUB_OUTPUT" \
+            || echo "::warning::PR #${PR_NUMBER} の情報を取得できませんでした。"
+
+      - name: Look up the forecast for this PR
+        id: forecast
+        env:
+          PR_TITLE: ${{ steps.pr.outputs.title }}
+          PR_HEAD_REF: ${{ steps.pr.outputs.headRef }}
+          # 予測発生時刻の注記（E6-2）。window は LLM 由来の自由文字列で機械的に引けないので、
+          # 構造化を先回りせず注記で受ける（予報が2桁に達するまでは、これが設計どおり）。
+          FORECAST_PREDICTED_AT: ${{ inputs.predictedAt || vars.FORECAST_PREDICTED_AT }}
+          COMMENT_BODY_FILE: forecast-pr-comment.md
+        run: pnpm tsx src/apps/ci/forecast-pr-comment/main.ts
+
+      # 同じ PR にコメントを積まない（push のたびに増えると、読まれなくなる＝提示頻度の問題）。
+      # 目印を含む既存コメントがあれば PATCH、無ければ新規。
+      - name: Post or update the forecast comment
+        if: steps.forecast.outputs.matched == 'true'
+        # fork からの PR では GITHUB_TOKEN が read-only で投稿できない。予報は参照なので、
+        # 投稿できないことを PR の失敗にしない。
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          marker='<!-- kizashi-forecast:pr-comment -->'
+          id=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments?per_page=100" \
+               | jq -r --arg m "$marker" '[.[] | select(.body | contains($m))] | last | .id // empty')
+          if [ -n "$id" ]; then
+            # 本文はテンプレート展開せず rawfile で JSON にする（markdown の記号で壊れない）。
+            jq -n --rawfile body forecast-pr-comment.md '{body: $body}' \
+              | gh api --method PATCH "repos/$REPO/issues/comments/$id" --input - > /dev/null
+            echo "既存の予報コメント（id=$id）を更新しました。"
+          else
+            gh pr comment "$PR_NUMBER" --body-file forecast-pr-comment.md
+          fi
