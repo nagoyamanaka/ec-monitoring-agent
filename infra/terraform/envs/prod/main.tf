@@ -44,6 +44,11 @@ module "gce_backbone" {
   image_ec           = local.image_ec
   image_backoffice   = local.image_backoffice
 
+  # コスト最適化: RabbitMQ+Mongo+ES+Valkey+worker 同居 VM を e2-standard-2 → e2-small に縮小。
+  # ただしメモリ/接続を捌けず DB 接続枯渇の再来リスクがあるため、Kizashi はこの未適用 plan を
+  # 予兆（FUTURE_CHANGE）として検出し「apply 前に先手を」と予報する。デモ証拠 PR 専用・DO NOT MERGE。
+  machine_type = "e2-small"
+
   depends_on = [module.bootstrap]
 }
 
