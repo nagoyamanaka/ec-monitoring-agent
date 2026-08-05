@@ -65,8 +65,8 @@ function readPullRequestContext(): PullRequestContext | undefined {
   const headRef = process.env.PR_HEAD_REF ?? "";
   if (!Number.isInteger(number) || number <= 0) return undefined;
 
-  // 予測発生時刻の**人手の注記**（E6-2）。`window` は LLM 由来の自由文字列なので、
-  // 構造化を先回りせず注記で受ける。読めない値は「無かった」と同じに扱う（推定しない）。
+  // 予測発生時刻の**手動オーバーライド**（通常は未設定）。既定では引用された SCHEDULE
+  // シグナルから解決する＝人間の入力に依存させない。読めない値は無指定と同じに扱う。
   const predictedAt = parseDate(process.env.FORECAST_PREDICTED_AT);
   return { number, title, headRef, ...(predictedAt ? { predictedAt } : {}) };
 }
@@ -75,7 +75,9 @@ function parseDate(raw: string | undefined): Date | undefined {
   if (!raw || raw.trim() === "") return undefined;
   const parsed = new Date(raw.trim());
   if (Number.isNaN(parsed.getTime())) {
-    warn(`FORECAST_PREDICTED_AT を日時として読めませんでした（${raw}）。注記なしとして続行します。`);
+    warn(
+      `FORECAST_PREDICTED_AT を日時として読めませんでした（${raw}）。オーバーライド無しとして続行します。`,
+    );
     return undefined;
   }
   return parsed;
