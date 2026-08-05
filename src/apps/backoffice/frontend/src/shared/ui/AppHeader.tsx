@@ -9,7 +9,7 @@ export interface AppHeaderProps {
   /** Forecast タブを出すか。既定 off＝backend の FORECAST_ENABLED に追従（GET /forecast の可用性で判定）。 */
   forecastEnabled?: boolean;
   /**
-   * Forecast タブに添える HIGH リスクバッジ（例: "HIGH 1件"）。予兆への導線1個だけ（F7）＝
+   * Forecast タブに添える高リスク件数バッジ（例: "高リスク 1件"・文言はカードと同じ riskLevelLabel の語彙）。予兆への導線1個だけ（F7）＝
    * 一覧へ予報コンテンツは混載しない方針のまま、リスクの存在だけをナビで知らせる。
    */
   forecastBadge?: string;

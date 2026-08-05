@@ -189,6 +189,54 @@ export function convergenceLanes(
   }));
 }
 
+/**
+ * LLM 散文（reasoning / preventiveAction）を、引用 id の出現で分割する（E9 の続き）。
+ *
+ * 散文には「…インフラ変更（plan-1）と、関連する PR（pr-55）の適用を…」のように
+ * **生の引用 id がそのまま埋まっている**。これはカード面に残った最後の機械語彙で、
+ * 読者には内部ジャーゴンにしか見えない——が、**書き換えはしない**（LLM の出力は原文のまま。
+ * 盛らない側の規律）。id を「下の引用カードへの参照」として描けるように分割だけする。
+ * 分割対象は **このリスクの citations に実在する id だけ**——散文に現れても引用に無い id は
+ * ただの文字列として残す（検証を通っていないものに参照の見た目を与えない）。
+ */
+export type ProseSegment =
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "citation"; readonly citation: CitationView };
+
+export function segmentProseByCitations(
+  text: string,
+  citations: readonly CitationView[],
+): ProseSegment[] {
+  if (text === "") return [];
+  const byId = new Map(citations.map((c) => [c.id, c]));
+  if (byId.size === 0) return [{ kind: "text", text }];
+
+  // 長い id から先に照合（pr-5 と pr-55 の前方一致誤爆を防ぐ）。前後が英数字/ハイフンで
+  // 続く場合は別トークン（pr-550 の中の pr-55 を拾わない）。
+  const ids = [...byId.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(
+    `(?<![A-Za-z0-9-])(${ids.join("|")})(?![A-Za-z0-9-])`,
+    "g",
+  );
+
+  const segments: ProseSegment[] = [];
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    if (index > cursor) {
+      segments.push({ kind: "text", text: text.slice(cursor, index) });
+    }
+    segments.push({ kind: "citation", citation: byId.get(match[0])! });
+    cursor = index + match[0].length;
+  }
+  if (cursor < text.length) {
+    segments.push({ kind: "text", text: text.slice(cursor) });
+  }
+  return segments;
+}
+
 /** シグナル種別 MEMORY（過去の同型事例）。 */
 const MEMORY_KIND = "MEMORY";
 

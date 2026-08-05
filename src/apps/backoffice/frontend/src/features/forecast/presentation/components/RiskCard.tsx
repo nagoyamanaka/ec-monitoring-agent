@@ -5,8 +5,10 @@ import {
   citationKindCount,
   pastIncidentCount,
   riskSubjectLabel,
+  segmentProseByCitations,
 } from "../../domain/ForecastView";
-import type { RiskCardView } from "../../domain/ForecastView";
+import type { CitationView, RiskCardView } from "../../domain/ForecastView";
+import { INLINE_REF_CLASS, laneTone } from "./laneColors";
 import { riskLevelLabel } from "../../domain/RiskLevel";
 import { CitationList } from "./CitationList";
 import { ConvergenceMiniFlow } from "./ConvergenceMiniFlow";
@@ -107,7 +109,10 @@ export function RiskCard({ risk, generatedAt }: RiskCardProps) {
             </span>
           </p>
           <p className="mt-1 text-sm leading-relaxed text-cyan-100">
-            {risk.preventiveAction}
+            <CitationRefProse
+              text={risk.preventiveAction}
+              citations={risk.citations}
+            />
           </p>
           {/* U1③: 先手の効果1行（決定論テンプレ・引用の past 件数から生成）。
               ②b の LLM 文（preventiveAction）を上書きせず別行で共存する（0件なら出さない）。 */}
@@ -127,9 +132,58 @@ export function RiskCard({ risk, generatedAt }: RiskCardProps) {
           <span className="inline-block transition-transform group-open:rotate-90">›</span>{" "}
           AI の推論を読む
         </summary>
-        <p className="mt-2 text-sm leading-relaxed text-slate-300">{risk.reasoning}</p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-300">
+          <CitationRefProse text={risk.reasoning} citations={risk.citations} />
+        </p>
       </details>
       <CitationList citations={risk.citations} />
     </article>
+  );
+}
+
+/**
+ * LLM 散文中の生の引用 id（`plan-1` / `pr-55` …）を、下の引用カードへの参照に変える。
+ *
+ * カード面に残った最後の機械語彙（E9 が subject でやったことの散文版）。**原文は1字も
+ * 書き換えない**——id を検証可能な参照として描き直すだけで、色相はレーン（laneColors）から
+ * 借り、点線下線＝クリック可は台帳セル（C-3b）と同じ既存語彙。参照化するのは
+ * **このリスクの citations に実在する id だけ**（`segmentProseByCitations`）。
+ */
+function CitationRefProse({
+  text,
+  citations,
+}: {
+  text: string;
+  citations: readonly CitationView[];
+}) {
+  const segments = segmentProseByCitations(text, citations);
+  return (
+    <>
+      {segments.map((segment, i) =>
+        segment.kind === "text" ? (
+          <span key={i}>{segment.text}</span>
+        ) : (
+          <button
+            key={i}
+            type="button"
+            className={`cursor-pointer underline decoration-dotted underline-offset-2 ${
+              INLINE_REF_CLASS[laneTone(segment.citation.kind)]
+            }`}
+            title={`${segment.citation.kindLabel}: ${segment.citation.desc}`}
+            aria-label={`引用 ${segment.citation.id}（${segment.citation.kindLabel}）へ移動`}
+            onClick={(event) => {
+              // 同一カード内の該当引用へ。DOM id を使わないのは、複数カードが同じ
+              // シグナル（sch-1 等）を引用してページ内で重複するため（CitationList 側の注記）。
+              event.currentTarget
+                .closest("article")
+                ?.querySelector(`[data-citation-id="${segment.citation.id}"]`)
+                ?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+            }}
+          >
+            {segment.citation.id}
+          </button>
+        ),
+      )}
+    </>
   );
 }

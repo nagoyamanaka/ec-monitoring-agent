@@ -109,7 +109,7 @@ describe("ForecastPage", () => {
 
     // FORECAST_ENABLED 有効時はナビに Forecast タブ＋HIGH バッジ
     expect(screen.getByRole("link", { name: /Forecast/ })).toBeInTheDocument();
-    expect(screen.getByText("HIGH 1件")).toBeInTheDocument();
+    expect(screen.getByText("高リスク 1件")).toBeInTheDocument();
 
     // F11a: 先手（防ぐ）がカード内に出る＝ページの主役
     expect(screen.getByText("今打てる先手")).toBeInTheDocument();

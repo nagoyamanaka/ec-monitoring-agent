@@ -40,8 +40,11 @@ export function CitationList({ citations }: CitationListProps) {
             className={`space-y-2 border-l-2 pl-3 ${LANE_BORDERS[lane.kind] ?? "border-slate-600/50"}`}
           >
             {lane.citations.map((c) => (
+              // data-citation-id: 散文中のインライン参照（RiskCard）が同一カード内スコープで
+              // この引用へスクロールするためのアンカー。DOM の id 属性にしないのは、複数の
+              // RiskCard が同じシグナル（sch-1 等）を引用してページ内で重複するため。
+              <div key={c.id} data-citation-id={c.id}>
               <ReferencedEvidenceCard
-                key={c.id}
                 compact
                 chipLabel={c.kindLabel}
                 chipTone={laneTone(c.kind)}
@@ -62,6 +65,7 @@ export function CitationList({ citations }: CitationListProps) {
                 href={c.alertId ? undefined : c.url}
                 linkLabel={c.alertId ? "当時のアラートを開く" : "証拠を開く"}
               />
+              </div>
             ))}
           </div>
         ))}

@@ -142,6 +142,8 @@ export function useForecastNav(): ForecastNav {
     snapshot.kind === "ready" ? snapshot.briefing.highRiskCount : 0;
   return {
     enabled: true,
-    badge: high > 0 ? `HIGH ${high}件` : undefined,
+    // 文言はカードのバッジ・収束フローの結論ノードと同じ riskLevelLabel の語彙（ADR-34 の
+    // 統一の続き）。ナビだけ「HIGH」だと、同じ level を画面の場所ごとに別の語で言うことになる。
+    badge: high > 0 ? `高リスク ${high}件` : undefined,
   };
 }

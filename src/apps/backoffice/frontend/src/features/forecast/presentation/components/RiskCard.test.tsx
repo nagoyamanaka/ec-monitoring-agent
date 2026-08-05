@@ -147,6 +147,27 @@ describe("RiskCard", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("散文中の引用 id は下の引用カードへの参照になる（citations に無い id は素の文字列のまま）", () => {
+    renderCard({
+      ...RISK,
+      reasoning: "縮小 PR（sig-pr）と過去事例（sig-mem）が重なる。ghost-9 は無関係。",
+      preventiveAction: "sig-pr のマージをセール後へ延期する。",
+    });
+
+    // 先手・推論の両方で参照化される（sig-pr は2回出る）
+    const refs = screen.getAllByRole("button", {
+      name: /引用 sig-pr（未来の変更）へ移動/,
+    });
+    expect(refs).toHaveLength(2);
+    expect(refs[0]).toHaveAttribute("title", "未来の変更: pool 100→40 に縮小する未マージ PR");
+    expect(
+      screen.getByRole("button", { name: /引用 sig-mem（過去の同型事例）へ移動/ }),
+    ).toBeInTheDocument();
+    // 検証を通っていない id に参照の見た目を与えない
+    expect(screen.queryByRole("button", { name: /ghost-9/ })).toBeNull();
+    expect(screen.getByText(/ghost-9 は無関係/)).toBeInTheDocument();
+  });
+
   it("先手が無ければ先手ブロックごと出さない（優雅な縮退）", () => {
     renderCard();
     expect(screen.queryByText("今打てる先手")).not.toBeInTheDocument();
