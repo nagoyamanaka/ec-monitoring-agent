@@ -93,8 +93,14 @@ describe("ForecastPage", () => {
     renderPage(apiMock());
 
     expect(await screen.findByText("DB 接続プール枯渇")).toBeInTheDocument();
-    expect(screen.getByText("対象: 今週末")).toBeInTheDocument();
-    expect(screen.getByText("評価シグナル: 3 件")).toBeInTheDocument();
+    // 2026-08-05: メタチップ3つ（対象/生成/評価シグナル）を一覧見出しへ畳んだ。
+    // horizon は見出しへ昇格、母数（シグナル件数）は E6-3 の画面文言で残す。
+    expect(
+      screen.getByRole("heading", { level: 2, name: "今週末のリスク" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("シグナル 3 件を突合して、リスク 2 件に絞り込み"),
+    ).toBeInTheDocument();
 
     // level 降順: HIGH（DB 接続プール枯渇）→ LOW（バッチ遅延）
     const cards = screen.getAllByRole("article");

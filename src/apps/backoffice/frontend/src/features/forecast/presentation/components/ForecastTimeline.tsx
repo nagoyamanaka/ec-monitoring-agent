@@ -1,5 +1,4 @@
 import {
-  buildForecastTimeline,
   formatBusinessDateTime,
   formatDurationJa,
   type ForecastTimelineView,
@@ -23,16 +22,15 @@ import type { RiskCardView } from "../../domain/ForecastView";
  * - **終了時刻が書かれていない窓は幅を主張しない**（モデル側で最小長にとどめる）
  */
 export interface ForecastTimelineProps {
+  /**
+   * 組み立て済みの軸。**呼び出し側が組み立てる**——カードは「軸を描けるか」で見出しの
+   * 出し方を変える（描けないときだけ window を補足行へ戻す）ので、判定を2回やらない。
+   */
+  timeline: ForecastTimelineView;
   risk: RiskCardView;
-  /** 予報の発行時刻（軸の左端）。 */
-  generatedAt: string;
 }
 
-export function ForecastTimeline({ risk, generatedAt }: ForecastTimelineProps) {
-  const timeline = buildForecastTimeline(risk, generatedAt);
-  // 引用にスケジュールが無ければ軸ごと出さない（先手ブロックと同じ縮退）。
-  if (!timeline) return null;
-
+export function ForecastTimeline({ timeline, risk }: ForecastTimelineProps) {
   return (
     <div className="space-y-2 rounded-lg bg-slate-900/40 px-4 py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[11px]">

@@ -43,17 +43,26 @@ function renderCard(risk: RiskCardView = RISK) {
 }
 
 describe("RiskCard", () => {
-  it("window を主見出しに、level バッジ・reasoning を出す", () => {
+  it("subject を主見出しに、level バッジ・reasoning を出す", () => {
     renderCard();
+    // 2026-08-05: 主見出しは window → subject（「いつ」は時間軸が日付つきで答える）。
     expect(
-      screen.getByRole("heading", { level: 3, name: /土曜 20:00-22:00/ }),
+      screen.getByRole("heading", { level: 3, name: "DB 接続プール枯渇" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("HIGH")).toBeInTheDocument();
+    // バッジ文言は収束ミニフローの結論ノードと同じ `riskLevelLabel` に揃えた。
+    expect(screen.getAllByText("高リスク").length).toBeGreaterThan(0);
+    expect(screen.queryByText("HIGH")).toBeNull();
     expect(
       screen.getByText(
         "接続上限を縮小する未マージ PR と週末の負荷スケジュールが重なる",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("軸を描けないリスクでは window を補足行に残す（縮退しても「いつ」は消えない）", () => {
+    renderCard();
+    // このテストのリスクはスケジュールを引用していない＝軸なし。
+    expect(screen.getByText("土曜 20:00-22:00")).toBeInTheDocument();
   });
 
   it("確信度%は出さない。裏付けの強さは決定論の「根拠 N種類」が担う", () => {
