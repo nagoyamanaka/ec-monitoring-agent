@@ -250,15 +250,15 @@ flowchart LR
 
 §2・§6 のフロー図は**データの因果**を描くため、全ノードに均等にかかる横断的関心事（cross-cutting concern）はあえて描かない（描くと全箱から線が出て可読性を損なう）。以下は Terraform 管理下で常時効いている基盤で、§5.5 の脅威モデルが論拠として参照する多層防御の実体でもある。
 
-| 関心事           | 実装（`infra/terraform/`）                                                            | 目的・効き方                                                                 |
-| ---------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| 機密             | **Secret Manager**（箱のみ tf 管理・平文 version は `gcloud` で別投入＝tf state 非搭載） | 各コンテナへ環境注入。LLM コンテキストに載らない＝注入成功時も鍵は漏れない（§5.5） |
-| CI 認証          | **Workload Identity Federation**（pool + provider・鍵レス）                            | GitHub Actions → GCP を SA キー配布ゼロで認証。長期鍵の漏洩面を排除          |
-| 権限             | **役割別サービスアカウント ×3**（CI デプロイ用 / Cloud Run 実行用 / GCE 実行用・最小権限） | 実行系と CI 系を分離。プロセス誤動作時の横移動を限定（§5.5 最小権限・サービス分離） |
-| 状態管理         | **GCS**（tfstate 用＝partial backend config で tf 外に用意・deploy 資材用＝tf 管理）／state lock | plan/apply の tfstate 奪い合いを CI の `concurrency` で直列化（§6.5②）       |
-| 配信             | **Artifact Registry**（apps リポジトリに ec-backend / backoffice-backend イメージ）    | image build & push の格納先（§6.5①）                                        |
-| ネットワーク     | VPC / subnet / **Serverless VPC Access Connector** / 静的 IP / firewall                | Cloud Run（サーバレス）→ GCE 常駐系（RabbitMQ/Mongo 等）への疎通            |
-| API 有効化       | `google_project_service`（bootstrap で宣言的に enable）                                | 使う GCP API を IaC で明示（Cloud Trace のみ意図的に未 enable＝§6 注）       |
+| 関心事       | 実装（`infra/terraform/`）                                                                       | 目的・効き方                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| 機密         | **Secret Manager**（箱のみ tf 管理・平文 version は `gcloud` で別投入＝tf state 非搭載）         | 各コンテナへ環境注入。LLM コンテキストに載らない＝注入成功時も鍵は漏れない（§5.5）  |
+| CI 認証      | **Workload Identity Federation**（pool + provider・鍵レス）                                      | GitHub Actions → GCP を SA キー配布ゼロで認証。長期鍵の漏洩面を排除                 |
+| 権限         | **役割別サービスアカウント ×3**（CI デプロイ用 / Cloud Run 実行用 / GCE 実行用・最小権限）       | 実行系と CI 系を分離。プロセス誤動作時の横移動を限定（§5.5 最小権限・サービス分離） |
+| 状態管理     | **GCS**（tfstate 用＝partial backend config で tf 外に用意・deploy 資材用＝tf 管理）／state lock | plan/apply の tfstate 奪い合いを CI の `concurrency` で直列化（§6.5②）              |
+| 配信         | **Artifact Registry**（apps リポジトリに ec-backend / backoffice-backend イメージ）              | image build & push の格納先（§6.5①）                                                |
+| ネットワーク | VPC / subnet / **Serverless VPC Access Connector** / 静的 IP / firewall                          | Cloud Run（サーバレス）→ GCE 常駐系（RabbitMQ/Mongo 等）への疎通                    |
+| API 有効化   | `google_project_service`（bootstrap で宣言的に enable）                                          | 使う GCP API を IaC で明示（Cloud Trace のみ意図的に未 enable＝§6 注）              |
 
 - **draft PR 承認ゲート**（§5）も「AI の write を止められる形で運用する」非機能設計としてここに連なる（実装は §5・§6.5④）。
 - これらは**本番のみ効く**基盤で、ローカル（docker compose）では該当せず＝挙動非侵食。
@@ -319,25 +319,25 @@ src/
 ```
 
 - ポート実装は `...Adapter`、ドメインサービスは `...DomainService`。driven ポートと wire DTO は infrastructure 配下。ワイヤ型は contracts に単一ソース化。
-- テスト: Vitest（BDD）unit 1174件・166ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
+- テスト: Vitest（BDD）unit 1297件・166ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
 
 ## 8. 主要 API（backoffice）
 
-| エンドポイント                    | 役割                                                                                                                                                     |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /alerts` / `GET /alerts/:id` | 一覧・詳細（一覧は SSE `GET /stream` でライブ更新。名前付きイベント: `remediation`＝リメディ確定、`investigation-progress`＝ADK 調査の実行イベント中継） |
-| `PATCH /alerts/:id/feedback`      | 正解/不正解フィードバック（正解→SimilarIncident 蓄積→閾値で自動昇格）                                                                                    |
-| `POST /alerts/:id/promote`        | 手動即時昇格（結晶化）                                                                                                                                   |
-| `POST /alerts/:id/report`         | 既知/類似へのオンデマンド AI レポート生成（202→SSE）                                                                                                     |
-| `POST /alerts/:id/reinvestigate`  | オペレーターノート付き再調査                                                                                                                             |
-| `POST /ingest/cloud-monitoring`   | Cloud Monitoring webhook（Basic 認証）                                                                                                                   |
-| `POST /ingest/security-scan`      | CI/Trivy 検知（`INGEST_TOKEN`）                                                                                                                          |
-| `POST /ingest/remediation-result` | AI リメディ CI の結果 callback                                                                                                                           |
+| エンドポイント                    | 役割                                                                                                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /alerts` / `GET /alerts/:id` | 一覧・詳細（一覧は SSE `GET /stream` でライブ更新。名前付きイベント: `remediation`＝リメディ確定、`investigation-progress`＝ADK 調査の実行イベント中継）    |
+| `PATCH /alerts/:id/feedback`      | 正解/不正解フィードバック（正解→SimilarIncident 蓄積→閾値で自動昇格）                                                                                       |
+| `POST /alerts/:id/promote`        | 手動即時昇格（結晶化）                                                                                                                                      |
+| `POST /alerts/:id/report`         | 既知/類似へのオンデマンド AI レポート生成（202→SSE）                                                                                                        |
+| `POST /alerts/:id/reinvestigate`  | オペレーターノート付き再調査                                                                                                                                |
+| `POST /ingest/cloud-monitoring`   | Cloud Monitoring webhook（Basic 認証）                                                                                                                      |
+| `POST /ingest/security-scan`      | CI/Trivy 検知（`INGEST_TOKEN`）                                                                                                                             |
+| `POST /ingest/remediation-result` | AI リメディ CI の結果 callback                                                                                                                              |
 | `GET /analytics`                  | 承認済みアラート等の集計ビュー（正答率＝判定履歴が母数・引用照合率＝**引用単位**の `citationCoverage`・予報の測定＝**破棄の件数**の `forecastMeasurement`） |
-| `POST /demo/scenario` ほか        | デモ操作卓（`DEMO_ENABLED` 配下）                                                                                                                        |
-| `GET /forecast`                   | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）                               |
-| `POST /forecast`                  | 予報の生成（`FORECAST_ENABLED` かつ `DEMO_ENABLED` 配下・Gemini 呼び出し・horizon は `FORECAST_HORIZON` 固定）                                           |
-| `DELETE /forecast`                | 予報キャッシュのリセット（`DEMO_ENABLED` 配下・アラート側 `/demo/reset` とは独立＝一覧リセットが予報を巻き込まない）                                     |
+| `POST /demo/scenario` ほか        | デモ操作卓（`DEMO_ENABLED` 配下）                                                                                                                           |
+| `GET /forecast`                   | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）                                  |
+| `POST /forecast`                  | 予報の生成（`FORECAST_ENABLED` かつ `DEMO_ENABLED` 配下・Gemini 呼び出し・horizon は `FORECAST_HORIZON` 固定）                                              |
+| `DELETE /forecast`                | 予報キャッシュのリセット（`DEMO_ENABLED` 配下・アラート側 `/demo/reset` とは独立＝一覧リセットが予報を巻き込まない）                                        |
 
 ## 9. デモシナリオ（5ボタン・リアルさバッジ付き）
 
