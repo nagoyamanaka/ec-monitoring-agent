@@ -88,20 +88,13 @@ export function RiskCard({ risk, generatedAt }: RiskCardProps) {
       {/* 見出しの直下に「いつまでに動くか」を置く。対処を始める期限が画面のどこにも無く、
           時間の話が読み手の暗算に残っていた。引用にスケジュールが無ければ軸ごと出ない（縮退）。 */}
       {timeline && <ForecastTimeline timeline={timeline} risk={risk} />}
-      {/* U1③: 収束ミニフロー＝「入力（根拠の種類別件数）→ AI 調査 → 結論」。 */}
-      <ConvergenceMiniFlow risk={risk} />
-      {/* AI の推論文は畳む。決定論側（軸・収束・引用）と同じことを長く言っているだけで、
-          カードで最も読まれない。summary が「読める」ことを示すので隠蔽にはならない。 */}
-      <details className="group">
-        <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-400 hover:text-slate-300">
-          <span className="inline-block transition-transform group-open:rotate-90">›</span>{" "}
-          AI の推論を読む
-        </summary>
-        <p className="mt-2 text-sm leading-relaxed text-slate-300">{risk.reasoning}</p>
-      </details>
       {/* F11a: 先手＝カード内の視覚的主役。実行主体は人間（write-zero）＝ボタンにしない。
           実行先（PR/plan/過去事例）への動線は下の CitationList の実リンクが担う。
-          LLM が出さなければフィールドごと欠落＝このブロックが消えるだけの縮退。 */}
+          LLM が出さなければフィールドごと欠落＝このブロックが消えるだけの縮退。
+          ⚠ 2026-08-05 に順序を「入力→AI推論→結論→先手」から
+          **「何が（見出し）→ いつまでに（軸）→ 何をする（先手）→ なぜ（収束）→ 根拠（引用）」**へ
+          変えた。旧順は物語の順で、読み手が判断に必要な順ではない——決裁の場で先に要るのは
+          打ち手であって、正当化はその後に検算されるもの。 */}
       {risk.preventiveAction && (
         <div className="rounded-lg bg-cyan-500/10 px-4 py-3">
           <p className="flex flex-wrap items-center justify-between gap-x-3 text-[11px] font-medium tracking-wide text-cyan-300">
@@ -125,6 +118,17 @@ export function RiskCard({ risk, generatedAt }: RiskCardProps) {
           )}
         </div>
       )}
+      {/* U1③: 収束ミニフロー＝「入力（根拠の種類別件数）→ AI 調査 → 結論」。 */}
+      <ConvergenceMiniFlow risk={risk} />
+      {/* AI の推論文は畳む。決定論側（軸・収束・引用）と同じことを長く言っているだけで、
+          カードで最も読まれない。summary が「読める」ことを示すので隠蔽にはならない。 */}
+      <details className="group">
+        <summary className="cursor-pointer list-none text-[11px] font-medium text-slate-400 hover:text-slate-300">
+          <span className="inline-block transition-transform group-open:rotate-90">›</span>{" "}
+          AI の推論を読む
+        </summary>
+        <p className="mt-2 text-sm leading-relaxed text-slate-300">{risk.reasoning}</p>
+      </details>
       <CitationList citations={risk.citations} />
     </article>
   );
