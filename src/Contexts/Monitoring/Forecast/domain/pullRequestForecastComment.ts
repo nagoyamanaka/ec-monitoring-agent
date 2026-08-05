@@ -41,6 +41,7 @@ import type {
 } from "./contracts/ForecastContract.js";
 import { normalizeSubject, subjectsMatch } from "./forecastSubject.js";
 import { effectiveLeadTime, formatEffectiveLeadTime } from "./remediationLeadTime.js";
+import { resolveScheduleOccurrence } from "./scheduleWindowOccurrence.js";
 
 /**
  * 同じ PR に何度も積まないための目印（sticky comment）。CI 側はこの文字列を含む
@@ -60,7 +61,9 @@ const KIND_LABELS: Record<string, string> = {
   MEMORY: "過去の同型事例",
 };
 
-const LANE_KIND_ORDER = ["FUTURE_CHANGE", "SCHEDULE", "MEMORY"];
+const SCHEDULE_KIND = "SCHEDULE";
+const MEMORY_KIND = "MEMORY";
+const LANE_KIND_ORDER = ["FUTURE_CHANGE", SCHEDULE_KIND, MEMORY_KIND];
 
 const LEVEL_ORDER: Record<RiskItemPrimitives["level"], number> = {
   HIGH: 0,
@@ -73,9 +76,11 @@ export type PullRequestContext = {
   readonly title: string;
   readonly headRef: string;
   /**
-   * 予測発生時刻の**人手の注記**（E6-2）。`window` は LLM 由来の自由文字列なので
-   * 機械的には引けない——注記が無ければ有効リードタイムは出さず、その旨を書く
-   * （出せない数字を推測で埋めない）。
+   * 予測発生時刻の**手動オーバーライド**（任意・通常は不要）。
+   *
+   * 既定では**引用されている SCHEDULE シグナルから解決する**（`scheduleWindowOccurrence`）
+   * ——「いつ負荷が来るか」は製品が持っている情報で、人間が CI 設定へ転記するものではない。
+   * ここに値を渡すのは、スケジュールから引けない窓を手で当てて確かめたいときだけ。
    */
   readonly predictedAt?: Date;
 };
@@ -234,12 +239,12 @@ function renderBody(params: {
     "",
     `> ${risk.reasoning}`,
     "",
-    renderLeadTime(briefing.forecast.generatedAt, risk, pr.predictedAt),
+    renderLeadTime(briefing.forecast.generatedAt, risk, citations, pr.predictedAt),
   ];
 
   if (risk.preventiveAction) {
     lines.push("", "**今打てる先手**", "", risk.preventiveAction);
-    const pastCount = citations.filter((c) => c.kind === "MEMORY").length;
+    const pastCount = citations.filter((c) => c.kind === MEMORY_KIND).length;
     if (pastCount > 0) {
       lines.push(
         "",
@@ -267,31 +272,56 @@ function renderBody(params: {
 }
 
 /**
- * E6-2 の1行。**時間が決裁の場に届くのがこのフェーズの芯**なので level より先に読ませたい
- * ——が、予測発生時刻は人手の注記なので、注記が無いときに勝手に推定しない。
- * 「測っていない」と「0」を混ぜないのと同じ扱いで、出せない側は出せない理由を書く。
+ * E6-2 の1行。**時間が決裁の場に届くのがこのフェーズの芯**なので level より先に読ませる。
+ *
+ * 予測発生時刻は**引用された SCHEDULE シグナルから解決する**（人間の入力に依存させない）。
+ * 解決できなければ推定せず、出せない理由を書く——「測っていない」と「0」を混ぜないのと
+ * 同じ扱い。**どこから来た時刻なのかを必ず併記する**（出所の無い時間は材料にならない）。
  */
 function renderLeadTime(
   generatedAt: string,
   risk: RiskItemPrimitives,
-  predictedAt?: Date,
+  citations: readonly ResolvedCitation[],
+  override?: Date,
 ): string {
+  const issuedAt = new Date(generatedAt);
+  const scheduled = nextScheduledOccurrence(citations, issuedAt);
+  const predictedAt = override ?? scheduled?.startsAt;
+
   if (!predictedAt) {
     return [
       "**対処の所要は約 30 分（宣言値）。**",
-      `予測発生時刻は時間窓（「${risk.window}」）の自由記述で機械的に引けないため、`,
+      `引用にスケジュールが含まれていないため、予測発生時刻を決定論で引けません`,
+      `（時間窓「${risk.window}」は LLM 由来の自由記述なので読みません）。`,
       "有効リードタイム（判断に使える時間）はこのコメントでは算出していません。",
     ].join("");
   }
-  const lead = effectiveLeadTime({
-    issuedAt: new Date(generatedAt),
-    predictedAt,
-  });
+
+  const lead = effectiveLeadTime({ issuedAt, predictedAt });
+  const provenance =
+    override || !scheduled
+      ? "手動で指定した値です"
+      : `引用したスケジュール「${scheduled.source}」を予報の発行時刻から解決した値です（LLM の出力は読んでいません）`;
   return [
     `**${formatEffectiveLeadTime(lead)}**`,
     "",
-    `※ 予測発生時刻（${predictedAt.toISOString()}）は時間窓「${risk.window}」に対する**人手の注記**、対処の所要は**宣言値**であって実測ではありません。`,
+    `※ 予測発生時刻（${predictedAt.toISOString()}）は${provenance}。対処の所要は**宣言値**であって実測ではありません。`,
   ].join("\n");
+}
+
+/**
+ * 引用された SCHEDULE シグナルのうち、**最も早く到来する**窓。複数あるときに早い側を採るのは、
+ * 猶予を実際より長く見せないため（保守側に倒す）。
+ */
+function nextScheduledOccurrence(
+  citations: readonly ResolvedCitation[],
+  issuedAt: Date,
+): { startsAt: Date; source: string } | undefined {
+  return citations
+    .filter((c) => c.kind === SCHEDULE_KIND)
+    .map((c) => resolveScheduleOccurrence(c.when, issuedAt))
+    .filter((o): o is NonNullable<typeof o> => o !== undefined)
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0];
 }
 
 type ResolvedCitation = ForecastSignalPrimitives & { readonly kindLabel: string };

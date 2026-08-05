@@ -24,7 +24,7 @@ on:
         required: true
         type: string
       predictedAt:
-        description: "予測発生時刻の**人手の注記**（ISO 8601・例 2026-08-08T20:00:00+09:00）。空なら有効リードタイムは出さない"
+        description: "予測発生時刻の手動オーバーライド（ISO 8601）。**通常は空**——既定では引用されたスケジュールから解決する"
         required: false
         default: ""
         type: string
@@ -81,9 +81,11 @@ jobs:
         env:
           PR_TITLE: ${{ steps.pr.outputs.title }}
           PR_HEAD_REF: ${{ steps.pr.outputs.headRef }}
-          # 予測発生時刻の注記（E6-2）。window は LLM 由来の自由文字列で機械的に引けないので、
-          # 構造化を先回りせず注記で受ける（予報が2桁に達するまでは、これが設計どおり）。
-          FORECAST_PREDICTED_AT: ${{ inputs.predictedAt || vars.FORECAST_PREDICTED_AT }}
+          # 予測発生時刻は**引用されたスケジュールから解決する**（E6-2）。ここは手動実行の
+          # オーバーライド用で、通常は空。⚠ repo variable にはしない——「いつ負荷が来るか」は
+          # 製品が持っている情報で、人間が CI 設定へ転記するものではないし、決裁の場に出す
+          # リードタイムの出所が人間になると、計算しているように見えて実質は申告値になる。
+          FORECAST_PREDICTED_AT: ${{ inputs.predictedAt }}
           COMMENT_BODY_FILE: forecast-pr-comment.md
         run: pnpm tsx src/apps/ci/forecast-pr-comment/main.ts
 

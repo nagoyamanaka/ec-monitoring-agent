@@ -258,22 +258,35 @@ describe("buildPullRequestForecastComment — 本文", () => {
 });
 
 describe("buildPullRequestForecastComment — 有効リードタイム（E6-2）", () => {
-  it("注記があれば「あと N 時間・対処は M 分」を出す", () => {
-    const decision = buildPullRequestForecastComment(briefing(), {
-      ...pr,
-      predictedAt: new Date("2026-08-08T11:00:00.000Z"),
-    });
+  it("人間の入力なしで出る（引用されたスケジュールから解決する）", () => {
+    // 予報発行 2026-08-04T03:33Z ＝ JST 12:33(火)、スケジュール "土 20:00-23:00"
+    // → 次の到来は JST 08-08(土) 20:00 ＝ UTC 11:00。差 103時間27分。
+    const decision = buildPullRequestForecastComment(briefing(), pr);
 
     expect(decision.kind).toBe("comment");
     if (decision.kind !== "comment") return;
     expect(decision.body).toContain("予測発生まで 約 103 時間 27 分");
     expect(decision.body).toContain("対処の所要は約 30 分（宣言値）");
     expect(decision.body).toContain("判断に使える時間は 約 102 時間 57 分");
-    expect(decision.body).toContain("人手の注記");
+    expect(decision.body).toContain("引用したスケジュール「土 20:00-23:00」を予報の発行時刻から解決");
+    expect(decision.body).toContain("LLM の出力は読んでいません");
   });
 
-  it("注記が無ければ推定せず、出せない理由を書く", () => {
+  it("🚨 リードタイムの出所を人間にしない（時刻はどこにも手入力されていない）", () => {
+    // repo variable で予測発生時刻を渡す設計は、決裁の場に出す数字の出所を人間にする。
+    // 引数を渡さなくても出ることが、その設計を採らないことの担保。
     const decision = buildPullRequestForecastComment(briefing(), pr);
+
+    expect(decision.kind === "comment" && decision.body).not.toContain("手動で指定");
+  });
+
+  it("スケジュールを引用していないリスクでは推定せず、出せない理由を書く", () => {
+    const decision = buildPullRequestForecastComment(
+      briefing({
+        risks: [{ ...risk, citations: ["pr-55", "inc-1"] }],
+      }),
+      pr,
+    );
 
     expect(decision.kind === "comment" && decision.body).toContain(
       "有効リードタイム（判断に使える時間）はこのコメントでは算出していません",
@@ -281,6 +294,39 @@ describe("buildPullRequestForecastComment — 有効リードタイム（E6-2）
     expect(decision.kind === "comment" && decision.body).toContain(
       "対処の所要は約 30 分（宣言値）",
     );
+    // LLM 由来の window を読んで埋めることはしない
+    expect(decision.kind === "comment" && decision.body).toContain(
+      "LLM 由来の自由記述なので読みません",
+    );
+  });
+
+  it("複数のスケジュールを引用していたら早いほうを採る（猶予を長く見せない）", () => {
+    const earlier: ForecastSignalPrimitives = {
+      ...scheduleSignal,
+      id: "sched-2",
+      when: "水 09:00-12:00",
+      desc: "在庫締め 高負荷",
+    };
+    const decision = buildPullRequestForecastComment(
+      briefing({
+        risks: [{ ...risk, citations: ["sched-1", "sched-2"] }],
+        signals: [scheduleSignal, earlier],
+      }),
+      pr,
+    );
+
+    // 発行が火曜なので 水 09:00 のほうが先に来る
+    expect(decision.kind === "comment" && decision.body).toContain("「水 09:00-12:00」");
+  });
+
+  it("手動オーバーライドを渡したときは、その旨を書く（出所を偽らない）", () => {
+    const decision = buildPullRequestForecastComment(briefing(), {
+      ...pr,
+      predictedAt: new Date("2026-08-05T03:33:00.000Z"),
+    });
+
+    expect(decision.kind === "comment" && decision.body).toContain("手動で指定した値です");
+    expect(decision.kind === "comment" && decision.body).toContain("予測発生まで 約 24 時間");
   });
 });
 
