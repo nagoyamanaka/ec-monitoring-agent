@@ -166,19 +166,6 @@ export function formatDurationJa(minutes: number): string {
   return rest === 0 ? `${hours}時間` : `${hours}時間${rest}分`;
 }
 
-/**
- * 業務スケジュールの時刻表示（JST 固定）。軸上の3点は業務ローカル時刻の話なので、
- * 閲覧者の端末タイムゾーンで揺らすと窓の曜日がずれて読める。
- */
-export function formatBusinessDateTime(value: Date): string {
-  return value.toLocaleString("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    month: "numeric",
-    day: "numeric",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
+// 時刻表示は Contexts 側を単一ソースにする（PR コメントと同じ表記でないと突き合わせできない）。
+export { formatBusinessDateTime } from "@monitoring/Forecast/domain/scheduleWindowOccurrence";
 export { DECLARED_REMEDIATION_MINUTES };
