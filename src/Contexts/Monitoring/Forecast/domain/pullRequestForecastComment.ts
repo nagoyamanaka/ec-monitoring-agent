@@ -41,7 +41,11 @@ import type {
 } from "./contracts/ForecastContract.js";
 import { normalizeSubject, subjectsMatch } from "./forecastSubject.js";
 import { effectiveLeadTime, formatEffectiveLeadTime } from "./remediationLeadTime.js";
-import { resolveScheduleOccurrence } from "./scheduleWindowOccurrence.js";
+import {
+  formatBusinessDateTime,
+  formatBusinessTime,
+  resolveScheduleOccurrence,
+} from "./scheduleWindowOccurrence.js";
 
 /**
  * 同じ PR に何度も積まないための目印（sticky comment）。CI 側はこの文字列を含む
@@ -298,6 +302,7 @@ function renderLeadTime(
   }
 
   const lead = effectiveLeadTime({ issuedAt, predictedAt });
+  const deadlineAt = new Date(predictedAt.getTime() - lead.remediationMinutes * 60_000);
   const provenance =
     override || !scheduled
       ? "手動で指定した値です"
@@ -305,8 +310,20 @@ function renderLeadTime(
   return [
     `**${formatEffectiveLeadTime(lead)}**`,
     "",
-    `※ 予測発生時刻（${predictedAt.toISOString()}）は${provenance}。対処の所要は**宣言値**であって実測ではありません。`,
+    // 予報カードの時間軸と**同じ3点**を出す。画面と決裁の場で同じものを見ていることが
+    // 突き合わせできる形にする（表記も `formatBusinessDateTime` の単一ソース）。
+    "| いま（予報の発行） | 対処を始める期限 | 予測発生 |",
+    "| --- | --- | --- |",
+    `| ${formatBusinessDateTime(issuedAt)} | **${formatBusinessDateTime(deadlineAt)}** | ${formatWindow(predictedAt, scheduled?.endsAt)} |`,
+    "",
+    `※ 予測発生時刻は${provenance}。対処の所要は**宣言値**であって実測ではありません。`,
   ].join("\n");
+}
+
+/** 発生窓。終了時刻が解決できていなければ**開始だけ**を出す（長さを主張しない）。 */
+function formatWindow(startsAt: Date, endsAt?: Date): string {
+  const head = formatBusinessDateTime(startsAt);
+  return endsAt ? `${head}-${formatBusinessTime(endsAt)}` : head;
 }
 
 /**
@@ -316,7 +333,7 @@ function renderLeadTime(
 function nextScheduledOccurrence(
   citations: readonly ResolvedCitation[],
   issuedAt: Date,
-): { startsAt: Date; source: string } | undefined {
+): { startsAt: Date; endsAt?: Date; source: string } | undefined {
   return citations
     .filter((c) => c.kind === SCHEDULE_KIND)
     .map((c) => resolveScheduleOccurrence(c.when, issuedAt))

@@ -99,6 +99,31 @@ export function resolveScheduleOccurrence(
   };
 }
 
+/**
+ * 業務スケジュールの時刻表示（JST 固定）。**予報カードと PR コメントで同じ形にする**ため
+ * ここを単一ソースにする——同じ時刻が画面と決裁の場で違う表記になると、突き合わせができない。
+ * 閲覧者の端末タイムゾーンで揺らすと窓の曜日がずれて読めるので、業務ローカルに固定する。
+ */
+export function formatBusinessDateTime(value: Date): string {
+  return value.toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** 同日内の終了時刻（`8/8(土) 20:00-23:00` の後半）。 */
+export function formatBusinessTime(value: Date): string {
+  return value.toLocaleTimeString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function parseWeekday(when: string): number | undefined {
   const ja = JA_WEEKDAY.exec(when);
   if (ja) return WEEKDAY_INDEX[ja[1] as string];

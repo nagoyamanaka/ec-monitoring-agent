@@ -272,6 +272,28 @@ describe("buildPullRequestForecastComment — 有効リードタイム（E6-2）
     expect(decision.body).toContain("LLM の出力は読んでいません");
   });
 
+  it("予報カードの時間軸と同じ3点を表で出す（画面と決裁の場で同じものを見る）", () => {
+    const decision = buildPullRequestForecastComment(briefing(), pr);
+    if (decision.kind !== "comment") throw new Error("comment");
+
+    expect(decision.body).toContain("| いま（予報の発行） | 対処を始める期限 | 予測発生 |");
+    // 発行 8/4(火) 12:33 JST → 発生 8/8(土) 20:00 → 期限はその30分前
+    expect(decision.body).toContain("8/4(火) 12:33");
+    expect(decision.body).toContain("**8/8(土) 19:30**");
+    expect(decision.body).toContain("8/8(土) 20:00-23:00");
+  });
+
+  it("終了時刻が解決できない窓は開始だけ出す（長さを主張しない）", () => {
+    const decision = buildPullRequestForecastComment(
+      briefing({ signals: [prSignal, { ...scheduleSignal, when: "土 20:00" }, memorySignal] }),
+      pr,
+    );
+    if (decision.kind !== "comment") throw new Error("comment");
+
+    expect(decision.body).toContain("| 8/8(土) 20:00 |");
+    expect(decision.body).not.toContain("8/8(土) 20:00-");
+  });
+
   it("🚨 リードタイムの出所を人間にしない（時刻はどこにも手入力されていない）", () => {
     // repo variable で予測発生時刻を渡す設計は、決裁の場に出す数字の出所を人間にする。
     // 引数を渡さなくても出ることが、その設計を採らないことの担保。
