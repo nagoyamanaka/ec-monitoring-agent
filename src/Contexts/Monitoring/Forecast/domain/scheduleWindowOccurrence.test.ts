@@ -49,6 +49,27 @@ describe("resolveScheduleOccurrence", () => {
     expect(resolveScheduleOccurrence("8日 20:00 開始", issuedAt)).toBeUndefined();
   });
 
+  it("終了時刻が書かれていれば窓の終わりも解決する", () => {
+    const occurrence = resolveScheduleOccurrence("土 20:00-23:00", issuedAt);
+
+    expect(occurrence?.endsAt?.toISOString()).toBe("2026-08-08T14:00:00.000Z");
+  });
+
+  it("終了時刻が無ければ窓の長さを捏造しない", () => {
+    const occurrence = resolveScheduleOccurrence("土 20:00", issuedAt);
+
+    expect(occurrence?.startsAt.toISOString()).toBe("2026-08-08T11:00:00.000Z");
+    expect(occurrence?.endsAt).toBeUndefined();
+  });
+
+  it("日跨ぎの窓は翌日へ送る（22:00-02:00 が負の長さにならない）", () => {
+    const occurrence = resolveScheduleOccurrence("土 22:00-02:00", issuedAt);
+
+    // JST 08-08 22:00 → 08-09 02:00
+    expect(occurrence?.startsAt.toISOString()).toBe("2026-08-08T13:00:00.000Z");
+    expect(occurrence?.endsAt?.toISOString()).toBe("2026-08-08T17:00:00.000Z");
+  });
+
   it("業務タイムゾーンは JST 固定（DST が無いので厳密）", () => {
     // JST 日曜 00:30 ＝ UTC 土曜 15:30。UTC 基準で解くと曜日を1つ間違える
     const occurrence = resolveScheduleOccurrence("日 00:30", issuedAt);

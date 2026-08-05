@@ -234,7 +234,11 @@ function BriefingBody({ briefing }: { briefing: ForecastBriefingView }) {
         <>
           <div className="space-y-5" aria-label="予兆リスク一覧">
             {briefing.risks.map((risk, i) => (
-              <RiskCard key={`${risk.subject}-${i}`} risk={risk} />
+              <RiskCard
+                key={`${risk.subject}-${i}`}
+                risk={risk}
+                generatedAt={briefing.generatedAt}
+              />
             ))}
           </div>
           {/* F10-②/F11b: 橋渡しCTA（保険）。risks がある時だけ・ページ単位で1個 */}

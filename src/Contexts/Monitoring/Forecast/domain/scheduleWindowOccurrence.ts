@@ -39,13 +39,18 @@ const WEEKDAY_INDEX: Record<string, number> = {
 // （前が行頭/空白/括弧で、後ろが「曜」「曜日」か区切り）。英語は語境界で見る。
 const JA_WEEKDAY = /(?:^|[\s（(])([日月火水木金土])(?:曜日?)?(?=[\s（(]|$)/;
 const EN_WEEKDAY = /\b(sun|mon|tue|wed|thu|fri|sat)[a-z]*\b/i;
-// 開始時刻＝最初に現れる HH:MM（"土 20:00-23:00" なら 20:00）。
-const START_TIME = /\b([01]?\d|2[0-3]):([0-5]\d)\b/;
+// HH:MM の全出現。1つめが開始、2つめがあれば終了（"土 20:00-23:00" → 20:00 と 23:00）。
+const TIME_ALL = /\b([01]?\d|2[0-3]):([0-5]\d)\b/g;
 
-/** 解決できた時刻と、読み取った素材（コメントに出所を書くため）。 */
+/** 解決できた時刻と、読み取った素材（出所をそのまま表示に出すため）。 */
 export type ScheduleOccurrence = {
   /** 予報発行時刻から見て、次にこの窓が始まる瞬間（UTC の Date）。 */
   readonly startsAt: Date;
+  /**
+   * 窓が終わる瞬間。**終了時刻が書かれていなければ付かない**——長さを勝手に決めない
+   * （帯の幅を捏造しないための欠落）。開始より前なら日跨ぎとして翌日に送る。
+   */
+  readonly endsAt?: Date;
   /** 解決の元になった文字列（`ScheduleWindow.when` そのもの）。 */
   readonly source: string;
 };
@@ -59,11 +64,12 @@ export function resolveScheduleOccurrence(
   issuedAt: Date,
 ): ScheduleOccurrence | undefined {
   const weekday = parseWeekday(when);
-  const time = START_TIME.exec(when);
-  if (weekday === undefined || !time) return undefined;
-
-  const hour = Number(time[1]);
-  const minute = Number(time[2]);
+  const times = [...when.matchAll(TIME_ALL)].map((m) => ({
+    hour: Number(m[1]),
+    minute: Number(m[2]),
+  }));
+  const start = times[0];
+  if (weekday === undefined || !start) return undefined;
 
   // 業務ローカル時刻での計算に持ち込む（+9h ずらし、以後 UTC ゲッタを「現地の暦」として読む）。
   const localNow = new Date(issuedAt.getTime() + OFFSET_MS);
@@ -71,15 +77,26 @@ export function resolveScheduleOccurrence(
     localNow.getUTCFullYear(),
     localNow.getUTCMonth(),
     localNow.getUTCDate(),
-    hour,
-    minute,
+    start.hour,
+    start.minute,
   );
   const daysAhead = (weekday - new Date(todayAtTime).getUTCDay() + 7) % 7;
   let candidate = todayAtTime + daysAhead * DAY_MS;
   // 同じ曜日でも時刻を過ぎていれば翌週（「次に来る窓」が定義）。
   if (candidate < localNow.getTime()) candidate += 7 * DAY_MS;
 
-  return { startsAt: new Date(candidate - OFFSET_MS), source: when };
+  const end = times[1];
+  let endLocal: number | undefined;
+  if (end) {
+    endLocal = candidate + ((end.hour - start.hour) * 60 + (end.minute - start.minute)) * 60_000;
+    if (endLocal <= candidate) endLocal += DAY_MS; // 日跨ぎ（例 22:00-02:00）
+  }
+
+  return {
+    startsAt: new Date(candidate - OFFSET_MS),
+    ...(endLocal !== undefined ? { endsAt: new Date(endLocal - OFFSET_MS) } : {}),
+    source: when,
+  };
 }
 
 function parseWeekday(when: string): number | undefined {
