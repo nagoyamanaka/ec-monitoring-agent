@@ -11,6 +11,7 @@ import {
   incidentAlertId,
   pastIncidentCount,
   riskSubjectLabel,
+  segmentProseByCitations,
   signalKindLabel,
   toForecastBriefingView,
   type CitationView,
@@ -271,5 +272,68 @@ describe("riskSubjectLabel（E9: 生突合キーの表示専用人間語化）",
       "google_sql_database_instance_ec_db",
     );
     expect(riskSubjectLabel("")).toBe("");
+  });
+});
+
+describe("segmentProseByCitations", () => {
+  const citation = (id: string, kind = "FUTURE_CHANGE"): CitationView => ({
+    id,
+    kind,
+    kindLabel: signalKindLabel(kind),
+    subject: "db.connection_pool",
+    when: "未マージ",
+    desc: `${id} の説明`,
+  });
+
+  it("散文中の引用 id を参照セグメントに分割する（原文は1字も変えない）", () => {
+    const text = "インフラ変更（plan-1）と PR（pr-55）の適用を延期する。";
+    const segments = segmentProseByCitations(text, [
+      citation("plan-1"),
+      citation("pr-55"),
+    ]);
+
+    expect(segments).toEqual([
+      { kind: "text", text: "インフラ変更（" },
+      { kind: "citation", citation: citation("plan-1") },
+      { kind: "text", text: "）と PR（" },
+      { kind: "citation", citation: citation("pr-55") },
+      { kind: "text", text: "）の適用を延期する。" },
+    ]);
+    // 復元して原文一致＝1字も書き換えていないことの固定
+    expect(
+      segments.map((s) => (s.kind === "text" ? s.text : s.citation.id)).join(""),
+    ).toBe(text);
+  });
+
+  it("citations に無い id はただの文字列として残す（検証を通っていないものに参照の見た目を与えない）", () => {
+    const segments = segmentProseByCitations("plan-1 と ghost-9 が原因。", [
+      citation("plan-1"),
+    ]);
+
+    expect(segments.filter((s) => s.kind === "citation")).toHaveLength(1);
+    expect(segments.some((s) => s.kind === "text" && s.text.includes("ghost-9"))).toBe(
+      true,
+    );
+  });
+
+  it("前方一致の誤爆をしない（pr-55 を pr-550 の中から拾わない・pr-5 と pr-55 を混同しない）", () => {
+    const segments = segmentProseByCitations("pr-550 と pr-55 と pr-5。", [
+      citation("pr-55"),
+      citation("pr-5"),
+    ]);
+
+    const refs = segments.filter((s) => s.kind === "citation");
+    expect(refs.map((s) => (s.kind === "citation" ? s.citation.id : ""))).toEqual([
+      "pr-55",
+      "pr-5",
+    ]);
+    expect(segments[0]).toEqual({ kind: "text", text: "pr-550 と " });
+  });
+
+  it("引用ゼロ・空文字列でも壊れない", () => {
+    expect(segmentProseByCitations("そのまま。", [])).toEqual([
+      { kind: "text", text: "そのまま。" },
+    ]);
+    expect(segmentProseByCitations("", [citation("plan-1")])).toEqual([]);
   });
 });

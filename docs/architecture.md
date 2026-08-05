@@ -170,7 +170,8 @@ flowchart TD
 
 - 調査=read / 修正=write を構造分離。自動マージは一切しない。
 - 3モード（`REMEDIATION_MODE`・既定 **demo**）: **demo**（事前に同パイプラインで起票済みの**本物の draft PR** URL（`REMEDIATION_DEMO_PR_URL`）を毎回提示＝GitHub 非接触・PR 増殖なし・書き込みトークン不要。審査/デモ用）／**advisory**（in-process で方針テキスト→`SECURITY_REMEDIATION.md` 草案PR）／**dispatch**（`repository_dispatch` → `ai-remediation.yml` でランナー上の AI が実コード修正→Trivy 再スキャン＋テスト緑→draft PR→`POST /ingest/remediation-result` で結果確定）。
-  - **実績**: 既存の draft PR（#29/#31/#32/#38）は**すべて advisory 経路**（`InProcessAdvisoryRemediation` → `GitHubPullRequestGateway`）が起票したもので、dispatch 経路＝ランナー上のテストゲートを通過した PR はまだ無い（2026-08-04 時点で `ai-remediation.yml` の実行回数 0）。**配線は下記のとおり通してあるが、「回した」とは言えない**。
+  - **実績（2026-08-05・本番で実測）**: UI の起票ボタン → `repository_dispatch` → ランナー上で AI が `pnpm.overrides` を修正（`ansi-regex 3.0.0→5.0.1` / `semver 7.3.4→7.5.2`）→ テストゲート通過 → **draft PR #123**（`ai-remediation[bot]` 名義）→ `POST /ingest/remediation-result` で record が `dispatched` → `drafted` に確定。**所要 9分33秒**（02:07:26 dispatch → 02:16:59 確定）。`vulnerabilityCount=2` は dispatch 時の値を保持（CI は件数を知らない）。
+  - なお #29/#31/#32/#38 は advisory 経路（`InProcessAdvisoryRemediation` → `GitHubPullRequestGateway`）が起票したもので、中身は `SECURITY_REMEDIATION.md`（方針テキスト）。**実コードを変えるのは dispatch 経路だけ**という違いがある。
   - dispatch の CI 側: 認証は WIF ＋ Vertex AI（API キー無し・SA は `roles/aiplatform.user` のみの専用 SA で、デプロイ SA は使い回さない）。修正の土台にする ref は `client_payload.baseRef`（＝backend の `GITHUB_REMEDIATION_BASE_REF`）で運び、同じ ref へ draft PR を戻す（`repository_dispatch` の起動 ref は常に既定ブランチなので、payload で運ばないと脆弱性の実体があるブランチに届かない）。
   - CI が返す確定は3値: **drafted**（PR 起票）／**skipped**（テストゲートは緑だが直す変更が無かった）／**failed**（上限まで赤・PR 起票失敗・検証到達前の失敗を理由で書き分け）。
 - **確定が届かなかった場合の終端**: CI 側は結果 POST を必須扱いにし（[.github/actions/ingest-post](../.github/actions/ingest-post/action.yml) の `on-missing-url: fail`。検知・予兆の2経路は `skip`）、backend 側は `REMEDIATION_DISPATCH_TIMEOUT_MS`（既定20分）を過ぎた `dispatched` を `failed` へ落とす（`ExpireStaleRemediationsUseCase`・worker/all の1プロセスのみが走査）。**送る側と受ける側の両方**に置いてあるのは、ジョブ自体が落ちれば callback は発生しようがないため＝CI の誠実さに依存させない。
@@ -298,7 +299,7 @@ flowchart TB
 - **③ 自己検知（ループの閉じ）**（`app.yml` の `security-scan` job）: Trivy が**自リポジトリの依存**を fs スキャン→HIGH/CRITICAL を代表 CVE に昇格し全件同梱→本番 `/ingest/security-scan` に POST。**検知入力が外部イベントではなく自分自身の CI から来る**＝ドッグフーディングの核。これが[シナリオ4](#9-デモシナリオ5ボタンリアルさバッジ付き)の実経路。
 - **④ 自己修復**（`ai-remediation.yml`）: SECURITY 調査が `repository_dispatch` を発火→ランナー上で AI が実コードを修正→Trivy 再スキャン＋テスト緑になるまで自己修正（`REMEDIATION_MAX_ATTEMPTS` で打ち切り＝課金暴走の安全弁）→**自リポジトリに draft PR**（自動マージなし・人間承認）。マージされれば ① に戻り再デプロイ＝**完全な自己参照 DevOps ループ**。
 
-> **正直さの境界**: ①②③は実行実績のある実ワークフロー。**④は配線済みだが実行回数 0**（既存の draft PR は in-process の advisory 経路が起票したもの＝ランナーのテストゲートは通っていない。§5 参照）。加えてデモ卓のシナリオ4は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
+> **正直さの境界**: ①②③④すべて実行実績のある実ワークフロー（④は 2026-08-05 に本番で実測＝PR #123・9分33秒。§5 参照）。ただしデモ卓のシナリオ4は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
 
 ## 7. コード構成（DDD + Clean Architecture + CQRS + EDA）
 

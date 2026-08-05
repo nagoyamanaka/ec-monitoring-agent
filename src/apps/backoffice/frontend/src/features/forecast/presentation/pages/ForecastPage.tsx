@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { DefaultLayout } from "@shared/layouts/DefaultLayout";
 import { HttpError } from "@shared/api/HttpClient";
-import { formatDateTimeJa } from "@shared/format/dateTime";
 import { EmptyStateFigure } from "@shared/ui/EmptyStateFigure";
 import { RiskCardSkeleton } from "@shared/ui/Skeleton";
 import { useDocumentTitle } from "@shared/ui/useDocumentTitle";
@@ -206,12 +205,20 @@ export function ForecastPage({ demoApi }: ForecastPageProps) {
 function BriefingBody({ briefing }: { briefing: ForecastBriefingView }) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
-        <span className="rounded-full bg-slate-700/40 px-2 py-0.5 font-medium text-slate-300">
-          対象: {briefing.horizon}
-        </span>
-        <span>生成: {formatDateTimeJa(briefing.generatedAt)}</span>
-        <span>評価シグナル: {briefing.signalCount} 件</span>
+      {/* ⚠ 2026-08-05: 3つのメタチップ（対象 / 生成 / 評価シグナル）を一覧の見出しへ畳んだ。
+          「対象: 今週末」と「生成: …」は**時間軸が日付つきでより正確に言うようになった**ので
+          重複。horizon は捨てずに一覧の見出し（「今週末のリスク」）へ昇格させ、スコープを
+          示す役に変えた。**シグナル件数だけは残す**——これは母数で、「何件見て何件出したか」が
+          この製品の規律の中心にあり、消すと質疑での答えが画面から消える。文言は E6-3 の
+          画面文言（「シグナル N 件を突合して、リスク M 件に絞り込み」）に揃える。 */}
+      <div className="space-y-1">
+        <h2 className="text-sm font-bold tracking-wide text-slate-200">
+          {briefing.horizon}のリスク
+        </h2>
+        <p className="text-xs text-slate-400">
+          シグナル {briefing.signalCount} 件を突合して、リスク {briefing.risks.length}{" "}
+          件に絞り込み
+        </p>
       </div>
 
       {briefing.isFallback && (

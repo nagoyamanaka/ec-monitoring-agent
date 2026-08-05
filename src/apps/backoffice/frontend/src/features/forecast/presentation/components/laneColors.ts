@@ -31,3 +31,11 @@ export const LANE_TILE_CLASS: Record<ReferencedChipTone, string> = {
   emerald: "bg-emerald-500/10 text-slate-200 ring-emerald-500/30",
   amber: "bg-amber-500/10 text-slate-200 ring-amber-500/30",
 };
+
+/** LLM 散文中の引用 id 参照（RiskCard のインライン参照）。点線下線＝クリック可の既存語彙
+ *  （C-3b の台帳セルと同じ）に、レーン色相を文字色で乗せて「下のどのレーンに飛ぶか」を予告する。 */
+export const INLINE_REF_CLASS: Record<ReferencedChipTone, string> = {
+  cyan: "text-cyan-300 decoration-cyan-400/60",
+  emerald: "text-emerald-300 decoration-emerald-400/60",
+  amber: "text-amber-300 decoration-amber-400/60",
+};
