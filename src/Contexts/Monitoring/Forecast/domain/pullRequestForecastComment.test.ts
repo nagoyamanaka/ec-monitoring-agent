@@ -191,7 +191,7 @@ describe("buildPullRequestForecastComment — 本文", () => {
   it("level・根拠 N種類・時間窓・先手を出す", () => {
     const text = body();
 
-    expect(text).toContain("**HIGH**");
+    expect(text).toContain("**高リスク**");
     expect(text).toContain("根拠 3種類");
     expect(text).toContain("時間窓: 土 20:00-23:00");
     expect(text).toContain("**今打てる先手**");
@@ -200,6 +200,27 @@ describe("buildPullRequestForecastComment — 本文", () => {
 
   it("確信度%は載せない（ADR-32・裏付けの強さは根拠 N種類が担う）", () => {
     expect(body()).not.toMatch(/\d+\s*%/);
+  });
+
+  // 2026-08-05: 予報カードは `高リスク` に統一済みなのに、ここだけ生 enum を出していた。
+  // 決裁の場に**同じ製品の2つの語彙**が並ぶのを止める（面の語彙はフロント側に揃える）。
+  it("level は日本語ラベルで出し、生の enum を決裁の場に出さない", () => {
+    expect(body()).not.toMatch(/\b(HIGH|MEDIUM|LOW)\b/);
+
+    for (const [level, label] of [
+      ["HIGH", "高リスク"],
+      ["MEDIUM", "中リスク"],
+      ["LOW", "低リスク"],
+    ] as const) {
+      const decision = buildPullRequestForecastComment(
+        briefing({ risks: [{ ...risk, level }] }),
+        pr,
+      );
+      if (decision.kind !== "comment") throw new Error(decision.reason);
+      // ⚠ decision.level は機械向けの構造化フィールドなので enum のまま（本文だけを日本語化する）
+      expect(decision.level).toBe(level);
+      expect(decision.body).toContain(`**${label}**`);
+    }
   });
 
   it("根拠が1種類なら「根拠 N種類」チップを出さない", () => {
