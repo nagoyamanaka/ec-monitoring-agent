@@ -75,6 +75,22 @@ const LEVEL_ORDER: Record<RiskItemPrimitives["level"], number> = {
   LOW: 2,
 };
 
+/**
+ * level の表示ラベル。**生の enum を決裁の場に出さない**（2026-08-05）。
+ *
+ * 予報カード側は `riskLevelLabel`（frontend/features/forecast/domain/RiskLevel.ts）で
+ * 既に `高リスク` へ統一済みで、ここだけ `HIGH` のままだったため**同じ製品が2つの語彙で話していた**。
+ * 語を揃える先はフロント側（人が読む面の既定）。
+ *
+ * ⚠ **frontend と二重に持つのは意図的。** frontend は型だけを contracts から引き、
+ * 文言は各面が持つ方針（kind ラベルと同じ扱い）。**増やすときは両方直すこと。**
+ */
+const LEVEL_LABELS: Record<RiskItemPrimitives["level"], string> = {
+  HIGH: "高リスク",
+  MEDIUM: "中リスク",
+  LOW: "低リスク",
+};
+
 export type PullRequestContext = {
   readonly number: number;
   readonly title: string;
@@ -225,7 +241,7 @@ function renderBody(params: {
   const citations = resolveCitations(risk, briefing.signals);
   const kindCount = new Set(citations.map((c) => c.kind)).size;
 
-  const headline = [`**${risk.level}**`, `時間窓: ${risk.window}`];
+  const headline = [`**${LEVEL_LABELS[risk.level]}**`, `時間窓: ${risk.window}`];
   // 「根拠 N種類」は2種類以上のときだけ出す（RiskCard と同じ規約＝1種類で「根拠1種類」と
   // 書くと収束していないものを収束したように読ませる）。
   if (kindCount >= 2) headline.splice(1, 0, `根拠 ${kindCount}種類`);
