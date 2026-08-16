@@ -52,10 +52,68 @@ node capture.mjs dogfooding      # draft PR カットは既定で PR #29 を使�
 環境変数: `FRONT_URL`（既定 http://localhost:5173）／`API_URL`（同 3001）／`TAKE`（既存テイクへ追記）／
 `HEADED=1` ブラウザ表示／`SLOWMO`（ms・既定150）／`DWELL_SCALE`（間合い倍率・既定1）／`RESET=1`／`DRAFT_PR_URL`（未指定なら既定 PR #29）
 
+### スライド埋め込みクリップ専用: `capture-s5-clip.mjs`
+
+```bash
+TAKE=take009 node capture-s5-clip.mjs   # → output/takeNNN/s5-forecast.mp4
+```
+
+決勝スライド S5（予報デモ）に**埋める27秒**だけを撮る。`forecast` シーンが台本カット1〜3の
+素材（ProtoPedia 用スクショ込み・Valkey カード・PR #83・アラート詳細まで写る約49秒）なのに対し、
+こちらは**予報カード → 引用先の実 PR → 先手**の3画面しか撮らない＝カットが頭を落とすだけで済む。
+撮影前に `GET /forecast` の1枚目が期待どおりか（subject・level・引用）を検査して落ちる。
+環境変数: `PR_MATCH`（クリックする引用の href・既定 `/pull/55`）／`EXPECT_SUBJECT`（既定 `db_connection_pool`）／
+`PR_ZOOM`（PR ページだけの拡大率・既定 1.35）。27秒への切り出しは `temp/hackathon-study/slides/cut_s3_clip.sh`。
+
+### ProtoPedia メイン画像専用: `make-hero.mjs`
+
+```bash
+node make-hero.mjs        # 3案すべて → output/hero/hero-{a,b,c}.png
+node make-hero.mjs a      # 採用案（時間軸）だけ
+```
+
+スクショを素材にしない**描き起こしのメイン画像**。`make-posters.mjs` の hero（part1 スクショに帯と
+コピーを焼く型）は一覧カード幅に縮むと上2/3が情報ゼロの暗色になるため、決勝勢と同じ
+「巨大な主張が1つ」の型で作り直したもの。`*-card.png` は幅320pxへ縮めた検証用で、
+ここで読めないものは実際の一覧でも読めない。
+
+| 案 | 型 | 置き場所 |
+| --- | --- | --- |
+| **B（採用）** | アイコン＋巨大ワードマーク＋1行＋下辺のスペック帯 | `docs/protopedia/assets/hero-brand.png` |
+| A | 時間軸の図＋巨大見出し | `docs/protopedia/assets/hero-timeline.png`（代替として温存） |
+
+`poster-1-hero.png` は `make-posters.mjs` の出力なので上書きしない＝名前を分けてある。
+
+**案Bで踏んだ落とし穴（画）**: マークからタイルを外して字面だけを 560px で置くと、折れ線が
+**家具（リクライニングチェア）に見えて意匠が壊れる**。タイルは飾りではなく、字面を
+「グラフの軌跡」として読ませる枠。またアイコンを主役にすると、参照している DriftScribe /
+KangaL とは主従が逆（向こうはワードマークが主役）になり、アイコンショーケースに見える。
+
+**案Bで踏んだ落とし穴（文言）**: 下辺の3列は最初「判断に使える時間 81時間2分／8つのAI
+エージェント／既知は1秒」だった=**実装の自慢であって判断材料ではない**。81時間はデモ1件の
+値なのにスペックの顔で置くと製品の性質と誤読され、エージェント数は全員が言えるうえ「数が
+多いほど良い」という嘘の含意が乗る。**載せる基準は「他作品が同じことを言えないか」**で、
+現行の3列（根拠＝照合できない引用は表示しない／判断＝決めるのは人／導入＝既存の監視基盤を
+置き換えない）は技術審査員が最初に確かめる「出力を信じていいか・本番が壊れないか・乗り換えが
+要るか」に1列ずつ対応している。**具体の数値は1つも載せない**＝UI が変わっても腐らない。
+
+図と語彙はアプリの実装に従う。ずらすと嘘になるので、UI を変えたらここも追従する:
+
+| 画像の要素 | 正の在処 |
+| --- | --- |
+| 「次の一点」の幾何（点は立ち上がりの延長線上） | `frontend/public/favicon.svg` / `shared/ui/BrandMark.tsx` |
+| 人が動ける区間＝cyan・発生窓＝amber・起点＝白丸 | `features/forecast/presentation/components/ForecastTimeline.tsx` |
+| level 文言「高リスク」（**「HIGH」は廃止済み**） | `features/forecast/domain/RiskLevel.ts` の `riskLevelLabel` |
+| 確信度%を出さない | `RiskCard.tsx`（未較正のため意図的に非表示） |
+
+フォントは本体と同じ `@fontsource/ibm-plex-sans-jp` の実体を data URI で焼き込むので、
+実行環境にフォントが無くてもフォールバックしない。
+
 ## 出力
 
 ```
 output/
+  hero/                           # make-hero.mjs（ProtoPedia メイン画像・原寸1920x1080 と縮小検証）
   take001/                        # 実行ごとに自動採番（TAKE= で固定可）
     part1-forecast.mp4            # パート本体（H.264・1920x1080・30fps）。外部タブは partN-*-popupM.mp4
     part2-investigation.mp4
