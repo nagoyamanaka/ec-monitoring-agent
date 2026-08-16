@@ -24,4 +24,8 @@
 - **デモ操作卓は 5 ボタン**（1/2/3/3b/4）。旧「在庫競合」廃止で -1 繰り上げ済み・旧5/6 は撤退済み。「8 ボタン」等の古い記述は無効（現行一覧は [architecture.md §9](../architecture.md#9-デモシナリオ5ボタンリアルさバッジ付き)）。
 - **承認済みアラートは dedup 窓から除外**され、Analytics ページに承認済み一覧がある（2026-07 追加）。承認→昇格→再発1秒既知→却下→再調査の一生と、訂正が次回 SIMILARITY 分類の正になる学習一周は `e2e/backoffice/feedback-lifecycle.e2e.test.ts` が担保。
 - **予兆（Forecast）は実装済み**（`GET/POST/DELETE /forecast`・引用検証・E2E あり）。「未実装・stretch」と読める古い記述は無効（現状は [architecture.md §10](../architecture.md#10-予兆ブリーフィングforecast実装済み)）。
-- **テスト実測は 2026-07-10 時点で unit 1,103件/155ファイル＋ HTTP API E2E 22件/7ファイル**。step 系に散在する古い件数はその時点のスナップショット。
+- **予報は Mongo へ追記型で永続化**（`risk_forecasts`・`DELETE /forecast` は soft discard）。「最新1件をオンメモリ保持」と読める古い記述は無効（[ADR-28](../decisions/ADR.md)）。
+- **判定は「状態」と「履歴」に分かれた**（`Alert.reviewHistory` が追記のみ・正答率の母数は履歴側）。「却下→再調査で母数から消える」前提の記述は無効（[ADR-29](../decisions/ADR.md)）。
+- **測定が入った**（2026-08）: 診断側の引用照合率（`GET /analytics` の `citationCoverage`＝引用単位）と、予報側の**破棄件数**（`forecastMeasurement`）。予報の確信度%は UI から撤去済み（[ADR-30](../decisions/ADR.md)〜[ADR-32](../decisions/ADR.md)）。
+- **予報は PR コメントとしても出る**（`forecast-pr-comment.yml`＋`src/apps/ci/forecast-pr-comment/`）。「予報は画面でしか見られない（pull 型）」と読める古い記述は無効。**gate ではない**（[ADR-33](../decisions/ADR.md)）。予報カードの構成も「決裁の読み順＋時間軸」へ組み替え済み（[ADR-34](../decisions/ADR.md)・旧「window を主見出し／タイムチャート不採用」は撤回）。
+- **テスト実測は 2026-08-17 時点で unit 1,298件/178ファイル＋ HTTP API E2E 22件/7ファイル**（docker 必須の結合 `*.int.test.ts` 11ファイルは別ラン）。step 系に散在する古い件数はその時点のスナップショット。
