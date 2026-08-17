@@ -1,4 +1,4 @@
-# Kizashi（兆し）アーキテクチャ（コード準拠・2026-07-11 時点）
+# Kizashi（兆し）アーキテクチャ（コード準拠・2026-08-17 時点）
 
 > **本書はコードを正とした現状スナップショット**。設計の経緯・理由は [docs/steps/](steps/)（step 系設計書）と [docs/decisions/](decisions/) を参照。ここに書かれていることはすべて実装済み（未実装は明示）。
 
@@ -41,9 +41,11 @@ flowchart LR
   end
 
   UI["React 観測コンソール<br/>SSE リアルタイム・証拠パネル・承認"]
+  PRC["GitHub PR コメント（§10.9）<br/>決裁の場へ材料を届ける<br/>（止めない・gate ではない）"]
   REM["リメディエーション(write隔離)<br/>GitHub Actions 上で AI が実修正<br/>→テストゲート→draft PR(人間承認)"]
 
   FSIG --> FC --> UI
+  FC --> PRC
   SI -.記憶（MEMORY）.-> FC
   EC -->|DomainEvent| SUB
   CM -->|webhook| ICM
@@ -159,7 +161,7 @@ flowchart TD
 - 既知/未知でルートが変わる（既知は重い調査モジュールを通さない）。出口は自責→修正起案 / 他責→運用エスカレーションに分岐。
 - 失敗時も空にしない: runner 例外・パース不能の fallback レポートに**収集済み証拠リンクを温存**。パース不能時は rawSnippet をログに残し真因を追跡。
 - **空応答への構造的防御（finalizer 分離）**: gemini-2.5 系は思考トークンも `maxOutputTokens` を消費するため、証拠が競合する高推論シナリオ（例: 症状=メモリ枯渇 × Terraform 差分=接続上限縮小）では最終 JSON 合成ターンの思考が予算を食い切り **finishReason=MAX_TOKENS・0文字**になる故障モードがある（思考予算キャップは努力目標であり硬い壁ではない）。**恒久策として「統括」と「JSON 化」を別ターンに分離**した——エージェントループ終了後に、**ツールなし・思考予算0・`responseSchema`（制約付きデコード）強制の単発呼び出し**を1回だけ直列で足し、セッションで回収したサブエージェント出力群を JSON へ清書させる（`GeminiInvestigationFinalizer`）。ツールを持たないので `responseSchema` の併用制約に当たらず、思考が予算を取らないので空応答の機序自体が成立しない。**エージェント数は増えない**（グラフ外の直列ステップ・8体のまま）。清書がパースを通らなければコーディネーターの下書きへ黙って戻す（`finalizeInvestigationOutput`）ので分離前が下限。
-- **空応答への縮退リトライ（後段の受け皿）**: 上の finalizer は前段の防御であって置き換えではないため、縮退リトライは残す。1回目が空/パース不能/例外のとき、**思考予算だけ落とした同一グラフで1回だけ再実行**してから fallback に落とす（思考↓＝最終 JSON 用トークン保証↑と失敗機序に整合・sub-agent の予算は不変なので分析の質は保たれる・再実行は `ai_investigation_retrying` ログで観測可能・上限1回で prefetch(1) の占有を有界に保つ）。清書役自体が落ちた場合（Vertex 側の瞬断・タイムアウト）と、ADK 調査そのものが例外で死ぬ経路をここが拾う。決定の履歴は [ADR-26](decisions/ADR.md#adr-26-空応答fallbackは思考予算を落とした縮退リトライ1回で防御)。
+- **空応答への縮退リトライ（後段の受け皿）**: 上の finalizer は前段の防御であって置き換えではないため、縮退リトライは残す。1回目が空/パース不能/例外のとき、**思考予算だけ落とした同一グラフで1回だけ再実行**してから fallback に落とす（思考↓＝最終 JSON 用トークン保証↑と失敗機序に整合・sub-agent の予算は不変なので分析の質は保たれる・再実行は `ai_investigation_retrying` ログで観測可能・上限1回で prefetch(1) の占有を有界に保つ）。清書役自体が落ちた場合（Vertex 側の瞬断・タイムアウト）と、ADK 調査そのものが例外で死ぬ経路をここが拾う。決定の履歴は [ADR-26](decisions/ADR.md#adr-26-空応答-fallback-は思考予算を落とした縮退リトライ1回で防御)。
 - **fallback からの復帰導線（E3）**: fallback は行き止まりにしない。ドロワー/詳細ページの警告バナー直下に「再調査を実行」（既存 `POST /alerts/:id/reinvestigate` へ定型 operatorNote を添えてワンクリック結線・`FallbackRecoveryBanner`）、温存された証拠リンクは「収集済みの証拠リンク」として要約射影でも表示、一覧カードの「AI推定: 」空文字は「調査失敗・再調査可」の定型文に写像。
 - **働きの明細（G1）**: 調査完了時に UseCase が実測メトリクス（`InvestigationMetrics`＝elapsedMs＋証拠件数内訳: ログ/メトリクス/Terraform差分/コミット/類似事例）を `InvestigationReport.metrics`（optional・後方互換）へ deterministic に添付（ADK/単一Gemini 両経路で同形・LLM 出力ではない）。UI はレポート冒頭に「**92秒**で Cloud Logging・GitHub・類似事例DB を横断し、**証拠62件**を収集して原因を推定」の実測1行（要約射影）を出し、既知一致には「既知パターン一致＝**1秒未満・AI コストゼロ**で確定」の経済性対比を添える。表示は記録済みの事実のみ（「人間なら◯分」等の換算はしない）。
 - **報告書の視覚構造（E8・詳細ページ full 射影）**: 同じ実測メトリクスを**証拠フローダイアグラム**（流入源→AI 調査→結論の収束図・`EvidenceFlowDiagram`＋`evidenceFlowModel` 純関数）として図示し、G1 の実測1行は図ヘッダに吸収（同じ数字を二度出さない・描けない条件では1行へ劣化）。結論ノードに確信度ゲージ＋キャリブレーション注記を合流。冒頭は結論ファースト（AI推定パターン直下に自責/他責バッジ＋障害規模1行・推奨アクションを調査ステップより先に）。調査ステップは縦タイムライン（生エージェント名は台帳で人間語化・時刻は記録が無いため出さない＝順序のみ）。生ログ引用（算定根拠/添付証拠/判定根拠）は既定折りたたみ「n件」＋展開でソース種別レーン（観測データ/変更履歴/過去事例・`groupCitations`）。すべて記録済み実データからの表示射影＝backend 変更ゼロ。
@@ -254,7 +256,7 @@ flowchart LR
 | ------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
 | 機密         | **Secret Manager**（箱のみ tf 管理・平文 version は `gcloud` で別投入＝tf state 非搭載）         | 各コンテナへ環境注入。LLM コンテキストに載らない＝注入成功時も鍵は漏れない（§5.5）  |
 | CI 認証      | **Workload Identity Federation**（pool + provider・鍵レス）                                      | GitHub Actions → GCP を SA キー配布ゼロで認証。長期鍵の漏洩面を排除                 |
-| 権限         | **役割別サービスアカウント ×3**（CI デプロイ用 / Cloud Run 実行用 / GCE 実行用・最小権限）       | 実行系と CI 系を分離。プロセス誤動作時の横移動を限定（§5.5 最小権限・サービス分離） |
+| 権限         | **役割別サービスアカウント ×4**（CI デプロイ用 / **CI AI 修正用**（`roles/aiplatform.user` のみ）/ Cloud Run 実行用 / GCE 実行用・最小権限） | 実行系と CI 系を分離。さらに CI の中でもデプロイ権限と AI 修正ジョブを分ける＝**LLM が書いたコードを走らせるランナーにデプロイできる資格情報を置かない**（§5・§5.5） |
 | 状態管理     | **GCS**（tfstate 用＝partial backend config で tf 外に用意・deploy 資材用＝tf 管理）／state lock | plan/apply の tfstate 奪い合いを CI の `concurrency` で直列化（§6.5②）              |
 | 配信         | **Artifact Registry**（apps リポジトリに ec-backend / backoffice-backend イメージ）              | image build & push の格納先（§6.5①）                                                |
 | ネットワーク | VPC / subnet / **Serverless VPC Access Connector** / 静的 IP / firewall                          | Cloud Run（サーバレス）→ GCE 常駐系（RabbitMQ/Mongo 等）への疎通                    |
@@ -279,6 +281,7 @@ flowchart TB
     TF["terraform.yml<br/>plan(PR) / apply(main・承認ゲート)<br/>state lock 直列化済み"]
     TRIVY["app.yml: Trivy fs scan<br/>HIGH/CRITICAL 抽出→整形"]
     REM["ai-remediation.yml<br/>AI が実修正→テストゲート→draft PR"]
+    FPC["forecast-pr-comment.yml<br/>予報を PR コメントで提示<br/>（参照のみ・常に exit 0）"]
   end
 
   subgraph prod["本番（Cloud Run + GCE）＝ 監視エージェント稼働"]
@@ -291,6 +294,8 @@ flowchart TB
   SRC --> TRIVY -->|"POST /ingest/security-scan<br/>(実 ingest・シナリオ4 の実経路)"| AGENT
   AGENT -->|"SECURITY 調査 → repository_dispatch"| REM
   REM -->|"draft PR（人間承認ゲート）"| SRC
+  AGENT -->|"GET /forecast（参照）"| FPC
+  FPC -->|"自リポジトリの PR へコメント<br/>（材料のみ・止めない）"| SRC
   AGENT -.監視.-> ECPROD
 ```
 
@@ -298,8 +303,9 @@ flowchart TB
 - **② 自己 IaC**（`terraform.yml`）: `plan` は PR・`apply` は `main`（`environment: prod` 承認ゲート）。PR とマージの plan/apply が同一 tfstate ロックを奪い合うレースを `concurrency` で直列化済み（1回目失敗→rerun 成功の既知事象を解消）。
 - **③ 自己検知（ループの閉じ）**（`app.yml` の `security-scan` job）: Trivy が**自リポジトリの依存**を fs スキャン→HIGH/CRITICAL を代表 CVE に昇格し全件同梱→本番 `/ingest/security-scan` に POST。**検知入力が外部イベントではなく自分自身の CI から来る**＝ドッグフーディングの核。これが[シナリオ4](#9-デモシナリオ5ボタンリアルさバッジ付き)の実経路。
 - **④ 自己修復**（`ai-remediation.yml`）: SECURITY 調査が `repository_dispatch` を発火→ランナー上で AI が実コードを修正→Trivy 再スキャン＋テスト緑になるまで自己修正（`REMEDIATION_MAX_ATTEMPTS` で打ち切り＝課金暴走の安全弁）→**自リポジトリに draft PR**（自動マージなし・人間承認）。マージされれば ① に戻り再デプロイ＝**完全な自己参照 DevOps ループ**。
+- **⑤ 自己予報（起きる前側のループ）**（`forecast-pr-comment.yml`）: 自リポジトリの PR が開くたびに本番 edge の `GET /forecast` を引き、その PR に該当する予報があればコメントを1枚出す＝**予報を自分自身のリリース判断の場に置く**。①〜④が「起きた後」の自己運用ループなのに対し、⑤は「起きる前」の材料が同じループへ入る口（詳細と非 gate 規律は §10.9）。
 
-> **正直さの境界**: ①②③④すべて実行実績のある実ワークフロー（④は 2026-08-05 に本番で実測＝PR #123・9分33秒。§5 参照）。ただしデモ卓のシナリオ4は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
+> **正直さの境界**: ①②③④すべて実行実績のある実ワークフロー（④は 2026-08-05 に本番で実測＝PR #123・9分33秒。§5 参照）。⑤は**本番予報と実 PR（#55）に対して出力を実測済み**だが、その実測は純関数へ流した確認であって、ワークフロー実行としての実績は本書では主張しない（§10.9 の注記）。ただしデモ卓のシナリオ4は「実 CI の非同期完了を待たずに」同じ ingest 経路へ合成入力を流す（入口のみ合成・以降は実経路・UI に amber バッジ）。本物の CI 発火→PR は `main` マージ後に非同期で起き、レポートに実リンクは即時には出せない割り切り（[決定記録](decisions/)・デモ用途の設計判断）。
 
 ## 7. コード構成（DDD + Clean Architecture + CQRS + EDA）
 
@@ -315,11 +321,13 @@ src/
 │   └── Shared/                   # EventBus(RabbitMQ)・CommandBus・criteria 等
 └── apps/
     ├── ec/backend/
-    └── backoffice/{backend,frontend}/   # frontend は features/{alerts,analytics,demo,forecast}
+    ├── backoffice/{backend,frontend}/   # frontend は features/{alerts,analytics,demo,forecast}
+    └── ci/forecast-pr-comment/          # CI 合成ルート（§10.9・root tsconfig で型検査対象）
 ```
 
 - ポート実装は `...Adapter`、ドメインサービスは `...DomainService`。driven ポートと wire DTO は infrastructure 配下。ワイヤ型は contracts に単一ソース化。
-- テスト: Vitest（BDD）unit 1297件・166ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕）。docker 必須の結合（`*.int.test.ts`）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
+- `apps/ci/` は **CI から起動するグルーの置き場**（判定と本文は domain の純関数、取得と出力だけここ）。root `tsconfig.json` の include に入れてあり、**CI のグルーが typecheck の外に落ちない**ようにしている。
+- テスト: Vitest（BDD）unit 1,298件・178ファイル（backend/shared＋frontend〔jsdom/RTL は別プロジェクト〕・2026-08-17 実測）。docker 必須の結合（`*.int.test.ts`・11ファイル）は `make test-integration` の別ラン。分岐の厚い ACL は fake 注入の UT、薄いリポジトリは E2E。E2E は `e2e/`（Vitest・HTTP API レベル・docker compose 実スタック＋stub AI・22件/7ファイル）: 既知1秒/未知調査/フィードバック一生（承認→昇格→再発既知→却下→再調査）/類似学習一周/予兆引用検証/デモ操作卓/EC 注文。
 
 ## 8. 主要 API（backoffice）
 
@@ -335,7 +343,7 @@ src/
 | `POST /ingest/remediation-result` | AI リメディ CI の結果 callback                                                                                                                              |
 | `GET /analytics`                  | 承認済みアラート等の集計ビュー（正答率＝判定履歴が母数・引用照合率＝**引用単位**の `citationCoverage`・予報の測定＝**破棄の件数**の `forecastMeasurement`） |
 | `POST /demo/scenario` ほか        | デモ操作卓（`DEMO_ENABLED` 配下）                                                                                                                           |
-| `GET /forecast`                   | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）                                  |
+| `GET /forecast`                   | 予兆ブリーフィング＝事前生成済みの最新リスク予報（`FORECAST_ENABLED` 配下・Gemini 非呼び出し＝無人閲覧に課金ゼロで耐える）。**UI だけでなく CI（PR コメント・§10.9）も同じ口を参照する**（読み取り専用・失敗しても CI は落とさない） |
 | `POST /forecast`                  | 予報の生成（`FORECAST_ENABLED` かつ `DEMO_ENABLED` 配下・Gemini 呼び出し・horizon は `FORECAST_HORIZON` 固定）                                              |
 | `DELETE /forecast`                | 予報キャッシュのリセット（`DEMO_ENABLED` 配下・アラート側 `/demo/reset` とは独立＝一覧リセットが予報を巻き込まない）                                        |
 
@@ -359,7 +367,9 @@ src/
 
 ## 10. 予兆ブリーフィング（Forecast・実装済み）
 
-未来シグナル×記憶の**引用付きリスク予報**。**発火条件は未来シグナルが1本以上あることだけ**で、記憶（過去の同型障害）は**発火の関門ではなくレベルの増幅材**＝前例が無くても未来シグナル単独で予報は出る（その場合は原則 LOW〜MEDIUM に留まる／§10 の F5・プロンプト規約）。**F1〜F8・F10〜F12 まで実装済み**。ローカル E2E（`e2e/backoffice/forecast.e2e.test.ts`）が引用検証（偽引用 drop・裏付けゼロ破棄）・MEMORY の実在解決・GET キャッシュ配信を決定論担保。残タスクはコードでなく人間タスク（実 PR ステージングと録画）のみ。
+未来シグナル×記憶の**引用付きリスク予報**。**発火条件は未来シグナルが1本以上あることだけ**で、記憶（過去の同型障害）は**発火の関門ではなくレベルの増幅材**＝前例が無くても未来シグナル単独で予報は出る。**F1〜F8・F10〜F12 実装済み＋ E7（決裁の場への提示・§10.9）**。ローカル E2E（`e2e/backoffice/forecast.e2e.test.ts`）が引用検証（偽引用 drop・裏付けゼロ破棄）・MEMORY の実在解決・GET キャッシュ配信を決定論担保。
+
+> ⚠ **「前例が無ければ弱く出る」は実測で否定された**（2026-08-04・ローカル2群 n=21・実 Gemini）。記憶ゼロの B群でも **9回中9回 HIGH** が出ている。プロンプトの床（「単独シグナルのみで裏付けられるリスクは原則 LOW〜MEDIUM」）が縛るのは**根拠の種類が1つのとき**であって、**前例の有無ではない**——記憶が無くても未来の変更＋負荷予定の2種類が残るため床に当たらない。記憶で変わったのは level の高さではなく**1回あたりの本数**（2.25本 → 1.67本）と MEDIUM 比率（7% → 40%）。数字の出所は `buildForecastMeasurement`（§10.3 F5c）。
 
 ```
 未来シグナル3系統                         記憶
@@ -396,14 +406,14 @@ src/
 
 ### 10.5 UI（F7）
 
-`frontend/features/forecast`＝domain（`ForecastView`/`RiskLevel` 純関数・wire は `ForecastContract` を `@monitoring` alias 直 import）／infrastructure（`forecastApi`＝GET の 404 を body で「機能 off（guard・非JSON）/未生成（JSON）」に判別し可用性を返す＝専用 status API を増やさない）／application（`triggerForecast`）／presentation（`ForecastProvider`＝GET 1回でナビ表示可否＋最新予報を全ページ共有・`ForecastPage`＝リスク level 降順・`RiskCard`＝level バッジ+**根拠 N種類チップ**（引用の kind 数＝決定論値）+reasoning。⚠ **confidence は表示しない**——LLM の自己申告をクランプしただけで診断側のような cap も署名UIも無く、判断材料が level と同じ＝決定論で出せている軸の二重表示だった（[ADR-32](decisions/ADR.md#adr-32-予報に確信度は表示しない較正できない自己申告を決定論で出せている軸に重ねない)。値は wire・履歴・同 level 内の表示順には残す）・**`CitationList`＝引用検証済みシグナルのみの引用チップ（未マージ PR／未適用 plan（実 PR #83）／過去アラートへ実リンク・ハルシネーション否定の可視化）**）。`/forecast` SPA ルート追加（vite proxy / nginx を Accept 出し分けの SPA-aware 側へ移動）・Forecast ナビタブは `FORECAST_ENABLED` off で非表示＋HIGH n件バッジの導線1個。カード描画は `shared/ui/ReferencedEvidenceCard` へ昇格し相関パネル（`RelatedAlertsPanel`）と共有＝「参照 id を実在レコードへ解決して提示する」同型パターンの単一実装。
+`frontend/features/forecast`＝domain（`ForecastView`/`RiskLevel` 純関数・wire は `ForecastContract` を `@monitoring` alias 直 import）／infrastructure（`forecastApi`＝GET の 404 を body で「機能 off（guard・非JSON）/未生成（JSON）」に判別し可用性を返す＝専用 status API を増やさない）／application（`triggerForecast`）／presentation（`ForecastProvider`＝GET 1回でナビ表示可否＋最新予報を全ページ共有・`ForecastPage`＝リスク level 降順（horizon は一覧見出し「今週末のリスク」へ昇格・ページ上部のメタチップは見出しへ畳み、シグナル件数＝母数だけ残す）・`RiskCard`＝**決裁の読み順**（[ADR-34](decisions/ADR.md#adr-34-予報カードは決裁の読み順に並べ替えいつまでに動くかを軸で出す)）で「**何が**（subject 見出し＋level バッジ）→ **いつまでに**（`ForecastTimeline`）→ **何をする**（🛡 先手）→ **なぜ**（`ConvergenceMiniFlow` の収束）→ **詳しく**（AI の推論文・`<details>` で畳む）→ **証拠**（`CitationList`）」。バッジと結論ノードの文言は `riskLevelLabel`（`高リスク` / `中リスク` / `低リスク`）に統一し、ナビの件数バッジまで同じ語彙で揃えた＝**画面に生 enum を出さない**（PR コメント側も同じ写像・§10.9）。推論文中の生の引用 id（`sch-1` 等）は `CitationRefProse` が引用チップへの参照リンクに変換する。`ForecastTimeline` は **いま → 対処を始める期限 → 予測発生窓**の3点を線形軸で描き（`予測発生 − 対処所要`＝期限。対処所要は宣言値なので斜線、実測由来はベタ塗り）、**予測発生時刻は引用された SCHEDULE シグナルから決定論で解決**する（`scheduleWindowOccurrence`・出所を画面に併記・解決できなければ軸ごと出さず `window` の補足行へ縮退）。⚠ **confidence は表示しない**——LLM の自己申告をクランプしただけで診断側のような cap も署名UIも無く、判断材料が level と同じ＝決定論で出せている軸の二重表示だった（[ADR-32](decisions/ADR.md#adr-32-予報に確信度は表示しない較正できない自己申告を決定論で出せている軸に重ねない)。値は wire・履歴・同 level 内の表示順には残す）・**`CitationList`＝引用検証済みシグナルのみの引用チップ（未マージ PR／未適用 plan（実 PR #83）／過去アラートへ実リンク・ハルシネーション否定の可視化）**）。`/forecast` SPA ルート追加（vite proxy / nginx を Accept 出し分けの SPA-aware 側へ移動）・Forecast ナビタブは `FORECAST_ENABLED` off で非表示＋HIGH n件バッジの導線1個。カード描画は `shared/ui/ReferencedEvidenceCard` へ昇格し相関パネル（`RelatedAlertsPanel`）と共有＝「参照 id を実在レコードへ解決して提示する」同型パターンの単一実装。
 
 ### 10.6 フラッグシップ seed と E2E（F8）
 
 - seed 3系統（DB接続枯渇）: `seeds/ForecastPendingPlanSeed.ts`＝バックボーン VM `machine_type` e2-standard-2→e2-small 縮小の未適用 plan（実 PR #83 の terraform plan と同内容・`FORECAST_PENDING_PLAN_PR_URL` 既定=#83 を後付けし「証拠を開く」が実 PR に解決／`DEMO_ENABLED` 配下で `InMemoryPendingInfraPlanStore` へ投入）／`seeds/ForecastScheduleSeed.ts`＝土 20:00 checkout 負荷 x5／`seeds/ResolvedAlertSeed.ts` に過去解決事例2件（`FORECAST_MEMORY_SEED_ALERT_IDS`・`report.subject` を plan の terraform address / schedule の checkout とトークン突合する語彙で明示＝MEMORY 引用が `incident.<実在AlertId>` として `GET /alerts/:id` に解決できる）。
 - **MEMORY は生成時に再 warmUp**（`ForecastRiskUseCase.recallMemorySignals`）＝demo reset の再 seed・直前に承認/解決した事例が backend 再起動なしで記憶に載る。
 - ローカル E2E（`AI_INVESTIGATION_STUB=true`）: `StubLLMClient` が予兆 SYSTEM_INSTRUCTION を判別して固定予報（**意図的な偽引用 ghost-\* 入り**・実在引用は plan-1/sch-1/inc-1 の3系統）を返し、引用検証＝偽引用 drop・裏付けゼロ破棄・MEMORY の実在解決・GET キャッシュ配信を課金なしで決定論検証。
-- UI の見せ方: `RiskCard` は **window（いつ危ないか）を主見出し**にし、引用を種別レーン（変更予定 cyan／負荷予定 amber／過去の記憶 emerald）＋「根拠 n系統」チップで**系統の収束**として見せる（`groupCitationsByKind`・タイムチャートは window が LLM 由来の自由文字列のため不採用）。MEMORY 引用の「当時のアラートを開く」は、一覧 API が RESOLVED を除外するため詳細ページ側で `GET /alerts/:id` へフォールバックして解決（`useAlertDetail` が現役＝共有一覧 state／アーカイブ＝単品 fetch の二源を単一インターフェースに畳む。アーカイブは共有一覧 state へ merge しない＝一覧に混入しない。類似分類の関連アラート導線も同経路）。
+- UI の見せ方: 引用を種別レーン（変更予定 cyan／負荷予定 amber／過去の記憶 emerald）＋「根拠 n系統」チップで**系統の収束**として見せる（`groupCitationsByKind`）。⚠ **かつての2つの決定は [ADR-34](decisions/ADR.md#adr-34-予報カードは決裁の読み順に並べ替えいつまでに動くかを軸で出す) で撤回済み**——「window を主見出し」は軸が日付つきで「いつ」を答えるようになったため見出しは「何が」へ、「タイムチャート不採用」（理由: `window` が LLM 由来の自由文字列）は**読む対象を `risk.window` から引用スケジュールの `when`（我々自身のデータ）に替えたことで根拠が消えた**（`risk.window` は今も時刻として読まない）。MEMORY 引用の「当時のアラートを開く」は、一覧 API が RESOLVED を除外するため詳細ページ側で `GET /alerts/:id` へフォールバックして解決（`useAlertDetail` が現役＝共有一覧 state／アーカイブ＝単品 fetch の二源を単一インターフェースに畳む。アーカイブは共有一覧 state へ merge しない＝一覧に混入しない。類似分類の関連アラート導線も同経路）。
 
 ### 10.7 予防ファースト（F10・F11）
 
@@ -416,6 +426,30 @@ src/
 
 `DELETE /forecast`＝`RiskForecastRepository.clear()`（soft discard・履歴は残す）・`demoGuard` 配下。**アラート側 /demo/reset とは独立**＝一覧のリセットが提出前に温めた予報キャッシュ（無人閲覧の要）を巻き込まない。UI は `ForecastDemoConsole`＝アラート一覧の DEMO CONSOLE と同一視覚言語（fuchsia ピル・realness バッジ・cyan 実行/rose リセット）の右 aside パネルで、**投入シグナル台帳**（実データ＝実 GitHub PR は1つだけ・残りは合成 seed、と本物度を明示）＋「▶ 予報を生成（AI 突合・約1分）」「予報をリセット」を集約。可用性は GET /demo/status 404 判定＝本番ではコンソールごと非表示・予報閲覧は無傷。
 
+### 10.9 決裁の場への提示（E7・PR コメント・実装済み）
+
+予報は**見に行くもの（pull）**だった——`/forecast` を人が開いて初めて材料になる。E7 は「**必ず発生する決裁（リリース可否）の時と場所に、材料のほうから出る**」入口を1つ作る。決定の理由と語彙の制約は [ADR-33](decisions/ADR.md#adr-33-予報は-pr-コメントで届けるgate-にはせず該当は引用一致を第一根拠にする)。
+
+```
+PR open/reopen/synchronize（または workflow_dispatch）
+   ↓  .github/workflows/forecast-pr-comment.yml
+src/apps/ci/forecast-pr-comment/main.ts  ── GET /forecast（本番 edge・参照のみ）
+   ↓  取得と出力だけ（GitHub への書き込み権を持たない）
+Forecast/domain/pullRequestForecastComment.ts（純関数・判定と本文）
+   ↓  該当があるときだけ
+gh がコメント1枚を投稿／既存コメントを更新（目印 <!-- kizashi-forecast:pr-comment -->）
+```
+
+- **止めない**（最重要の規律）: `exit code` で落とす経路も必須チェック化も入れない。edge 停止・予報未生成・JSON 破損・時刻が解決できない——**すべて warning 止まりで常に exit 0**、投稿ステップも `continue-on-error`（fork PR では `GITHUB_TOKEN` が read-only）。形式的な外部承認プロセスが変更失敗率を下げる証拠は無い（DORA / 2019 State of DevOps）ので、**既にあるレビューと自動チェックに材料を1つ届ける**に徹する。
+- **該当の判定は2本立て**（順序に意味がある）: **(1) 引用一致**＝その PR を指すシグナル（`source === github.pr#N`／`PullRequestSignalSource` の規約）が `risk.citations` に居る（**強**・引用検証を通った結果なので語の重なりより強い）→ **(2) subject のトークン照合**（弱）。**level より先に引用一致を見る**（この PR を根拠に出た予報のほうが、この PR の決裁に効く）。
+- **本文に載るもの**（材料は予報カードと同じ・新しい表現を発明しない）: level（`高リスク` 等の日本語ラベル＝画面と同一語彙）・根拠 N種類（**2種類以上のときだけ**）・時間窓・**なぜこの PR に出ているのかの1行**（引用一致か突合キー一致かを明示＝読み手が検算できる）・推論の引用・**有効リードタイム**（`予測発生 − 発行 − 対処所要`／予測発生は引用スケジュールから解決・**人間の入力はゼロ**・解決できなければ推定せず「算出していない」と書く）・🛡 今打てる先手・実在照合済みの引用リスト。⚠ **確信度%は載せない**（[ADR-32](decisions/ADR.md#adr-32-予報に確信度は表示しない較正できない自己申告を決定論で出せている軸に重ねない)）。
+- **フッタは毎回**: 「この予報はリリースを止めません」＋「**決めた記録（acted / deferred / rejected）を残す台帳はまだありません（ロードマップ）**」＋予報 ID / 生成時刻 / 対象期間 ＋「シグナル N 件を突合して、リスク M 件に絞り込み」＋引用検証の会計（E6-1 の破棄件数・**破棄ゼロでも書く**／検証カウンタを持たない予報では行ごと出さない＝「破棄0」と「測っていない」を畳まない）。
+- **出さない条件**: 該当が無い／`isFallback`（答えられなかった予報を材料として出さない）。**毎 PR に出すとゴム印になる**ため沈黙を選ぶが、**出さなかった回もジョブサマリに理由を必ず書く**（「該当が無かった」と「edge に繋がらなかった」を同じ沈黙に畳まない）。同じ PR にコメントは積まず、目印を含む既存コメントを更新する。
+- **実測（2026-08-04）**: 本番予報（生成 08-04 15:13 JST）を実 PR #55 に対して評価すると、**高リスク・根拠3種類・引用5件（うち PR#55 自身）・先手あり・有効リードタイム 100時間16分**（発行 → 引用スケジュール「土 20:00-23:00」＝08-08 20:00 JST − 対処30分〈宣言値〉）。⚠ これは `GET /forecast` の実データを同じ純関数へ流した確認であり、**ワークフロー実行としての実績はここでは主張しない**。
+- **ここで作らないもの**: 決裁台帳（`decision` の記録）と提示頻度の上限。E7 は**入口だけ**＝「提示は実装済み・記録はロードマップ」と正確に言える状態を保つ（§11）。
+
 ## 11. 未実装（設計のみ）
 
+- **決裁台帳（`decision` の記録）**: 提示（§10.9）は実装済みだが、**提示された材料に対して人が何を選んだか**（acted / deferred / rejected）を予報側で記録する台帳は無い。アラート側の判定履歴（`Alert.reviewHistory`・[ADR-29](decisions/ADR.md#adr-29-判定は上書きの状態と追記の事実に分ける正答率の母数は履歴から数える)）は既に追記型で持っているので、器の形はそこに揃える。**提示頻度の上限**（アラート疲れ対策）も台帳と同時に設計する——上限が無い `deferred` 台帳は「決裁の証跡」ではなく「無視の証跡」になるため。PR コメントのフッタで毎回この不在を明示している。
+- **先手を打った後の事後検証**: 予報の「的中」は二値で定義できない（予防のパラドクス）が、飽和系のクラスは**先手の後に前兆（旧閾値を超える負荷）が来たか**を1件ずつ実測できる。標本（先手を打った予報の実データ）が要るため未着手。
 - **イベントソーシング基盤（stretchⅢ）**: ハッカソン後。将来的には検出層から出力されるイベントの単一入口（Event Gateway）として集約し、すべての検知ソースを同一イベントモデルへ正規化する構想。
