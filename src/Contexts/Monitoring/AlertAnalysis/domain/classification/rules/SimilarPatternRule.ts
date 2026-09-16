@@ -1,4 +1,5 @@
 import { MonitoringEvent } from "../../../../Shared/domain/MonitoringEvent.js";
+import { buildIncidentQueryText } from "../../../../SimilarIncident/domain/incidentQueryText.js";
 import { SimilarIncidentRepository } from "../../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import {
   ClassificationConfidence,
@@ -35,7 +36,7 @@ export class SimilarPatternRule implements ClassificationRule {
   ): Promise<KnownAlertClassification | null> {
     const matches = await this.similarIncidents.search({
       eventName: monitoringEvent.eventName,
-      text: this.buildQueryText(monitoringEvent),
+      text: buildIncidentQueryText(monitoringEvent),
       limit: this.limit,
     });
     if (matches.length === 0) {
@@ -92,26 +93,4 @@ export class SimilarPatternRule implements ClassificationRule {
     const normalized = rawScore / this.scoreCeiling;
     return Math.max(0, Math.min(1, normalized));
   }
-
-  // eventName と payload からハイブリッド検索用の自由文を組み立てる。
-  //
-  // 発生毎に変わる高カーディナリティ値（UUID・数量・金額・ID配列）は除外する。
-  // これらは「再発した同種障害」を語る語彙ではなく、毎回ユニークなトークンとして
-  // Jaccard の和集合だけを膨らませるノイズ。実イベントは orderId/customerId の
-  // UUID 2つだけで類似度上限が約0.5に潰れ、しきい値0.6に構造的に届かなくなる
-  // （＝実経路の再発が永遠に類似一致しない）。障害の語彙を運ぶのは reason/symptom 等の
-  // 文字列フィールドなので、UUID 形式でない文字列値だけをクエリに載せる。
-  private buildQueryText(event: MonitoringEvent): string {
-    const payloadText = Object.entries(event.payload)
-      .filter(
-        (entry): entry is [string, string] =>
-          typeof entry[1] === "string" && !UUID_PATTERN.test(entry[1]),
-      )
-      .map(([key, value]) => `${key}=${value}`)
-      .join(" ");
-    return `${event.eventName} ${payloadText}`.trim();
-  }
 }
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
