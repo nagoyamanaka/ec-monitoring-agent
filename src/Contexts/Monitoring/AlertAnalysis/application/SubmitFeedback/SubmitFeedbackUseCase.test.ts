@@ -137,6 +137,8 @@ describe("SubmitFeedbackUseCase", () => {
     expect(indexed[0].resolvedNote).toBe("プール拡張で解決");
     // 元アラートへの back-link を保持する（UI ディープリンク用）
     expect(indexed[0].sourceAlertId).toBe(ALERT_ID);
+    // 突合本文は payload 由来（分類側のクエリと同じ関数）。resolvedNote（和文メモ）とは分離する。
+    expect(indexed[0].searchText).toBe("ec.some.unknown_event");
   });
 
   it("operatorNote 無しでも investigationReport.summary を resolvedNote に残す", async () => {

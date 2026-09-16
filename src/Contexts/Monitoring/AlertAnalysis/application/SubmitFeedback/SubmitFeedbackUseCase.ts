@@ -1,5 +1,6 @@
 import { EvidenceWeightedPromotionPolicy } from "@monitoring/AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
+import { buildIncidentQueryText } from "../../../SimilarIncident/domain/incidentQueryText.js";
 import { ResolvedIncident } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { SimilarIncidentRepository } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { Alert, ReviewDecision } from "../../domain/Alert.js";
@@ -91,6 +92,9 @@ export class SubmitFeedbackUseCase {
         operatorNote ??
         alert.investigationReport?.summary ??
         "正解フィードバックによる解決",
+      // 突合本文は分類側のクエリと同じ関数で作る（表示用 resolvedNote と分離）。これが無いと
+      // 和文メモと payload トークンが重ならず、承認した事例が再発しても類似に当たらない。
+      searchText: buildIncidentQueryText(alert.monitoringEvent),
       severity: alert.severity,
       // 元アラートへ辿れる back-link（UI ディープリンク用）
       sourceAlertId: alert.id.value,
