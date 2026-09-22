@@ -15,6 +15,7 @@ import { PromoteAlertCommandHandler } from "../../../../Contexts/Monitoring/Aler
 import { PromoteAlertUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromoteAlert/PromoteAlertUseCase.js";
 import { SubmitFeedbackCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommandHandler.js";
 import { SubmitFeedbackUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackUseCase.js";
+import { RebuildSimilarIncidentsUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/RebuildSimilarIncidents/RebuildSimilarIncidentsUseCase.js";
 import { buildAlertClassifier } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/buildAlertClassifier.js";
 import { KnownPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/rules/KnownPatternRule.js";
 import { SimilarPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/rules/SimilarPatternRule.js";
@@ -57,6 +58,7 @@ import { ADKInvestigationAgentRunner } from "../../../../Contexts/Monitoring/AII
 import { GeminiInvestigationFinalizer } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/GeminiInvestigationFinalizer.js";
 import { InMemoryEscalationDirectory } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/escalation/InMemoryEscalationDirectory.js";
 import { ESCALATION_DIRECTORY_SEED } from "../../../../Contexts/Monitoring/seeds/EscalationDirectorySeed.js";
+import { RESOLVED_INCIDENT_SEEDS } from "../../../../Contexts/Monitoring/seeds/ResolvedIncidentSeed.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
 import { CloudMonitoringGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudMonitoringGatewayImpl.js";
@@ -644,6 +646,17 @@ export class BackofficeApp {
           // 予兆ブリーフィング（FORECAST_ENABLED off では guard が 404 を返す）。
           riskForecastRepository,
           horizon: config.forecast.horizon,
+        },
+        {
+          // 類似コーパス（ES）を Mongo の承認済み Alert から作り直す管理コマンド。
+          // デモ seed はコードが正本なので demo 有効時だけ入れ直す（本番の ES に seed は無い）。
+          rebuildSimilarIncidentsUseCase: new RebuildSimilarIncidentsUseCase(
+            alertRepository,
+            similarIncidentRepository,
+            logger,
+            config.demo.enabled ? RESOLVED_INCIDENT_SEEDS : [],
+          ),
+          ingestToken: config.ingestToken,
         },
       );
     }

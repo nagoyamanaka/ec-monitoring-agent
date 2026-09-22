@@ -137,6 +137,7 @@ describe("ResolvedAlertForecastMemoryRepository", () => {
         throw new Error("mongo down");
       },
       findOpenByDedupKey: async () => null,
+      findApproved: async () => [],
     };
 
     const repo = makeRepo(broken);

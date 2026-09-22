@@ -12,4 +12,9 @@ export interface AlertRepository {
    * RESOLVED は対象外＝解決後に再発したら新しいインシデントとして起票する。
    */
   findOpenByDedupKey(dedupKey: string): Promise<Alert | null>;
+  /**
+   * 承認済み（feedback.isCorrect=true）の Alert を全件返す。順序は保証しない。
+   * 類似コーパス（ES）を Mongo から作り直すための読み取り＝正本から派生を再生成する入口。
+   */
+  findApproved(): Promise<Alert[]>;
 }

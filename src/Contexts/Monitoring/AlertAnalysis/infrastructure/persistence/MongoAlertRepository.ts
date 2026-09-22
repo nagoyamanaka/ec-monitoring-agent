@@ -52,4 +52,14 @@ export class MongoAlertRepository
     const { _id, ...rest } = doc as unknown as AlertDoc;
     return Alert.fromPrimitives({ id: _id, ...rest } as AlertPrimitives);
   }
+
+  async findApproved(): Promise<Alert[]> {
+    const docs = await this.collection()
+      .find({ "feedback.isCorrect": true } as unknown as Filter<Document>)
+      .toArray();
+    return docs.map((doc) => {
+      const { _id, ...rest } = doc as unknown as AlertDoc;
+      return Alert.fromPrimitives({ id: _id, ...rest } as AlertPrimitives);
+    });
+  }
 }
