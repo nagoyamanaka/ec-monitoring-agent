@@ -1,15 +1,25 @@
-import { randomUUID } from "node:crypto";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { ForecastBriefing, RiskForecastRepository } from "../../domain/ForecastBriefing.js";
+import { ForecastId } from "../../domain/ForecastId.js";
 import { ForecastMemoryEntry, ForecastMemoryRepository } from "../../domain/ForecastMemory.js";
 import { ForecastPort } from "../../domain/ForecastPort.js";
 import { ForecastSignal, ForecastSignalKind } from "../../domain/ForecastSignal.js";
 import { ForecastSignalSource } from "../../domain/ForecastSignalSource.js";
 import { RiskForecast, RiskItem } from "../../domain/RiskForecast.js";
+import { ForecastLedgerRecorder } from "./ForecastLedgerRecorder.js";
 import {
   countMemoryCitedRisks,
   formatLevels,
 } from "../../domain/riskLevelBreakdown.js";
+
+// forecasterVersion のハッシュ入力（T0-1）。予報の結果を変える**コード上の規則**の一覧。
+// プロンプトと違って規則はコードに埋まっていて内容ハッシュに乗らないので、ここに書き出す。
+// 下の verifyCitations / dedupeByEvidenceUrl / recallMemorySignals を変えたら、この記述も直すこと。
+export const FORECAST_PIPELINE_RULES = [
+  "citations: drop ids not in collected signals; drop risk with 0 valid citations",
+  "dedupe: one signal per url; terraform.plan wins over other sources",
+  "memory: recall MEMORY signals by subjects of primary signals",
+] as const;
 
 /**
  * 予兆ブリーフィングの生成（全依存 read-only・write ゼロ）。
@@ -23,6 +33,8 @@ export class ForecastRiskUseCase {
     private readonly forecastPort: ForecastPort,
     private readonly riskForecastRepository: RiskForecastRepository,
     private readonly logger: Logger,
+    // 発火した risk を台帳へ追記する（T0-1）。予報の出し方には関与しない。
+    private readonly forecastLedger: ForecastLedgerRecorder,
   ) {}
 
   async run(params: { horizon: string }): Promise<void> {
@@ -188,6 +200,7 @@ export class ForecastRiskUseCase {
   ): Promise<void> {
     const briefing: ForecastBriefing = { forecast, signals };
     await this.riskForecastRepository.append(briefing);
+    await this.forecastLedger.record(briefing);
     await this.logger.info({
       service: "backoffice-backend",
       action: "forecast_generated",
@@ -207,7 +220,7 @@ export class ForecastRiskUseCase {
     });
     await this.riskForecastRepository.append({
       forecast: {
-        forecastId: randomUUID(),
+        forecastId: ForecastId.random().value,
         generatedAt: new Date(),
         horizon,
         risks: [],

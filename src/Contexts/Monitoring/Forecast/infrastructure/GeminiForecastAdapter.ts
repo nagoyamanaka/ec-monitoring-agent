@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
 import { Logger } from "../../../Shared/domain/logging/Logger.js";
 import { LLMTextClient } from "../../AIInvestigation/domain/LLMTextClient.js";
 import { ForecastContext } from "../domain/ForecastContext.js";
+import { ForecastId } from "../domain/ForecastId.js";
 import { ForecastPort } from "../domain/ForecastPort.js";
 import { RiskForecast, RiskItem, RiskLevel } from "../domain/RiskForecast.js";
 
@@ -18,7 +18,8 @@ import { RiskForecast, RiskItem, RiskLevel } from "../domain/RiskForecast.js";
 
 // LLM に固定出力させる予報スキーマ。citations 必須（シグナル id で裏付けられない
 // リスクは出させない）をプロンプトで強制する。実在照合は F5（引用検証）の責務。
-const SYSTEM_INSTRUCTION = `あなたはECシステムの予兆ブリーフィングAIです。
+// forecasterVersion のハッシュ入力（1文字でも変えると予報器の版が変わる・T0-1）。
+export const FORECAST_SYSTEM_INSTRUCTION = `あなたはECシステムの予兆ブリーフィングAIです。
 提供された未来シグナル（未マージPR / 未適用インフラ変更 / 業務・負荷スケジュール / 過去インシデントの記憶）を
 突合し、対象期間（horizon）内に起こりうる障害リスクを必ずJSONフォーマットで回答してください。
 各シグナルには id があります。各リスクの citations には、そのリスクの根拠に使ったシグナルの id を
@@ -87,6 +88,14 @@ ${JSON.stringify(signals, null, 2)}`;
 const LEVEL_ORDER: Record<RiskLevel, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
 
 const VALID_LEVELS: ReadonlySet<string> = new Set<RiskLevel>(["HIGH", "MEDIUM", "LOW"]);
+
+// forecasterVersion のハッシュ入力（T0-1）。LLM 出力の正規化で予報の結果を変える規則の一覧。
+// toLevel / clampConfidence / toRiskItems の並び替えを変えたら、この記述も直すこと。
+export const FORECAST_OUTPUT_RULES = [
+  "level: unknown value -> LOW",
+  "confidence: clamp to [0,1], non-number -> 0",
+  "risks: sort by level desc, then confidence desc",
+] as const;
 
 function clampConfidence(value: unknown): number {
   if (typeof value !== "number" || Number.isNaN(value)) return 0;
@@ -166,7 +175,7 @@ function rawSnippet(text: string, max = 500): string {
 
 function buildFallbackForecast(horizon: string): RiskForecast {
   return {
-    forecastId: randomUUID(),
+    forecastId: ForecastId.random().value,
     generatedAt: new Date(),
     horizon,
     risks: [],
@@ -184,7 +193,7 @@ export class GeminiForecastAdapter implements ForecastPort {
   async forecast(context: ForecastContext): Promise<RiskForecast> {
     let raw: string;
     try {
-      raw = await this.llm.generate(SYSTEM_INSTRUCTION, buildForecastPrompt(context));
+      raw = await this.llm.generate(FORECAST_SYSTEM_INSTRUCTION, buildForecastPrompt(context));
     } catch (error) {
       await this.logger?.warn({
         service: "backoffice-backend",
@@ -205,7 +214,7 @@ export class GeminiForecastAdapter implements ForecastPort {
     }
 
     return {
-      forecastId: randomUUID(),
+      forecastId: ForecastId.random().value,
       generatedAt: new Date(),
       horizon: context.horizon,
       risks,

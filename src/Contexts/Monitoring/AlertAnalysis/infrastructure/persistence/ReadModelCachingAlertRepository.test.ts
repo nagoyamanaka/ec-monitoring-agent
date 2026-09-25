@@ -49,6 +49,7 @@ class FakeInnerRepository implements AlertRepository {
   findById = vi.fn(async (_id: AlertId): Promise<Alert | null> => null);
   findByCriteria = vi.fn(async (_c: Criteria): Promise<Alert[]> => []);
   findOpenByDedupKey = vi.fn(async (_k: string): Promise<Alert | null> => null);
+  findApproved = vi.fn(async (): Promise<Alert[]> => []);
 }
 
 // in-memory な read-model store fake。
@@ -144,6 +145,15 @@ describe("ReadModelCachingAlertRepository", () => {
   it("findOpenByDedupKey は SoT 直読（passthrough）", async () => {
     await repo.findOpenByDedupKey("dedup-1");
     expect(inner.findOpenByDedupKey).toHaveBeenCalledWith("dedup-1");
+  });
+
+  it("findApproved は SoT 直読（派生インデックスの再構築元は cache でない）", async () => {
+    store.list = [buildAlert(new AlertId(Uuid.random().value).value).toPrimitives()];
+
+    await repo.findApproved();
+
+    expect(inner.findApproved).toHaveBeenCalledTimes(1);
+    expect(store.getList).not.toHaveBeenCalled();
   });
 
   it("read-model が落ちても Mongo 経路は壊れない（best-effort fallback）", async () => {

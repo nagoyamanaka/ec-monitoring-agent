@@ -15,6 +15,7 @@ import { registerAnalyticsRoutes } from "./analyticsRoutes.js";
 import { registerDemoRoutes } from "./demoRoutes.js";
 import { registerIngestRoutes } from "./ingestRoutes.js";
 import { ForecastDependencies, registerForecastRoutes } from "./forecastRoutes.js";
+import { AdminDependencies, registerAdminRoutes } from "./adminRoutes.js";
 
 export type IngestDependencies = {
   collectMonitoringEventUseCase: CollectMonitoringEventUseCase;
@@ -31,6 +32,7 @@ export function registerRoutes(
   demoDeps: DemoDependencies,
   ingestDeps: IngestDependencies,
   forecastDeps: ForecastDependencies,
+  adminDeps: AdminDependencies,
 ): void {
   // /alerts/stream を /alerts/:id より先に登録する（後者が "stream" を id として捕捉するのを防ぐ）
   registerStreamRoutes(router, sseNotifier);
@@ -41,6 +43,7 @@ export function registerRoutes(
   registerAnalyticsRoutes(router, queryBus);
   registerDemoRoutes(router, queryBus, demoDeps);
   registerForecastRoutes(router, commandBus, forecastDeps);
+  registerAdminRoutes(router, adminDeps);
   registerIngestRoutes(
     router,
     ingestDeps.collectMonitoringEventUseCase,

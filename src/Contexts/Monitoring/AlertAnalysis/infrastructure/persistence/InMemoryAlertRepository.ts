@@ -36,6 +36,10 @@ export class InMemoryAlertRepository implements AlertRepository {
     return open[0] ?? null;
   }
 
+  async findApproved(): Promise<Alert[]> {
+    return Array.from(this.store.values()).filter((alert) => alert.isApproved());
+  }
+
   clear(): void {
     this.store.clear();
   }

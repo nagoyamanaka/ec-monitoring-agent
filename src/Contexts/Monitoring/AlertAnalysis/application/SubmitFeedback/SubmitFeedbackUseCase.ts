@@ -1,7 +1,5 @@
 import { EvidenceWeightedPromotionPolicy } from "@monitoring/AlertAnalysis/domain/promotion/EvidenceWeightedPromotionPolicy.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
-import { buildIncidentQueryText } from "../../../SimilarIncident/domain/incidentQueryText.js";
-import { ResolvedIncident } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { SimilarIncidentRepository } from "../../../SimilarIncident/domain/SimilarIncidentRepository.js";
 import { Alert, ReviewDecision } from "../../domain/Alert.js";
 import { AlertId } from "../../domain/AlertId.js";
@@ -9,6 +7,7 @@ import { AlertRepository } from "../../domain/AlertRepository.js";
 import { KnownErrorPatternRepository } from "../../domain/KnownErrorPatternRepository.js";
 import { crystallizePatternFromAlert } from "../../domain/promotion/crystallizePatternFromAlert.js";
 import { PatternPromotionPolicy } from "../../domain/promotion/PatternPromotionPolicy.js";
+import { resolvedIncidentFromAlert } from "../../domain/resolvedIncidentFromAlert.js";
 import { MonitoringResourceNotFoundError } from "../errors/MonitoringResourceNotFoundError.js";
 
 export class SubmitFeedbackUseCase {
@@ -51,7 +50,7 @@ export class SubmitFeedbackUseCase {
     if (isCorrect) {
       // 非承認→承認の遷移時のみ index（再承認での二重 index を防ぐ）。
       if (!wasApproved) {
-        await this.indexAsResolved(updatedAlert, operatorNote);
+        await this.indexAsResolved(updatedAlert);
       }
       await this.maybeAutoPromote(updatedAlert);
     } else if (wasApproved) {
@@ -78,28 +77,10 @@ export class SubmitFeedbackUseCase {
     });
   }
 
-  // 正解フィードバックを解決済みインシデントとしてインデックス登録する
-  private async indexAsResolved(
-    alert: Alert,
-    operatorNote?: string,
-  ): Promise<void> {
-    const incident: ResolvedIncident = {
-      eventName: alert.monitoringEvent.eventName,
-      occurredOn: alert.monitoringEvent.occurredOn,
-      // オペレーターのメモ＞AI調査summary＞汎用文字列の順でフォールバック。
-      // AI調査結果は手元の alert に載っているので「どう直したか」を記憶に残す。
-      resolvedNote:
-        operatorNote ??
-        alert.investigationReport?.summary ??
-        "正解フィードバックによる解決",
-      // 突合本文は分類側のクエリと同じ関数で作る（表示用 resolvedNote と分離）。これが無いと
-      // 和文メモと payload トークンが重ならず、承認した事例が再発しても類似に当たらない。
-      searchText: buildIncidentQueryText(alert.monitoringEvent),
-      severity: alert.severity,
-      // 元アラートへ辿れる back-link（UI ディープリンク用）
-      sourceAlertId: alert.id.value,
-    };
-    await this.similarIncidentRepository.index(incident);
+  // 正解フィードバックを解決済みインシデントとしてインデックス登録する。
+  // 変換は再構築（RebuildSimilarIncidentsUseCase）と共有＝ES を Mongo から同じ形に作り直せる。
+  private async indexAsResolved(alert: Alert): Promise<void> {
+    await this.similarIncidentRepository.index(resolvedIncidentFromAlert(alert));
   }
 
   // 昇格判定（いつ）はポリシーに委譲し、満たせば既知パターンを構築・save（どう）する

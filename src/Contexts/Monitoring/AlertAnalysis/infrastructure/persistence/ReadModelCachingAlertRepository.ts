@@ -12,7 +12,8 @@ import { AlertReadModelStore } from "../readmodel/AlertReadModelStore.js";
  *    cache を真実の前段にしない（必ず inner→store の順）。
  *  - findById / findByCriteria(フィルタ無し＝一覧): Valkey hit→返す / miss・down→Mongo にフォールバック
  *    して再投入（再構築可能・結果整合）。
- *  - findByCriteria(フィルタ付き) / findOpenByDedupKey: 書き込み経路の真実が要るので常に Mongo 直読。
+ *  - findByCriteria(フィルタ付き) / findOpenByDedupKey / findApproved: 書き込み経路・派生の再構築元として
+ *    真実が要るので常に Mongo 直読。
  *
  * SoT は常に inner(Mongo)。Valkey 障害は best-effort で握りつぶし、「障害」でなく「性能劣化」に縮める。
  */
@@ -63,6 +64,11 @@ export class ReadModelCachingAlertRepository implements AlertRepository {
   findOpenByDedupKey(dedupKey: string): Promise<Alert | null> {
     // dedup 判定は未解決 Alert の真実が要る（畳み込みの正しさに直結）ので SoT 直読。
     return this.inner.findOpenByDedupKey(dedupKey);
+  }
+
+  findApproved(): Promise<Alert[]> {
+    // 派生インデックスの再構築元は SoT でなければ意味がない（cache から cache を作らない）。
+    return this.inner.findApproved();
   }
 
   // Valkey 障害は best-effort：read-model 操作の失敗は飲み込み、SoT(Mongo) 経路を壊さない。

@@ -96,6 +96,14 @@ export const config = {
     // compose プロセスで terraform 単独リソースを持たず、本物の terraform plan を作れない
     // （VM metadata 経由にすると address が backbone VM になり flagship と subject 衝突するため不採用）。
     // Valkey シナリオの実クリック証拠は過去インシデント（inc-3/4→実 Alert）が担保する。
+    // 予報台帳（T0-1）の事前登録プロトコルの版（T0-5 の git tag かコミット SHA）。
+    // 未登録のまま出た行は "unregistered" になり、集計から外せる。
+    protocolVersion: process.env.MEASUREMENT_PROTOCOL_VERSION ?? "unregistered",
+    // クラス別の観測窓長（時間）の上書き。JSON で {"load_risk":24} のように渡す。
+    // 指定の無いクラスは既定 72h。未知のクラス名・非正の値は起動時に落とす。
+    windowHoursByClass: JSON.parse(
+      process.env.FORECAST_WINDOW_HOURS_BY_CLASS ?? "{}",
+    ) as Record<string, number>,
   },
   demo: {
     enabled: process.env.DEMO_ENABLED === "true",

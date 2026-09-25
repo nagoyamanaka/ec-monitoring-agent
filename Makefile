@@ -3,7 +3,7 @@
         bo-up bo-down bo-restart bo-logs bo-build \
         front-up front-down front-restart front-logs front-build \
         up down rebuild test integration e2e e2e-prod swagger \
-        seed \
+        seed rebuild-similar-incidents \
         prune prune-all
 
 # ENV=local (default) or ENV=prod
@@ -124,6 +124,12 @@ swagger: ec-up
 # ── Seed ──────────────────────────────────────────────────────
 seed:
 	curl -X POST http://localhost:3001/demo/reset 
+
+# 類似コーパス（ES）を正本（Mongo の承認済み Alert）から作り直す。ES の volume を消したとき・
+# マッピング変更で reindex するときに1回打つ。index は backoffice 起動時に自動生成されるので
+# ES を作り直したら先に bo-restart。トークンは .env.local の INGEST_TOKEN（ingest と同じ）。
+rebuild-similar-incidents:
+	curl -X POST -H "x-ingest-token: $$(grep '^INGEST_TOKEN=' .env.local | cut -d= -f2)" http://localhost:3001/admin/similar-incidents/rebuild
 
 # ── Cleanup ───────────────────────────────────────────────────
 prune:

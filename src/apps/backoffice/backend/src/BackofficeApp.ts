@@ -15,6 +15,7 @@ import { PromoteAlertCommandHandler } from "../../../../Contexts/Monitoring/Aler
 import { PromoteAlertUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/PromoteAlert/PromoteAlertUseCase.js";
 import { SubmitFeedbackCommandHandler } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackCommandHandler.js";
 import { SubmitFeedbackUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/SubmitFeedback/SubmitFeedbackUseCase.js";
+import { RebuildSimilarIncidentsUseCase } from "../../../../Contexts/Monitoring/AlertAnalysis/application/RebuildSimilarIncidents/RebuildSimilarIncidentsUseCase.js";
 import { buildAlertClassifier } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/buildAlertClassifier.js";
 import { KnownPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/rules/KnownPatternRule.js";
 import { SimilarPatternRule } from "../../../../Contexts/Monitoring/AlertAnalysis/domain/classification/rules/SimilarPatternRule.js";
@@ -57,6 +58,7 @@ import { ADKInvestigationAgentRunner } from "../../../../Contexts/Monitoring/AII
 import { GeminiInvestigationFinalizer } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/adk/GeminiInvestigationFinalizer.js";
 import { InMemoryEscalationDirectory } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/escalation/InMemoryEscalationDirectory.js";
 import { ESCALATION_DIRECTORY_SEED } from "../../../../Contexts/Monitoring/seeds/EscalationDirectorySeed.js";
+import { RESOLVED_INCIDENT_SEEDS } from "../../../../Contexts/Monitoring/seeds/ResolvedIncidentSeed.js";
 import { DefaultInfraInvestigationAdapter } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/DefaultInfraInvestigationAdapter.js";
 import { CloudLoggingGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudLoggingGatewayImpl.js";
 import { CloudMonitoringGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/CloudMonitoringGatewayImpl.js";
@@ -66,12 +68,24 @@ import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigati
 import { GitHubPullRequestReadGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestReadGateway.js";
 import { InMemoryPendingInfraPlanStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryPendingInfraPlanStore.js";
 import { ForecastRiskCommandHandler } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskCommandHandler.js";
-import { ForecastRiskUseCase } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskUseCase.js";
+import { ForecastLedgerRecorder } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastLedgerRecorder.js";
+import {
+  FORECAST_PIPELINE_RULES,
+  ForecastRiskUseCase,
+} from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskUseCase.js";
 import { GetForecastMeasurementQueryHandler } from "../../../../Contexts/Monitoring/Forecast/application/GetForecastMeasurement/GetForecastMeasurementQueryHandler.js";
 import { GetForecastMeasurementUseCase } from "../../../../Contexts/Monitoring/Forecast/application/GetForecastMeasurement/GetForecastMeasurementUseCase.js";
 import { ForecastPort } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastPort.js";
 import { ForecastSignalSource } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastSignalSource.js";
-import { GeminiForecastAdapter } from "../../../../Contexts/Monitoring/Forecast/infrastructure/GeminiForecastAdapter.js";
+import { ForecastWindowPolicy } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastWindowPolicy.js";
+import { FORECAST_CLASS_DEFINITIONS } from "../../../../Contexts/Monitoring/Forecast/domain/forecastClass.js";
+import { computeForecasterVersion } from "../../../../Contexts/Monitoring/Forecast/domain/forecastFingerprint.js";
+import {
+  FORECAST_OUTPUT_RULES,
+  FORECAST_SYSTEM_INSTRUCTION,
+  GeminiForecastAdapter,
+} from "../../../../Contexts/Monitoring/Forecast/infrastructure/GeminiForecastAdapter.js";
+import { MongoForecastLedgerRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/MongoForecastLedgerRepository.js";
 import { MongoRiskForecastRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/MongoRiskForecastRepository.js";
 import { PendingPlanSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/PendingPlanSignalSource.js";
 import { PullRequestSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/PullRequestSignalSource.js";
@@ -522,12 +536,31 @@ export class BackofficeApp {
     // ★差し替え点（ForecastPort）: 既定は単発 Gemini（ADK 非使用は意図的・GeminiForecastAdapter 参照）。
     const forecastPort =
       this.overrides.forecastPort ?? new GeminiForecastAdapter(llmClient, logger);
+    // 予報台帳（T0-1）。版と窓長は起動時に1度だけ確定し、全行に同じ刻印を押す。
+    // 予報器の版はモデル名・プロンプト・閾値・クラス定義・コード上の規則の内容ハッシュ（閾値は現状なし＝level は
+    // LLM が付け、confidence のクランプは判定ではない）。stub 時はモデル名を "stub" にして本物と混ぜない。
+    const forecastLedgerRecorder = new ForecastLedgerRecorder(
+      new MongoForecastLedgerRepository(mongoClient),
+      {
+        protocolVersion: config.forecast.protocolVersion,
+        forecasterVersion: computeForecasterVersion({
+          model: config.ai.useStubInvestigation ? "stub" : config.gemini.model,
+          promptTemplate: FORECAST_SYSTEM_INSTRUCTION,
+          thresholds: {},
+          classDefinitions: FORECAST_CLASS_DEFINITIONS,
+          pipelineRules: [...FORECAST_PIPELINE_RULES, ...FORECAST_OUTPUT_RULES],
+        }),
+        windowPolicy: ForecastWindowPolicy.fromOverrides(config.forecast.windowHoursByClass),
+      },
+      logger,
+    );
     const forecastRiskUseCase = new ForecastRiskUseCase(
       forecastSignalSources,
       forecastMemoryRepository,
       forecastPort,
       riskForecastRepository,
       logger,
+      forecastLedgerRecorder,
     );
     const forecastRiskCommandHandler = new ForecastRiskCommandHandler(forecastRiskUseCase);
     // 予報の測定（E6-1/E6-3）。GET /analytics に相乗りするので FORECAST_ENABLED には従属しない
@@ -644,6 +677,17 @@ export class BackofficeApp {
           // 予兆ブリーフィング（FORECAST_ENABLED off では guard が 404 を返す）。
           riskForecastRepository,
           horizon: config.forecast.horizon,
+        },
+        {
+          // 類似コーパス（ES）を Mongo の承認済み Alert から作り直す管理コマンド。
+          // デモ seed はコードが正本なので demo 有効時だけ入れ直す（本番の ES に seed は無い）。
+          rebuildSimilarIncidentsUseCase: new RebuildSimilarIncidentsUseCase(
+            alertRepository,
+            similarIncidentRepository,
+            logger,
+            config.demo.enabled ? RESOLVED_INCIDENT_SEEDS : [],
+          ),
+          ingestToken: config.ingestToken,
         },
       );
     }
