@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { ForecastBriefing, RiskForecastRepository } from "../../domain/ForecastBriefing.js";
+import { ForecastId } from "../../domain/ForecastId.js";
 import { ForecastMemoryEntry, ForecastMemoryRepository } from "../../domain/ForecastMemory.js";
 import { ForecastPort } from "../../domain/ForecastPort.js";
 import { ForecastSignal, ForecastSignalKind } from "../../domain/ForecastSignal.js";
@@ -207,7 +207,7 @@ export class ForecastRiskUseCase {
     });
     await this.riskForecastRepository.append({
       forecast: {
-        forecastId: randomUUID(),
+        forecastId: ForecastId.random().value,
         generatedAt: new Date(),
         horizon,
         risks: [],

@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
 import { Logger } from "../../../Shared/domain/logging/Logger.js";
 import { LLMTextClient } from "../../AIInvestigation/domain/LLMTextClient.js";
 import { ForecastContext } from "../domain/ForecastContext.js";
+import { ForecastId } from "../domain/ForecastId.js";
 import { ForecastPort } from "../domain/ForecastPort.js";
 import { RiskForecast, RiskItem, RiskLevel } from "../domain/RiskForecast.js";
 
@@ -166,7 +166,7 @@ function rawSnippet(text: string, max = 500): string {
 
 function buildFallbackForecast(horizon: string): RiskForecast {
   return {
-    forecastId: randomUUID(),
+    forecastId: ForecastId.random().value,
     generatedAt: new Date(),
     horizon,
     risks: [],
@@ -205,7 +205,7 @@ export class GeminiForecastAdapter implements ForecastPort {
     }
 
     return {
-      forecastId: randomUUID(),
+      forecastId: ForecastId.random().value,
       generatedAt: new Date(),
       horizon: context.horizon,
       risks,
