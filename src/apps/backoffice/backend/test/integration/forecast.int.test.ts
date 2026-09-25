@@ -84,6 +84,23 @@ describe("forecastRoutes (integration)", () => {
     expect(res.body.signals).toContainEqual(
       expect.objectContaining({ id: "sch-1", kind: "SCHEDULE", subject: "checkout" }),
     );
+    // 台帳（T0-1）: 引用検証を通った risk 1件ぶんの issued が1行だけ増える（落とした risk は載らない）。
+    const ledger = await mongo.db().collection("forecast_ledger").find({}).toArray();
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]).toMatchObject({
+      eventType: "issued",
+      briefingId: "forecast-int-1",
+      subjectKey: "checkout",
+      class: "load_risk", // sch-1（SCHEDULE）だけを引用
+      level: "HIGH",
+      issuedAt: "2026-07-03T12:00:00.000Z",
+      windowLengthHours: 72,
+      windowEndsAt: "2026-07-06T12:00:00.000Z",
+      protocolVersion: "unregistered",
+      evidenceSnapshotId: "",
+      assignment: "normal",
+      assignmentProb: 1,
+    });
   });
 
   it("GET /forecast は事前生成済みの最新予報をそのまま返す（再生成しない）", async () => {
@@ -99,6 +116,9 @@ describe("forecastRoutes (integration)", () => {
     await request(app.httpApp).post("/forecast").send();
 
     expect(await mongo.db().collection("risk_forecasts").countDocuments({})).toBe(2);
+    // 台帳も発火のたびに追記され、forecastId は行ごとに別（同じ forecastId を二度書かない）。
+    const ids = await mongo.db().collection("forecast_ledger").distinct("forecastId");
+    expect(ids).toHaveLength(2);
     // 追記しても配信は最新1件のまま＝ GET /forecast の形は不変。
     const res = await request(app.httpApp).get("/forecast");
     expect(res.status).toBe(200);

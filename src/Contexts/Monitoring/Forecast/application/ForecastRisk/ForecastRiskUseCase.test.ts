@@ -2,13 +2,16 @@ import { describe, it, expect } from "vitest";
 import { ForecastRiskUseCase } from "./ForecastRiskUseCase.js";
 import { ForecastBriefing, RiskForecastRepository } from "../../domain/ForecastBriefing.js";
 import { ForecastContext } from "../../domain/ForecastContext.js";
+import { ForecastLedgerEvent, ForecastLedgerRepository } from "../../domain/ForecastLedger.js";
 import { ForecastMemoryEntry, ForecastMemoryRepository } from "../../domain/ForecastMemory.js";
 import { ForecastPort } from "../../domain/ForecastPort.js";
 import { ForecastSignal, ForecastSignalKind } from "../../domain/ForecastSignal.js";
 import { ForecastSignalSource } from "../../domain/ForecastSignalSource.js";
+import { ForecastWindowPolicy } from "../../domain/ForecastWindowPolicy.js";
 import { RiskForecast, RiskItem } from "../../domain/RiskForecast.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { StructuredLog } from "../../../../Shared/domain/logging/StructuredLog.js";
+import { ForecastLedgerRecorder } from "./ForecastLedgerRecorder.js";
 
 const signal = (id: string, subject: string): ForecastSignal => ({
   id,
@@ -76,6 +79,19 @@ class FakeRepository implements RiskForecastRepository {
   }
 }
 
+// 追記専用の台帳 fake。failWith を立てると append が失敗する（縮退の検証用）。
+class FakeLedger implements ForecastLedgerRepository {
+  events: ForecastLedgerEvent[] = [];
+  failWith: Error | null = null;
+  async append(event: ForecastLedgerEvent): Promise<void> {
+    if (this.failWith) throw this.failWith;
+    this.events.push(event);
+  }
+  async findAll(): Promise<ForecastLedgerEvent[]> {
+    return [...this.events];
+  }
+}
+
 class RecordingLogger extends Logger {
   logs: StructuredLog[] = [];
   async write(log: StructuredLog): Promise<void> {
@@ -99,14 +115,24 @@ const build = (params: {
 }) => {
   const repository = new FakeRepository();
   const logger = new RecordingLogger();
+  const ledger = new FakeLedger();
   const useCase = new ForecastRiskUseCase(
     params.sources,
     params.memory ?? new FakeMemory(),
     params.port,
     repository,
     logger,
+    new ForecastLedgerRecorder(
+      ledger,
+      {
+        protocolVersion: "test-protocol",
+        forecasterVersion: "test-forecaster",
+        windowPolicy: ForecastWindowPolicy.fromOverrides({}),
+      },
+      logger,
+    ),
   );
-  return { useCase, repository, logger };
+  return { useCase, repository, logger, ledger };
 };
 
 describe("ForecastRiskUseCase", () => {
@@ -293,5 +319,57 @@ describe("ForecastRiskUseCase", () => {
     expect(repository.saved[0].forecast.isFallback).toBe(true);
     expect(repository.saved[0].forecast.risks).toEqual([]);
     expect(repository.saved[0].signals).toHaveLength(1); // fallback でも収集済みシグナルは残す
+  });
+
+  it("引用検証を通った risk だけを台帳に1行ずつ追記する（落とした risk は発火していない）", async () => {
+    const port = new FakePort([
+      risk("real", ["pr-1"]),
+      risk("mixed", ["pr-1", "ghost-9"]),
+      risk("uncited", []),
+    ]);
+    const { useCase, repository, ledger } = build({
+      sources: [new FakeSource([signal("pr-1", "db_connection_pool")])],
+      port,
+    });
+
+    await useCase.run({ horizon: "今週末" });
+
+    expect(ledger.events.map((e) => e.subjectKey)).toEqual(["real", "mixed"]);
+    expect(ledger.events.every((e) => e.briefingId === repository.saved[0].forecast.forecastId)).toBe(true);
+    expect(ledger.events[0]).toMatchObject({
+      eventType: "issued",
+      protocolVersion: "test-protocol",
+      forecasterVersion: "test-forecaster",
+      class: "change_risk",
+      windowLengthHours: 72,
+    });
+  });
+
+  it("空予報・fallback は台帳に何も書かない", async () => {
+    const empty = build({ sources: [new FakeSource([])], port: new FakePort([]) });
+    await empty.useCase.run({ horizon: "今週末" });
+    const fallback = build({
+      sources: [new FakeSource([signal("pr-1", "db_connection_pool")])],
+      port: new FakePort([], true),
+    });
+    await fallback.useCase.run({ horizon: "今週末" });
+
+    expect(empty.ledger.events).toEqual([]);
+    expect(fallback.ledger.events).toEqual([]);
+  });
+
+  it("台帳への追記に失敗しても予報は保存・配信し、error ログを残す", async () => {
+    const { useCase, repository, logger, ledger } = build({
+      sources: [new FakeSource([signal("pr-1", "db_connection_pool")])],
+      port: new FakePort([risk("real", ["pr-1"])]),
+    });
+    ledger.failWith = new Error("mongo down");
+
+    await useCase.run({ horizon: "今週末" });
+
+    expect(repository.saved).toHaveLength(1);
+    const failed = logger.logs.find((l) => l.action === "forecast_ledger_append_failed");
+    expect(failed?.message).toContain("mongo down");
+    expect(logger.logs.some((l) => l.action === "forecast_generated")).toBe(true);
   });
 });
