@@ -12,6 +12,12 @@ import { RiskForecast, RiskItem } from "../../domain/RiskForecast.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { StructuredLog } from "../../../../Shared/domain/logging/StructuredLog.js";
 import { ForecastLedgerRecorder } from "./ForecastLedgerRecorder.js";
+import { EvidenceSnapshotRecorder } from "./EvidenceSnapshotRecorder.js";
+import {
+  EvidenceSnapshot,
+  EvidenceSnapshotRepository,
+  restoreForecastContext,
+} from "../../domain/EvidenceSnapshot.js";
 
 const signal = (id: string, subject: string): ForecastSignal => ({
   id,
@@ -92,6 +98,19 @@ class FakeLedger implements ForecastLedgerRepository {
   }
 }
 
+// 内容アドレスの snapshot 置き場の fake（同じ id は最初の1件を残す＝Mongo 実装と同じ意味論）。
+class FakeSnapshots implements EvidenceSnapshotRepository {
+  saved = new Map<string, EvidenceSnapshot>();
+  failWith: Error | null = null;
+  async save(snapshot: EvidenceSnapshot): Promise<void> {
+    if (this.failWith) throw this.failWith;
+    if (!this.saved.has(snapshot.snapshotId)) this.saved.set(snapshot.snapshotId, snapshot);
+  }
+  async findById(snapshotId: string): Promise<EvidenceSnapshot | null> {
+    return this.saved.get(snapshotId) ?? null;
+  }
+}
+
 class RecordingLogger extends Logger {
   logs: StructuredLog[] = [];
   async write(log: StructuredLog): Promise<void> {
@@ -116,6 +135,7 @@ const build = (params: {
   const repository = new FakeRepository();
   const logger = new RecordingLogger();
   const ledger = new FakeLedger();
+  const snapshots = new FakeSnapshots();
   const useCase = new ForecastRiskUseCase(
     params.sources,
     params.memory ?? new FakeMemory(),
@@ -131,8 +151,9 @@ const build = (params: {
       },
       logger,
     ),
+    new EvidenceSnapshotRecorder(snapshots, logger),
   );
-  return { useCase, repository, logger, ledger };
+  return { useCase, repository, logger, ledger, snapshots };
 };
 
 describe("ForecastRiskUseCase", () => {
@@ -371,5 +392,46 @@ describe("ForecastRiskUseCase", () => {
     const failed = logger.logs.find((l) => l.action === "forecast_ledger_append_failed");
     expect(failed?.message).toContain("mongo down");
     expect(logger.logs.some((l) => l.action === "forecast_generated")).toBe(true);
+  });
+
+  it("予報器に渡した入力を snapshot として凍結し、台帳行はその snapshotId を指す（T0-2）", async () => {
+    const port = new FakePort([risk("real", ["pr-1"]), risk("other", ["pr-1"], "LOW")]);
+    const { useCase, ledger, snapshots } = build({
+      sources: [new FakeSource([signal("pr-1", "db_connection_pool")])],
+      port,
+    });
+
+    await useCase.run({ horizon: "今週末" });
+
+    expect(snapshots.saved.size).toBe(1);
+    const [snapshot] = [...snapshots.saved.values()];
+    // snapshot から復元した入力＝予報器が実際に受け取った入力そのもの。
+    expect(restoreForecastContext(snapshot)).toEqual(port.contexts[0]);
+    expect(ledger.events.map((e) => e.evidenceSnapshotId)).toEqual([
+      snapshot.snapshotId,
+      snapshot.snapshotId,
+    ]);
+  });
+
+  it("シグナル0件（予報器を呼ばない回）は snapshot を作らない", async () => {
+    const { useCase, snapshots } = build({ sources: [new FakeSource([])], port: new FakePort([]) });
+    await useCase.run({ horizon: "今週末" });
+    expect(snapshots.saved.size).toBe(0);
+  });
+
+  it("snapshot の保存に失敗しても予報は出し、台帳の evidenceSnapshotId は空にして error ログを残す", async () => {
+    const { useCase, repository, logger, ledger, snapshots } = build({
+      sources: [new FakeSource([signal("pr-1", "db_connection_pool")])],
+      port: new FakePort([risk("real", ["pr-1"])]),
+    });
+    snapshots.failWith = new Error("mongo down");
+
+    await useCase.run({ horizon: "今週末" });
+
+    expect(repository.saved).toHaveLength(1);
+    expect(ledger.events).toHaveLength(1);
+    expect(ledger.events[0].evidenceSnapshotId).toBe("");
+    const failed = logger.logs.find((l) => l.action === "evidence_snapshot_save_failed");
+    expect(failed?.message).toContain("mongo down");
   });
 });

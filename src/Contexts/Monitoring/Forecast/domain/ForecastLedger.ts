@@ -32,7 +32,7 @@ export type ForecastIssued = {
   readonly windowLengthHours: number;
   readonly windowEndsAt: Date; // UTC
   readonly windowPolicyVersion: string;
-  readonly evidenceSnapshotId: string; // T0-2 までは空文字
+  readonly evidenceSnapshotId: string; // 入力の証拠スナップショット（T0-2）。保存に失敗した回は空文字
   readonly signalFingerprint: string;
   readonly assignment: ForecastAssignment;
   readonly assignmentProb: number;
@@ -60,10 +60,12 @@ const HOUR_MS = 60 * 60 * 1000;
 /**
  * 引用検証を通った予報1回ぶんを、risk ごとの issued 行に展開する（純関数・採番のみ非決定）。
  * risk が0件（空予報・fallback）なら行も0件＝発火していないものは台帳に載せない。
+ * 同じ回の risk はすべて同じ入力から出たので、evidenceSnapshotId は回で1つ。
  */
 export function issueForecasts(
   briefing: ForecastBriefing,
   stamp: ForecastLedgerStamp,
+  evidenceSnapshotId: string,
 ): ForecastIssued[] {
   const signalsById = new Map(briefing.signals.map((signal) => [signal.id, signal]));
   const issuedAt = briefing.forecast.generatedAt;
@@ -84,7 +86,7 @@ export function issueForecasts(
       windowLengthHours,
       windowEndsAt: new Date(issuedAt.getTime() + windowLengthHours * HOUR_MS),
       windowPolicyVersion: stamp.windowPolicy.version,
-      evidenceSnapshotId: "",
+      evidenceSnapshotId,
       signalFingerprint: computeSignalFingerprint(cited),
       assignment: ForecastAssignment.NORMAL,
       assignmentProb: 1.0,

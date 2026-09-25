@@ -1,12 +1,15 @@
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { ForecastBriefing, RiskForecastRepository } from "../../domain/ForecastBriefing.js";
+import { ForecastContext } from "../../domain/ForecastContext.js";
 import { ForecastId } from "../../domain/ForecastId.js";
 import { ForecastMemoryEntry, ForecastMemoryRepository } from "../../domain/ForecastMemory.js";
 import { ForecastPort } from "../../domain/ForecastPort.js";
 import { ForecastSignal, ForecastSignalKind } from "../../domain/ForecastSignal.js";
 import { ForecastSignalSource } from "../../domain/ForecastSignalSource.js";
-import { RiskForecast, RiskItem } from "../../domain/RiskForecast.js";
+import { RiskForecast } from "../../domain/RiskForecast.js";
+import { EvidenceSnapshotRecorder } from "./EvidenceSnapshotRecorder.js";
 import { ForecastLedgerRecorder } from "./ForecastLedgerRecorder.js";
+import { ForecastSynthesis } from "./ForecastSynthesis.js";
 import {
   countMemoryCitedRisks,
   formatLevels,
@@ -14,7 +17,7 @@ import {
 
 // forecasterVersion のハッシュ入力（T0-1）。予報の結果を変える**コード上の規則**の一覧。
 // プロンプトと違って規則はコードに埋まっていて内容ハッシュに乗らないので、ここに書き出す。
-// 下の verifyCitations / dedupeByEvidenceUrl / recallMemorySignals を変えたら、この記述も直すこと。
+// ForecastSynthesis の verifyCitations と下の dedupeByEvidenceUrl / recallMemorySignals を変えたら、この記述も直すこと。
 export const FORECAST_PIPELINE_RULES = [
   "citations: drop ids not in collected signals; drop risk with 0 valid citations",
   "dedupe: one signal per url; terraform.plan wins over other sources",
@@ -27,15 +30,21 @@ export const FORECAST_PIPELINE_RULES = [
  * 足すだけで本 UseCase はノータッチ。記憶（MEMORY）は subject 駆動なので配列反復と別ステップ。
  */
 export class ForecastRiskUseCase {
+  private readonly synthesis: ForecastSynthesis;
+
   constructor(
     private readonly signalSources: ForecastSignalSource[],
     private readonly forecastMemory: ForecastMemoryRepository,
-    private readonly forecastPort: ForecastPort,
+    forecastPort: ForecastPort,
     private readonly riskForecastRepository: RiskForecastRepository,
     private readonly logger: Logger,
     // 発火した risk を台帳へ追記する（T0-1）。予報の出し方には関与しない。
     private readonly forecastLedger: ForecastLedgerRecorder,
-  ) {}
+    // 予報器に渡す入力を凍結する（T0-2）。これも予報の出し方には関与しない。
+    private readonly evidenceSnapshots: EvidenceSnapshotRecorder,
+  ) {
+    this.synthesis = new ForecastSynthesis(forecastPort, logger);
+  }
 
   async run(params: { horizon: string }): Promise<void> {
     const { horizon } = params;
@@ -46,9 +55,11 @@ export class ForecastRiskUseCase {
       return;
     }
 
-    const forecast = await this.forecastPort.forecast({ horizon, signals });
-    const verified = await this.verifyCitations(forecast, signals);
-    await this.saveBriefing(verified, signals);
+    const context: ForecastContext = { horizon, signals };
+    // 予報器を呼ぶ前に入力を固定する＝スナップショットは「予報時点で手元にあったもの」だけになる。
+    const evidenceSnapshotId = await this.evidenceSnapshots.capture(context);
+    const verified = await this.synthesis.forecast(context);
+    await this.saveBriefing(verified, signals, evidenceSnapshotId);
   }
 
   /**
@@ -130,77 +141,15 @@ export class ForecastRiskUseCase {
     };
   }
 
-  /**
-   * 引用検証（ハルシネーション・ガード）: citations を実在する ForecastSignal.id に照合し、
-   * 実在しない id（偽引用）は落とす。裏付けが1つも残らないリスクは丸ごと落とす
-   * （citations 空＝「証拠なき主張」を表示前に排除。impact の citations 必須ガードと同方針）。
-   */
-  private async verifyCitations(
-    forecast: RiskForecast,
-    signals: ForecastSignal[],
-  ): Promise<RiskForecast> {
-    const signalIds = new Set(signals.map((signal) => signal.id));
-    const verifiedRisks: RiskItem[] = [];
-    // 破棄側の会計（E6-1）。判定は変えず、今まで捨てていたローカル値を予報に載せるだけ。
-    let citationsEmitted = 0;
-    let citationsDropped = 0;
-    for (const risk of forecast.risks) {
-      citationsEmitted += risk.citations.length;
-      const verified = await this.verifyRisk(risk, signalIds);
-      if (verified) {
-        citationsDropped += risk.citations.length - verified.citations.length;
-        verifiedRisks.push(verified);
-      } else {
-        // 丸ごと破棄したリスクの引用は全部「実在しなかった」か、あるいは最初から空。
-        citationsDropped += risk.citations.length;
-      }
-    }
-    return {
-      ...forecast,
-      risks: verifiedRisks,
-      verification: {
-        citationsEmitted,
-        citationsDropped,
-        risksEmitted: forecast.risks.length,
-        risksDropped: forecast.risks.length - verifiedRisks.length,
-      },
-    };
-  }
-
-  // 1リスクぶんの照合。偽引用は citations から除き、裏付けゼロなら null（破棄）を返す。
-  private async verifyRisk(
-    risk: RiskItem,
-    signalIds: ReadonlySet<string>,
-  ): Promise<RiskItem | null> {
-    const validCitations = risk.citations.filter((id) => signalIds.has(id));
-    const fakeCitations = risk.citations.filter((id) => !signalIds.has(id));
-
-    if (fakeCitations.length > 0) {
-      await this.logger.warn({
-        service: "backoffice-backend",
-        action: "forecast_fake_citation_dropped",
-        message: `実在しない引用を検出し破棄しました: subject=${risk.subject}, fake=[${fakeCitations.join(", ")}], valid=${validCitations.length}件`,
-      });
-    }
-    if (validCitations.length === 0) {
-      await this.logger.warn({
-        service: "backoffice-backend",
-        action: "forecast_uncited_risk_dropped",
-        message: `裏付けシグナルの無いリスクを破棄しました（証拠なき主張は出さない）: subject=${risk.subject}, level=${risk.level}`,
-      });
-      return null;
-    }
-    return { ...risk, citations: validCitations };
-  }
-
   // シグナル同梱の ForecastBriefing として1件追記（引用チップの解決先を配信に含める）。
   private async saveBriefing(
     forecast: RiskForecast,
     signals: ForecastSignal[],
+    evidenceSnapshotId: string,
   ): Promise<void> {
     const briefing: ForecastBriefing = { forecast, signals };
     await this.riskForecastRepository.append(briefing);
-    await this.forecastLedger.record(briefing);
+    await this.forecastLedger.record(briefing, evidenceSnapshotId);
     await this.logger.info({
       service: "backoffice-backend",
       action: "forecast_generated",

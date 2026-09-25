@@ -68,23 +68,16 @@ import { GitHubGatewayImpl } from "../../../../Contexts/Monitoring/AIInvestigati
 import { GitHubPullRequestReadGateway } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/remediation/GitHubPullRequestReadGateway.js";
 import { InMemoryPendingInfraPlanStore } from "../../../../Contexts/Monitoring/AIInvestigation/infrastructure/infrainvestigation/InMemoryPendingInfraPlanStore.js";
 import { ForecastRiskCommandHandler } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskCommandHandler.js";
+import { EvidenceSnapshotRecorder } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/EvidenceSnapshotRecorder.js";
 import { ForecastLedgerRecorder } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastLedgerRecorder.js";
-import {
-  FORECAST_PIPELINE_RULES,
-  ForecastRiskUseCase,
-} from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskUseCase.js";
+import { ForecastRiskUseCase } from "../../../../Contexts/Monitoring/Forecast/application/ForecastRisk/ForecastRiskUseCase.js";
 import { GetForecastMeasurementQueryHandler } from "../../../../Contexts/Monitoring/Forecast/application/GetForecastMeasurement/GetForecastMeasurementQueryHandler.js";
 import { GetForecastMeasurementUseCase } from "../../../../Contexts/Monitoring/Forecast/application/GetForecastMeasurement/GetForecastMeasurementUseCase.js";
 import { ForecastPort } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastPort.js";
 import { ForecastSignalSource } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastSignalSource.js";
 import { ForecastWindowPolicy } from "../../../../Contexts/Monitoring/Forecast/domain/ForecastWindowPolicy.js";
-import { FORECAST_CLASS_DEFINITIONS } from "../../../../Contexts/Monitoring/Forecast/domain/forecastClass.js";
-import { computeForecasterVersion } from "../../../../Contexts/Monitoring/Forecast/domain/forecastFingerprint.js";
-import {
-  FORECAST_OUTPUT_RULES,
-  FORECAST_SYSTEM_INSTRUCTION,
-  GeminiForecastAdapter,
-} from "../../../../Contexts/Monitoring/Forecast/infrastructure/GeminiForecastAdapter.js";
+import { GeminiForecastAdapter } from "../../../../Contexts/Monitoring/Forecast/infrastructure/GeminiForecastAdapter.js";
+import { MongoEvidenceSnapshotRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/MongoEvidenceSnapshotRepository.js";
 import { MongoForecastLedgerRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/MongoForecastLedgerRepository.js";
 import { MongoRiskForecastRepository } from "../../../../Contexts/Monitoring/Forecast/infrastructure/MongoRiskForecastRepository.js";
 import { PendingPlanSignalSource } from "../../../../Contexts/Monitoring/Forecast/infrastructure/PendingPlanSignalSource.js";
@@ -132,6 +125,7 @@ import { TriggerDemoScenarioUseCase } from "./demo/TriggerDemoScenarioUseCase.js
 import { MongoDemoDataAdapter } from "./demo/MongoDemoDataAdapter.js";
 import { DemoResetUseCase } from "./demo/DemoResetUseCase.js";
 import { config } from "./config.js";
+import { currentForecasterVersion } from "./forecasterVersion.js";
 
 // 結合テスト用の差し替え seam。本番は何も渡さず（既定の実装を使う）、
 // 結合テストだけ「実際に外部を叩く driven アダプタ」を vi.fn 等で置き換える。
@@ -537,19 +531,12 @@ export class BackofficeApp {
     const forecastPort =
       this.overrides.forecastPort ?? new GeminiForecastAdapter(llmClient, logger);
     // 予報台帳（T0-1）。版と窓長は起動時に1度だけ確定し、全行に同じ刻印を押す。
-    // 予報器の版はモデル名・プロンプト・閾値・クラス定義・コード上の規則の内容ハッシュ（閾値は現状なし＝level は
-    // LLM が付け、confidence のクランプは判定ではない）。stub 時はモデル名を "stub" にして本物と混ぜない。
+    // 予報器の版はモデル名・プロンプト・閾値・クラス定義・コード上の規則の内容ハッシュ（リプレイ CLI と共通の計算）。
     const forecastLedgerRecorder = new ForecastLedgerRecorder(
       new MongoForecastLedgerRepository(mongoClient),
       {
         protocolVersion: config.forecast.protocolVersion,
-        forecasterVersion: computeForecasterVersion({
-          model: config.ai.useStubInvestigation ? "stub" : config.gemini.model,
-          promptTemplate: FORECAST_SYSTEM_INSTRUCTION,
-          thresholds: {},
-          classDefinitions: FORECAST_CLASS_DEFINITIONS,
-          pipelineRules: [...FORECAST_PIPELINE_RULES, ...FORECAST_OUTPUT_RULES],
-        }),
+        forecasterVersion: currentForecasterVersion(),
         windowPolicy: ForecastWindowPolicy.fromOverrides(config.forecast.windowHoursByClass),
       },
       logger,
@@ -561,6 +548,8 @@ export class BackofficeApp {
       riskForecastRepository,
       logger,
       forecastLedgerRecorder,
+      // 予報器に渡す入力の凍結（T0-2）。台帳と同じく demo reset の対象外。
+      new EvidenceSnapshotRecorder(new MongoEvidenceSnapshotRepository(mongoClient), logger),
     );
     const forecastRiskCommandHandler = new ForecastRiskCommandHandler(forecastRiskUseCase);
     // 予報の測定（E6-1/E6-3）。GET /analytics に相乗りするので FORECAST_ENABLED には従属しない

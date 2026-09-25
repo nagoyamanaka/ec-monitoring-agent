@@ -42,6 +42,7 @@ describe("issueForecasts", () => {
     const rows = issueForecasts(
       briefing([risk("db_connection_pool", ["chg-1", "sch-1"]), risk("checkout", ["sch-1"], "MEDIUM")]),
       stamp,
+      "snap-1",
     );
 
     expect(rows).toHaveLength(2);
@@ -55,7 +56,7 @@ describe("issueForecasts", () => {
       level: "HIGH",
       issuedAt: new Date("2026-09-24T00:00:00.000Z"),
       windowPolicyVersion: stamp.windowPolicy.version,
-      evidenceSnapshotId: "",
+      evidenceSnapshotId: "snap-1",
       assignment: "normal",
       assignmentProb: 1.0,
     });
@@ -69,6 +70,7 @@ describe("issueForecasts", () => {
         risk("valkey", ["inc-1"]),
       ]),
       stamp,
+      "snap-1",
     );
 
     expect(change).toMatchObject({ class: "change_risk", windowLengthHours: 72 });
@@ -82,12 +84,13 @@ describe("issueForecasts", () => {
     const [a, b, c] = issueForecasts(
       briefing([risk("x", ["chg-1", "sch-1"]), risk("y", ["sch-1", "chg-1"]), risk("z", ["sch-1"])]),
       stamp,
+      "snap-1",
     );
     expect(a.signalFingerprint).toBe(b.signalFingerprint);
     expect(c.signalFingerprint).not.toBe(a.signalFingerprint);
   });
 
   it("risk が0件（空予報・fallback）なら行も0件", () => {
-    expect(issueForecasts(briefing([]), stamp)).toEqual([]);
+    expect(issueForecasts(briefing([]), stamp, "snap-1")).toEqual([]);
   });
 });

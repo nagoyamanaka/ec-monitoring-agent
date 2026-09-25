@@ -24,6 +24,8 @@ const COLLECTIONS = [
   "risk_forecasts",
   // 台帳も追記型（issued の件数を実行ごとに数えるため掃除する）。
   "forecast_ledger",
+  // snapshot は内容アドレス＝前回実行分が残ると件数の検証がずれる。
+  "evidence_snapshots",
 ];
 
 // app.build() が "backoffice" 名で登録した同一 Mongo クライアントを再利用する。
