@@ -97,10 +97,19 @@ describe("forecastRoutes (integration)", () => {
       windowLengthHours: 72,
       windowEndsAt: "2026-07-06T12:00:00.000Z",
       protocolVersion: "unregistered",
-      evidenceSnapshotId: "",
       assignment: "normal",
       assignmentProb: 1,
     });
+    // 証拠スナップショット（T0-2）: 台帳行は予報器に渡した入力の snapshot を指し、その中身は sch-1 を含む。
+    const snapshotId = ledger[0].evidenceSnapshotId as string;
+    expect(snapshotId).toMatch(/^[0-9a-f]{64}$/);
+    const snapshot = await mongo
+      .db()
+      .collection<{ _id: string; content: string }>("evidence_snapshots")
+      .findOne({ _id: snapshotId });
+    expect(JSON.parse(snapshot!.content).signals).toContainEqual(
+      expect.objectContaining({ id: "sch-1", subject: "checkout" }),
+    );
   });
 
   it("GET /forecast は事前生成済みの最新予報をそのまま返す（再生成しない）", async () => {
@@ -119,6 +128,10 @@ describe("forecastRoutes (integration)", () => {
     // 台帳も発火のたびに追記され、forecastId は行ごとに別（同じ forecastId を二度書かない）。
     const ids = await mongo.db().collection("forecast_ledger").distinct("forecastId");
     expect(ids).toHaveLength(2);
+    // 入力が同じなら snapshot は内容アドレスで1件に畳まれ、両方の行が同じ snapshot を指す。
+    expect(await mongo.db().collection("evidence_snapshots").countDocuments({})).toBe(1);
+    const snapshotIds = await mongo.db().collection("forecast_ledger").distinct("evidenceSnapshotId");
+    expect(snapshotIds).toHaveLength(1);
     // 追記しても配信は最新1件のまま＝ GET /forecast の形は不変。
     const res = await request(app.httpApp).get("/forecast");
     expect(res.status).toBe(200);

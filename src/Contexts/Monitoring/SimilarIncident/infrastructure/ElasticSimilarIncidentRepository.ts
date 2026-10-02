@@ -135,8 +135,8 @@ export class ElasticSimilarIncidentRepository
 
   // ハイブリッド検索：候補取得（recall/ランキング）は BM25 の fuzzy multi_match に任せるが、
   // **分類 confidence には backend 非依存で有界な lexicalSimilarity（Jaccard, [0,1]）を使う**。
-  // 生 _score は無界でコーパス規模・アナライザに依存し、小コーパスで飽和して「無関係事例に 100% 類似」の
-  // 偽 KNOWN を生むため score としては返さない（InMemory と同義の [0,1] に揃える）。
+  // 生 _score は無界でコーパス規模（IDF）・アナライザで尺度が変わり、固定閾値では事例が増えるにつれ
+  // 無関係事例が閾値を超えて偽 KNOWN を生むため score としては返さない（InMemory と同義の [0,1] に揃える）。
   async search(query: SimilarSearchQuery): Promise<ScoredIncident[]> {
     const client = await this.client;
     const response = await client.search<EsSearchBody<IncidentDoc>>({

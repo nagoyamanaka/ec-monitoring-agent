@@ -7,7 +7,14 @@ import {
 } from "@google/adk";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
 import { InvestigationProgressNotifier } from "../../domain/InvestigationProgressNotifier.js";
-import { InvestigationAgentRunner } from "./InvestigationAgentRunner.js";
+import type {
+  InvestigationAgentRunner,
+  InvestigationAgentRunResult,
+} from "./InvestigationAgentRunner.js";
+import {
+  ToolObservationLog,
+  runWithToolObservations,
+} from "./tools/toolObservationScope.js";
 import type {
   InvestigationFinalizer,
   SubAgentOutput,
@@ -190,7 +197,7 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
   async run(
     seedPrompt: string,
     options?: { alertId?: string },
-  ): Promise<string> {
+  ): Promise<InvestigationAgentRunResult> {
     const startedAt = Date.now();
     const deadline = startedAt + this.timeoutMs;
     let finalText = "";
@@ -203,50 +210,56 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
     // サブエージェントが返した本文（清書役への材料）。コーディネーターの最終ターンが空でも
     // 調査の実質はここに残っているので、これを拾える限り fallback には落ちない（ADR-26 恒久策）。
     const subAgentOutputs: SubAgentOutput[] = [];
-
-    const stream = this.runner.runEphemeral({
-      userId: USER_ID,
-      newMessage: { role: "user", parts: [{ text: seedPrompt }] },
-      runConfig: { maxLlmCalls: this.maxLlmCalls },
-    });
+    // この実行中にツールが Gateway から実取得した証拠（引用照合の語彙に足す）。入れ子 Runner の
+    // ツール応答は下のイベントに出てこないので、ツール側の記録を AsyncLocalStorage で受ける。
+    const observations = new ToolObservationLog();
 
     const alertId = options?.alertId;
 
-    for await (const event of stream) {
-      eventCount++;
-      for (const call of getFunctionCalls(event)) {
-        agentTrace.push(`${event.author ?? "?"}→${call.name ?? "?"}`);
-        // agentTrace と同じ実イベントを SSE にライブ中継する（E1(b)・捏造なし）。
-        // best-effort: 中継の失敗で調査本体を止めない。
-        if (alertId && this.progressNotifier) {
-          try {
-            this.progressNotifier.notifyInvestigationProgress({
-              alertId,
-              agent: event.author ?? "unknown",
-              tool: call.name ?? "unknown",
-              at: new Date().toISOString(),
-            });
-          } catch {
-            // 通知失敗は無視（調査継続）。トレースはログに残る。
+    await runWithToolObservations(observations, async () => {
+      const stream = this.runner.runEphemeral({
+        userId: USER_ID,
+        newMessage: { role: "user", parts: [{ text: seedPrompt }] },
+        runConfig: { maxLlmCalls: this.maxLlmCalls },
+      });
+  
+      for await (const event of stream) {
+        eventCount++;
+        for (const call of getFunctionCalls(event)) {
+          agentTrace.push(`${event.author ?? "?"}→${call.name ?? "?"}`);
+          // agentTrace と同じ実イベントを SSE にライブ中継する（E1(b)・捏造なし）。
+          // best-effort: 中継の失敗で調査本体を止めない。
+          if (alertId && this.progressNotifier) {
+            try {
+              this.progressNotifier.notifyInvestigationProgress({
+                alertId,
+                agent: event.author ?? "unknown",
+                tool: call.name ?? "unknown",
+                at: new Date().toISOString(),
+              });
+            } catch {
+              // 通知失敗は無視（調査継続）。トレースはログに残る。
+            }
           }
         }
+        for (const response of getFunctionResponses(event)) {
+          const name = response.name ?? "";
+          if (!this.subAgentNames.has(name)) continue;
+          subAgentOutputs.push({
+            agent: name,
+            output: stringifySubAgentResponse(response.response),
+          });
+        }
+        if (isFinalResponse(event)) {
+          finalText = extractText(event);
+        }
+        if (Date.now() > deadline) {
+          timedOut = true;
+          break;
+        }
       }
-      for (const response of getFunctionResponses(event)) {
-        const name = response.name ?? "";
-        if (!this.subAgentNames.has(name)) continue;
-        subAgentOutputs.push({
-          agent: name,
-          output: stringifySubAgentResponse(response.response),
-        });
-      }
-      if (isFinalResponse(event)) {
-        finalText = extractText(event);
-      }
-      if (Date.now() > deadline) {
-        timedOut = true;
-        break;
-      }
-    }
+    });
+    const toolObservedEvidence = observations.snapshot();
 
     // エージェントループの外で JSON 化だけをやり直す（熟考する仕事と書き出す仕事を同じターンに
     // 置かない）。清書がパースを通らなければコーディネーターの下書きへ黙って戻るので、この段で
@@ -270,9 +283,9 @@ export class ADKInvestigationAgentRunner implements InvestigationAgentRunner {
     await this.logger.info({
       service: "backoffice-backend",
       action: "adk_investigation_run_completed",
-      message: `ADK調査実行：elapsedMs=${Date.now() - startedAt}, events=${eventCount}, timedOut=${timedOut}, maxLlmCalls=${this.maxLlmCalls}, finalTextLen=${finalText.length}, outputSource=${finalization.source}, outputLen=${finalization.text.length}, subAgentOutputs=${subAgentOutputs.length}, agentTrace=[${agentTrace.join(" > ") || "(no tool calls)"}]`,
+      message: `ADK調査実行：elapsedMs=${Date.now() - startedAt}, events=${eventCount}, timedOut=${timedOut}, maxLlmCalls=${this.maxLlmCalls}, finalTextLen=${finalText.length}, outputSource=${finalization.source}, outputLen=${finalization.text.length}, subAgentOutputs=${subAgentOutputs.length}, toolObservedCommits=${toolObservedEvidence.commits.length}, toolObservedTerraformDiffs=${toolObservedEvidence.terraformDiffs.length}, agentTrace=[${agentTrace.join(" > ") || "(no tool calls)"}]`,
     });
 
-    return finalization.text;
+    return { text: finalization.text, toolObservedEvidence };
   }
 }

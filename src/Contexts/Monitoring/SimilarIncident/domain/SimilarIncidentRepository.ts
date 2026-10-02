@@ -19,7 +19,7 @@ export type ResolvedIncident = {
 
 // 類似度スコア付きの検索ヒット。score は **backend 非依存で有界な字句類似度 [0,1]**（高いほど類似）。
 // 各リポジトリ実装が lexicalSimilarity で算出する＝Elastic(BM25)/InMemory どちらでも同じ意味になり、
-// 無界 BM25 の小コーパス飽和（無関係事例への偽 100% 一致）を防ぐ。BM25 は候補取得にのみ使う。
+// 無界 BM25 の尺度がコーパス規模で変わり固定閾値が効かない問題（無関係事例の偽 KNOWN）を防ぐ。BM25 は候補取得にのみ使う。
 export type ScoredIncident = {
   readonly incident: SimilarIncident;
   readonly score: number;

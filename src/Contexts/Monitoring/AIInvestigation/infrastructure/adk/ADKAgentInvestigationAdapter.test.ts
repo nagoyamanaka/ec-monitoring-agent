@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { ADKAgentInvestigationAdapter } from "./ADKAgentInvestigationAdapter.js";
-import { InvestigationAgentRunner } from "./InvestigationAgentRunner.js";
+import type {
+  InvestigationAgentRunner,
+  InvestigationAgentRunResult,
+} from "./InvestigationAgentRunner.js";
+import {
+  EMPTY_TOOL_OBSERVED_EVIDENCE,
+  type ToolObservedEvidence,
+} from "../../domain/ToolObservedEvidence.js";
 import { InvestigationContext } from "../../domain/InvestigationContext.js";
 import { AlertSeverities } from "../../../Shared/domain/AlertSeverity.js";
 import { Logger } from "../../../../Shared/domain/logging/Logger.js";
@@ -21,15 +28,25 @@ const context: InvestigationContext = {
 class FakeAgentRunner implements InvestigationAgentRunner {
   lastOptions: { alertId?: string } | undefined;
   calls = 0;
-  constructor(private readonly behavior: { text?: string; error?: Error }) {}
+  constructor(
+    private readonly behavior: {
+      text?: string;
+      error?: Error;
+      toolObservedEvidence?: ToolObservedEvidence;
+    },
+  ) {}
   async run(
     _seedPrompt: string,
     options?: { alertId?: string },
-  ): Promise<string> {
+  ): Promise<InvestigationAgentRunResult> {
     this.calls++;
     this.lastOptions = options;
     if (this.behavior.error) throw this.behavior.error;
-    return this.behavior.text ?? "";
+    return {
+      text: this.behavior.text ?? "",
+      toolObservedEvidence:
+        this.behavior.toolObservedEvidence ?? EMPTY_TOOL_OBSERVED_EVIDENCE,
+    };
   }
 }
 
@@ -238,5 +255,80 @@ describe("ADKAgentInvestigationAdapter", () => {
         kind: "code",
       },
     ]);
+  });
+
+  describe("ツールが実取得した証拠も引用照合の語彙に入る（事前収集に無い証拠）", () => {
+    // 事前収集（infraEvidence）はゼロ＝従来なら相関は全て落ち、引用は未照合だった。
+    const relatedJson = (citation: string) =>
+      JSON.stringify({
+        ...JSON.parse(validJson),
+        relatedAlerts: [
+          {
+            alertId: "alert-2",
+            relation: "same_root_cause",
+            rationale: "同じコミットを共有",
+            citations: [citation],
+          },
+        ],
+        impact: {
+          fault: "internal",
+          scope: "決済",
+          scale: "全件",
+          affectedSubjects: ["payment"],
+          citations: [citation],
+        },
+      });
+    const observed: ToolObservedEvidence = {
+      commits: [{ sha: "c0ffee1234", url: "https://github.com/o/r/commit/c0ffee1234" }],
+      terraformDiffs: [],
+    };
+
+    it("ツールが返した sha を引く相関は残り、引用は commit として照合済みになる", async () => {
+      const adapter = new ADKAgentInvestigationAdapter(
+        new FakeAgentRunner({
+          text: relatedJson("commit c0ffee1234"),
+          toolObservedEvidence: observed,
+        }),
+      );
+
+      const report = await adapter.investigate(context);
+
+      expect(report.relatedAlerts.map((r) => r.alertId)).toEqual(["alert-2"]);
+      expect(report.impact?.citationRefs).toEqual([
+        {
+          value: "commit c0ffee1234",
+          kind: "commit",
+          href: "https://github.com/o/r/commit/c0ffee1234",
+        },
+      ]);
+    });
+
+    it("ツールが返していない sha（AI の捏造）を引く相関は落ち、引用は未照合のまま", async () => {
+      const adapter = new ADKAgentInvestigationAdapter(
+        new FakeAgentRunner({
+          text: relatedJson("commit deadbeef99"),
+          toolObservedEvidence: observed,
+        }),
+      );
+
+      const report = await adapter.investigate(context);
+
+      expect(report.relatedAlerts).toEqual([]);
+      expect(report.impact?.citationRefs).toEqual([{ value: "commit deadbeef99" }]);
+    });
+
+    it("語彙は attempt ごと: 1回目のツール取得は縮退リトライの照合に持ち越さない", async () => {
+      const adapter = new ADKAgentInvestigationAdapter(
+        new FakeAgentRunner({ text: "", toolObservedEvidence: observed }),
+        undefined,
+        undefined,
+        new FakeAgentRunner({ text: relatedJson("commit c0ffee1234") }),
+      );
+
+      const report = await adapter.investigate(context);
+
+      expect(report.isFallback).toBe(false);
+      expect(report.relatedAlerts).toEqual([]);
+    });
   });
 });

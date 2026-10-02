@@ -6,6 +6,7 @@ import { CloudLoggingGateway } from "../../infrainvestigation/CloudLoggingGatewa
 import { TerraformGateway } from "../../infrainvestigation/TerraformGateway.js";
 import { GitHubGateway } from "../../infrainvestigation/GitHubGateway.js";
 import { SimilarIncidentRepository } from "../../../../SimilarIncident/domain/SimilarIncidentRepository.js";
+import { currentToolObservationLog } from "./toolObservationScope.js";
 
 /**
  * EvidenceCollectorAgent が使う「読み取り専用」ツール群（ADK FunctionTool）。
@@ -15,6 +16,8 @@ import { SimilarIncidentRepository } from "../../../../SimilarIncident/domain/Si
  * - 各ツールはベストエフォート: 失敗は throw せず { error } を返してエージェントの調査を継続させる
  *   （DefaultInfraInvestigationAdapter の try/catch と同方針）。
  * - 返り値は JSON シリアライズ可能な素のオブジェクトに正規化する（Date は ISO 文字列）。
+ * - commit / terraform は Gateway が返した値を調査ごとの ToolObservationLog に記録する
+ *   （引用の照合語彙に足すため。引数・null・例外は記録しない）。
  *
  * seed コンテキスト（InvestigateAlertUseCase が広く事前収集した証拠）と違い、ここでの収集は
  * エージェントが仮説に応じて引数（サービス名・時間窓・検索語）を絞って叩く「狙い撃ち」収集。
@@ -85,6 +88,7 @@ export function buildInvestigationTools(deps: InvestigationToolDeps): FunctionTo
         const diff = await deps.terraformGateway.getAppliedDiff({
           since: parseIso(sinceIso),
         });
+        if (diff) currentToolObservationLog()?.recordTerraformDiff(diff);
         return (
           diff ?? {
             resourceChanges: [],
@@ -109,6 +113,8 @@ export function buildInvestigationTools(deps: InvestigationToolDeps): FunctionTo
           since: parseIso(sinceIso),
           ...(limit !== undefined ? { limit } : {}),
         });
+        const log = currentToolObservationLog();
+        for (const c of commits) log?.recordCommit(c);
         return commits.map((c) => ({
           sha: c.sha,
           message: c.message,
@@ -131,12 +137,15 @@ export function buildInvestigationTools(deps: InvestigationToolDeps): FunctionTo
       bestEffort(async () => {
         const diff = await deps.githubGateway.getCommitDiff({ sha });
         if (!diff) {
+          // 下の戻り値は引数 sha のおうむ返し（取得できた証拠ではない）ので記録しない。
           return {
             sha,
             files: [],
             summary: "差分を取得できなかった（未設定/権限なし/不明な SHA）",
           };
         }
+        // 記録するのは Gateway が返した sha（引数ではない）。
+        currentToolObservationLog()?.recordCommit(diff);
         return { ...diff, committedAt: diff.committedAt.toISOString() };
       }),
   });

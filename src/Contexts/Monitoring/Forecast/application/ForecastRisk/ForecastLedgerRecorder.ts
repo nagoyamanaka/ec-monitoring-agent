@@ -18,8 +18,8 @@ export class ForecastLedgerRecorder {
     private readonly logger: Logger,
   ) {}
 
-  async record(briefing: ForecastBriefing): Promise<void> {
-    const events = issueForecasts(briefing, this.stamp);
+  async record(briefing: ForecastBriefing, evidenceSnapshotId: string): Promise<void> {
+    const events = issueForecasts(briefing, this.stamp, evidenceSnapshotId);
     for (const event of events) {
       try {
         await this.ledger.append(event);

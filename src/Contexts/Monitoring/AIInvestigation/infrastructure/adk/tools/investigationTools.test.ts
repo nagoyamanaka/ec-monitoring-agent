@@ -13,6 +13,10 @@ import type { ScoredIncident } from "../../../../SimilarIncident/domain/SimilarI
 import type { SimilarIncident } from "../../../../SimilarIncident/domain/SimilarIncident.js";
 import type { TerraformGateway } from "../../infrainvestigation/TerraformGateway.js";
 import type { GitHubGateway } from "../../infrainvestigation/GitHubGateway.js";
+import {
+  ToolObservationLog,
+  runWithToolObservations,
+} from "./toolObservationScope.js";
 
 const ISO = "2026-01-15T12:00:00.000Z";
 const DATE = new Date(ISO);
@@ -371,6 +375,94 @@ describe("fetch_commit_diff", () => {
     });
     const result = await call(tool(3, deps), { sha: "abc1234" });
     expect(result).toEqual({ error: "gh api error" });
+  });
+});
+
+// ── 実取得した証拠の記録（引用照合の語彙） ──────────────────────────────────
+
+describe("ツールが実取得した証拠の記録", () => {
+  const DIFF: TerraformDiff = {
+    resourceChanges: [{ address: "google_sql_database_instance.main", action: "update", attributeDeltas: [] }],
+    appliedAt: "2026-01-01T00:00:00.000Z",
+    changedResources: ["google_sql_database_instance.main"],
+    summary: "max_connections 100 → 40",
+  };
+  const COMMIT_DIFF: GitCommitDiff = {
+    sha: "abc1234full",
+    message: "fix",
+    author: "dev",
+    committedAt: DATE,
+    files: [],
+    url: "https://github.com/o/r/commit/abc1234full",
+  };
+
+  async function observe(fn: () => Promise<unknown>) {
+    const log = new ToolObservationLog();
+    await runWithToolObservations(log, fn);
+    return log.snapshot();
+  }
+
+  it("Gateway が返した commit / terraform 差分を記録する（sha は Gateway の値）", async () => {
+    const deps = makeDeps({
+      terraformGateway: fakeTerraformGateway({ getAppliedDiff: async () => DIFF }),
+      githubGateway: fakeGitHubGateway({
+        listRecentCommits: async () => [
+          { sha: "e12b655", message: "perf", author: "dev", committedAt: DATE },
+        ],
+        getCommitDiff: async () => COMMIT_DIFF,
+      }),
+    });
+
+    const observed = await observe(async () => {
+      await call(tool(1, deps), { sinceIso: ISO });
+      await call(tool(2, deps), { sinceIso: ISO });
+      // 省略 sha で引いても、記録するのは Gateway が返した完全な sha
+      await call(tool(3, deps), { sha: "abc1234" });
+    });
+
+    expect(observed.terraformDiffs).toEqual([DIFF]);
+    expect(observed.commits).toEqual([
+      { sha: "e12b655" },
+      { sha: "abc1234full", url: "https://github.com/o/r/commit/abc1234full" },
+    ]);
+  });
+
+  it("架空の sha で呼んで取得できなかった応答（引数のおうむ返し）は記録しない", async () => {
+    const observed = await observe(() => call(tool(3), { sha: "deadbeef99" }));
+    expect(observed.commits).toEqual([]);
+  });
+
+  it("差分なし（null）・Gateway の例外は記録しない", async () => {
+    const throwing = makeDeps({
+      githubGateway: fakeGitHubGateway({
+        listRecentCommits: async () => {
+          throw new Error("gh api error");
+        },
+      }),
+    });
+    const observed = await observe(async () => {
+      await call(tool(1), { sinceIso: ISO });
+      await call(tool(2, throwing), { sinceIso: ISO });
+    });
+    expect(observed).toEqual({ commits: [], terraformDiffs: [] });
+  });
+
+  it("並行する調査の記録は混ざらない", async () => {
+    const depsFor = (sha: string) =>
+      makeDeps({
+        githubGateway: fakeGitHubGateway({
+          listRecentCommits: async () => {
+            await new Promise((r) => setTimeout(r, 5));
+            return [{ sha, message: "m", author: "a", committedAt: DATE }];
+          },
+        }),
+      });
+    const [a, b] = await Promise.all([
+      observe(() => call(tool(2, depsFor("aaa1111")), { sinceIso: ISO })),
+      observe(() => call(tool(2, depsFor("bbb2222")), { sinceIso: ISO })),
+    ]);
+    expect(a.commits).toEqual([{ sha: "aaa1111" }]);
+    expect(b.commits).toEqual([{ sha: "bbb2222" }]);
   });
 });
 

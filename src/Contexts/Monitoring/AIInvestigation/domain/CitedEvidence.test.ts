@@ -76,4 +76,21 @@ describe("collectCitableEvidenceIds", () => {
     };
     expect(collectCitableEvidenceIds(evidence)).toEqual([]);
   });
+
+  it("ツールが実取得した commit / terraform も語彙に足す（事前収集が無くても）", () => {
+    expect(
+      collectCitableEvidenceIds(undefined, {
+        commits: [{ sha: "C0FFEE1234" }],
+        terraformDiffs: [
+          {
+            resourceChanges: [],
+            appliedAt: "2026-07-04T06:00:00.000Z",
+            commitSha: "740498f",
+            changedResources: ["google_compute_instance.backbone"],
+            summary: "machine_type 縮小",
+          },
+        ],
+      }),
+    ).toEqual(["google_compute_instance.backbone", "740498f", "c0ffee1234"]);
+  });
 });
