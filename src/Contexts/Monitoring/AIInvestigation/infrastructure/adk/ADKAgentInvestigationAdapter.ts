@@ -15,7 +15,10 @@ import {
   evidenceLinkConfigFromEnv,
   type EvidenceLinkConfig,
 } from "../aiinvestigation/evidenceLinks.js";
-import { InvestigationAgentRunner } from "./InvestigationAgentRunner.js";
+import type {
+  InvestigationAgentRunner,
+  InvestigationAgentRunResult,
+} from "./InvestigationAgentRunner.js";
 
 /**
  * AIInvestigationPort の ADK マルチエージェント実装（タスク18）。
@@ -47,16 +50,8 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
     const seedPrompt = buildUserPrompt(context);
     // fallback（例外／パース不能）でも収集済み証拠のリンクは残せるよう、先に決定的に組んでおく。
     const evidenceLinks = buildEvidenceLinks(context.infraEvidence, this.linkConfig);
-    // 相関ガード（relatedAlerts の citation 実在照合）の語彙。収集済み証拠から決定的に導出する。
-    const citableEvidenceIds = collectCitableEvidenceIds(context.infraEvidence);
-    // 引用の表示用照合カタログ（impact/escalation の citationRefs）。同じく決定的に導出する。
-    const citationCatalog = buildCitationCatalog(context);
 
-    const first = await this.attempt(this.runner, 1, context, seedPrompt, {
-      evidenceLinks,
-      citableEvidenceIds,
-      citationCatalog,
-    });
+    const first = await this.attempt(this.runner, 1, context, seedPrompt, evidenceLinks);
     if (first) return first;
 
     if (this.retryRunner) {
@@ -67,11 +62,7 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
         action: "ai_investigation_retrying",
         message: `AI調査(ADK)の1回目が失敗したため思考予算を落として再実行します: eventName=${context.errorEvent.eventName}`,
       });
-      const second = await this.attempt(this.retryRunner, 2, context, seedPrompt, {
-        evidenceLinks,
-        citableEvidenceIds,
-        citationCatalog,
-      });
+      const second = await this.attempt(this.retryRunner, 2, context, seedPrompt, evidenceLinks);
       if (second) return second;
     }
 
@@ -84,16 +75,12 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
     attemptNo: number,
     context: InvestigationContext,
     seedPrompt: string,
-    mapping: {
-      evidenceLinks: ReturnType<typeof buildEvidenceLinks>;
-      citableEvidenceIds: ReturnType<typeof collectCitableEvidenceIds>;
-      citationCatalog: ReturnType<typeof buildCitationCatalog>;
-    },
+    evidenceLinks: ReturnType<typeof buildEvidenceLinks>,
   ): Promise<InvestigationReport | null> {
-    let raw: string;
+    let result: InvestigationAgentRunResult;
     try {
       // alertId があれば実行イベントのライブ中継（investigation-progress）の相関キーとして渡す。
-      raw = await runner.run(
+      result = await runner.run(
         seedPrompt,
         context.alertId ? { alertId: context.alertId } : undefined,
       );
@@ -105,6 +92,20 @@ export class ADKAgentInvestigationAdapter implements AIInvestigationPort {
       });
       return null;
     }
+
+    const raw = result.text;
+    // 引用照合の語彙は「事前収集＋この実行でツールが実取得した証拠」から決定的に導出する
+    // （LLM の文章・引数は入らない）。実行ごとに取得内容が違うので attempt 単位で組む。
+    const mapping = {
+      evidenceLinks,
+      // 相関ガード（relatedAlerts の citation 実在照合）の語彙。
+      citableEvidenceIds: collectCitableEvidenceIds(
+        context.infraEvidence,
+        result.toolObservedEvidence,
+      ),
+      // 引用の表示用照合カタログ（impact/escalation の citationRefs）。
+      citationCatalog: buildCitationCatalog(context, result.toolObservedEvidence),
+    };
 
     const output = parseLLMOutput(raw);
     if (!output) {

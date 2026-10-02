@@ -14,6 +14,7 @@ import type {
   CitationSourceKind,
 } from "../../AlertAnalysis/domain/contracts/AlertContract.js";
 import type { InfraEvidence } from "./InfraEvidence.js";
+import type { ToolObservedEvidence } from "./ToolObservedEvidence.js";
 
 /** カタログ1エントリ＝照合キー（証拠カタログ上の id）とその出所種別・リンク。 */
 export type CitationCatalogEntry = {
@@ -64,9 +65,11 @@ function collectCveIds(value: unknown, depth: number, out: Set<string>): void {
  * 調査文脈から引用カタログを決定論で構築する。エントリは全て「システムが収集済みの事実」のみ
  * （受信イベント名／payload 中の CVE 識別子／既知パターン名／commit sha／terraform アドレス・
  * 由来 sha／メトリクス名／類似事例のイベント名／相関候補 alertId）。LLM の出力は一切入らない。
+ * observed（ADK 経路のツールが実取得した commit / terraform）も Gateway の戻り値なので同列に載る。
  */
 export function buildCitationCatalog(
   context: CitationCatalogContext,
+  observed?: ToolObservedEvidence,
 ): CitationCatalogEntry[] {
   const entries: CitationCatalogEntry[] = [];
   const eventName = context.errorEvent.eventName.trim();
@@ -85,11 +88,16 @@ export function buildCitationCatalog(
     if (pattern.name.trim() !== "") entries.push({ id: pattern.name, kind: "pattern" });
   }
   const evidence = context.infraEvidence;
-  for (const commit of evidence?.recentCommits ?? []) {
+  // 事前収集を先に置く＝同じ id なら事前収集側（リンク付きのことが多い）が同長先着で勝つ。
+  const commits = [...(evidence?.recentCommits ?? []), ...(observed?.commits ?? [])];
+  for (const commit of commits) {
     entries.push({ id: commit.sha, kind: "commit", ...(commit.url ? { href: commit.url } : {}) });
   }
-  const diff = evidence?.terraformDiff;
-  if (diff) {
+  const diffs = [
+    ...(evidence?.terraformDiff ? [evidence.terraformDiff] : []),
+    ...(observed?.terraformDiffs ?? []),
+  ];
+  for (const diff of diffs) {
     const href = diff.url ? { href: diff.url } : {};
     for (const address of new Set([
       ...diff.resourceChanges.map((c) => c.address),

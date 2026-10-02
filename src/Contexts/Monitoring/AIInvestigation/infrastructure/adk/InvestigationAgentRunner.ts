@@ -1,3 +1,11 @@
+import type { ToolObservedEvidence } from "../../domain/ToolObservedEvidence.js";
+
+/** 1回の実行結果＝最終 JSON 文字列＋その実行中にツールが実取得した証拠（引用照合の語彙に足す）。 */
+export type InvestigationAgentRunResult = {
+  readonly text: string;
+  readonly toolObservedEvidence: ToolObservedEvidence;
+};
+
 /**
  * ADK マルチエージェント・グラフ（Coordinator + 専門agent）への text-in / text-out 契約。
  *
@@ -12,5 +20,8 @@ export interface InvestigationAgentRunner {
    * options.alertId が与えられた場合、実行イベント（ツール呼び出し）を当該 Alert に紐付けて
    * ライブ中継してよい（investigation-progress・実イベントのみ）。省略時は中継しない。
    */
-  run(seedPrompt: string, options?: { alertId?: string }): Promise<string>;
+  run(
+    seedPrompt: string,
+    options?: { alertId?: string },
+  ): Promise<InvestigationAgentRunResult>;
 }

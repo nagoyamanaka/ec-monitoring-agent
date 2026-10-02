@@ -10,6 +10,7 @@
  */
 
 import type { InfraEvidence } from "./InfraEvidence.js";
+import type { ToolObservedEvidence } from "./ToolObservedEvidence.js";
 
 /** InvestigationReport（ドメイン）と検証済みLLM出力の両方が構造的に満たす引用源の形。 */
 export type CitedEvidenceSource = {
@@ -38,19 +39,28 @@ export function collectCitedEvidenceText(source: CitedEvidenceSource | null): st
  * - appLogs は含めない（安定 id が無く、resource 名は「同時期にログが存在する」程度の
  *   弱い歯＝捏造を通す）。similarIncidents も含めない（自分の類似事例を写すだけで解決して
  *   しまい、「infraEvidence ゼロの他責障害では指せる共有証拠が無い」という構造の歯が抜ける）。
+ * - ADK 経路では evidence_collector のツールが調査中に実取得した commit / terraform も同じ語彙に入る
+ *   （ToolObservedEvidence。LLM の引数や文章ではなく Gateway の戻り値だけ）。
  * 因果の向きの妥当性は決定論では判定しない（correlation_verifier＝タスク J2 の領分）。
  */
-export function collectCitableEvidenceIds(evidence: InfraEvidence | undefined): string[] {
-  if (!evidence) return [];
+export function collectCitableEvidenceIds(
+  evidence: InfraEvidence | undefined,
+  // ツールが調査中に実取得した証拠（ADK 経路のみ）。事前収集と同じ Gateway の戻り値だけなので同じ語彙に入れる。
+  observed?: ToolObservedEvidence,
+): string[] {
   const ids: string[] = [];
-  for (const commit of evidence.recentCommits ?? []) ids.push(commit.sha);
-  const diff = evidence.terraformDiff;
-  if (diff) {
+  for (const commit of evidence?.recentCommits ?? []) ids.push(commit.sha);
+  const diffs = [
+    ...(evidence?.terraformDiff ? [evidence.terraformDiff] : []),
+    ...(observed?.terraformDiffs ?? []),
+  ];
+  for (const diff of diffs) {
     ids.push(...diff.resourceChanges.map((c) => c.address), ...diff.changedResources);
     if (diff.commitSha) ids.push(diff.commitSha);
   }
-  for (const metric of evidence.metrics ?? []) {
+  for (const metric of evidence?.metrics ?? []) {
     ids.push(metric.metricType, metric.displayName);
   }
+  for (const commit of observed?.commits ?? []) ids.push(commit.sha);
   return [...new Set(ids.map((id) => id.toLowerCase()).filter((id) => id.trim() !== ""))];
 }

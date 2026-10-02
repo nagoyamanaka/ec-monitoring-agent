@@ -40,6 +40,7 @@
 | [ADR-32](#adr-32-予報に確信度は表示しない較正できない自己申告を決定論で出せている軸に重ねない) | 予報の確信度%は表示しない | 予兆 |
 | [ADR-33](#adr-33-予報は-pr-コメントで届けるgate-にはせず該当は引用一致を第一根拠にする) | 予報を PR コメントで提示・gate にしない | 予兆 |
 | [ADR-34](#adr-34-予報カードは決裁の読み順に並べ替えいつまでに動くかを軸で出す) | 予報カードは決裁の読み順・時間軸を出す | フロント |
+| [ADR-35](#adr-35-ツールが実取得した証拠も引用照合の語彙に入れる引数とllmの文章は入れない) | ツールが実取得した証拠も引用照合の語彙に | AI |
 
 ---
 
@@ -298,3 +299,14 @@
 - **メタチップを畳んでも母数は消さない**: 「対象: 今週末」「生成: …」は軸が日付つきでより正確に言うので重複だが、**シグナル件数は母数**なので残し、文言を E6-3 の画面文言（`シグナル N 件を突合して、リスク M 件に絞り込み`）へ揃えた。horizon は捨てず一覧見出し（`今週末のリスク`）へ昇格させ、スコープを示す役に変えた
 - ⚠ **既知の残り**: `SeverityBadge` の MEDIUM と レーン/軸の SCHEDULE がともに amber＝**同一画面に2つの意味の amber が並ぶ**。band の直上に「予測発生 …」と amber で明示ラベルを置いて曖昧さを抑えているが、level 色（rose/sky）へ寄せると別の二重意味になるため据え置き。**MEDIUM のカードで再点検すること**
 - **参照**: `ForecastTimeline`（domain の組み立て＋presentation の描画）・`scheduleWindowOccurrence`・`RiskCard`・`ForecastPage`・[ADR-32](#adr-32-予報に確信度は表示しない較正できない自己申告を決定論で出せている軸に重ねない)（確信度%は出さない＝この並べ替えでも復活させない）
+
+## ADR-35: ツールが実取得した証拠も引用照合の語彙に入れる（引数とLLMの文章は入れない）
+
+- **決定**: 引用照合の語彙（相関ゲート `collectCitableEvidenceIds`・表示カタログ `buildCitationCatalog`）を、事前収集（`InfraEvidence`）だけでなく**その実行で evidence_collector のツールが Gateway から実取得した commit / terraform 差分**（`ToolObservedEvidence`）からも組む。記録はツールの `execute` 内で Gateway の戻り値に対してだけ行い、**LLM が渡した引数・取得失敗・例外は記録しない**。
+- **理由**: 従来の語彙は事前収集だけだったので、AI が仮説に応じて追加で掘った証拠は、本物でも相関の根拠にすると破棄され、表示は「未照合」になっていた。「深く掘れるが、掘った結果を本物と示せない」状態で、evidence_collector（自律的な追加収集）の価値が照合の側で打ち消されていた。ツールの戻り値は事前収集と**同じ Gateway** が返した値で、LLM は中身を書けない。照合の基準（Gateway が返した値に一致するか）は変えず、出所を1つ足しただけ。
+- **引数を入れない理由（コードで確認した落とし穴）**: `fetch_commit_diff` は取得できないとき `{ sha: <引数>, files: [] }` を返す。応答に出てきた id を素朴に拾うと、LLM が架空の sha で呼ぶだけで照合を通ってしまう。記録は Gateway が非 null を返した分岐の中で、Gateway の値（省略 sha で引いても完全な sha）だけを使う。
+- **イベントから拾わない理由**: ADK の `AgentTool` はサブエージェントを入れ子の `Runner` で回し、外側には最終テキストしか返さない（`agent_tool.js`）。evidence_collector のツール応答は外側のイベントストリームに出てこないので、ツール側で記録し、調査ごとの入れ物を `AsyncLocalStorage` で渡す（ツールはランナー構築時に1度だけ作られ調査間で共有されるため。並行調査で混ざらないことは UT で確認）。
+- **範囲**: commit sha と terraform アドレス・由来 sha だけ。ログ・類似事例は事前収集と同じ方針で入れない（`CitedEvidence` の語彙方針）。語彙は attempt 単位で、1回目の取得を縮退リトライに持ち越さない。単一 Gemini 経路（ツールを持たない）は変わらない。
+- **言えることの上限**: 照合が保証するのは「引用した id を Gateway が実際に返した」まで。証拠が本物でも因果が正しいとは限らず、そこは CorrelationVerifier（批判役）の担当。デモ構成の Gateway の一部は seed なので、「本物」は「Gateway の戻り値と一致」の意味で、本番の外部システムとの一致ではない（事前収集と同じ条件）。
+- ⚠ **既知の残り**: 9/19 の実測（未知調査3本）では evidence_collector が一度も委譲されていない（`temp/roadmap-draft/elasticsearch-todo.md` ES-3）。この経路が実際の調査で効いた回はまだ無く、`adk_investigation_run_completed` ログの `toolObservedCommits` / `toolObservedTerraformDiffs` で観測する。引用照合率（[ADR-30](#adr-30-引用照合率は引用単位で数えゲートを通った引用は母数に入れない)）は語彙が広がった分だけ上がりうるので、この変更の前後で数字を比べるときは注意する。
+- **参照**: `ToolObservedEvidence`・`toolObservationScope`・`investigationTools`・`ADKInvestigationAgentRunner`・`ADKAgentInvestigationAdapter`

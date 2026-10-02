@@ -78,7 +78,7 @@ flowchart TD
   INV --> RPT["InvestigationReport 添付 → OPEN → SSE push"]
   RPT --> H{"人間レビュー"}
   H -->|"承認 <br/>PATCH /alerts/:id/feedback"| SIDX["SimilarIncident.index()<br/>訂正が resolvedNote として学習され<br/>類似分類の母集団が太る"]
-  SIDX -->|"閾値到達で自動昇格"| KP["KnownErrorPattern 生成"]
+  SIDX -.->|"自動昇格（点数はアラート1件ごと<br/>再発をまたいで貯まらず、通常は動かない）"| KP["KnownErrorPattern 生成"]
   SIDX -->|"同型再発は SIMILARITY 即分類<br/>（sourceAlertId が訂正事例を指す）"| C
   H -->|"手動即時昇格<br/>POST /alerts/:id/promote"| KP
   H -->|"却下（AI 訂正の指摘つき）<br/>→ POST /alerts/:id/reinvestigate"| INV
@@ -121,7 +121,7 @@ sequenceDiagram
   alt 承認
     UI->>BE: PATCH /alerts/:id/feedback (isCorrect=true)
     BE->>BE: SimilarIncident.index()＝学習
-    OP->>BE: POST /alerts/:id/promote（または閾値で自動昇格）
+    OP->>BE: POST /alerts/:id/promote（「既知へ昇格」ボタン）
     Note over BE: KnownErrorPattern 生成<br/>→ 同型の再発は1秒・AI コストゼロで既知
   else 却下 → 再調査
     UI->>BE: POST /alerts/:id/reinvestigate（operatorNote 付き）
@@ -159,6 +159,7 @@ flowchart TD
 ```
 
 - 既知/未知でルートが変わる（既知は重い調査モジュールを通さない）。出口は自責→修正起案 / 他責→運用エスカレーションに分岐。
+- **ツールが掘った証拠も引用照合に載せる**: 照合の語彙（相関ゲート `collectCitableEvidenceIds`・表示カタログ `buildCitationCatalog`）は事前収集（`InfraEvidence`）に加え、**その実行で evidence_collector のツールが Gateway から実取得した commit / terraform 差分**（`ToolObservedEvidence`）から決定的に組む。記録するのは Gateway の戻り値だけで、LLM が渡した引数（架空 sha）・取得失敗（`fetch_commit_diff` は引数 sha をおうむ返しする）・例外は入れない。ADK の AgentTool はサブエージェントを入れ子 Runner で回しツール応答が外側のイベントに出ないため、ツール自身が調査ごとの `ToolObservationLog` へ記録し、ランナーが `AsyncLocalStorage`（`toolObservationScope`）でその入れ物を渡す（並行調査で混ざらない）。語彙は attempt 単位で、1回目の取得を縮退リトライへ持ち越さない。ログ・類似事例は事前収集と同じ方針で語彙に入れない。決定の履歴は [ADR-35](decisions/ADR.md#adr-35-ツールが実取得した証拠も引用照合の語彙に入れる引数とllmの文章は入れない)。⚠ 9/19 の実測では未知調査3本とも evidence_collector が委譲されておらず、この経路が実際に効いた回はまだ無い。
 - 失敗時も空にしない: runner 例外・パース不能の fallback レポートに**収集済み証拠リンクを温存**。パース不能時は rawSnippet をログに残し真因を追跡。
 - **空応答への構造的防御（finalizer 分離）**: gemini-2.5 系は思考トークンも `maxOutputTokens` を消費するため、証拠が競合する高推論シナリオ（例: 症状=メモリ枯渇 × Terraform 差分=接続上限縮小）では最終 JSON 合成ターンの思考が予算を食い切り **finishReason=MAX_TOKENS・0文字**になる故障モードがある（思考予算キャップは努力目標であり硬い壁ではない）。**恒久策として「統括」と「JSON 化」を別ターンに分離**した——エージェントループ終了後に、**ツールなし・思考予算0・`responseSchema`（制約付きデコード）強制の単発呼び出し**を1回だけ直列で足し、セッションで回収したサブエージェント出力群を JSON へ清書させる（`GeminiInvestigationFinalizer`）。ツールを持たないので `responseSchema` の併用制約に当たらず、思考が予算を取らないので空応答の機序自体が成立しない。**エージェント数は増えない**（グラフ外の直列ステップ・8体のまま）。清書がパースを通らなければコーディネーターの下書きへ黙って戻す（`finalizeInvestigationOutput`）ので分離前が下限。
 - **空応答への縮退リトライ（後段の受け皿）**: 上の finalizer は前段の防御であって置き換えではないため、縮退リトライは残す。1回目が空/パース不能/例外のとき、**思考予算だけ落とした同一グラフで1回だけ再実行**してから fallback に落とす（思考↓＝最終 JSON 用トークン保証↑と失敗機序に整合・sub-agent の予算は不変なので分析の質は保たれる・再実行は `ai_investigation_retrying` ログで観測可能・上限1回で prefetch(1) の占有を有界に保つ）。清書役自体が落ちた場合（Vertex 側の瞬断・タイムアウト）と、ADK 調査そのものが例外で死ぬ経路をここが拾う。決定の履歴は [ADR-26](decisions/ADR.md#adr-26-空応答-fallback-は思考予算を落とした縮退リトライ1回で防御)。
@@ -334,7 +335,7 @@ src/
 | エンドポイント                    | 役割                                                                                                                                                        |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /alerts` / `GET /alerts/:id` | 一覧・詳細（一覧は SSE `GET /stream` でライブ更新。名前付きイベント: `remediation`＝リメディ確定、`investigation-progress`＝ADK 調査の実行イベント中継）    |
-| `PATCH /alerts/:id/feedback`      | 正解/不正解フィードバック（正解→SimilarIncident 蓄積→閾値で自動昇格）                                                                                       |
+| `PATCH /alerts/:id/feedback`      | 正解/不正解フィードバック（正解→SimilarIncident 蓄積。自動昇格の判定もここで走るが、点数はアラート1件ごとで通常は届かない。既知化の主な経路は `POST /alerts/:id/promote`） |
 | `POST /alerts/:id/promote`        | 手動即時昇格（結晶化）                                                                                                                                      |
 | `POST /alerts/:id/report`         | 既知/類似へのオンデマンド AI レポート生成（202→SSE）                                                                                                        |
 | `POST /alerts/:id/reinvestigate`  | オペレーターノート付き再調査                                                                                                                                |
